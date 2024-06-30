@@ -6,42 +6,42 @@ namespace clice {
 // allowed to extend these and announce the values they support in the
 // corresponding client capability.
 enum class SemanticTokenTypes {
-  Namespace,
-  Type,
-  Class,
-  Enum,
-  Interface,
-  Struct,
-  TypeParameter,
-  Parameter,
-  Variable,
-  Property,
-  EnumMember,
-  Event,
-  Function,
-  Method,
-  Macro,
-  Keyword,
-  Modifier,
-  Comment,
-  String,
-  Number,
-  Regexp,
-  Operator,
-  Decorator // @since 3.17.0
+    Namespace,
+    Type,
+    Class,
+    Enum,
+    Interface,
+    Struct,
+    TypeParameter,
+    Parameter,
+    Variable,
+    Property,
+    EnumMember,
+    Event,
+    Function,
+    Method,
+    Macro,
+    Keyword,
+    Modifier,
+    Comment,
+    String,
+    Number,
+    Regexp,
+    Operator,
+    Decorator  // @since 3.17.0
 };
 
 enum SemanticTokenModifiers {
-  Declaration,
-  Definition,
-  Readonly,
-  Static,
-  Deprecated,
-  Abstract,
-  Async,
-  Modification,
-  Documentation,
-  DefaultLibrary
+    Declaration,
+    Definition,
+    Readonly,
+    Static,
+    Deprecated,
+    Abstract,
+    Async,
+    Modification,
+    Documentation,
+    DefaultLibrary
 };
 
-} // namespace clice
+}  // namespace clice

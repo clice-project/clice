@@ -76,3 +76,5 @@
 1. CodeCompletion 这个需要利用 CodeCompletionConsumer 调用 Clang 提供的接口来实现，然而我们实际上可以做一些更加复杂的分析（clangd 目前没有做）。比如判断当前的是不是在 Template 语境下从而决定补全`sizeof`的时候要不要补全`...`。在补全成员的时候，似乎我们也可以获取`expr.f`中的父对象的类型，从而根据它的类型来做一些补全。有待进一步研究。
 2. Semantic Tokens 等基于当前 AST 的操作，则是遍历 AST 渲染 Token 即可。
 3. 剩下很多的，例如 Find References 等等等查询功能，都是在已经索引好的文件中进行查询，不需要对语法树进行什么改动。
+
+### 

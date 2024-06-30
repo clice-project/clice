@@ -1,7 +1,8 @@
 #include <LSP/Server.h>
 
 int main() {
-  clice::Server server;
-  server.run();
-  return 0;
+    using namespace clice;
+    Server::Initialize();
+    Server::Exit();
+    return 0;
 }

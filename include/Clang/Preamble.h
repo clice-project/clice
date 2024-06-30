@@ -1,0 +1,5 @@
+namespace {
+
+class Preamble {};
+
+}  // namespace

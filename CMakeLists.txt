@@ -17,7 +17,8 @@ set(PCH_HEADER "${CMAKE_SOURCE_DIR}/include/Clang/Clang.h")
 add_subdirectory(external/libuv)
 add_subdirectory(external/simdjson)
 
-add_executable(libtooling src/main.cpp)
+file(GLOB_RECURSE SOURCES src/*.cpp)
+add_executable(libtooling ${SOURCES})
 
 target_include_directories(libtooling PRIVATE "${CMAKE_SOURCE_DIR}/include")
 target_include_directories(libtooling PRIVATE ${LLVM_INCLUDE_DIRS})
