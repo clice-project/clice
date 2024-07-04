@@ -34,3 +34,7 @@
 .cache/
 build/
 external/
+
+# vscode plugin
+vscode-clice/dist/
+vscode-clice/node_modules/
