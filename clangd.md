@@ -22,7 +22,8 @@ TODO:
 FIXME:
 - 为每个 Token 都提供语义高亮: https://github.com/clangd/clangd/issues/1115
 - no-self-contained: https://github.com/clangd/clangd/issues/45
-
+- 提供更好的模板代码补全（需要在索引文件里面记录模板实例化），https://github.com/clangd/clangd/issues/443，然后补全的时候获取`.`号前面的表达式类型，之后再这里查找
+- 支持模块：https://github.com/clangd/clangd/issues/1293
 ## 性能优化
 
 TODO: 寻找核心优化点
@@ -42,6 +43,7 @@ TODO:
 一些讨论：
 - [支持离线索引](https://github.com/clangd/clangd/issues/587)
 - 另外请见 https://discourse.llvm.org/t/using-background-and-static-indexes-simultaneously-for-large-codebases/3706/7
+
 
 ## 详细的支持功能列表
 

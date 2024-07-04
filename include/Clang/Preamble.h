@@ -1,5 +1,10 @@
-namespace {
+#include "Clang.h"
 
-class Preamble {};
+namespace clice{
+
+class Preamble {
+    public:
+    
+};
 
 }  // namespace

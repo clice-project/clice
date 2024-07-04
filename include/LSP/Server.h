@@ -1,15 +1,22 @@
 #include <uv.h>
+#include <string_view>
 
 namespace clice {
 
+// global server instance
+extern class Server server;
+
 /// core class responsible for starting the server
 class Server {
-    static uv_loop_t* loop;
-    static uv_pipe_t stdin_pipe;
+    uv_loop_t* loop;
+    uv_pipe_t stdin_pipe;
 
 public:
-    static int Initialize();
-    static int Exit();
+    int initialize();
+    int exit();
+
+public:
+    void handle_message(std::string_view message);
 };
 
 }  // namespace clice
