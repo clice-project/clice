@@ -1,5 +1,6 @@
 #include <simdjson.h>
 #include <LSP/Server.h>
+#include <fstream>
 
 namespace clice {
 
@@ -42,14 +43,15 @@ int Server::exit() {
 }
 
 void Server::handle_message(std::string_view message) {
-    const char* json = R"({
-        "name": "John",
-        "age": 30,
-        "city": "New York"
-    })";
+    // std::string content = "{\"result\":\"" + std::string(message) + "\"}";
+    std::string content = "{\"result\": \"Hello, World!\"}";
+    std::string header = "Content-Length: " + std::to_string(content.size()) + "\r\n\r\n";
 
-    simdjson::dom::parser parser;
+    llvm::outs() << (header + content);
 
+    std::ofstream out("/home/ykiko/Project/C++/clice/build/twitter.json", std::ios::app);
+    out << message;
+    out.close();
 }  // namespace clice
 
 }  // namespace clice

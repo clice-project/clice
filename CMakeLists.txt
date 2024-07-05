@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(libtooling)
+project(clice)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -18,24 +18,24 @@ add_subdirectory(external/libuv)
 add_subdirectory(external/simdjson)
 
 file(GLOB_RECURSE SOURCES src/*.cpp)
-add_executable(libtooling ${SOURCES})
+add_executable(clice ${SOURCES})
 
-target_include_directories(libtooling PRIVATE "${CMAKE_SOURCE_DIR}/include")
-target_include_directories(libtooling PRIVATE ${LLVM_INCLUDE_DIRS})
-target_include_directories(libtooling PRIVATE ${CLANG_INCLUDE_DIRS})
+target_include_directories(clice PRIVATE "${CMAKE_SOURCE_DIR}/include")
+target_include_directories(clice PRIVATE ${LLVM_INCLUDE_DIRS})
+target_include_directories(clice PRIVATE ${CLANG_INCLUDE_DIRS})
 
 llvm_map_components_to_libnames(llvm_libs support core irreader)
 
 message(STATUS "LLVM_INCLUDE_DIRS: ${LLVM_INCLUDE_DIRS}")
 message(STATUS "LLVM_LIBS: ${llvm_libs}")
 
-target_precompile_headers(libtooling PRIVATE ${PCH_HEADER})
+target_precompile_headers(clice PRIVATE ${PCH_HEADER})
 
-target_link_libraries(libtooling PRIVATE uv)
-target_link_libraries(libtooling PRIVATE simdjson)
-target_link_libraries(libtooling PRIVATE ${llvm_libs})
+target_link_libraries(clice PRIVATE uv)
+target_link_libraries(clice PRIVATE simdjson)
+target_link_libraries(clice PRIVATE ${llvm_libs})
 
-target_link_libraries(libtooling PRIVATE
+target_link_libraries(clice PRIVATE
     LLVMTargetParser
     clangAST
     clangASTMatchers
