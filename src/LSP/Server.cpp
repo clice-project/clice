@@ -6,7 +6,7 @@ namespace clice {
 
 Server server;
 
-int Server::initialize() {
+int Server::start() {
     loop = uv_default_loop();
 
     // initialize pipe and bind to stdin

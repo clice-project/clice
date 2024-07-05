@@ -12,11 +12,12 @@ class Server {
     uv_pipe_t stdin_pipe;
 
 public:
-    int initialize();
+    int start();
     int exit();
-
-public:
     void handle_message(std::string_view message);
+
+    // LSP methods
+    void initialize();
 };
 
 }  // namespace clice

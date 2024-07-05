@@ -1,8 +1,8 @@
 #include <LSP/Server.h>
 #include <coroutine>
-#include <thread>
 #include <iostream>
-
+#include <LSP/Protocol.h>
+#include <Support/Serialize.h>
 uv_loop_t* loop = nullptr;
 
 struct Task {
@@ -76,7 +76,9 @@ Task async_factorial(int n) {
 }
 
 int main() {
-    auto& server = clice::server;
-    server.initialize();
+    clice::InitializeResult result;
+    clice::print(result);
+    // auto& server = clice::server;
+    // server.start();
     return 0;
 }
