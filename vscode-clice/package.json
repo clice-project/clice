@@ -12,8 +12,18 @@
   "activationEvents": [
     "onLanguage:cpp"
   ],
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "C/C++ Language Client",
+      "properties": {
+        "clice-client.trace.server": {
+          "default": "verbose"
+        }
+      }
+    }
+  },
   "main": "./dist/extension.js",
-  "contributes": {},
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "webpack",

@@ -1,10 +1,10 @@
 import * as path from 'path';
 import { workspace, window, ExtensionContext, OutputChannel } from 'vscode';
-import { LanguageClient, LanguageClientOptions, ServerOptions, Trace ,TransportKind } from 'vscode-languageclient/node';
+import { LanguageClient, LanguageClientOptions, ServerOptions, Trace, TransportKind } from 'vscode-languageclient/node';
 
 let client: LanguageClient;
 
-export function activate(context: ExtensionContext) {
+export async function activate(context: ExtensionContext) {
 	console.log('Congratulations, your extension "clice" is now active!');
 
 	let channel = window.createOutputChannel('clice');
@@ -14,28 +14,26 @@ export function activate(context: ExtensionContext) {
 	const serverOptions: ServerOptions = {
 		run: { command: serverPath, args: [] },
 		debug: { command: serverPath, args: ['--inspect=6009'] }
+
 	};
 
 	const clientOptions: LanguageClientOptions = {
 		documentSelector: [{ scheme: 'file', language: 'cpp' }],
 		traceOutputChannel: channel,
-		//outputChannel: channel,
+		// outputChannel: channel,
 		synchronize: {
 			fileEvents: workspace.createFileSystemWatcher('**/.clientrc')
 		},
 
+
 	};
 
 	client = new LanguageClient(
-		'languageServerExample',
-		'Language Server Example',
+		'clice-client',
+		'client for clice language server',
 		serverOptions,
 		clientOptions
 	);
-
-	client.onTelemetry(e => {
-		console.log(e);
-	});
 
 	client.start();
 }
