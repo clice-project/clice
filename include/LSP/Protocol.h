@@ -481,7 +481,7 @@ struct ServerCapabilities {
     /// If omitted it defaults to 'utf-16'.
     ///
     /// possible values: ['utf-8', 'utf-16', 'utf-32'] in PositionEncodingKind
-    std::string_view positionEncoding = PositionEncodingKind::UTF8;
+    std::string_view positionEncoding = PositionEncodingKind::UTF16;
 
     /// Defines how text documents are synced. Is either a detailed structure
     /// defining each notification or for backwards compatibility the

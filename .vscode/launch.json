@@ -8,7 +8,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug",
-            "program": "${workspaceFolder}/build/libtooling",
+            "program": "${workspaceFolder}/build/clice",
             "args": [],
             "cwd": "${workspaceFolder}"
         }

@@ -1,8 +1,8 @@
-#include "Reflection.h"
-#include <iostream>
-#include <optional>
+#include <nlohmann/json.hpp>
 
-namespace clice {
+#include <Support/Reflection.h>
+
+namespace clice::impl {
 
 template <typename T>
 constexpr inline bool is_optional_v = false;
@@ -19,36 +19,36 @@ constexpr inline bool is_vector_like_v<std::array<T, N>> = true;
 template <typename T>
 constexpr inline bool is_vector_like_v<std::vector<T>> = true;
 
+}  // namespace clice::impl
+
+namespace clice {
+
+using nlohmann::json;
+
 template <typename Object>
-void print(Object&& object) {
-    using T = std::decay_t<Object>;
-    if constexpr(std::is_same_v<T, bool>) {
-        std::cout << (object ? "true" : "false") << std::endl;
-    } else if constexpr(std::is_integral_v<T> || std::is_floating_point_v<T> ||
-                        std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>) {
-        std::cout << object << std::endl;
-    } else if constexpr(std::is_enum_v<T>) {
-        std::cout << static_cast<std::underlying_type_t<T>>(object) << std::endl;
-    } else if constexpr(is_optional_v<T>) {
-        if(object.has_value()) {
-            print(object.value());
-        } else {
-            std::cout << "null" << std::endl;
-        }
-    } else if constexpr(is_vector_like_v<T>) {
-        std::cout << "[" << std::endl;
-        for(auto&& value: object) {
-            print(value);
-        }
-        std::cout << "]" << std::endl;
+auto serialize(const Object& object) {
+    if constexpr(std::is_fundamental_v<Object> || std::is_same_v<Object, std::string_view> ||
+                 std::is_same_v<Object, std::string>) {
+        return json(object);
+    } else if constexpr(impl::is_vector_like_v<Object>) {
+        return json(object);
+    } else if constexpr(std::is_enum_v<Object>) {
+        return static_cast<std::underlying_type_t<Object>>(object);
     } else {
-        std::cout << "{" << std::endl;
-        for_each(object, [&](auto&& name, auto&& value) {
-            std::cout << name << ": ";
-            print(value);
+        json json;
+        for_each(object, [&json](std::string_view name, auto& member) {
+            using Member = std::remove_cvref_t<decltype(member)>;
+            if constexpr(impl::is_optional_v<Member>) {
+                if(member.has_value()) {
+                    json.emplace(name, serialize(member.value()));
+                }
+            } else {
+                json.emplace(name, serialize(member));
+            }
         });
-        std::cout << "}" << std::endl;
+        return json;
     }
 }
+
 }  // namespace clice
 

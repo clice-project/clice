@@ -123,40 +123,31 @@ constexpr auto collcet_members(Object&& object) {
         return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u};
     } else if constexpr(count == 22) {
         auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v] = object;
-        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k,
-                          &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v};
+        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v};
     } else if constexpr(count == 23) {
         auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w] = object;
-        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l,
-                          &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w};
+        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w};
     } else if constexpr(count == 24) {
         auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x] = object;
-        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l,
-                          &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x};
+        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x};
     } else if constexpr(count == 25) {
         auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y] = object;
-        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m,
-                          &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y};
+        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y};
     } else if constexpr(count == 26) {
         auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z] = object;
-        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m,
-                          &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z};
+        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z};
     } else if constexpr(count == 27) {
         auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, _0] = object;
-        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n,
-                          &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0};
+        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0};
     } else if constexpr(count == 28) {
         auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, _0, _1] = object;
-        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n,
-                          &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0, &_1};
+        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0, &_1};
     } else if constexpr(count == 29) {
         auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, _0, _1, _2] = object;
-        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n,
-                          &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0, &_1, &_2};
+        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0, &_1, &_2};
     } else if constexpr(count == 30) {
         auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, _0, _1, _2, _3] = object;
-        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n,
-                          &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0, &_1, &_2, &_3};
+        return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0, &_1, &_2, &_3};
     } else {
         static_assert(count <= 30, "Not supported member count");
     }

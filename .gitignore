@@ -34,6 +34,7 @@
 .cache/
 build/
 external/
+logs/
 
 # vscode plugin
 vscode-clice/dist/
