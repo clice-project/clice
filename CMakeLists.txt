@@ -14,8 +14,10 @@ add_definitions(${LLVM_DEFINITIONS_LIST})
 
 set(PCH_HEADER "${CMAKE_SOURCE_DIR}/include/Clang/Clang.h")
 
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+add_subdirectory(external/json)
 add_subdirectory(external/libuv)
-add_subdirectory(external/simdjson)
+add_subdirectory(external/spdlog)
 
 file(GLOB_RECURSE SOURCES src/*.cpp)
 add_executable(clice ${SOURCES})
@@ -31,10 +33,11 @@ message(STATUS "LLVM_LIBS: ${llvm_libs}")
 
 target_precompile_headers(clice PRIVATE ${PCH_HEADER})
 
+target_link_libraries(clice PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(clice PRIVATE uv)
-target_link_libraries(clice PRIVATE simdjson)
-target_link_libraries(clice PRIVATE ${llvm_libs})
+target_link_libraries(clice PRIVATE spdlog::spdlog)
 
+target_link_libraries(clice PRIVATE ${llvm_libs})
 target_link_libraries(clice PRIVATE
     LLVMTargetParser
     clangAST
