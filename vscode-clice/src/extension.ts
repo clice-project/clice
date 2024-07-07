@@ -30,7 +30,7 @@ export async function activate(context: ExtensionContext) {
 
 	client = new LanguageClient(
 		'clice-client',
-		'client for clice language server',
+		'clice-client',
 		serverOptions,
 		clientOptions
 	);

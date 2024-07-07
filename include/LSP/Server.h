@@ -1,9 +1,7 @@
 #pragma once
 
-#include <uv.h>
-#include <string_view>
-
 #include "Protocol.h"
+#include "Transport.h"
 
 namespace clice {
 
@@ -13,11 +11,10 @@ extern class Server server;
 /// core class responsible for starting the server
 class Server {
     uv_loop_t* loop;
-    uv_pipe_t stdin_pipe;
-    uv_pipe_t stdout_pipe;
+    std::unique_ptr<Transport> transport;
 
 public:
-    int start();
+    int run();
     int exit();
     void handle_message(std::string_view message);
 
