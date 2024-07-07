@@ -45,4 +45,9 @@ enum SemanticTokenModifiers {
     DefaultLibrary
 };
 
+struct SemanticTokensLegend {
+    std::vector<std::string> tokenTypes;
+    std::vector<std::string> tokenModifiers;
+};
+
 }  // namespace clice

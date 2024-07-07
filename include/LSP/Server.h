@@ -25,9 +25,13 @@ public:
     /===================================================*/
 
     // Server lifecycle
-    void initialize(InitializeParams& params);
+    void initialize(const InitializeParams& params);
 
     // Text Document Synchronization
+    void didOpen(this Server& self, const DidOpenTextDocumentParams& params);
+    void didChange(this Server& self, const DidChangeTextDocumentParams& params);
+    void didClose(this Server& self, const DidCloseTextDocumentParams& params);
+    void didSave(this Server& self, const DidSaveTextDocumentParams& params);
 
     // Language Features
     void declaration();

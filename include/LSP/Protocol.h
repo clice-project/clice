@@ -5,6 +5,8 @@
 #include <optional>
 #include <string_view>
 
+#include "SemanticTokens.h"
+
 namespace clice {
 
 // Defined by JSON RPC.
@@ -473,6 +475,22 @@ struct DocumentOnTypeFormattingOptions {
     /// moreTriggerCharacter?: string[];
 };
 
+struct SemanticTokensOptions {
+    /// The legend used by the server
+    SemanticTokensLegend legend;
+
+    /// Server supports providing semantic tokens for a specific range of a document.
+    bool range = false;  // TODO: further check
+
+    struct Full {
+        /// Server supports providing semantic tokens for a full document.
+        bool delta = true;
+    };
+
+    /// Server supports providing semantic tokens for a full document.
+    Full full;
+};
+
 struct ServerCapabilities {
     /// The position encoding the server picked from the encodings offered
     /// by the client via the client capability `general.positionEncodings`.
@@ -567,7 +585,7 @@ struct ServerCapabilities {
     bool callHierarchyProvider = true;
 
     /// The server provides semantic tokens support.
-    // TODO: semanticTokensProvider?: SemanticTokensOptions
+    SemanticTokensOptions semanticTokensProvider;
 
     /// Whether server provides moniker support.
     bool monikerProvider = false;  // TODO: further discussion
@@ -605,6 +623,87 @@ struct InitializeResult {
 
     /// Information about the server.
     ServerInfo serverInfo;
+};
+
+/*===================================================/
+/                                                    /
+/=======   Text Document Synchronization   ==========/
+/                                                    /
+/===================================================*/
+
+/// An item to transfer a text document from the client to the server.
+struct TextDocumentItem {
+    /// The text document's URI.
+    std::string_view uri;
+
+    /// The text document's language identifier.
+    std::string_view languageId;
+
+    /// he version number of this document (it will increase after each change, including undo/redo).
+    int version;
+
+    /// The content of the opened text document.
+    std::string_view text;
+};
+
+/// Text documents are identified using a URI. On the protocol level, URIs are passed as strings.
+struct TextDocumentIdentifier {
+    /// The text document's URI.
+    std::string_view uri;
+};
+
+struct VersionedTextDocumentIdentifier {
+    /// The text document's URI.
+    std::string_view uri;
+
+    /// The version number of this document.
+    ///
+    /// The version number of a document will increase after each change,
+    /// including undo/redo. The number doesn't need to be consecutive.
+    int version;
+};
+
+struct DidOpenTextDocumentParams {
+    /// The document that was opened.
+    TextDocumentItem textDocument;
+};
+
+struct TextDocumentContentChangeEvent {
+    // TODO:
+};
+
+struct DidChangeTextDocumentParams {
+    /// The document that did change. The version number points
+    /// to the version after all provided content changes have
+    /// been applied.
+    VersionedTextDocumentIdentifier textDocument;
+
+    /// The actual content changes. The content changes describe single state
+    /// changes to the document. So if there are two content changes c1 (at
+    /// array index 0) and c2 (at array index 1) for a document in state S then
+    /// c1 moves the document from S to S' and c2 from S' to S''. So c1 is
+    /// computed on the state S and c2 is computed on the state S'.
+    ///
+    /// To mirror the content of a document using change events use the following
+    /// approach:
+    /// - start with the same initial content
+    /// - apply the 'textDocument/didChange' notifications in the order you receive them.
+    /// - apply the `TextDocumentContentChangeEvent`s in a single notification in the order you receive them.
+    std::vector<TextDocumentContentChangeEvent> contentChanges;
+};
+
+struct DidCloseTextDocumentParams {
+    /// The document that was closed.
+    TextDocumentIdentifier textDocument;
+};
+
+struct DidSaveTextDocumentParams {
+    /// The document that was saved.
+    TextDocumentIdentifier textDocument;
+
+    /// Optional the content when saved. Depends on the includeText value
+    /// when the save notification was requested.
+    std::optional<std::string_view> text;
 };
 
 }  // namespace clice

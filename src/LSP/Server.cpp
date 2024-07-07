@@ -36,6 +36,10 @@ void Server::handle_message(std::string_view message) {
                 {"result", clice::serialize(InitializeResult{})}
             };
             transport->send(json.dump());
+        } else if(method == "textDocument/didOpen") {
+            // didOpen();
+            auto params = deserialize<DidOpenTextDocumentParams>(input["params"]);
+            logger::info("serialize successfully: {}", serialize(params).dump());
         }
     } catch(std::exception& e) {
         logger::error("failed to parse JSON: {}", e.what());
