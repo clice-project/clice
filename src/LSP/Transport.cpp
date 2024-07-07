@@ -84,4 +84,36 @@ void Pipe::send(std::string_view message) {
     });
 }
 
+Socket::Socket(std::string_view address, int port) {
+    uv_loop_t* loop = uv_default_loop();
+    uv_tcp_init(loop, &socket);
+
+    struct sockaddr_in addr;
+    uv_ip4_addr(address.data(), port, &addr);
+
+    uv_connect_t* connect = (uv_connect_t*)std::malloc(sizeof(uv_connect_t));
+    uv_tcp_connect(connect, &socket, (const struct sockaddr*)&addr, [](uv_connect_t* req, int status) {
+        if(status < 0) {
+            logger::error("error connecting to socket: {}", uv_strerror(status));
+        }
+        std::free(req);
+    });
+
+    // uv_read_start((uv_stream_t*)&socket, Pipe::alloc_buffer, Pipe::on_read);
+}
+
+void Socket::send(std::string_view message) {
+    std::string header = "Content-Length: " + std::to_string(message.size()) + "\r\n\r\n";
+    header += message;
+    uv_buf_t buf = uv_buf_init(header.data(), header.size());
+
+    uv_write_t* req = (uv_write_t*)std::malloc(sizeof(uv_write_t));
+    uv_write(req, (uv_stream_t*)&socket, &buf, 1, [](uv_write_t* req, int status) {
+        if(status < 0) {
+            logger::error("error writing to socket: {}", uv_strerror(status));
+        }
+        std::free(req);
+    });
+}
+
 }  // namespace clice

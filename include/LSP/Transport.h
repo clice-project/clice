@@ -41,4 +41,16 @@ public:
     }
 };
 
+class Socket : public Transport {
+private:
+    uv_tcp_t socket;
+
+public:
+    Socket(std::string_view address, int port);
+
+    void send(std::string_view message) override;
+
+    ~Socket() override { uv_close((uv_handle_t*)&socket, nullptr); }
+};
+
 }  // namespace clice
