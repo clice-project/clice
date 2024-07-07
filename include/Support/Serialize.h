@@ -1,3 +1,6 @@
+#pragma once
+
+
 #include <nlohmann/json.hpp>
 
 #include <Support/Reflection.h>

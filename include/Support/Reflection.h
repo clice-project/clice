@@ -1,3 +1,5 @@
+#pragma once
+
 // support basic reflection through template meta programming
 #include <tuple>
 #include <string_view>

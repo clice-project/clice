@@ -1,5 +1,9 @@
+#pragma once
+
 #include <uv.h>
 #include <string_view>
+
+#include "Protocol.h"
 
 namespace clice {
 
@@ -17,8 +21,33 @@ public:
     int exit();
     void handle_message(std::string_view message);
 
-    // LSP methods
-    void initialize();
+    /*===================================================/
+    /                                                    /
+    /==================== LSP methods ===================/
+    /                                                    /
+    /===================================================*/
+
+    // Server lifecycle
+    void initialize(InitializeParams& params);
+
+    // Text Document Synchronization
+
+    // Language Features
+    void declaration();
+    void definition();
+    void typeDefinition();
+    void implementation();
+    void references();
+    void callHierarchy();
+    /* ... */
+    void hover();
+    void codeLens();
+    /* ... */
+    void foldingRange();
+    void selectionRange();
+    void documentSymbol();
+    void semanticTokens();
+    void inlineValue();
 };
 
 }  // namespace clice

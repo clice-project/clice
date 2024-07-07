@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Clang/ParsedAST.h>
 
 namespace clice {
