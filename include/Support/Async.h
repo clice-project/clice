@@ -52,66 +52,97 @@ async(T) -> async<std::decay_t<T>>;
 
 template <typename T>
 class Task {
+public:
     struct promise_type {
         std::optional<T> value;
+        std::coroutine_handle<> continuation;
 
         Task get_return_object(this promise_type& self) {
-            return {std::coroutine_handle<promise_type>::from_promise(self)};
+            return Task{std::coroutine_handle<promise_type>::from_promise(self)};
         }
 
         std::suspend_always initial_suspend() { return {}; }
 
-        std::suspend_always final_suspend() noexcept { return {}; }
+        std::suspend_always final_suspend() noexcept {
+            if(continuation) {
+                continuation.resume();
+            }
+            return {};
+        }
 
-        void return_value(this promise_type& self, T&& value) { self.value = std::move(value); }
+        void return_value(T&& val) { value = std::move(val); }
 
-        void return_value(this promise_type& self, const T& value) { self.value = value; }
+        void return_value(const T& val) { value = val; }
 
         void unhandled_exception() { std::terminate(); }
     };
 
-    std::coroutine_handle<promise_type> handle;
-
-public:
     Task(std::coroutine_handle<promise_type> handle) : handle(handle) {}
 
     ~Task() {
-        if(!handle.done()) {
+        if(handle && !handle.done()) {
             handle.destroy();
         }
     }
 
-    T get() { return std::move(handle.promise().value); }
+    T get() { return std::move(*handle.promise().value); }
+
+    bool await_ready() const noexcept { return false; }
+
+    void await_suspend(std::coroutine_handle<> awaiting) noexcept {
+        handle.promise().continuation = awaiting;
+        handle.resume();
+    }
+
+    T await_resume() { return std::move(*handle.promise().value); }
+
+private:
+    std::coroutine_handle<promise_type> handle;
 };
 
 template <>
 class Task<void> {
+public:
     struct promise_type {
+        std::coroutine_handle<> continuation;
+
         Task get_return_object(this promise_type& self) {
-            return {std::coroutine_handle<promise_type>::from_promise(self)};
+            return Task{std::coroutine_handle<promise_type>::from_promise(self)};
         }
 
-        std::suspend_never initial_suspend() { return {}; }
+        std::suspend_always initial_suspend() { return {}; }
 
-        std::suspend_never final_suspend() noexcept { return {}; }
+        std::suspend_always final_suspend() noexcept {
+            if(continuation) {
+                continuation.resume();
+            }
+            return {};
+        }
 
         void return_void() {}
 
         void unhandled_exception() { std::terminate(); }
     };
 
-    std::coroutine_handle<promise_type> handle;
-
-public:
     Task(std::coroutine_handle<promise_type> handle) : handle(handle) {}
 
     ~Task() {
-        if(!handle.done()) {
+        if(handle && !handle.done()) {
             handle.destroy();
         }
     }
 
-    void get() {}
+    bool await_ready() const noexcept { return false; }
+
+    void await_suspend(std::coroutine_handle<> awaiting) noexcept {
+        handle.promise().continuation = awaiting;
+        handle.resume();
+    }
+
+    void await_resume() {}
+
+private:
+    std::coroutine_handle<promise_type> handle;
 };
 
 }  // namespace clice
