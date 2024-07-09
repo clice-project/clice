@@ -2,12 +2,16 @@
 
 namespace clice {
 
+std::unique_ptr<ParsedAST> ParsedAST::build(std::string_view path, std::string_view content){
+    
+}
+
 std::unique_ptr<ParsedAST> ParsedAST::build(std::string_view path,
                                             const std::shared_ptr<CompilerInvocation>& invocation,
                                             const std::shared_ptr<Preamble>& preamble) {
     auto AST = new ParsedAST();
     AST->path = path;
-    
+
     // some settings for CompilerInstance
     auto& instance = AST->instance;
     instance.setInvocation(invocation);

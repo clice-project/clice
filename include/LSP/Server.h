@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Protocol.h"
+#include "Scheduler.h"
 #include "Transport.h"
 
 namespace clice {
@@ -12,12 +13,26 @@ extern class Server server;
 class Server {
     uv_loop_t* loop;
     std::unique_ptr<Transport> transport;
+    Scheduler scheduler;
+    std::map<std::string_view, void (*)(std::string_view)> methods;
 
 public:
     int run();
     int exit();
     void handle_message(std::string_view message);
 
+    template <auto ptr>
+    void register_method(std::string_view name) {
+        methods[name] = []<typename R, typename... Args>(R (*)(Args...)) {
+            return [](std::string_view message) {
+                // auto input = json::parse(message);
+                // auto params = deserialize<Args>(input["params"]);
+                // ptr(params);
+            };
+        }(ptr);
+    }
+
+private:
     /*===================================================/
     /                                                    /
     /==================== LSP methods ===================/
@@ -28,27 +43,27 @@ public:
     void initialize(const InitializeParams& params);
 
     // Text Document Synchronization
-    void didOpen(this Server& self, const DidOpenTextDocumentParams& params);
-    void didChange(this Server& self, const DidChangeTextDocumentParams& params);
-    void didClose(this Server& self, const DidCloseTextDocumentParams& params);
-    void didSave(this Server& self, const DidSaveTextDocumentParams& params);
+    Task<void> didOpen(const DidOpenTextDocumentParams& params);
+    Task<void> didChange(const DidChangeTextDocumentParams& params);
+    Task<void> didClose(const DidCloseTextDocumentParams& params);
+    Task<void> didSave(const DidSaveTextDocumentParams& params);
 
     // Language Features
-    void declaration();
-    void definition();
-    void typeDefinition();
-    void implementation();
-    void references();
-    void callHierarchy();
+    Task<void> declaration();
+    Task<void> definition();
+    Task<void> typeDefinition();
+    Task<void> implementation();
+    Task<void> references();
+    Task<void> callHierarchy();
     /* ... */
-    void hover();
-    void codeLens();
+    Task<void> hover();
+    Task<void> codeLens();
     /* ... */
-    void foldingRange();
-    void selectionRange();
-    void documentSymbol();
-    void semanticTokens();
-    void inlineValue();
+    Task<void> foldingRange();
+    Task<void> selectionRange();
+    Task<void> documentSymbol();
+    Task<void> semanticTokens();
+    Task<void> inlineValue();
 };
 
 }  // namespace clice

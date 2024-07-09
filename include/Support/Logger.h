@@ -19,15 +19,17 @@ inline void info(spdlog::format_string_t<Args...> message, Args&&... args) {
     spdlog::default_logger()->flush();
 }
 
-inline void error(std::string_view message) {
+inline void error [[noreturn]] (std::string_view message) {
     spdlog::error(message);
     spdlog::default_logger()->flush();
+    std::terminate();
 }
 
 template <typename... Args>
-inline void error(spdlog::format_string_t<Args...> message, Args&&... args) {
+inline void error [[noreturn]] (spdlog::format_string_t<Args...> message, Args&&... args) {
     spdlog::error(message, std::forward<Args>(args)...);
     spdlog::default_logger()->flush();
+    std::terminate();
 }
 
 }  // namespace clice::logger

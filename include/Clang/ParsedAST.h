@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Diagnostics.h"
 #include "Preamble.h"
 #include "CompileDatabase.h"
@@ -33,9 +35,11 @@ private:
     ParsedAST() = default;
 
 public:
-    std::unique_ptr<ParsedAST> build(std::string_view path,
-                                     const std::shared_ptr<CompilerInvocation>& invocation,
-                                     const std::shared_ptr<Preamble>& preamble);
+    static std::unique_ptr<ParsedAST> build(std::string_view path, std::string_view content);
+
+    static std::unique_ptr<ParsedAST> build(std::string_view path,
+                                            const std::shared_ptr<CompilerInvocation>& invocation,
+                                            const std::shared_ptr<Preamble>& preamble);
 
     auto& Tokens() { return tokens.value; }
 

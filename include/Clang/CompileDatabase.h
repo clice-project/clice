@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Clang/Clang.h>
 
 namespace clice {

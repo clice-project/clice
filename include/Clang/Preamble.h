@@ -1,10 +1,20 @@
+#pragma once
+
 #include "Clang.h"
 
-namespace clice{
+namespace clice {
 
 class Preamble {
-    public:
-    
+private:
+    clang::PrecompiledPreamble* preamble;
+
+    Preamble(clang::PrecompiledPreamble* preamble) : preamble(preamble) {}
+
+public:
+    Preamble() = default;
+
+    static Preamble
+        build(std::string_view path, std::string_view content, const CompilerInvocation& invocation);
 };
 
-}  // namespace
+}  // namespace clice
