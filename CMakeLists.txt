@@ -3,43 +3,37 @@ project(clice)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_RELEASE} -g -O0 -fno-rtti ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_RELEASE} -g -O0 -fno-rtti")
 
 set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/external/llvm/lib/cmake")
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 
-separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
-add_definitions(${LLVM_DEFINITIONS_LIST})
+message(STATUS "LLVM_INCLUDE_DIRS: ${LLVM_INCLUDE_DIRS}")
 
 set(PCH_HEADER "${CMAKE_SOURCE_DIR}/include/Clang/Clang.h")
 
 set(JSON_BuildTests OFF CACHE INTERNAL "")
-add_subdirectory(external/json)
-add_subdirectory(external/libuv)
-add_subdirectory(external/spdlog)
+add_subdirectory("${CMAKE_SOURCE_DIR}/external/json")
+add_subdirectory("${CMAKE_SOURCE_DIR}/external/libuv")
+add_subdirectory("${CMAKE_SOURCE_DIR}/external/spdlog")
 
-file(GLOB_RECURSE SOURCES src/*.cpp)
-add_executable(clice ${SOURCES})
+set(INCLUDE_DIRS
+    "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/external/json/include"
+    "${CMAKE_SOURCE_DIR}/external/libuv/include"
+    "${CMAKE_SOURCE_DIR}/external/spdlog/include"
+    "${CMAKE_SOURCE_DIR}/external/llvm/include"
+    "${CMAKE_SOURCE_DIR}/external/llvm/tools/clang/include"
+)
 
-target_include_directories(clice PRIVATE "${CMAKE_SOURCE_DIR}/include")
-target_include_directories(clice PRIVATE ${LLVM_INCLUDE_DIRS})
-target_include_directories(clice PRIVATE ${CLANG_INCLUDE_DIRS})
-
-llvm_map_components_to_libnames(llvm_libs support core irreader)
-
-message(STATUS "LLVM_INCLUDE_DIRS: ${LLVM_INCLUDE_DIRS}")
-message(STATUS "LLVM_LIBS: ${llvm_libs}")
-
-target_precompile_headers(clice PRIVATE ${PCH_HEADER})
-
-target_link_libraries(clice PRIVATE nlohmann_json::nlohmann_json)
-target_link_libraries(clice PRIVATE uv)
-target_link_libraries(clice PRIVATE spdlog::spdlog)
-
-target_link_libraries(clice PRIVATE ${llvm_libs})
-target_link_libraries(clice PRIVATE
-    LLVMTargetParser
+set(LINK_LIBS
+    nlohmann_json::nlohmann_json
+    uv
+    spdlog::spdlog
+    LLVMCore
+    LLVMSupport
+    LLVMIRReader
     clangAST
     clangASTMatchers
     clangBasic
@@ -56,3 +50,26 @@ target_link_libraries(clice PRIVATE
     clangToolingInclusionsStdlib
     clangToolingSyntax
 )
+
+file(GLOB_RECURSE SOURCES "${CMAKE_SOURCE_DIR}/src/*.cpp")
+list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/main.cpp")
+
+add_executable(clice src/main.cpp ${SOURCES})
+target_precompile_headers(clice PRIVATE ${PCH_HEADER})
+target_include_directories(clice PRIVATE ${INCLUDE_DIRS})
+target_link_libraries(clice PRIVATE ${LINK_LIBS})
+
+if(CLICE_TEST)
+    file(GLOB_RECURSE TEST_SOURCES "${CMAKE_SOURCE_DIR}/tests/*.cpp")
+    include_directories(${CMAKE_SOURCE_DIR}/external/googletest/googletest/include)
+    add_subdirectory(external/googletest)
+
+    if(WIN32)
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    endif()
+
+    add_executable(clice_test ${SOURCES} ${TEST_SOURCES})
+    target_precompile_headers(clice_test PRIVATE ${PCH_HEADER})
+    target_include_directories(clice_test PRIVATE ${INCLUDE_DIRS})
+    target_link_libraries(clice_test PRIVATE ${LINK_LIBS} GTest::gtest_main)
+endif()

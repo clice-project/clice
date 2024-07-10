@@ -128,11 +128,11 @@ public:
 
     Task(handle_type handle) : handle(handle) {}
 
-    ~Task() {
-        if(handle && !handle.done()) {
-            handle.destroy();
-        }
-    }
+    //~Task() {
+    //    if(handle && !handle.done()) {
+    //        handle.destroy();
+    //    }
+    //}
 
     void resume() { handle.resume(); }
 

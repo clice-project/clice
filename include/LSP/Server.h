@@ -17,7 +17,7 @@ class Server {
     std::map<std::string_view, void (*)(std::string_view)> methods;
 
 public:
-    int run();
+    int run(int argc, char** argv);
     int exit();
     void handle_message(std::string_view message);
 

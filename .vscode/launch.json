@@ -7,10 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug",
+            "name": "Launch",
             "program": "${workspaceFolder}/build/clice",
             "args": [],
             "cwd": "${workspaceFolder}"
-        }
+        },
+        //{
+        //    "type": "lldb",
+        //    "request": "attach",
+        //    "name": "Attach",
+        //    "program": "${workspaceFolder}/build/clice"
+        //},
     ]
 }

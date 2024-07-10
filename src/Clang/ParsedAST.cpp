@@ -1,14 +1,23 @@
 #include <Clang/ParsedAST.h>
+#include <Support/Logger.h>
 
 namespace clice {
 
-std::unique_ptr<ParsedAST> ParsedAST::build(std::string_view path, std::string_view content){
-    
+std::unique_ptr<ParsedAST> ParsedAST::build(std::string_view path, std::string_view content) {
+    auto command = CompileDatabase::instance().lookup(path);
+    std::shared_ptr<CompilerInvocation> invocation = clang::createInvocation(command);
+
+    auto& inputs = invocation->getFrontendOpts().Inputs;
+    inputs.push_back(clang::FrontendInputFile(path, clang::InputKind{clang::Language::CXX}));
+
+    auto preamble = Preamble::build(path, content, *invocation);
+
+    return build(path, invocation, preamble);
 }
 
 std::unique_ptr<ParsedAST> ParsedAST::build(std::string_view path,
                                             const std::shared_ptr<CompilerInvocation>& invocation,
-                                            const std::shared_ptr<Preamble>& preamble) {
+                                            const Preamble& preamble) {
     auto AST = new ParsedAST();
     AST->path = path;
 
@@ -18,15 +27,13 @@ std::unique_ptr<ParsedAST> ParsedAST::build(std::string_view path,
     instance.createDiagnostics();
 
     if(!instance.createTarget()) {
-        llvm::errs() << "Failed to create target\n";
-        std::terminate();
+        logger::error("Failed to create target");
     }
 
     if(auto manager = instance.createFileManager()) {
         instance.createSourceManager(*manager);
     } else {
-        llvm::errs() << "Failed to create file manager\n";
-        std::terminate();
+        logger::error("Failed to create file manager");
     }
 
     instance.createPreprocessor(clang::TranslationUnitKind::TU_Complete);
@@ -38,15 +45,13 @@ std::unique_ptr<ParsedAST> ParsedAST::build(std::string_view path,
     auto& action = AST->action;
 
     if(!action.BeginSourceFile(instance, input)) {
-        llvm::errs() << "Failed to begin source file\n";
-        std::terminate();
+        logger::error("Failed to begin source file");
     }
 
     clang::syntax::TokenCollector collector = {instance.getPreprocessor()};
 
     if(llvm::Error error = action.Execute()) {
-        llvm::errs() << "Failed to execute action: " << error << "\n";
-        std::terminate();
+        logger::error("Failed to execute action: {0}", llvm::errorToErrorCode(std::move(error)).message());
     }
 
     AST->tokens.construct(std::move(collector).consume());

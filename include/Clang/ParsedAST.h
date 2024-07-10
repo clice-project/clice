@@ -39,7 +39,7 @@ public:
 
     static std::unique_ptr<ParsedAST> build(std::string_view path,
                                             const std::shared_ptr<CompilerInvocation>& invocation,
-                                            const std::shared_ptr<Preamble>& preamble);
+                                            const Preamble& preamble);
 
     auto& Tokens() { return tokens.value; }
 

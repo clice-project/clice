@@ -1,4 +1,5 @@
 #include <LSP/Server.h>
+#include <LSP/Setting.h>
 #include <LSP/Protocol.h>
 #include <LSP/Transport.h>
 
@@ -9,12 +10,29 @@ namespace clice {
 
 Server server;
 
-int Server::run() {
+int Server::run(int argc, char** argv) {
+    assert(argc == 2);
+    logger::init(argv[0]);
+
+    logger::info("reading settings...");
+    setting = deserialize<Setting>(json::parse(argv[1]));
+    logger::info("settings: {}", argv[1]);
+
     loop = uv_default_loop();
 
-    transport = std::make_unique<Pipe>();
+    if(setting.mode == "pipe") {
+        transport = std::make_unique<Pipe>();
+    } else if(setting.mode == "socket") {
+        // transport = std::make_unique<Socket>();
+    } else if(setting.mode == "index") {
+        transport = {};
+    } else {
+        logger::error("invalid mode: {}", setting.mode);
+        return 1;
+    }
 
     // start the event loop
+    logger::info("starting the server...");
     return uv_run(loop, UV_RUN_DEFAULT);
 }
 
@@ -40,11 +58,19 @@ void Server::handle_message(std::string_view message) {
             // didOpen();
             auto params = deserialize<DidOpenTextDocumentParams>(input["params"]);
             logger::info("serialize successfully: {}", serialize(params).dump());
+            auto task = didOpen(params);
+            task.resume();
         }
     } catch(std::exception& e) {
         logger::error("failed to parse JSON: {}", e.what());
         return;
     }
+}
+
+Task<void> Server::didOpen(const DidOpenTextDocumentParams& params) {
+    logger::info("textDocument/didOpen: {}", params.textDocument.uri);
+    auto& textDocument = params.textDocument;
+    co_await scheduler.update(textDocument.uri, textDocument.text);
 }
 
 }  // namespace clice

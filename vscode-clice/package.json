@@ -19,6 +19,11 @@
       "properties": {
         "clice-client.trace.server": {
           "default": "verbose"
+        },
+        "clice.compile_commands_dir": {
+          "type": "string",
+          "default": "/build",
+          "description": "The directory where compile_commands.json is located"
         }
       }
     }

@@ -14,14 +14,7 @@ public:
         return instance;
     }
 
-    void load(std::string_view path) {
-        std::string error;
-        database = clang::tooling::CompilationDatabase::loadFromDirectory(path, error);
-        if(!database) {
-            llvm::errs() << "Failed to load compilation database. " << error << "\n";
-            std::terminate();
-        }
-    }
+    void load(std::string_view path);
 
     auto lookup(std::string_view path) {
         auto commands = database->getCompileCommands(path);
