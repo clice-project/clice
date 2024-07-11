@@ -1,5 +1,6 @@
 #include <Clang/Preamble.h>
 #include <Support/Logger.h>
+#include <Support/Filesystem.h>
 
 namespace clice {
 
@@ -12,10 +13,12 @@ Preamble
 
     clang::DiagnosticsEngine* engine;
     auto VFS = llvm::vfs::getRealFileSystem();
-    if(auto error = VFS->setCurrentWorkingDirectory(path)) {
+    auto dir = fs::path(path).parent_path();
+    if(auto error = VFS->setCurrentWorkingDirectory(dir.string())) {
         logger::error("failed to set current working directory: {}", error.message());
     } else {
         engine = new clang::DiagnosticsEngine(new clang::DiagnosticIDs(), new clang::DiagnosticOptions());
+        engine->setClient(new clang::TextDiagnosticPrinter(llvm::errs(), &engine->getDiagnosticOptions()));
     }
 
     // if store the preamble in memory, if not, store it in a file(storagePath)
