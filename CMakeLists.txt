@@ -27,10 +27,7 @@ set(INCLUDE_DIRS
     "${CMAKE_SOURCE_DIR}/external/llvm/tools/clang/include"
 )
 
-set(LINK_LIBS
-    nlohmann_json::nlohmann_json
-    uv
-    spdlog::spdlog
+set(LLVM_LIBS
     LLVMCore
     LLVMSupport
     LLVMIRReader
@@ -49,6 +46,13 @@ set(LINK_LIBS
     clangToolingInclusions
     clangToolingInclusionsStdlib
     clangToolingSyntax
+)
+
+set(LINK_LIBS
+    nlohmann_json::nlohmann_json
+    uv
+    spdlog::spdlog
+    ${LLVM_LIBS}
 )
 
 file(GLOB_RECURSE SOURCES "${CMAKE_SOURCE_DIR}/src/*.cpp")
@@ -72,4 +76,18 @@ if(CLICE_TEST)
     target_precompile_headers(clice_test PRIVATE ${PCH_HEADER})
     target_include_directories(clice_test PRIVATE ${INCLUDE_DIRS})
     target_link_libraries(clice_test PRIVATE ${LINK_LIBS} GTest::gtest_main)
+endif()
+
+if(CLICE_EXAMPLES)
+    macro(add_example target)
+        add_executable(${target} ${ARGN})
+        target_precompile_headers(${target} PRIVATE ${PCH_HEADER})
+        target_include_directories(${target} PRIVATE ${INCLUDE_DIRS})
+        target_link_libraries(${target} PRIVATE ${LINK_LIBS})
+    endmacro()
+
+    add_example(ASTVisitor docs/examples/ASTVisitor.cpp)
+    add_example(CodeCompletion docs/examples/CodeCompletion.cpp)
+    add_example(Preamble docs/examples/Preamble.cpp)
+    add_example(Preprocessor docs/examples/Preprocessor.cpp)
 endif()
