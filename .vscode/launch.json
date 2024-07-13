@@ -18,9 +18,7 @@
             "name": "Launch",
             "program": "${workspaceFolder}/build/Preamble",
             "args": [
-                "./main.cpp",
-                "12",
-                "11"
+                "/home/ykiko/Project/C++/clice/main.cpp",
             ],
             "cwd": "${workspaceFolder}"
         },

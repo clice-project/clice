@@ -64,7 +64,9 @@ int main(int argc, const char** argv) {
 
     auto invocation = std::make_shared<clang::CompilerInvocation>();
     std::vector<const char*> args = {
-        "/home/ykiko/Project/C++/clice/external/llvm/bin/clang++",
+        "/usr/local/bin/clang++",
+        "-x",
+        "c++",
         "-Xclang",
         "-no-round-trip-args",
         "-std=c++20",

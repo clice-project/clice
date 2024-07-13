@@ -1,6 +1,15 @@
 #include <Clang/Clang.h>
+#include <clang/Lex/PreprocessorOptions.h>
 
-// clang 的 CodeCompletion 提供的功能非常有限，无法直接区分当前的
+// clang 的 CodeCompletion 提供的功能非常有限，无法获取当前 Completion 的 scope
+// 而获取 scope 是非常重要的一个功能，有了它我们可以做更多事情，比如只把 ...sizeof 显示在可变模板参数的语境下
+// 又或者根据函数名的语境不同(定义和调用)执行不同的补全逻辑，定义的时候就自动补全参数，调用的时候就不补全
+// 我们只能通过一些 hack 的手段来做这个事情了，首先使用 TokenWatcher 可以获取到所有的 Token
+// 同样我们可以获取到最终的 tu，
+
+// TODO: 检查 SemaCodeCompletion.cpp，看看能不能把当前代码补全的 scope 拿到，当然在这之前，先尝试前面那种 hack
+// 的 方式，看看能不能同样拿到这些信息，反正 token 位置和最后的语法树都是有的 由于要改 clang
+// 源码，所以这不是一个高优先级的任务 ...
 
 class CodeCompleteConsumer : public clang::CodeCompleteConsumer {
 private:
@@ -23,6 +32,9 @@ public:
         auto contexts = Context.getVisitedContexts();
         for(auto c: contexts) {
             llvm::outs() << "   Kind: " << c->getDeclKindName() << "\n";
+            for(auto d: c->decls()) {
+                d->dump();
+            }
         }
 
         llvm::outs() << "code completion results:\n";
@@ -120,24 +132,15 @@ int main(int argc, const char** argv) {
     codeCompletionAt.Line = std::stoi(argv[2]);
     codeCompletionAt.Column = std::stoi(argv[3]);
 
+    clang::PreprocessorOptions& popts = invocation->getPreprocessorOpts();
+    popts.DetailedRecord = true;
+
     instance->setInvocation(std::move(invocation));
 
     if(!instance->createTarget()) {
         llvm::errs() << "Failed to create target\n";
         std::terminate();
     }
-
-    if(clang::FileManager* manager = instance->createFileManager()) {
-        instance->createSourceManager(*manager);
-    } else {
-        llvm::errs() << "Failed to create file manager\n";
-        std::terminate();
-    }
-
-    instance->createPreprocessor(clang::TranslationUnitKind::TU_Complete);
-
-    // ASTContent is necessary for SemanticAnalysis
-    instance->createASTContext();
 
     /// NOTICE:
     instance->setCodeCompletionConsumer(new CodeCompleteConsumer());
@@ -151,7 +154,9 @@ int main(int argc, const char** argv) {
 
     auto& pp = instance->getPreprocessor();
     pp.setTokenWatcher([&pp](const clang::Token& token) {
-        llvm::outs() << "token: " << pp.getSpelling(token) << " kind: " << token.getName() << "\n";
+        if(!token.isAnnotation()) {
+            // llvm::outs() << "token: " << pp.getSpelling(token) << " kind: " << token.getName() << "\n";
+        }
     });
 
     if(auto error = action.Execute()) {
@@ -160,7 +165,7 @@ int main(int argc, const char** argv) {
     }
 
     auto tu = instance->getASTContext().getTranslationUnitDecl();
-    tu->dump();
+    // tu->dump();
 
     action.EndSourceFile();
 }

@@ -1,54 +1,44 @@
-#include <Clang/Clang.h>
 #include <filesystem>
+#include <clang/Basic/Diagnostic.h>
+#include <clang/Frontend/CompilerInstance.h>
+#include <clang/Frontend/FrontendActions.h>
+#include <clang/Frontend/TextDiagnosticPrinter.h>
+#include <clang/Sema/Sema.h>
+#include <clang/Tooling/CompilationDatabase.h>
+#include <clang/Tooling/Syntax/Tokens.h>
+#include <clang/Lex/PreprocessorOptions.h>
 
 namespace fs = std::filesystem;
 
-int main(int argc, const char** argv) {
-    assert(argc == 2 && "Usage: Preamble <source-file>");
-    llvm::outs() << "running Preamble...\n";
-
-    auto instance = std::make_unique<clang::CompilerInstance>();
-
-    clang::DiagnosticIDs* ids = new clang::DiagnosticIDs();
-    clang::DiagnosticOptions* diag_opts = new clang::DiagnosticOptions();
-    clang::DiagnosticConsumer* consumer = new clang::TextDiagnosticPrinter(llvm::errs(), diag_opts);
-    clang::DiagnosticsEngine* engine = new clang::DiagnosticsEngine(ids, diag_opts, consumer);
-    instance->setDiagnostics(engine);
-
-    auto invocation =
-        std::make_shared<clang::CompilerInvocation>(std::make_shared<clang::PCHContainerOperations>());
-    std::vector<const char*> args = {
-        "/home/ykiko/Project/C++/clice/external/llvm/bin/clang++",
-        "-Xclang",
-        "-no-round-trip-args",
-        "-std=c++20",
-        "-Wno-everything",
-        argv[1],
-        "-c",
-    };
-
-    invocation = clang::createInvocation(args, {});
+auto buildPreamble(std::vector<const char*> args, const char* path) {
+    auto invocation = clang::createInvocation(args, {});
 
     // from filepath: llvm::MemoryBuffer::getFile
     // from content: llvm::MemoryBuffer::getMemBuffer(content);
-    auto tmp = llvm::MemoryBuffer::getFile(argv[1]);
+    auto tmp = llvm::MemoryBuffer::getFile(path);
     if(auto error = tmp.getError()) {
         llvm::errs() << "Failed to get file: " << error.message() << "\n";
         std::terminate();
     }
-    llvm::MemoryBuffer* buffer = tmp->get();
+    llvm::MemoryBuffer* buffer = tmp->release();
 
     // compute preamble bounds, if MaxLines set to false(0), it means not to limit the number of lines
-    auto bounds = clang::ComputePreambleBounds({}, *buffer, false);
+    auto bounds = clang::ComputePreambleBounds(invocation->getLangOpts(), *buffer, false);
 
-    auto VFS = llvm::vfs::getRealFileSystem();
-    // if(auto error = VFS->setCurrentWorkingDirectory(fs::path(argv[1]).parent_path().string())) {
-    //     llvm::errs() << "Failed to set current working directory: " << error.message() << "\n";
-    // }
+    // create diagnostic engine
+    clang::DiagnosticsEngine* engine = new clang::DiagnosticsEngine(
+        new clang::DiagnosticIDs(),
+        new clang::DiagnosticOptions(),
+        new clang::TextDiagnosticPrinter(llvm::errs(), new clang::DiagnosticOptions()));
 
     // if store the preamble in memory, if not, store it in a file(storagePath)
-    bool storeInMemory = true;
-    std::string storagePath = (fs::path(argv[0]).parent_path()).string();
+    bool storeInMemory = false;
+    std::string storagePath = (fs::path(path).parent_path() / "build").string();
+
+    auto VFS = llvm::vfs::getRealFileSystem();
+    if(auto error = VFS->setCurrentWorkingDirectory(storagePath)) {
+        llvm::errs() << error.message() << "\n";
+    }
 
     // use to collect information in the process of building preamble, such as include files and macros
     // TODO: inherit from clang::PreambleCallbacks and collect the information
@@ -59,10 +49,10 @@ int main(int argc, const char** argv) {
                                                       buffer,
                                                       bounds,
                                                       *engine,
-                                                      VFS,
+                                                      llvm::vfs::getRealFileSystem(),
                                                       std::make_shared<clang::PCHContainerOperations>(),
                                                       storeInMemory,
-                                                      "",
+                                                      storagePath,
                                                       callbacks);
 
     if(auto error = preamble.getError()) {
@@ -70,7 +60,39 @@ int main(int argc, const char** argv) {
         std::terminate();
     }
 
+    return preamble;
+}
+
+int main(int argc, const char** argv) {
+    assert(argc == 2 && "Usage: Preamble <source-file>");
+    llvm::outs() << "running Preamble...\n";
+
+    std::vector<const char*> args = {
+        "/home/ykiko/Project/C++/clice/external/llvm/bin/clang++",
+        "-Xclang",
+        "-no-round-trip-args",
+        "-std=c++20",
+        "-Wno-everything",
+        argv[1],
+    };
+
+    auto preamble = buildPreamble(args, argv[1]);
+
+    auto instance = std::make_unique<clang::CompilerInstance>();
+
+    auto invocation = std::make_shared<clang::CompilerInvocation>();
     invocation = clang::createInvocation(args, {});
+
+    auto tmp = llvm::MemoryBuffer::getFile(argv[1]);
+    if(auto error = tmp.getError()) {
+        llvm::errs() << "Failed to get file: " << error.message() << "\n";
+        std::terminate();
+    }
+    llvm::MemoryBuffer* buffer = tmp->release();
+
+    auto VFS = llvm::vfs::getRealFileSystem();
+    auto bounds = clang::ComputePreambleBounds(invocation->getLangOpts(), *buffer, false);
+
     // check if the preamble can be reused
     if(preamble->CanReuse(*invocation, *buffer, bounds, *VFS)) {
         llvm::outs() << "Resued preamble\n";
@@ -80,26 +102,19 @@ int main(int argc, const char** argv) {
 
     instance->setInvocation(std::move(invocation));
 
+    instance->createDiagnostics(
+        new clang::TextDiagnosticPrinter(llvm::errs(), new clang::DiagnosticOptions()),
+        true);
+
     if(!instance->createTarget()) {
         llvm::errs() << "Failed to create target\n";
         std::terminate();
     }
 
-    if(clang::FileManager* manager = instance->createFileManager()) {
-        instance->createSourceManager(*manager);
-    } else {
-        llvm::errs() << "Failed to create file manager\n";
-        std::terminate();
-    }
-
-    instance->createPreprocessor(clang::TranslationUnitKind::TU_Complete);
-
-    // ASTContent is necessary for SemanticAnalysis
-    instance->createASTContext();
-
     clang::SyntaxOnlyAction action;
 
-    if(!action.BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
+    auto& mainInput = instance->getFrontendOpts().Inputs[0];
+    if(!action.BeginSourceFile(*instance, mainInput)) {
         llvm::errs() << "Failed to begin source file\n";
         std::terminate();
     }
@@ -109,5 +124,6 @@ int main(int argc, const char** argv) {
         std::terminate();
     }
 
+    instance->getASTContext().getTranslationUnitDecl()->dump();
     action.EndSourceFile();
 }

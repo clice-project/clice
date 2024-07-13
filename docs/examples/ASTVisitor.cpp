@@ -42,18 +42,6 @@ int main(int argc, const char** argv) {
         std::terminate();
     }
 
-    if(clang::FileManager* manager = instance->createFileManager()) {
-        instance->createSourceManager(*manager);
-    } else {
-        llvm::errs() << "Failed to create file manager\n";
-        std::terminate();
-    }
-
-    instance->createPreprocessor(clang::TranslationUnitKind::TU_Complete);
-
-    // ASTContent is necessary for SemanticAnalysis
-    instance->createASTContext();
-
     clang::SyntaxOnlyAction action;
 
     if(!action.BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
