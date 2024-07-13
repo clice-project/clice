@@ -28,9 +28,7 @@ int main(int argc, const char** argv) {
         "-Xclang",
         "-no-round-trip-args",
         "-std=c++20",
-        "-Wno-everything",
         argv[1],
-        "-c",
     };
 
     invocation = clang::createInvocation(args, {});

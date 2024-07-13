@@ -31,10 +31,10 @@ public:
                                     unsigned NumResults) override {
         auto contexts = Context.getVisitedContexts();
         for(auto c: contexts) {
-            llvm::outs() << "   Kind: " << c->getDeclKindName() << "\n";
-            for(auto d: c->decls()) {
-                d->dump();
-            }
+            // llvm::outs() << "   Kind: " << c->getDeclKindName() << "\n";
+            // for(auto d: c->decls()) {
+            //     // d->dump();
+            // }
         }
 
         llvm::outs() << "code completion results:\n";
@@ -119,9 +119,7 @@ int main(int argc, const char** argv) {
         "-Xclang",
         "-no-round-trip-args",
         "-std=c++20",
-        "-Wno-everything",
         argv[1],
-        "-c",
     };
 
     invocation = clang::createInvocation(args, {});

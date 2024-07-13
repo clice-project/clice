@@ -36,9 +36,9 @@ auto buildPreamble(std::vector<const char*> args, const char* path) {
     std::string storagePath = (fs::path(path).parent_path() / "build").string();
 
     auto VFS = llvm::vfs::getRealFileSystem();
-    if(auto error = VFS->setCurrentWorkingDirectory(storagePath)) {
-        llvm::errs() << error.message() << "\n";
-    }
+    // if(auto error = VFS->setCurrentWorkingDirectory(storagePath)) {
+    //     llvm::errs() << error.message() << "\n";
+    // }
 
     // use to collect information in the process of building preamble, such as include files and macros
     // TODO: inherit from clang::PreambleCallbacks and collect the information
@@ -52,7 +52,7 @@ auto buildPreamble(std::vector<const char*> args, const char* path) {
                                                       llvm::vfs::getRealFileSystem(),
                                                       std::make_shared<clang::PCHContainerOperations>(),
                                                       storeInMemory,
-                                                      storagePath,
+                                                      storeInMemory ? "" : storagePath,
                                                       callbacks);
 
     if(auto error = preamble.getError()) {
@@ -72,8 +72,8 @@ int main(int argc, const char** argv) {
         "-Xclang",
         "-no-round-trip-args",
         "-std=c++20",
-        "-Wno-everything",
         argv[1],
+        "-c",
     };
 
     auto preamble = buildPreamble(args, argv[1]);
@@ -106,6 +106,12 @@ int main(int argc, const char** argv) {
         new clang::TextDiagnosticPrinter(llvm::errs(), new clang::DiagnosticOptions()),
         true);
 
+    /// NOTICE: if preamble is stored in memory, the code below is necessary
+    if(auto VFSWithRemapping =
+           createVFSFromCompilerInvocation(instance->getInvocation(), instance->getDiagnostics(), VFS))
+        VFS = VFSWithRemapping;
+    instance->createFileManager(VFS);
+
     if(!instance->createTarget()) {
         llvm::errs() << "Failed to create target\n";
         std::terminate();
@@ -125,5 +131,6 @@ int main(int argc, const char** argv) {
     }
 
     instance->getASTContext().getTranslationUnitDecl()->dump();
+
     action.EndSourceFile();
 }

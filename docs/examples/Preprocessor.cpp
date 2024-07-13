@@ -64,34 +64,21 @@ int main(int argc, const char** argv) {
 
     auto invocation = std::make_shared<clang::CompilerInvocation>();
     std::vector<const char*> args = {
-        "/usr/local/bin/clang++",
-        "-x",
-        "c++",
+        "/home/ykiko/Project/C++/clice/external/llvm/bin/clang++",
         "-Xclang",
         "-no-round-trip-args",
         "-std=c++20",
-        "-Wno-everything",
         argv[1],
-        "-c",
     };
 
-    // invocation = clang::createInvocation(args, {});
-    clang::CompilerInvocation::CreateFromArgs(*invocation, args, instance->getDiagnostics());
+    invocation = clang::createInvocation(args, {});
+
     instance->setInvocation(std::move(invocation));
 
     if(!instance->createTarget()) {
         llvm::errs() << "Failed to create target\n";
         std::terminate();
     }
-
-    if(clang::FileManager* manager = instance->createFileManager()) {
-        instance->createSourceManager(*manager);
-    } else {
-        llvm::errs() << "Failed to create file manager\n";
-        std::terminate();
-    }
-
-    instance->createPreprocessor(clang::TranslationUnitKind::TU_Complete);
 
     clang::PreprocessOnlyAction action;
 
@@ -101,7 +88,7 @@ int main(int argc, const char** argv) {
     }
 
     clang::Preprocessor& pp = instance->getPreprocessor();
-    pp.addPPCallbacks(std::make_unique<PPCallback>(pp));
+    // pp.addPPCallbacks(std::make_unique<PPCallback>(pp));
     clang::syntax::TokenCollector collector{pp};
 
     if(auto error = action.Execute()) {
