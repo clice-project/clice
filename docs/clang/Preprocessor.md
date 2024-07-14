@@ -1,4 +1,5 @@
-本小节会详细介绍`Preprocessor`提供的一些给用户的接口
+`Preprocessor`就是负责处理 C++ 预处理过程的类。
+
 
 ```cpp
 using namespace clang;

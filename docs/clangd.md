@@ -55,7 +55,7 @@ TODO:
 - 内联类型提示: https://github.com/clangd/clangd/issues/1535
 - 生成函数实现（补全父类虚函数和未实现的成员函数）: https://github.com/clangd/clangd/issues/445
 - 更详细的 Token 语义提示：https://github.com/clangd/clangd/issues/1115
-
+- module support: https://github.com/clangd/clangd/issues/1293
 
 一些必须要做的选项：
 - 支持补全的时候不补全函数模板的<>
