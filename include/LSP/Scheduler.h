@@ -5,6 +5,12 @@
 
 namespace clice {
 
+struct TranslationUnit {
+    std::string path;
+    std::deque<std::string> messages;
+    std::unique_ptr<ParsedAST> ast;
+};
+
 /// a class used to manage all resources for the LSP server
 class Scheduler {
 private:

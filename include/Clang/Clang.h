@@ -11,21 +11,9 @@
 
 namespace clice {
 
+using llvm::StringRef;
+
 using clang::CompilerInstance;
 using clang::CompilerInvocation;
-
-template <typename T>
-union uninitialized {
-    T value;
-
-    uninitialized() {}
-
-    ~uninitialized() { value.~T(); }
-
-    template <typename... Args>
-    auto& construct(Args&&... args) {
-        return *new (&value) T{std::forward<Args>(args)...};
-    }
-};
 
 }  // namespace clice

@@ -88,6 +88,14 @@ int main(int argc, const char** argv) {
     }
 
     clang::Preprocessor& pp = instance->getPreprocessor();
+    pp.setTokenWatcher([&pp](const clang::Token& token) {
+        if(!token.isAnnotation()) {
+            auto name = clang::Lexer::getSpelling(token, pp.getSourceManager(), pp.getLangOpts());
+            llvm::outs() << "token: " << name << " kind: " << token.getName() << "\n";
+        } else {
+            // TODO: split annoated token
+        }
+    });
     // pp.addPPCallbacks(std::make_unique<PPCallback>(pp));
     clang::syntax::TokenCollector collector{pp};
 

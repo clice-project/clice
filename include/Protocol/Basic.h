@@ -1,13 +1,18 @@
 #pragma once
 
+#include <string>
 #include <vector>
 #include <optional>
+#include <cstdint>
 
 namespace clice::protocol {
 
 using Integer = int;
 using UInteger = unsigned int;
 using String = std::string;
+
+template <typename... Ts>
+struct Combine : Ts... {};
 
 class URI {
 private:
@@ -133,6 +138,30 @@ struct Diagnostic {
     /// An array of related diagnostic information, e.g. when symbol-names within a scope collide all
     /// definitions can be marked via this property.
     // TODO: std::vector<DiagnosticRelatedInformation> relatedInformation;
+};
+
+/// A parameter literal used in requests to pass a text document and a position inside that document.
+struct TextDocumentPositionParams {
+    /// The text document.
+    TextDocumentIdentifier textDocument;
+
+    /// The position inside the text document.
+    Position position;
+};
+
+using DocumentUri = String;
+
+
+
+// value set ['plaintext', 'markdown']
+using MarkupKind = String;
+
+struct MarkupContent {
+    /// The type of the Markup
+    MarkupKind kind;
+
+    /// The content itself
+    String value;
 };
 
 }  // namespace clice::protocol

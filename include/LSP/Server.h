@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Protocol.h"
+#include <Protocol/Protocol.h>
 #include "Scheduler.h"
 #include "Transport.h"
 
@@ -11,9 +11,8 @@ extern class Server server;
 
 /// core class responsible for starting the server
 class Server {
-    uv_loop_t* loop;
     std::unique_ptr<Transport> transport;
-    Scheduler scheduler;
+    std::unique_ptr<Scheduler> scheduler;
     std::map<std::string_view, void (*)(std::string_view)> methods;
 
 public:

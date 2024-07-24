@@ -4,7 +4,8 @@
 
 namespace clice {
 
-struct Transport {
+class Transport {
+public:
     virtual void send(std::string_view) = 0;
     virtual ~Transport() = default;
 };

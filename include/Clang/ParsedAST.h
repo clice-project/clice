@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Diagnostics.h"
+#include "Diagnostic.h"
 #include "Preamble.h"
 #include "CompileDatabase.h"
 
@@ -28,7 +28,7 @@ private:
     std::vector<Decl> topLevelDecls;
     std::vector<Diagnostic> diagnostics;
     /// core members for clang frontend
-    uninitialized<TokenBuffer> tokens;
+    // uninitialized<TokenBuffer> tokens;
     clang::SyntaxOnlyAction action;
     CompilerInstance instance;
 
@@ -41,7 +41,7 @@ public:
                                             const std::shared_ptr<CompilerInvocation>& invocation,
                                             const Preamble& preamble);
 
-    auto& Tokens() { return tokens.value; }
+    // auto& Tokens() { return tokens.value; }
 
     auto& Diagnostics() { return diagnostics; }
 

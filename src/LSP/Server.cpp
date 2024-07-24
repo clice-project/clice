@@ -1,6 +1,6 @@
 #include <LSP/Server.h>
 #include <LSP/Setting.h>
-#include <LSP/Protocol.h>
+#include <Protocol/Protocol.h>
 #include <LSP/Transport.h>
 
 #include <Support/Logger.h>
@@ -18,7 +18,7 @@ int Server::run(int argc, char** argv) {
     setting = deserialize<Setting>(json::parse(argv[1]));
     logger::info("settings: {}", argv[1]);
 
-    loop = uv_default_loop();
+    uv_loop_t* loop = uv_default_loop();
 
     if(setting.mode == "pipe") {
         transport = std::make_unique<Pipe>();
@@ -38,7 +38,7 @@ int Server::run(int argc, char** argv) {
 
 int Server::exit() {
     // stop the event loop
-    uv_stop(loop);
+    uv_stop(uv_default_loop());
     return 0;
 }
 
@@ -70,7 +70,7 @@ void Server::handle_message(std::string_view message) {
 Task<void> Server::didOpen(const DidOpenTextDocumentParams& params) {
     logger::info("textDocument/didOpen: {}", params.textDocument.uri);
     auto& textDocument = params.textDocument;
-    co_await scheduler.update(textDocument.uri, textDocument.text);
+    co_await scheduler->update(textDocument.uri, textDocument.text);
 }
 
 }  // namespace clice
