@@ -1,7 +1,7 @@
-#include <LSP/Server.h>
-#include <LSP/Setting.h>
+#include <Server/Server.h>
+#include <Server/Setting.h>
+#include <Server/Transport.h>
 #include <Protocol/Protocol.h>
-#include <LSP/Transport.h>
 
 #include <Support/Logger.h>
 #include <Support/Serialize.h>

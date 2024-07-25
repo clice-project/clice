@@ -1,4 +1,4 @@
-#include <LSP/Server.h>
+#include <Server/Server.h>
 
 int main(int argc, char** argv) {
     using namespace clice;

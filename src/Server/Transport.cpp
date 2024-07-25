@@ -1,5 +1,5 @@
-#include <LSP/Server.h>
-#include <LSP/Transport.h>
+#include <Server/Server.h>
+#include <Server/Transport.h>
 #include <Support/Logger.h>
 
 namespace {

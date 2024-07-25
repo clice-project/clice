@@ -1,6 +1,6 @@
-#include "LSP/Scheduler.h"
-#include "Clang/ParsedAST.h"
-#include "Support/Logger.h"
+#include <Server/Scheduler.h>
+#include <Clang/ParsedAST.h>
+#include <Support/Logger.h>
 
 namespace clice {
 
