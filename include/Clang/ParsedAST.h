@@ -9,7 +9,6 @@ namespace clice {
 class ParsedAST {
 private:
     using Decl = clang::Decl*;
-    using PathRef = llvm::StringRef;
     using TokenBuffer = clang::syntax::TokenBuffer;
     using ASTConsumer = std::unique_ptr<clang::ASTConsumer>;
 
@@ -31,8 +30,6 @@ private:
     // uninitialized<TokenBuffer> tokens;
     clang::SyntaxOnlyAction action;
     CompilerInstance instance;
-
-    ParsedAST() = default;
 
 public:
     static std::unique_ptr<ParsedAST> build(std::string_view path, std::string_view content);

@@ -9,11 +9,10 @@
 #include <clang/Tooling/CompilationDatabase.h>
 #include <clang/Tooling/Syntax/Tokens.h>
 
-
 namespace clice {
 
 using llvm::StringRef;
-
+using PathRef = StringRef;
 using clang::CompilerInstance;
 using clang::CompilerInvocation;
 

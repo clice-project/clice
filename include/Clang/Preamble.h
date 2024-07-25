@@ -1,20 +1,19 @@
 #pragma once
 
-#include "Clang.h"
+#include "Directive.h"
 
 namespace clice {
 
 class Preamble {
 private:
-    clang::PrecompiledPreamble* preamble;
+    Directive directive;
+    clang::PrecompiledPreamble data;
 
-    Preamble(clang::PrecompiledPreamble* preamble) : preamble(preamble) {}
+    Preamble(clang::PrecompiledPreamble&& preamble) : data(std::move(preamble)) {}
 
 public:
-    Preamble() = default;
-
-    static Preamble
-        build(std::string_view path, std::string_view content, const CompilerInvocation& invocation);
+    static std::unique_ptr<Preamble>
+        build(PathRef path, StringRef content, const CompilerInvocation& invocation);
 };
 
 }  // namespace clice
