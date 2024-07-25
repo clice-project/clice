@@ -4,6 +4,12 @@
 
 namespace clice {
 
-inline auto createCompilerInvocation() {}
+inline CompilerInvocation createCompilerInvocation() {
+    
+}
+
+inline CompilerInstance createCompilerInstance() {
+    
+}
 
 }  // namespace clice

@@ -10,6 +10,7 @@ namespace clice::protocol {
 using Integer = int;
 using UInteger = unsigned int;
 using String = std::string;
+using StringRef = std::string_view;
 
 template <typename... Ts>
 struct Combine : Ts... {};
@@ -22,6 +23,8 @@ private:
 
 public:
 };
+
+using DocumentUri = String;
 
 /// Position in a text document expressed as zero-based line and zero-based character offset.
 struct Position {
@@ -45,7 +48,7 @@ struct Range {
 /// An item to transfer a text document from the client to the server.
 struct TextDocumentItem {
     /// The text document's URI.
-    URI uri;
+    DocumentUri uri;
 
     /// The text document's language identifier.
     String languageId;
@@ -61,7 +64,16 @@ struct TextDocumentItem {
 /// Text documents are identified using a URI.
 struct TextDocumentIdentifier {
     /// The text document's URI.
-    URI uri;
+    DocumentUri uri;
+};
+
+/// A parameter literal used in requests to pass a text document and a position inside that document.
+struct TextDocumentPositionParams {
+    /// The text document.
+    TextDocumentIdentifier textDocument;
+
+    /// The position inside the text document.
+    Position position;
 };
 
 /// A textual edit applicable to a text document.
@@ -140,21 +152,29 @@ struct Diagnostic {
     // TODO: std::vector<DiagnosticRelatedInformation> relatedInformation;
 };
 
-/// A parameter literal used in requests to pass a text document and a position inside that document.
-struct TextDocumentPositionParams {
-    /// The text document.
-    TextDocumentIdentifier textDocument;
+/// Represents a reference to a command.
+struct Command {
+    /// Title of the command, like `save`.
+    String title;
 
-    /// The position inside the text document.
-    Position position;
+    /// The identifier of the actual command handler.
+    String command;
+
+    /// Arguments that the command handler should be invoked with.
+    /// arguments?: LSPAny[];
 };
 
-using DocumentUri = String;
+struct MarkupKind {
+    StringRef m_Value;
 
+    MarkupKind(StringRef value) : m_Value(value) {}
 
+    /// Plain text is supported as a content format
+    constexpr inline static StringRef PlainText = "plaintext";
 
-// value set ['plaintext', 'markdown']
-using MarkupKind = String;
+    /// Markdown is supported as a content format
+    constexpr inline static StringRef Markdown = "markdown";
+};
 
 struct MarkupContent {
     /// The type of the Markup

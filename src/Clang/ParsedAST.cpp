@@ -54,7 +54,9 @@ std::unique_ptr<ParsedAST> ParsedAST::build(std::string_view path,
         logger::error("Failed to execute action: {0}", llvm::errorToErrorCode(std::move(error)).message());
     }
 
-    AST->tokens.construct(std::move(collector).consume());
+
+    
+    // AST->tokens.construct(std::move(collector).consume());
 
     return std::unique_ptr<ParsedAST>(AST);
 }
