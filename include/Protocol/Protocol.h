@@ -5,7 +5,7 @@
 #include <optional>
 #include <string_view>
 
-#include "SemanticTokens.h"
+#include "Language/SemanticToken.h"
 
 namespace clice {
 
