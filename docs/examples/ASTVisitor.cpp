@@ -1,10 +1,27 @@
 #include <Clang/Clang.h>
 
 class ASTVistor : public clang::RecursiveASTVisitor<ASTVistor> {
+private:
+    clang::Preprocessor& preprocessor;
+    clang::SourceManager& sourceManager;
+    clang::syntax::TokenBuffer& buffer;
+
 public:
+    ASTVistor(clang::Preprocessor& preprocessor, clang::syntax::TokenBuffer& buffer) :
+        preprocessor(preprocessor), sourceManager(preprocessor.getSourceManager()), buffer(buffer) {}
+
     bool VisitDecl(clang::Decl* decl) {
         if(clang::NamedDecl* named = llvm::dyn_cast<clang::NamedDecl>(decl)) {
-            llvm::outs() << "Decl: " << named->getNameAsString() << "\n";
+            auto name = named->getName();
+            if(name == "main") {
+                llvm::outs() << "Found main function\n";
+                auto location = named->getLocation();
+                llvm::outs() << "line: " << sourceManager.getPresumedLineNumber(location) << "\n";
+                llvm::outs() << "column: " << sourceManager.getPresumedColumnNumber(location) << "\n";
+                llvm::outs() << "line: " << sourceManager.getSpellingLineNumber(location) << "\n";
+                llvm::outs() << "column: " << sourceManager.getSpellingColumnNumber(location) << "\n";
+                // auto token = buffer.spelledTokenAt(location);
+            }
         }
         return true;
     }
@@ -47,13 +64,17 @@ int main(int argc, const char** argv) {
         std::terminate();
     }
 
+    clang::syntax::TokenCollector collector{instance->getPreprocessor()};
+
     if(auto error = action.Execute()) {
         llvm::errs() << "Failed to execute action: " << error << "\n";
         std::terminate();
     }
 
+    clang::syntax::TokenBuffer buffer = std::move(collector).consume();
+
     auto tu = instance->getASTContext().getTranslationUnitDecl();
-    ASTVistor visitor;
+    ASTVistor visitor{instance->getPreprocessor(), buffer};
     visitor.TraverseDecl(tu);
 
     action.EndSourceFile();
