@@ -1,3 +1,5 @@
+#pragma once
+
 #include "DocumentSymbol.h"
 
 namespace clice::protocol {

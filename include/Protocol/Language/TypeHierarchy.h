@@ -1,3 +1,5 @@
+#pragma once
+
 #include "DocumentSymbol.h"
 
 namespace clice::protocol {
@@ -57,5 +59,5 @@ using TypeHierarchyResult = std::vector<TypeHierarchyItem>;
 /                                                                          /
 /=========================================================================*/
 
-// TODO: 
+// TODO:
 }  // namespace clice::protocol
