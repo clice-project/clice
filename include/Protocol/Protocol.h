@@ -477,7 +477,7 @@ struct DocumentOnTypeFormattingOptions {
 
 struct SemanticTokensOptions {
     /// The legend used by the server
-    SemanticTokensLegend legend;
+    protocol::SemanticTokensLegend legend;
 
     /// Server supports providing semantic tokens for a specific range of a document.
     bool range = false;  // TODO: further check

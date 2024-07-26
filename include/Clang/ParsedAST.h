@@ -30,6 +30,7 @@ private:
     // uninitialized<TokenBuffer> tokens;
     clang::SyntaxOnlyAction action;
     CompilerInstance instance;
+    clang::syntax::TokenBuffer buffer;
 
 public:
     static std::unique_ptr<ParsedAST> build(std::string_view path, std::string_view content);
@@ -38,11 +39,13 @@ public:
                                             const std::shared_ptr<CompilerInvocation>& invocation,
                                             const Preamble& preamble);
 
-    // auto& Tokens() { return tokens.value; }
-
     auto& Diagnostics() { return diagnostics; }
 
     auto& ASTContext() { return instance.getASTContext(); }
+
+    auto& TokensBuffer() { return buffer; }
+
+    auto& SourceManager() { return instance.getSourceManager(); }
 
     auto& TranslationUnit() { return *instance.getASTContext().getTranslationUnitDecl(); }
 };
