@@ -3,7 +3,7 @@ project(clice)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_RELEASE} -g -O0 -fno-rtti")
+set(CMAKE_CXX_FLAGS "-isystem/usr/include/c++/13 -isystem/usr/include/x86_64-linux-gnu/c++/13 ${CMAKE_CXX_FLAGS_RELEASE} -g -O0 -fno-rtti")
 
 set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/external/llvm/lib/cmake")
 find_package(LLVM REQUIRED CONFIG)

@@ -179,13 +179,21 @@ public:
 preprocessor.addPPCallbacks(std::make_unique<Callback>());
 ```
 
-# AST
+
+
+This class is used to simplify a dependent type, so that we can do more things on it. e.g. code
+completion. Dependent type is a type that depends on a template parameter.
+
+For example:
 
 ```cpp
-
+template<typename T>
+void foo(std::vector<T> vec);
 ```
 
+`std::vector<T>` is a dependent type, because it depends on the template parameter `T`. Beacuse it has not been instantiated yet, we can't determine which specialization it will use(if have), even can't not determine whether the instantiation is valid or not. Beacuse of this, we can't not provide **precise** code completion for it.
 
+Note that I emphasis the word **precise**. In fact, in most of the cases, not very precise is tolerable. It's better than nothing. We can only consider the main template and provide code completion for it. 
 
 
 

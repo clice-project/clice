@@ -1,13 +1,14 @@
-#include <iostream>
+template <typename T>
+struct A {
+    using reference = T&;
+};
 
-#define X(x)                                                                                                 \
-    int x;                                                                                                   \
-    int y;                                                                                                   \
-    int z;
+template <typename U>
+struct B {
+    using reference = A<U>::reference;
+};
 
-X(x)
-
-int main() {
-    std::cout << x << std::endl;
-    return 0;
-}
+template <typename Z>
+struct C {
+    using type = B<Z>::reference;
+};

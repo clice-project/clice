@@ -9,7 +9,17 @@ using SemanticTokenModifiers = protocol::SemanticTokenModifiers;
 struct SemanticToken {
     clang::syntax::FileRange range;
     SemanticTokenTypes type;
-    uint32_t modifiers;
+    uint32_t modifiers = 0;
+
+    SemanticToken& setType(SemanticTokenTypes type) {
+        this->type = type;
+        return *this;
+    }
+
+    SemanticToken& addModifier(SemanticTokenModifiers modifier) {
+        modifiers |= modifier;
+        return *this;
+    }
 };
 
 class HighlighCollector {
@@ -17,8 +27,13 @@ private:
     clang::ASTContext& context;
     clang::syntax::TokenBuffer& buffer;
     clang::SourceManager& sourceManager;
+    // store all tokens in the main file
     std::vector<SemanticToken> tokens;
     llvm::DenseMap<const clang::syntax::Token*, std::size_t> tokenMap;
+    // cache the last location and token index
+    // to have a better performance in traversing the same node
+    clang::SourceLocation lastLocation;
+    std::optional<std::size_t> lastTokenIndex;
 
 private:
     /// determine whether the token is a keyword
@@ -88,19 +103,30 @@ public:
     void attach(clang::Decl* decl, SemanticTokenTypes type, uint32_t modifier);
 
     void attach(clang::SourceLocation location, SemanticTokenTypes type, uint32_t modifier) {
-        auto token = buffer.spelledTokenAt(location);
-        if(token) {
-            auto iter = tokenMap.find(token);
-            if(iter != tokenMap.end()) {
+        // check whether the location is same as the last location
+        if(lastLocation != location) {
+            // if not, update the last location and find the token
+            lastLocation = location;
+            auto token = buffer.spelledTokenAt(location);
+            if(token) {
+                // if there is a corresponding token, update the token
+                auto iter = tokenMap.find(token);
+                assert(iter != tokenMap.end());
                 auto index = iter->second;
                 tokens[index].type = type;
-                tokens[index].modifiers = modifier;
+                tokens[index].modifiers |= modifier;
+                lastTokenIndex = index;
+            } else {
+                // if there is no corresponding token, reset the last token index
+                lastTokenIndex.reset();
+            }
+        } else {
+            // if yes, use the last token index to find the token
+            if(lastTokenIndex) {
+                tokens[*lastTokenIndex].type = type;
+                tokens[*lastTokenIndex].modifiers |= modifier;
             }
         }
-
-        // buffer.expandedForSpelled()
-        // buffer.spelledForExpanded();
-        // buffer.spelledTokenContaining();
     }
 
     void collect() {}
@@ -234,6 +260,10 @@ public:
     VISIT(Stmt) { return collector.isInMainFile(node->getBeginLoc()); }
 
     VISIT(Expr) { return collector.isInMainFile(node->getBeginLoc()); }
+
+    VISIT(DeclRefExpr) {}
+
+    VISIT(MemberExpr) {}
 
     VISIT(Attr) {
         auto location = node->getLocation();

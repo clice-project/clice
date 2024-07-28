@@ -16,7 +16,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Launch",
-            "program": "${workspaceFolder}/build/Preamble",
+            "program": "${workspaceFolder}/build/ASTVisitor",
             "args": [
                 "/home/ykiko/Project/C++/clice/main.cpp",
             ],
