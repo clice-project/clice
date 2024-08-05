@@ -1,31 +1,31 @@
 cmake_minimum_required(VERSION 3.22)
 project(clice)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_FLAGS "-isystem/usr/include/c++/13 -isystem/usr/include/x86_64-linux-gnu/c++/13 ${CMAKE_CXX_FLAGS_RELEASE} -g -O0 -fno-rtti")
-
-set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/external/llvm/lib/cmake")
-find_package(LLVM REQUIRED CONFIG)
-find_package(Clang REQUIRED CONFIG)
-
-message(STATUS "LLVM_INCLUDE_DIRS: ${LLVM_INCLUDE_DIRS}")
-
-set(PCH_HEADER "${CMAKE_SOURCE_DIR}/include/Clang/Clang.h")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_RELEASE} -w -g -O0 -fno-rtti")
 
 set(JSON_BuildTests OFF CACHE INTERNAL "")
+set(LLVM_ENABLE_PROJECTS "clang")
+set(LLVM_TARGETS_TO_BUILD "X86")
+set(LLVM_USE_LINKER "lld")
+set(BUILD_SHARED_LIBS ON)
+set(LLVM_ABI_BREAKING_CHECKS "FORCE_OFF")
+
+add_subdirectory("${CMAKE_SOURCE_DIR}/external/llvm-project/llvm")
 add_subdirectory("${CMAKE_SOURCE_DIR}/external/json")
 add_subdirectory("${CMAKE_SOURCE_DIR}/external/libuv")
 add_subdirectory("${CMAKE_SOURCE_DIR}/external/spdlog")
 
 set(INCLUDE_DIRS
     "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/external/llvm-project/clang/lib/Sema"
     "${CMAKE_SOURCE_DIR}/external/json/include"
     "${CMAKE_SOURCE_DIR}/external/libuv/include"
     "${CMAKE_SOURCE_DIR}/external/spdlog/include"
-    "${CMAKE_SOURCE_DIR}/external/llvm/include"
-    "${CMAKE_SOURCE_DIR}/external/llvm/tools/clang/include"
 )
+
+set(PCH_HEADER "${CMAKE_SOURCE_DIR}/include/Clang/Clang.h")
 
 set(LLVM_LIBS
     LLVMCore
@@ -46,6 +46,7 @@ set(LLVM_LIBS
     clangToolingInclusions
     clangToolingInclusionsStdlib
     clangToolingSyntax
+    LLVMFrontendOpenMP
 )
 
 set(LINK_LIBS
@@ -90,4 +91,5 @@ if(CLICE_EXAMPLES)
     add_example(CodeCompletion docs/examples/CodeCompletion.cpp)
     add_example(Preamble docs/examples/Preamble.cpp)
     add_example(Preprocessor docs/examples/Preprocessor.cpp)
+    add_example(TreeTransform docs/examples/TreeTransform.cpp)
 endif()

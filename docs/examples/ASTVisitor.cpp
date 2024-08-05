@@ -1,5 +1,6 @@
 #include <Clang/Clang.h>
 #include <clang/Sema/Lookup.h>
+#include <clang/Sema/Template.h>
 
 class DependentShaper {
     clang::ASTContext& context;
@@ -33,6 +34,15 @@ public:
         }
 
         clang::ElaboratedType* elaboratedType = nullptr;
+        clang::MultiLevelTemplateArgumentList list;
+        list.addOuterTemplateArguments(originalArguments);
+        llvm::outs() << "-------------------------------------------------\n";
+        clang::Sema::CodeSynthesisContext InstContext;
+        // InstContext.Kind = clang::Sema::CodeSynthesisContext::TemplateInstantiation;
+        // InstContext.Entity = nullptr;
+        // InstContext.TemplateArgs = TemplateArgs;
+        //  sema.CodeSynthesisContexts.back().dump();
+        auto result = sema.SubstType(input, list, {}, {});
 
         if(auto type = llvm::dyn_cast<clang::LValueReferenceType>(input)) {
             auto pointee = type->getPointeeType();
@@ -147,6 +157,455 @@ public:
     }
 };
 
+namespace clang {
+class DependentNameResolver {
+public:
+    Sema& S;
+    ASTContext& Ctx;
+    clang::NamedDecl* CurrentDecl;
+
+public:
+    DependentNameResolver(ASTContext& Ctx, Sema& S) : Ctx(Ctx), S(S) {}
+
+    std::vector<TemplateArgument> resolve(llvm::ArrayRef<TemplateArgument> arguments) {
+        std::vector<TemplateArgument> result;
+        for(auto arg: arguments) {
+            if(arg.getKind() == TemplateArgument::ArgKind::Type) {
+                if(auto type = llvm::dyn_cast<TemplateTypeParmType>(arg.getAsType())) {
+                    const TemplateTypeParmDecl* param = type->getDecl();
+                    if(param->hasDefaultArgument()) {
+                        result.push_back(param->getDefaultArgument().getArgument());
+                        continue;
+                    }
+                }
+            }
+            result.push_back(arg);
+        }
+        return result;
+    }
+
+    QualType resolve(QualType T) {
+        if(!T->isDependentType()) {
+            return T;
+        }
+
+        while(true) {
+            if(auto DNT = T->getAs<DependentNameType>()) {
+                T = resolve(DNT);
+            } else if(auto DTST = T->getAs<DependentTemplateSpecializationType>()) {
+                T = resolve(DTST);
+            } else if(auto LRT = T->getAs<LValueReferenceType>()) {
+                return Ctx.getLValueReferenceType(resolve(LRT->getPointeeType()));
+            } else {
+                return T;
+            }
+        }
+    }
+
+    /// resolve a dependent name type, e.g. `typename std::vector<T>::reference`
+    QualType resolve(const DependentNameType* DNT) {
+        // e.g. when DNT is `typename std::vector<T>::reference`
+        // - qualifier: std::vector<T>
+        // - identifier: reference
+        return resolve(DNT->getQualifier(), DNT->getIdentifier());
+    }
+
+    /// resolve a dependent template specialization type.
+    QualType resolve(const DependentTemplateSpecializationType* DTST) {
+        // e.g. when DTST is `typename std::allocator_traits<Alloc>::template rebind_alloc<T>`.
+        // - qualifier: std::allocator_traits<Alloc>
+        // - identifier: rebind_alloc
+        // - template_arguments: <T>
+        return resolve(DTST->getQualifier(), DTST->getIdentifier(), DTST->template_arguments());
+    }
+
+    QualType resolve(const NestedNameSpecifier* TST,
+                     const IdentifierInfo* II,
+                     ArrayRef<TemplateArgument> arguments = {}) {
+
+        switch(TST->getKind()) {
+            case NestedNameSpecifier::SpecifierKind::Identifier: {
+                llvm::outs() << "\n------------------ Identifier -----------------------\n";
+                // when the kind of TST is Identifier
+                // e.g. std::vector<std::vector<T>>::value_type::
+                // resolve it recursively
+                return resolve(resolve(TST->getPrefix(), TST->getAsIdentifier()), II, arguments);
+            }
+
+            case NestedNameSpecifier::SpecifierKind::TypeSpec: {
+                llvm::outs() << "\n------------------ TypeSpec -----------------------\n";
+                TST->dump();
+                llvm::outs() << "         " << II->getName() << "\n";
+                // when the kind of TST is TypeSpec, e.g. std::vector<T>::
+                return resolve(QualType(TST->getAsType(), 0), II, arguments);
+            }
+
+            case NestedNameSpecifier::SpecifierKind::TypeSpecWithTemplate: {
+                llvm::outs() << "------------------ TypeSpecWithTemplate -----------------------\n";
+                // when the kind of TST is TypeSpecWithTemplate, e.g. std::vector<T>::template name<U>::
+                TST->dump();
+                return resolve(QualType(TST->getAsType(), 0), II, arguments);
+            }
+
+            default: {
+                llvm::outs() << "\n------------------ Unknown -----------------------\n";
+                TST->dump();
+                std::terminate();
+            }
+        }
+    }
+
+    QualType substitute(ClassTemplateDecl* CTD,
+                        const IdentifierInfo* II,
+                        ArrayRef<TemplateArgument> arguments = {}) {
+        Sema::CodeSynthesisContext context;
+
+        auto args = resolve(arguments);
+
+        context.Entity = CTD;
+        context.TemplateArgs = args.data();
+        context.Kind = Sema::CodeSynthesisContext::TemplateInstantiation;
+        S.pushCodeSynthesisContext(context);
+
+        MultiLevelTemplateArgumentList list;
+
+        auto recordDecl = CTD->getTemplatedDecl();
+        auto member = recordDecl->lookup(II).front();
+
+        QualType type;
+
+        if(auto TAD = llvm::dyn_cast<TypeAliasDecl>(member)) {
+            type = TAD->getUnderlyingType();
+        } else if(auto TD = llvm::dyn_cast<TypedefDecl>(member)) {
+            type = TD->getUnderlyingType();
+        } else if(auto TATD = llvm::dyn_cast<TypeAliasTemplateDecl>(member)) {
+            auto args2 = resolve(arguments);
+
+            context.Entity = TATD;
+            context.TemplateArgs = args2.data();
+            context.Kind = Sema::CodeSynthesisContext::TypeAliasTemplateInstantiation;
+            S.pushCodeSynthesisContext(context);
+
+            MultiLevelTemplateArgumentList list;
+            list.addOuterTemplateArguments(TATD, args2, false);
+
+            auto TAD = TATD->getTemplatedDecl();
+
+            type = TAD->getUnderlyingType();
+        } else if(auto CTD = llvm::dyn_cast<ClassTemplateDecl>(member)) {
+            return substitute(CTD, II, arguments);
+        } else {
+            member->dump();
+            std::terminate();
+        }
+
+        list.addOuterTemplateArguments(CTD, args, true);
+        return S.SubstType(type, list, {}, {});
+    }
+
+    /// typename A<U1>::template B<U2>::template C<U3>::type::
+    QualType resolve(const DependentTemplateSpecializationType* DTST, const IdentifierInfo* II) {
+        // auto prefix;
+        MultiLevelTemplateArgumentList list;
+        while(true) {
+            // list.addOuterTemplateArguments()
+        }
+    }
+
+    QualType resolve(QualType T, const IdentifierInfo* II, ArrayRef<TemplateArgument> arguments = {}) {
+        if(!T->isDependentType() && arguments.size() == 0) {
+            // TODO:
+        }
+        llvm::outs() << "\n";
+        T.dump();
+        Sema::CodeSynthesisContext context;
+
+        if(auto TTPT = T->getAs<TemplateTypeParmType>()) {
+            llvm::outs() << "\n-------------------------------------------------\n";
+            T->dump();
+            llvm::outs() << "                  \n" << II->getName();
+
+            // e.g. when T is `T`
+            // - index: 0
+        } else if(auto TST = T->getAs<TemplateSpecializationType>()) {
+            auto TemplateName = TST->getTemplateName();
+            auto TemplateDecl = TemplateName.getAsTemplateDecl();
+            auto TemplatedDecl = TemplateDecl->getTemplatedDecl();
+
+            if(auto CTD = llvm::dyn_cast<ClassTemplateDecl>(TemplateDecl)) {
+                return substitute(CTD, II, TST->template_arguments());
+            } else {
+                TemplateDecl->dump();
+                std::terminate();
+            }
+            auto TemplateArgs = TST->template_arguments();
+        } else if(auto DTST = T->getAs<DependentTemplateSpecializationType>()) {
+            auto TST = DTST->getQualifier()->getAsType()->getAs<TemplateSpecializationType>();
+            auto TemplateName = TST->getTemplateName();
+            auto TemplateDecl = TemplateName.getAsTemplateDecl();
+            auto TemplatedDecl = TemplateDecl->getTemplatedDecl();
+
+            if(auto CTD = llvm::dyn_cast<ClassTemplateDecl>(TemplateDecl)) {
+                auto args = resolve(TST->template_arguments());
+
+                context.Entity = CTD;
+                context.TemplateArgs = args.data();
+                context.Kind = Sema::CodeSynthesisContext::TemplateInstantiation;
+                S.pushCodeSynthesisContext(context);
+
+                MultiLevelTemplateArgumentList list;
+                list.addOuterTemplateArguments(CTD, args, true);
+
+                auto recordDecl = CTD->getTemplatedDecl();
+                auto member = recordDecl->lookup(DTST->getIdentifier()).front();
+
+                if(auto CTD2 = llvm::dyn_cast<ClassTemplateDecl>(member)) {
+                    auto args2 = resolve(DTST->template_arguments());
+
+                    context.Entity = CTD2;
+                    context.TemplateArgs = args2.data();
+                    context.Kind = Sema::CodeSynthesisContext::TemplateInstantiation;
+                    S.pushCodeSynthesisContext(context);
+
+                    MultiLevelTemplateArgumentList list;
+                    list.addOuterTemplateArguments(CTD2, args2, true);
+                    list.addOuterTemplateArguments(CTD, args, true);
+
+                    auto CRD = CTD2->getTemplatedDecl();
+                    return S.SubstType(
+                        llvm::dyn_cast<TypeAliasDecl>(CRD->lookup(II).front())->getUnderlyingType(),
+                        list,
+                        {},
+                        {});
+
+                } else if(auto TATD = llvm::dyn_cast<TypeAliasTemplateDecl>(member)) {
+                    auto args2 = resolve(arguments);
+
+                    context.Entity = TATD;
+                    context.TemplateArgs = args2.data();
+                    context.Kind = Sema::CodeSynthesisContext::TypeAliasTemplateInstantiation;
+                    S.pushCodeSynthesisContext(context);
+
+                    MultiLevelTemplateArgumentList list;
+                    list.addOuterTemplateArguments(TATD, args2, false);
+                    list.addOuterTemplateArguments(CTD, args, true);
+
+                    auto TAD = TATD->getTemplatedDecl();
+                    return S.SubstType(TAD->getUnderlyingType(), list, {}, {});
+                } else {
+                    member->dump();
+                    std::terminate();
+                }
+            } else {
+                T->dump();
+                std::terminate();
+            }
+
+            // S.SubstType()
+        }
+    }
+};
+
+class DependentNameResolverV2 {
+public:
+    Sema& S;
+    ASTContext& Ctx;
+
+    std::vector<std::pair<Decl*, std::vector<TemplateArgument>>*> arguments;
+
+public:
+    DependentNameResolverV2(ASTContext& Ctx, Sema& S) : Ctx(Ctx), S(S) {}
+
+    std::vector<TemplateArgument> resolve(llvm::ArrayRef<TemplateArgument> arguments) {
+        std::vector<TemplateArgument> result;
+        for(auto arg: arguments) {
+            if(arg.getKind() == TemplateArgument::ArgKind::Type) {
+                if(auto type = llvm::dyn_cast<TemplateTypeParmType>(arg.getAsType())) {
+                    const TemplateTypeParmDecl* param = type->getDecl();
+
+                    if(param && param->hasDefaultArgument()) {
+                        result.push_back(param->getDefaultArgument().getArgument());
+                        continue;
+                    }
+                }
+            }
+            result.push_back(arg);
+        }
+        return result;
+    }
+
+    QualType dealias(QualType type) {
+        if(auto DNT = type->getAs<TemplateSpecializationType>()) {
+            return QualType(DNT, 0);
+        } else if(auto DTST = type->getAs<DependentTemplateSpecializationType>()) {
+            auto NNS = NestedNameSpecifier::Create(
+                Ctx,
+                nullptr,
+                false,
+                dealias(QualType(DTST->getQualifier()->getAsType(), 0)).getTypePtr());
+
+            return Ctx.getDependentTemplateSpecializationType(DTST->getKeyword(),
+                                                              NNS,
+                                                              DTST->getIdentifier(),
+                                                              resolve(DTST->template_arguments()));
+        } else {
+            return type;
+        }
+    }
+
+    QualType resolve(QualType type) {
+
+        while(true) {
+            // llvm::outs() << "--------------------------------------------------------------------\n";
+            // type.dump();
+
+            MultiLevelTemplateArgumentList list;
+            if(auto DNT = type->getAs<DependentNameType>()) {
+                type = resolve(resolve(DNT->getQualifier(), DNT->getIdentifier()));
+                for(auto begin = arguments.rbegin(), end = arguments.rend(); begin != end; ++begin) {
+                    list.addOuterTemplateArguments((*begin)->first, (*begin)->second, true);
+                }
+                type = S.SubstType(dealias(type), list, {}, {});
+                arguments.clear();
+
+            } else if(auto DTST = type->getAs<DependentTemplateSpecializationType>()) {
+                auto ND = resolve(DTST->getQualifier(), DTST->getIdentifier());
+                if(auto TATD = llvm::dyn_cast<TypeAliasTemplateDecl>(ND)) {
+                    auto args = resolve(DTST->template_arguments());
+
+                    Sema::CodeSynthesisContext context;
+                    context.Entity = TATD;
+                    context.Kind = Sema::CodeSynthesisContext::TypeAliasTemplateInstantiation;
+                    context.TemplateArgs = args.data();
+                    S.pushCodeSynthesisContext(context);
+
+                    list.addOuterTemplateArguments(TATD, args, true);
+                    for(auto begin = arguments.rbegin(), end = arguments.rend(); begin != end; ++begin) {
+                        list.addOuterTemplateArguments((*begin)->first, (*begin)->second, true);
+                    }
+
+                    // llvm::outs() << "before:
+                    // ----------------------------------------------------------------\n";
+                    // TATD->getTemplatedDecl()->getUnderlyingType().dump();
+                    type = dealias(TATD->getTemplatedDecl()->getUnderlyingType());
+                    // llvm::outs() << "arguments:
+                    // -------------------------------------------------------------\n"; list.dump();
+                    type = S.SubstType(type, list, {}, {});
+                    // type.dump();
+                    arguments.clear();
+
+                } else {
+                    ND->dump();
+                    std::terminate();
+                }
+                // return resolve(DTST);
+            } else if(auto LRT = type->getAs<LValueReferenceType>()) {
+                type = Ctx.getLValueReferenceType(resolve(LRT->getPointeeType()));
+            } else {
+                return type;
+            }
+        }
+    }
+
+    QualType resolve(NamedDecl* ND) {
+        if(auto TD = llvm::dyn_cast<TypedefDecl>(ND)) {
+            return TD->getUnderlyingType();
+        } else if(auto TAD = llvm::dyn_cast<TypeAliasDecl>(ND)) {
+            return TAD->getUnderlyingType();
+        } else {
+            ND->dump();
+            std::terminate();
+        }
+    }
+
+    NamedDecl* resolve(const NestedNameSpecifier* NNS, const IdentifierInfo* II) {
+        switch(NNS->getKind()) {
+            // prefix is an identifier, e.g. <...>::name::
+            case NestedNameSpecifier::SpecifierKind::Identifier: {
+                return lookup(resolve(resolve(NNS->getPrefix(), NNS->getAsIdentifier())), II);
+            }
+
+            // prefix is a type, e.g. <...>::typename name::
+            case NestedNameSpecifier::SpecifierKind::TypeSpec:
+            case NestedNameSpecifier::SpecifierKind::TypeSpecWithTemplate: {
+                return lookup(QualType(NNS->getAsType(), 0), II);
+            }
+
+            default: {
+                NNS->dump();
+                std::terminate();
+            }
+        }
+    }
+
+    NamedDecl* lookup(QualType Type, const IdentifierInfo* Name) {
+        NamedDecl* TemplateDecl;
+        ArrayRef<TemplateArgument> arguments;
+
+        llvm::outs() << "--------------------------------------------------------------------\n";
+        Type.dump();
+
+        if(auto TTPT = Type->getAs<TemplateTypeParmType>()) {
+            Type->dump();
+            std::terminate();
+        } else if(auto TST = Type->getAs<TemplateSpecializationType>()) {
+            auto TemplateName = TST->getTemplateName();
+            TemplateDecl = TemplateName.getAsTemplateDecl();
+            arguments = TST->template_arguments();
+        } else if(auto DTST = Type->getAs<DependentTemplateSpecializationType>()) {
+            TemplateDecl = resolve(DTST->getQualifier(), DTST->getIdentifier());
+            arguments = DTST->template_arguments();
+        } else if(auto RT = Type->getAs<RecordType>()) {
+            return RT->getDecl()->lookup(Name).front();
+        } else {
+            Type->dump();
+            std::terminate();
+        }
+
+        this->arguments.push_back(
+            new std::pair<Decl*, std::vector<TemplateArgument>>{TemplateDecl, resolve(arguments)});
+
+        NamedDecl* result;
+
+        Sema::CodeSynthesisContext context;
+        context.Entity = TemplateDecl;
+        context.Kind = Sema::CodeSynthesisContext::TemplateInstantiation;
+        context.TemplateArgs = this->arguments.back()->second.data();
+        S.pushCodeSynthesisContext(context);
+
+        if(auto CTD = llvm::dyn_cast<ClassTemplateDecl>(TemplateDecl)) {
+            llvm::outs() << "--------------------------------------------------------------------\n";
+            llvm::SmallVector<ClassTemplatePartialSpecializationDecl*> paritals;
+            CTD->getPartialSpecializations(paritals);
+
+            for(auto partial: paritals) {
+                partial->getInjectedSpecializationType().dump();
+            }
+            llvm::outs() << "--------------------------------------------------------------------\n";
+            // CTD->findPartialSpecialization()
+            auto partial = CTD->findPartialSpecialization(Type);
+            if(partial) {
+                result = partial->lookup(Name).front();
+            }
+
+            if(!result) {
+                result = CTD->getTemplatedDecl()->lookup(Name).front();
+            }
+        } else if(auto TATD = llvm::dyn_cast<TypeAliasTemplateDecl>(TemplateDecl)) {
+            result = lookup(TATD->getTemplatedDecl()->getUnderlyingType(), Name);
+        }
+
+        if(result == nullptr) {
+            Type.dump();
+            std::terminate();
+        }
+
+        return result;
+    }
+};
+
+}  // namespace clang
+
 class ASTVistor : public clang::RecursiveASTVisitor<ASTVistor> {
 private:
     clang::Preprocessor& preprocessor;
@@ -165,15 +624,13 @@ public:
 
     bool VisitTypeAliasDecl(clang::TypeAliasDecl* decl) {
         auto& sm = context.getSourceManager();
-        if(sm.isInMainFile(decl->getLocation()) && decl->getName() == "type") {
+        if(sm.isInMainFile(decl->getLocation()) && decl->getName() == "result") {
             auto type = decl->getUnderlyingType();
             type.dump();
-            llvm::outs() << "----------------------------------------------------------------\n";
-            if(auto templateType = type->getAs<clang::DependentNameType>()) {
-                DependentShaper shaper{context};
-                auto result = shaper.simplify(templateType);
-                result->dump();
-            }
+            llvm::outs() << "---------------------------------  Result   ------------------------------\n";
+            clang::DependentNameResolverV2 shaper{context, sema};
+            auto result = shaper.resolve(type);
+            result.dump();
         }
 
         return true;
@@ -194,7 +651,7 @@ int main(int argc, const char** argv) {
 
     auto invocation = std::make_shared<clang::CompilerInvocation>();
     std::vector<const char*> args = {
-        "/home/ykiko/Project/C++/clice/external/llvm/bin/clang++",
+        "/usr/local/bin/clang++",
         "-Xclang",
         "-no-round-trip-args",
         "-std=c++20",

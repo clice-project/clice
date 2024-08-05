@@ -20,14 +20,14 @@ public:
         requires std::is_invocable_v<Fn>
     async(Fn&& fn) : callback(std::forward<Fn>(fn)) {}
 
-    bool await_ready(this const async& self) noexcept { return false; }
+    bool await_ready() noexcept { return false; }
 
-    void await_suspend(this async& self, std::coroutine_handle<> handle) noexcept {
-        self.handle = handle;
-        self.req.data = &self;
+    void await_suspend(std::coroutine_handle<> handle) noexcept {
+        handle = handle;
+        req.data = this;
         uv_queue_work(
             uv_default_loop(),
-            &self.req,
+            &this->req,
             [](uv_work_t* req) {
                 auto& self = *static_cast<async*>(req->data);
                 self.result = self.callback();
@@ -41,9 +41,9 @@ public:
             });
     }
 
-    decltype(auto) await_resume(this async& self) noexcept {
-        assert(self.result.has_value());
-        return std::move(*self.result);
+    decltype(auto) await_resume() noexcept {
+        // assert(self.result.has_value());
+        return std::move(*this->result);
     }
 };
 

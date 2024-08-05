@@ -1,4 +1,5 @@
 #include <Clang/Directive.h>
+#include <vector>
 
 namespace clice {
 
@@ -14,7 +15,8 @@ public:
                             clang::OptionalFileEntryRef File,
                             StringRef SearchPath,
                             StringRef RelativePath,
-                            const clang::Module* Imported,
+                            const clang::Module* SuggestedModule,
+                            bool ModuleImported,
                             clang::SrcMgr::CharacteristicKind FileType) override {}
 
     void moduleImport(clang::SourceLocation ImportLoc,

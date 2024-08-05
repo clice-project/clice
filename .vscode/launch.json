@@ -18,7 +18,7 @@
             "name": "Launch",
             "program": "${workspaceFolder}/build/ASTVisitor",
             "args": [
-                "/home/ykiko/Project/C++/clice/main.cpp",
+                "/home/ykiko/C++/clice/main.cpp",
             ],
             "cwd": "${workspaceFolder}"
         },

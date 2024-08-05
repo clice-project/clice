@@ -77,4 +77,35 @@
 2. Semantic Tokens 等基于当前 AST 的操作，则是遍历 AST 渲染 Token 即可。
 3. 剩下很多的，例如 Find References 等等等查询功能，都是在已经索引好的文件中进行查询，不需要对语法树进行什么改动。
 
-### 
+### DependentNameResolver
+
+对于一个`DependentNameType`我们要分情况处理
+
+最一般的`DependentNameType`可以用如下形式的正则表达式处理 `typename T<...>[::T2|::template T2<...>]*`
+
+首先我们要讨论希望化简到什么结果，例如对于
+
+```cpp
+typename std::vector<std::vector<T>>::reference
+```
+
+我们希望得到
+
+```cpp
+std::vector<T>&
+```
+
+对于
+
+```cpp
+typename std::vector<std::vector<T>>::value_type::reference
+```
+
+我们希望得到
+
+```cpp
+T&
+```
+
+无论如何我们需要递归进行处理
+

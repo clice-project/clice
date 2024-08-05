@@ -29,67 +29,73 @@ public:
                                     clang::CodeCompletionContext Context,
                                     clang::CodeCompletionResult* Results,
                                     unsigned NumResults) override {
-        auto contexts = Context.getVisitedContexts();
-        for(auto c: contexts) {
-            // llvm::outs() << "   Kind: " << c->getDeclKindName() << "\n";
-            // for(auto d: c->decls()) {
-            //     // d->dump();
-            // }
+        llvm::outs() << NumResults << " code completion results\n";
+        auto kind = Context.getKind();
+        if(kind == clang::CodeCompletionContext::CCC_DotMemberAccess) {
+            auto type = Context.getBaseType();
+            type->dump();
         }
-
-        llvm::outs() << "code completion results:\n";
-        switch(Context.getKind()) {
-            case clang::CodeCompletionContext::CCC_Attribute: {
-            }
-            case clang::CodeCompletionContext::CCC_DotMemberAccess: {
-                const auto type = Context.getBaseType();
-                if(type->isDependentType()) {
-
-                    if(const auto dependentType = type->getAs<clang::DependentNameType>()) {
-                        auto qualifers = dependentType->getQualifier();
-                        // qualifers->getKind() -> clang::NestedNameSpecifier::SpecifierKind;
-                        // auto t = qualifers->getAsType();
-                        // TODO: 看是否能根据主模板一路把依赖名替换下去，直到变成非依赖名
-                    } else if(const auto dependentType = type->getAs<clang::TemplateSpecializationType>()) {
-                    }
-                }
-                break;
-            }
-            /* ... */
-            default: {
-                llvm::outs() << "   Kind: " << Context.getKind() << "\n";
-            }
-        }
-
-        for(unsigned i = 0; i < NumResults; ++i) {
-            clang::CodeCompletionResult& Result = Results[i];
-
-            switch(Result.Kind) {
-                case clang::CodeCompletionResult::RK_Declaration: {
-                    llvm::outs() << "   Declaration: ";
-                    llvm::outs() << Result.Declaration->getNameAsString() << "\n";
-                    break;
-                }
-
-                case clang::CodeCompletionResult::RK_Keyword: {
-                    llvm::outs() << "   Keyword: ";
-                    llvm::outs() << Result.Keyword << "\n";
-                    break;
-                }
-
-                case clang::CodeCompletionResult::RK_Macro: {
-                    llvm::outs() << "   Macro: ";
-                    llvm::outs() << Result.Macro->getName() << "\n";
-                    break;
-                }
-
-                case clang::CodeCompletionResult::RK_Pattern: {
-                    llvm::outs() << "   Pattern: ";
-                    llvm::outs() << Result.Pattern->getAsString() << "\n";
-                    break;
-                }
-            }
-        }
+        // auto contexts = Context.getVisitedContexts();
+        // for(auto c: contexts) {
+        //     // llvm::outs() << "   Kind: " << c->getDeclKindName() << "\n";
+        //     // for(auto d: c->decls()) {
+        //     //     // d->dump();
+        //     // }
+        // }
+        //
+        // llvm::outs() << "code completion results:\n";
+        // switch(Context.getKind()) {
+        //    case clang::CodeCompletionContext::CCC_Attribute: {
+        //    }
+        //    case clang::CodeCompletionContext::CCC_DotMemberAccess: {
+        //        const auto type = Context.getBaseType();
+        //        if(type->isDependentType()) {
+        //
+        //            if(const auto dependentType = type->getAs<clang::DependentNameType>()) {
+        //                auto qualifers = dependentType->getQualifier();
+        //                // qualifers->getKind() -> clang::NestedNameSpecifier::SpecifierKind;
+        //                // auto t = qualifers->getAsType();
+        //                // TODO: 看是否能根据主模板一路把依赖名替换下去，直到变成非依赖名
+        //            } else if(const auto dependentType = type->getAs<clang::TemplateSpecializationType>()) {
+        //            }
+        //        }
+        //        break;
+        //    }
+        //    /* ... */
+        //    default: {
+        //        llvm::outs() << "   Kind: " << Context.getKind() << "\n";
+        //    }
+        //}
+        //
+        // for(unsigned i = 0; i < NumResults; ++i) {
+        //    clang::CodeCompletionResult& Result = Results[i];
+        //
+        //    switch(Result.Kind) {
+        //        case clang::CodeCompletionResult::RK_Declaration: {
+        //            llvm::outs() << "   Declaration: ";
+        //            llvm::outs() << Result.Declaration->getNameAsString() << "\n";
+        //            break;
+        //        }
+        //
+        //        case clang::CodeCompletionResult::RK_Keyword: {
+        //            llvm::outs() << "   Keyword: ";
+        //            llvm::outs() << Result.Keyword << "\n";
+        //            break;
+        //        }
+        //
+        //        case clang::CodeCompletionResult::RK_Macro: {
+        //            llvm::outs() << "   Macro: ";
+        //            llvm::outs() << Result.Macro->getName() << "\n";
+        //            break;
+        //        }
+        //
+        //        case clang::CodeCompletionResult::RK_Pattern: {
+        //            llvm::outs() << "   Pattern: ";
+        //            llvm::outs() << Result.Pattern->getAsString() << "\n";
+        //            break;
+        //        }
+        //    }
+        //}
     }
 
     void ProcessOverloadCandidates(clang::Sema& S,
@@ -109,13 +115,13 @@ int main(int argc, const char** argv) {
     clang::DiagnosticIDs* ids = new clang::DiagnosticIDs();
     clang::DiagnosticOptions* diag_opts = new clang::DiagnosticOptions();
     diag_opts->IgnoreWarnings = true;
-    clang::DiagnosticConsumer* consumer = new clang::TextDiagnosticPrinter(llvm::errs(), diag_opts);
+    clang::DiagnosticConsumer* consumer = new clang::IgnoringDiagConsumer();
     clang::DiagnosticsEngine* engine = new clang::DiagnosticsEngine(ids, diag_opts, consumer);
     instance->setDiagnostics(engine);
 
     auto invocation = std::make_shared<clang::CompilerInvocation>();
     std::vector<const char*> args = {
-        "/home/ykiko/Project/C++/clice/external/llvm/bin/clang++",
+        "/usr/local/bin/clang++",
         "-Xclang",
         "-no-round-trip-args",
         "-std=c++20",

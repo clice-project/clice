@@ -107,7 +107,7 @@ public:
         if(lastLocation != location) {
             // if not, update the last location and find the token
             lastLocation = location;
-            auto token = buffer.spelledTokenAt(location);
+            auto token = buffer.spelledTokenContaining(location);
             if(token) {
                 // if there is a corresponding token, update the token
                 auto iter = tokenMap.find(token);
