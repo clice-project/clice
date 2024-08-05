@@ -61,20 +61,15 @@ enum class SemanticTokenTypes : uint8_t {
 enum SemanticTokenModifiers : uint32_t {
     Declaration = 1 << 0,
     Definition = 1 << 1,
-    Readonly = 1 << 2,
-    Const = Readonly,
-    /// extension, represent a constexpr variable or function(since C++11),
+    Const = 1 << 2,
     Constexpr = 1 << 3,
-    Consteval,
-    Virtual,
-    Inline,
-    Static = 1 << 3,
-    Deprecated = 1 << 4,
-    Abstract = 1 << 5,
-    PureVirtual = Abstract,
-    Async = 1 << 6,
-    /// extension, represent a local variable,
-    Local = 1 << 7,
+    Consteval = 1 << 4,
+    Virtual = 1 << 5,
+    PureVirtual = 1 << 6,
+    Inline = 1 << 7,
+    Static = 1 << 8,
+    Deprecated = 1 << 9,
+    Local = 1 << 10,
 };
 
 /// Client Capability:

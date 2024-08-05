@@ -622,17 +622,28 @@ public:
         preprocessor(preprocessor), sourceManager(preprocessor.getSourceManager()), buffer(buffer),
         context(context), sema(sema) {}
 
-    bool VisitTypeAliasDecl(clang::TypeAliasDecl* decl) {
-        auto& sm = context.getSourceManager();
-        if(sm.isInMainFile(decl->getLocation()) && decl->getName() == "result") {
-            auto type = decl->getUnderlyingType();
-            type.dump();
-            llvm::outs() << "---------------------------------  Result   ------------------------------\n";
-            clang::DependentNameResolverV2 shaper{context, sema};
-            auto result = shaper.resolve(type);
-            result.dump();
+    bool TraverseTranslationUnitDecl(clang::TranslationUnitDecl* decl) {
+        for(auto it = decl->decls_begin(), end = decl->decls_end(); it != end; ++it) {
+            auto decl = *it;
+            if(sourceManager.isInMainFile(decl->getLocation())) {
+                TraverseDecl(*it);
+            }
         }
+        return true;
+    }
 
+    bool VisitDecl(clang::Decl* decl) {
+        llvm::outs() << "Visiting Decl: " << decl->getDeclKindName() << "\n";
+        return true;
+    }
+
+    bool FieldDeclecl(clang::FieldDecl* decl) {
+        llvm::outs() << "Visiting FieldDeclecl: " << decl->getDeclKindName() << "\n";
+        return true;
+    }
+
+    bool WalkUpFromCXXRecordDecl(clang::CXXRecordDecl* decl) {
+        llvm::outs() << "Visiting CXXRecordDecl\n";
         return true;
     }
 };

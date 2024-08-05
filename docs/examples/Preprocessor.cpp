@@ -64,7 +64,7 @@ int main(int argc, const char** argv) {
 
     auto invocation = std::make_shared<clang::CompilerInvocation>();
     std::vector<const char*> args = {
-        "/home/ykiko/Project/C++/clice/external/llvm/bin/clang++",
+        "clang++",
         "-Xclang",
         "-no-round-trip-args",
         "-std=c++20",
@@ -88,15 +88,26 @@ int main(int argc, const char** argv) {
     }
 
     clang::Preprocessor& pp = instance->getPreprocessor();
-    pp.setTokenWatcher([&pp](const clang::Token& token) {
-        if(!token.isAnnotation()) {
-            auto name = clang::Lexer::getSpelling(token, pp.getSourceManager(), pp.getLangOpts());
-            llvm::outs() << "token: " << name << " kind: " << token.getName() << "\n";
-        } else {
-            // TODO: split annoated token
-        }
-    });
-    // pp.addPPCallbacks(std::make_unique<PPCallback>(pp));
+    auto& sm = pp.getSourceManager();
+
+    // pp.setTokenWatcher([&](const clang::Token& token) {
+    //     llvm::outs() << "Token: " << pp.getSpelling(token);
+    //     auto loc = sm.getSpellingLoc(token.getLocation());
+    //
+    //     //llvm::outs() << " at " << pp.get << "\n";
+    //     // if(!token.isAnnotation()) {
+    //     //     if(auto II = token.getIdentifierInfo()) {
+    //     //         if(II->isKeyword(pp.getLangOpts())) {
+    //     //             auto name = clang::Lexer::getSpelling(token, pp.getSourceManager(),
+    //     pp.getLangOpts());
+    //     //             llvm::outs() << "Keyword: " << name << "\n";
+    //     //         }
+    //     //     }
+    //     // } else {
+    //     //     // TODO: split annoated token
+    //     // }
+    // });
+    //  pp.addPPCallbacks(std::make_unique<PPCallback>(pp));
     clang::syntax::TokenCollector collector{pp};
 
     if(auto error = action.Execute()) {
@@ -104,12 +115,19 @@ int main(int argc, const char** argv) {
         std::terminate();
     }
 
-    clang::syntax::TokenBuffer buffer = std::move(collector).consume();
-    auto tokens = buffer.expandedTokens();
+    auto buffer = std::move(collector).consume();
+    buffer.dumpForTests();
+    auto tokens = buffer.spelledTokens(sm.getMainFileID());
     for(auto& token: tokens) {
-        llvm::outs() << token.text(pp.getSourceManager()) << "\n";
+        llvm::outs() << "Token: " << token.text(sm) << "\n";
     }
-
+    auto tokens2 = buffer.expandedTokens();
+    for(auto& token: tokens2) {
+        llvm::outs() << "Token: " << token.text(sm) << "\n";
+    }
+    // auto buffer = sm.getBufferData(sm.getMainFileID());
+    // llvm::outs() << buffer << "\n";
+    // buffer.spelledTokenContaining()
     // all operations should before action end
     action.EndSourceFile();
 }

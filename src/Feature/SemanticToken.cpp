@@ -11,13 +11,31 @@ struct SemanticToken {
     SemanticTokenTypes type;
     uint32_t modifiers = 0;
 
-    SemanticToken& setType(SemanticTokenTypes type) {
-        this->type = type;
+#define ADD_MODIFIER(NAME)                                                                                   \
+    SemanticToken& add##NAME(bool is##NAME) {                                                                \
+        modifiers |= is##NAME ? SemanticTokenModifiers::NAME : 0;                                            \
+        return *this;                                                                                        \
+    }
+    ADD_MODIFIER(Declaration)
+    ADD_MODIFIER(Definition)
+    ADD_MODIFIER(Const)
+    ADD_MODIFIER(Constexpr)
+    ADD_MODIFIER(Consteval)
+    ADD_MODIFIER(Virtual)
+    ADD_MODIFIER(PureVirtual)
+    ADD_MODIFIER(Inline)
+    ADD_MODIFIER(Static)
+    ADD_MODIFIER(Deprecated)
+    ADD_MODIFIER(Local)
+#undef ADD_MODIFIER
+
+    SemanticToken& addDefinitionElseDeclaration(bool isDefinition) {
+        modifiers |= isDefinition ? SemanticTokenModifiers::Definition : SemanticTokenModifiers::Declaration;
         return *this;
     }
 
-    SemanticToken& addModifier(SemanticTokenModifiers modifier) {
-        modifiers |= modifier;
+    SemanticToken& setType(SemanticTokenTypes type) {
+        this->type = type;
         return *this;
     }
 };
@@ -26,7 +44,8 @@ class HighlighCollector {
 private:
     clang::ASTContext& context;
     clang::syntax::TokenBuffer& buffer;
-    clang::SourceManager& sourceManager;
+    clang::SourceManager& SM;
+    clang::Preprocessor& PP;
     // store all tokens in the main file
     std::vector<SemanticToken> tokens;
     llvm::DenseMap<const clang::syntax::Token*, std::size_t> tokenMap;
@@ -35,74 +54,61 @@ private:
     clang::SourceLocation lastLocation;
     std::optional<std::size_t> lastTokenIndex;
 
-private:
-    /// determine whether the token is a keyword
-    /// TODO: distinguish different language modes, e.g. C++ and C
-    static bool isKeyword(clang::tok::TokenKind kind) {
-        switch(kind) {
-#define KEYWORD(name, ...)                                                                                   \
-    case clang::tok::TokenKind::kw_##name: return true;
-#include <clang/Basic/TokenKinds.def>
-#undef KEYWORD
-            default: return false;
-        }
-    }
-
-    /// determine whether the token is an operator
-    static bool isOperator(clang::tok::TokenKind kind) {
-        switch(kind) {
-#define PUNCTUATOR(name, ...)                                                                                \
-    case clang::tok::TokenKind::name: return true;
-#include <clang/Basic/TokenKinds.def>
-#undef PUNCTUATOR
-            default: return false;
-        }
-    }
-
 public:
-    HighlighCollector(ParsedAST& ast) :
-        context(ast.ASTContext()), buffer(ast.TokensBuffer()), sourceManager(ast.SourceManager()) {
+    HighlighCollector(ParsedAST& ast, clang::Preprocessor& PP) :
+        context(ast.ASTContext()), buffer(ast.TokensBuffer()), SM(ast.SourceManager()), PP(PP) {
+        // TODO: render diretives use the information from the preprocessor
         // collect all source tokens(preprocessings haven't occurred)
-        for(auto& token: buffer.spelledTokens(sourceManager.getMainFileID())) {
+        for(auto& token: buffer.spelledTokens(SM.getMainFileID())) {
             clang::tok::TokenKind kind = token.kind();
             SemanticTokenTypes type = SemanticTokenTypes::Unknown;
 
-            // attach basic semantic to token
-            if(kind == clang::tok::numeric_constant) {
-                // Numeric Literal
-                type = SemanticTokenTypes::Number;
-            } else if(kind == clang::tok::char_constant) {
-                // Char Literal
-                type = SemanticTokenTypes::Char;
-            } else if(kind == clang::tok::string_literal) {
-                // String Literal
-                type = SemanticTokenTypes::String;
-            } else if(isOperator(kind)) {
-                // Operator
-                type = SemanticTokenTypes::Operator;
-            } else if(isKeyword(kind)) {
-                // Keyword
-                type = SemanticTokenTypes::Keyword;
-            } else if(kind == clang::tok::comment) {
-                // Comment
-                type = SemanticTokenTypes::Comment;
+            switch(kind) {
+                case clang::tok::numeric_constant: {
+                    type = SemanticTokenTypes::Number;
+                    break;
+                }
+                case clang::tok::char_constant: {
+                    type = SemanticTokenTypes::Char;
+                    break;
+                }
+                case clang::tok::string_literal: {
+                    type = SemanticTokenTypes::String;
+                    break;
+                }
+                case clang::tok::comment: {
+                    type = SemanticTokenTypes::Comment;
+                    break;
+                }
+
+#define PUNCTUATOR(name, ...) case clang::tok::TokenKind::name:
+#include <clang/Basic/TokenKinds.def>
+#undef PUNCTUATOR
+                    {
+                        type = SemanticTokenTypes::Operator;
+                        break;
+                    }
+
+                default: {
+                    if(auto II = PP.getIdentifierInfo(token.text(SM))) {
+                        if(II->isKeyword(PP.getLangOpts())) {
+                            type = SemanticTokenTypes::Keyword;
+                        }
+                    }
+                }
             }
 
-            // TODO: render diretives use the information from the preprocessor
-
             tokenMap[&token] = tokens.size();
-            tokens.push_back({token.range(sourceManager), SemanticTokenTypes::Unknown, 0});
+            tokens.emplace_back(token.range(SM), type, 0);
         }
     }
 
     /// determine whether the location is in the main file or in the header file
     bool isInMainFile(clang::Decl* decl) { return isInMainFile(decl->getLocation()); }
 
-    bool isInMainFile(clang::SourceLocation location) { return sourceManager.isWrittenInMainFile(location); }
+    bool isInMainFile(clang::SourceLocation location) { return SM.isWrittenInMainFile(location); }
 
-    void attach(clang::Decl* decl, SemanticTokenTypes type, uint32_t modifier);
-
-    void attach(clang::SourceLocation location, SemanticTokenTypes type, uint32_t modifier) {
+    SemanticToken* lookup(clang::SourceLocation location) {
         // check whether the location is same as the last location
         if(lastLocation != location) {
             // if not, update the last location and find the token
@@ -113,24 +119,23 @@ public:
                 auto iter = tokenMap.find(token);
                 assert(iter != tokenMap.end());
                 auto index = iter->second;
-                tokens[index].type = type;
-                tokens[index].modifiers |= modifier;
                 lastTokenIndex = index;
+                return &tokens[index];
             } else {
                 // if there is no corresponding token, reset the last token index
                 lastTokenIndex.reset();
+                return nullptr;
             }
         } else {
             // if yes, use the last token index to find the token
             if(lastTokenIndex) {
-                tokens[*lastTokenIndex].type = type;
-                tokens[*lastTokenIndex].modifiers |= modifier;
+                return &tokens[*lastTokenIndex];
             }
         }
     }
 
     void collect() {}
-};
+};  // namespace clice
 
 class HighlightVisitor : public clang::RecursiveASTVisitor<HighlightVisitor> {
 private:
@@ -139,138 +144,181 @@ private:
 public:
     HighlightVisitor(HighlighCollector& collector) : collector(collector) {}
 
+#define Traverse(NAME) bool Traverse##NAME(clang::NAME* node)
+#define WalkUpFrom(NAME) bool WalkUpFrom##NAME(clang::NAME* node)
 #define VISIT(NAME) bool Visit##NAME(clang::NAME* node)
 
-    // filter out the nodes that are not in the main file
-    VISIT(Decl) { return collector.isInMainFile(node); }
-
-    VISIT(NamespaceDecl) {
-        collector.attach(node, SemanticTokenTypes::Namespace, 0);
-        return true;
-    }
-
-    VISIT(TypeDecl) {
-        collector.attach(node, SemanticTokenTypes::Type, 0);
-        return true;
-    }
-
-    VISIT(RecordDecl) {
-        SemanticTokenTypes type;
-        if(node->isUnion()) {
-            type = SemanticTokenTypes::Union;
-        } else if(node->isStruct()) {
-            type = SemanticTokenTypes::Struct;
-        } else if(node->isClass()) {
-            type = SemanticTokenTypes::Class;
+    Traverse(TranslationUnitDecl) {
+        // filter out the nodes that are not in the main file(in headers)
+        for(auto decl: node->decls()) {
+            auto loc = decl->getLocation();
+            if(collector.isInMainFile(loc)) {
+                TraverseDecl(decl);
+            }
         }
-        collector.attach(node, type, 0);
         return true;
     }
 
-    VISIT(CXXRecordDecl) {
-        collector.attach(node, SemanticTokenTypes::Class, 0);
+    WalkUpFrom(NamespaceDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::Namespace);
+        }
         return true;
     }
 
-    VISIT(FieldDecl) {
-        collector.attach(node, SemanticTokenTypes::Field, 0);
+    WalkUpFrom(TypeDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::Type);
+        }
         return true;
     }
 
-    VISIT(EnumDecl) {
-        collector.attach(node, SemanticTokenTypes::Enum, 0);
+    WalkUpFrom(RecordDecl) {
+        // if(auto token = collector.lookup(node->getLocation())) {
+        //     token->setType(SemanticTokenTypes::Struct);
+        // }
         return true;
     }
 
-    VISIT(EnumConstantDecl) {
-        collector.attach(node, SemanticTokenTypes::EnumMember, 0);
+    WalkUpFrom(CXXRecordDecl) {
+        // collector.attach(node, SemanticTokenTypes::Class, 0);
         return true;
     }
 
-    VISIT(VarDecl) {
-        uint32_t modifier = 0;
-        modifier |= (node->isThisDeclarationADefinition() ? SemanticTokenModifiers::Definition
-                                                          : SemanticTokenModifiers::Declaration);
-        modifier |= (node->isConstexpr() ? SemanticTokenModifiers::Constexpr : 0);
-        modifier |= (node->isInline() ? SemanticTokenModifiers::Inline : 0);
-        modifier |= (node->isStaticDataMember() ? SemanticTokenModifiers::Static : 0);
-        modifier |= (node->isLocalVarDecl() ? SemanticTokenModifiers::Local : 0);
-        collector.attach(node, SemanticTokenTypes::Variable, modifier);
+    WalkUpFrom(FieldDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::Field);
+        }
         return true;
     }
 
-    VISIT(FunctionDecl) {
-        uint32_t modifier = 0;
-        modifier |= (node->isThisDeclarationADefinition() ? SemanticTokenModifiers::Definition
-                                                          : SemanticTokenModifiers::Declaration);
-        modifier |= (node->isVirtualAsWritten() ? SemanticTokenModifiers::Virtual : 0);
-        modifier |= (node->isPureVirtual() ? SemanticTokenModifiers::PureVirtual : 0);
-        modifier |= (node->isConstexpr() ? SemanticTokenModifiers::Constexpr : 0);
-        modifier |= (node->isConsteval() ? SemanticTokenModifiers::Consteval : 0);
-        modifier |= (node->isInlined() ? SemanticTokenModifiers::Inline : 0);
-        collector.attach(node, SemanticTokenTypes::Function, modifier);
+    WalkUpFrom(EnumDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::Enum);
+        }
         return true;
     }
 
-    VISIT(CXXMethodDecl) {
-        collector.attach(node, SemanticTokenTypes::Method, 0);
+    WalkUpFrom(EnumConstantDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::EnumMember);
+        }
         return true;
     }
 
-    VISIT(ParmVarDecl) {
-        collector.attach(node, SemanticTokenTypes::Parameter, 0);
+    WalkUpFrom(VarDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::Variable)
+                .addDefinitionElseDeclaration(node->isThisDeclarationADefinition())
+                .addConstexpr(node->isConstexpr())
+                .addInline(node->isInline())
+                .addStatic(node->isStaticDataMember())
+                .addLocal(node->isLocalVarDecl());
+        }
         return true;
     }
 
-    VISIT(TemplateTypeParmDecl) {
-        collector.attach(node, SemanticTokenTypes::TypeTemplateParameter, 0);
-        return true;
-    }
-
-    VISIT(NonTypeTemplateParmDecl) {
-        collector.attach(node, SemanticTokenTypes::NonTypeTemplateParameter, 0);
-        return true;
-    }
-
-    VISIT(TemplateTemplateParmDecl) {
-        collector.attach(node, SemanticTokenTypes::TemplateTemplateParameter, 0);
-        return true;
-    }
-
-    VISIT(ClassTemplateDecl) {
-        collector.attach(node, SemanticTokenTypes::ClassTemplate, 0);
-        return true;
-    }
-
-    VISIT(VarTemplateDecl) {
-        collector.attach(node, SemanticTokenTypes::VariableTemplate, 0);
-        return true;
-    }
-
-    VISIT(FunctionTemplateDecl) {
-        collector.attach(node, SemanticTokenTypes::FunctionTemplate, 0);
-        return true;
-    }
-
-    VISIT(ConceptDecl) {
-        collector.attach(node, SemanticTokenTypes::Concept, 0);
-        return true;
-    }
-
-    VISIT(Stmt) { return collector.isInMainFile(node->getBeginLoc()); }
-
-    VISIT(Expr) { return collector.isInMainFile(node->getBeginLoc()); }
-
-    VISIT(DeclRefExpr) {}
-
-    VISIT(MemberExpr) {}
-
-    VISIT(Attr) {
-        auto location = node->getLocation();
-        if(collector.isInMainFile(location)) {
-            collector.attach(location, SemanticTokenTypes::Attribute, 0);
+    WalkUpFrom(FunctionDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::Function)
+                .addDefinitionElseDeclaration(node->isThisDeclarationADefinition())
+                .addConstexpr(node->isConstexpr())
+                .addConsteval(node->isConsteval())
+                .addVirtual(node->isVirtualAsWritten())
+                .addPureVirtual(node->isPureVirtual())
+                .addInline(node->isInlined());
             return true;
         }
+        return false;
+    }
+
+    WalkUpFrom(CXXMethodDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::Method)
+                .addDefinitionElseDeclaration(node->isThisDeclarationADefinition())
+                .addConstexpr(node->isConstexpr())
+                .addConsteval(node->isConsteval())
+                .addVirtual(node->isVirtualAsWritten())
+                .addPureVirtual(node->isPureVirtual())
+                .addInline(node->isInlined());
+            return true;
+        }
+        return false;
+    }
+
+    WalkUpFrom(ParmVarDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::Parameter)
+                .addDefinitionElseDeclaration(node->isThisDeclarationADefinition())
+                .addConst(node->isConstexpr())
+                .addLocal(node->isLocalVarDecl());
+        }
+        return true;
+    }
+
+    WalkUpFrom(TemplateTypeParmDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::TypeTemplateParameter);
+        }
+        return true;
+    }
+
+    WalkUpFrom(NonTypeTemplateParmDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::NonTypeTemplateParameter).addConstexpr(true);
+        }
+        return true;
+    }
+
+    WalkUpFrom(TemplateTemplateParmDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::TemplateTemplateParameter);
+        }
+        return true;
+    }
+
+    WalkUpFrom(ClassTemplateDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::ClassTemplate);
+        }
+        return true;
+    }
+
+    WalkUpFrom(VarTemplateDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::VariableTemplate);
+        }
+        return true;
+    }
+
+    WalkUpFrom(FunctionTemplateDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::FunctionTemplate);
+        }
+        return true;
+    }
+
+    WalkUpFrom(ConceptDecl) {
+        if(auto token = collector.lookup(node->getLocation())) {
+            token->setType(SemanticTokenTypes::Concept);
+        }
+        return true;
+    }
+
+    WalkUpFrom(Stmt) { return collector.isInMainFile(node->getBeginLoc()); }
+
+    WalkUpFrom(Expr) { return collector.isInMainFile(node->getBeginLoc()); }
+
+    WalkUpFrom(DeclRefExpr) {}
+
+    WalkUpFrom(MemberExpr) {}
+
+    WalkUpFrom(Attr) {
+        // auto location = node->getLocation();
+        // if(collector.isInMainFile(location)) {
+        //     collector.attach(location, SemanticTokenTypes::Attribute, 0);
+        //     return true;
+        // }
         return false;
     }
 
