@@ -122,6 +122,7 @@ int main(int argc, const char** argv) {
     //     //     // TODO: split annoated token
     //     // }
     // });
+
     pp.addPPCallbacks(std::make_unique<PPCallback>(pp));
     clang::syntax::TokenCollector collector{pp};
 
@@ -138,7 +139,7 @@ int main(int argc, const char** argv) {
         llvm::outs() << "Token: " << token.text(sm) << " " << clang::tok::getTokenName(token.kind())
                      << "\n";
     }
-    buffer.expansionStartingAt(tokens[0].location());
+
     // auto tokens2 = buffer.expandedTokens();
     // for(auto& token: tokens2) {
     //     token.dumpForTests(sm);

@@ -618,6 +618,7 @@ public:
 #define Traverse(NAME) bool Traverse##NAME(clang::NAME* node)
 #define WalkUpFrom(NAME) bool WalkUpFrom##NAME(clang::NAME* node)
 #define VISIT(NAME) bool Visit##NAME(clang::NAME* node)
+#define VISIT_TYPE(NAME) bool Visit##NAME(clang::NAME node)
 
 class ASTVistor : public clang::RecursiveASTVisitor<ASTVistor> {
 private:
@@ -667,23 +668,15 @@ public:
     //    return true;
     //}
     //
-
-    bool VisitCXXStaticCastExpr(clang::CXXStaticCastExpr* expr) {
-        expr->getAngleBrackets().getBegin().dump(sourceManager);
-        expr->getAngleBrackets().getEnd().dump(sourceManager);
-        return true;
-    }
-
-    bool VisitTypeLoc(clang::TypeLoc loc) {
-        // loc.dump();
-        return true;
+    void addAngle(clang::SourceLocation l, clang::SourceLocation r) {
+        l.dump(sourceManager);
+        r.dump(sourceManager);
     }
 
     VISIT(DeclaratorDecl) {
         for(unsigned i = 0; i < node->getNumTemplateParameterLists(); ++i) {
-            if(auto* TPL = node->getTemplateParameterList(i)) {
-                TPL->getLAngleLoc().dump(sourceManager);
-                TPL->getRAngleLoc().dump(sourceManager);
+            if(auto params = node->getTemplateParameterList(i)) {
+                addAngle(params->getLAngleLoc(), params->getRAngleLoc());
             }
         }
         return true;
@@ -691,83 +684,84 @@ public:
 
     VISIT(TagDecl) {
         for(unsigned i = 0; i < node->getNumTemplateParameterLists(); ++i) {
-            if(auto* TPL = node->getTemplateParameterList(i)) {
-                TPL->getLAngleLoc().dump(sourceManager);
-                TPL->getRAngleLoc().dump(sourceManager);
+            if(auto params = node->getTemplateParameterList(i)) {
+                addAngle(params->getLAngleLoc(), params->getRAngleLoc());
             }
         }
         return true;
     }
 
-    VISIT(TemplateDecl) {
-        if(clang::TemplateParameterList* params = node->getTemplateParameters()) {
-            auto langle = params->getLAngleLoc();
-            auto rangle = params->getRAngleLoc();
-            langle.dump(sourceManager);
-            rangle.dump(sourceManager);
+    VISIT(FunctionDecl) {
+        if(auto args = node->getTemplateSpecializationArgsAsWritten()) {
+            addAngle(args->getLAngleLoc(), args->getRAngleLoc());
         }
         return true;
     }
 
-    VISIT(FunctionDecl) {
-        if(auto* args = node->getTemplateSpecializationArgsAsWritten()) {
-            auto langle = args->LAngleLoc;
-            auto rangle = args->RAngleLoc;
-            langle.dump(sourceManager);
-            rangle.dump(sourceManager);
+    VISIT(TemplateDecl) {
+        if(auto params = node->getTemplateParameters()) {
+            addAngle(params->getLAngleLoc(), params->getRAngleLoc());
         }
         return true;
     }
 
     VISIT(ClassTemplateSpecializationDecl) {
-        if(const clang::ASTTemplateArgumentListInfo* args = node->getTemplateArgsAsWritten()) {
-            auto langle = args->getLAngleLoc();
-            auto rangle = args->getRAngleLoc();
-            langle.dump(sourceManager);
-            rangle.dump(sourceManager);
+        if(auto args = node->getTemplateArgsAsWritten()) {
+            addAngle(args->getLAngleLoc(), args->getRAngleLoc());
         }
         return true;
     }
 
     VISIT(ClassTemplatePartialSpecializationDecl) {
-        if(clang::TemplateParameterList* params = node->getTemplateParameters()) {
-            auto langle = params->getLAngleLoc();
-            auto rangle = params->getRAngleLoc();
-            langle.dump(sourceManager);
-            rangle.dump(sourceManager);
+        if(auto params = node->getTemplateParameters()) {
+            addAngle(params->getLAngleLoc(), params->getRAngleLoc());
         }
         return true;
     }
 
-    // VISIT(FunctionTemplateSpecializationInfo) {
-    //     if(clang::TemplateParameterList* params = node->getTemplateParameters()) {
-    //         auto langle = params->getLAngleLoc();
-    //         auto rangle = params->getRAngleLoc();
-    //     }
-    //     return true;
-    // }
+    VISIT(VarTemplateSpecializationDecl) {
+        if(auto args = node->getTemplateArgsAsWritten()) {
+            addAngle(args->LAngleLoc, args->RAngleLoc);
+        }
+        return true;
+    }
 
-    // bool VisitTemplateSpecializationTypeLoc(clang::TemplateSpecializationTypeLoc loc) {
-    //     // loc.dump();
-    //     auto l_angle = loc.getLAngleLoc();
-    //     l_angle.dump(sourceManager);
-    //     auto r_angle = sourceManager.getFileLoc(loc.getRAngleLoc());
-    //     r_angle.dump(sourceManager);
-    //
-    //    // llvm::outs() << sourceManager.getSpellingColumnNumber(r_angle) << "\n";
-    //    // llvm::outs() << sourceManager.getExpansionColumnNumber(r_angle) << "\n";
-    //
-    //    llvm::outs() << sourceManager.isInMainFile(r_angle) << "\n";
-    //
-    //    auto ID = sourceManager.getFileID(r_angle);
-    //    llvm::outs() << sourceManager.getFilename(r_angle) << "\n";
-    //
-    //    auto tokens = buffer.spelledTokens(sourceManager.getFileID(l_angle));
-    //    for(auto& token: tokens) {
-    //        token.location().dump(sourceManager);
-    //    }
-    //    return true;
-    //}
+    VISIT(VarTemplatePartialSpecializationDecl) {
+        if(auto params = node->getTemplateParameters()) {
+            addAngle(params->getLAngleLoc(), params->getRAngleLoc());
+        }
+        return true;
+    }
+
+    VISIT(CXXNamedCastExpr) {
+        addAngle(node->getAngleBrackets().getBegin(), node->getAngleBrackets().getEnd());
+        return true;
+    }
+
+    VISIT(OverloadExpr) {
+        addAngle(node->getLAngleLoc(), node->getRAngleLoc());
+        return true;
+    }
+
+    VISIT(CXXDependentScopeMemberExpr) {
+        addAngle(node->getLAngleLoc(), node->getRAngleLoc());
+        return true;
+    }
+
+    VISIT(DependentScopeDeclRefExpr) {
+        addAngle(node->getLAngleLoc(), node->getRAngleLoc());
+        return true;
+    }
+
+    VISIT_TYPE(TemplateSpecializationTypeLoc) {
+        addAngle(node.getLAngleLoc(), node.getRAngleLoc());
+        return true;
+    }
+
+    VISIT_TYPE(DependentTemplateSpecializationTypeLoc) {
+        addAngle(node.getLAngleLoc(), node.getRAngleLoc());
+        return true;
+    }
 };
 
 int main(int argc, const char** argv) {
