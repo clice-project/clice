@@ -3,18 +3,18 @@
 
 namespace clice {
 
-using SemanticTokenTypes = protocol::SemanticTokenTypes;
-using SemanticTokenModifiers = protocol::SemanticTokenModifiers;
+using protocol::SemanticTokenTypes;
+using protocol::SemanticTokenModifiers;
 
 struct SemanticToken {
-    clang::syntax::FileRange range;
+    clang::SourceRange range;
     SemanticTokenTypes type;
     uint32_t modifiers = 0;
 
-#define ADD_MODIFIER(NAME)                                                                                   \
-    SemanticToken& add##NAME(bool is##NAME) {                                                                \
-        modifiers |= is##NAME ? SemanticTokenModifiers::NAME : 0;                                            \
-        return *this;                                                                                        \
+#define ADD_MODIFIER(NAME)                                                                         \
+    SemanticToken& add##NAME(bool is##NAME) {                                                      \
+        modifiers |= is##NAME ? SemanticTokenModifiers::NAME : 0;                                  \
+        return *this;                                                                              \
     }
     ADD_MODIFIER(Declaration)
     ADD_MODIFIER(Definition)
@@ -30,7 +30,8 @@ struct SemanticToken {
 #undef ADD_MODIFIER
 
     SemanticToken& addDefinitionElseDeclaration(bool isDefinition) {
-        modifiers |= isDefinition ? SemanticTokenModifiers::Definition : SemanticTokenModifiers::Declaration;
+        modifiers |=
+            isDefinition ? SemanticTokenModifiers::Definition : SemanticTokenModifiers::Declaration;
         return *this;
     }
 
@@ -56,7 +57,8 @@ private:
 
 public:
     HighlighCollector(ParsedAST& ast, clang::Preprocessor& PP) :
-        context(ast.ASTContext()), buffer(ast.TokensBuffer()), SM(ast.SourceManager()), PP(PP) {
+        context(ast.ASTContext()), buffer(ast.
+        ()), SM(ast.SourceManager()), PP(PP) {
         // TODO: render diretives use the information from the preprocessor
         // collect all source tokens(preprocessings haven't occurred)
         for(auto& token: buffer.spelledTokens(SM.getMainFileID())) {
@@ -81,9 +83,6 @@ public:
                     break;
                 }
 
-#define PUNCTUATOR(name, ...) case clang::tok::TokenKind::name:
-#include <clang/Basic/TokenKinds.def>
-#undef PUNCTUATOR
                     {
                         type = SemanticTokenTypes::Operator;
                         break;
@@ -100,6 +99,8 @@ public:
 
             tokenMap[&token] = tokens.size();
             tokens.emplace_back(token.range(SM), type, 0);
+            clang::SourceLocation loc = token.location();
+            auto length = token.length();
         }
     }
 
@@ -188,6 +189,7 @@ public:
     WalkUpFrom(FieldDecl) {
         if(auto token = collector.lookup(node->getLocation())) {
             token->setType(SemanticTokenTypes::Field);
+            auto TSI = node->getTypeSourceInfo();
         }
         return true;
     }

@@ -2,7 +2,7 @@
 # compatible with clang-format 18
 
 UseTab: Never
-ColumnLimit: 110
+ColumnLimit: 100
 
 # Indent
 IndentWidth: 4
@@ -96,7 +96,7 @@ SpacesInSquareBrackets: false
 QualifierAlignment: Custom
 QualifierOrder: ["constexpr", "const", "inline", "static", "type"]
 SortIncludes: Never
-SortUsingDeclarations: LexicographicNumeric
+SortUsingDeclarations: Never
 IncludeBlocks: Merge
 
 WhitespaceSensitiveMacros: ["PK_PROTECTED", "LUA_PROTECTED"]

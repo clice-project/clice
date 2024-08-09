@@ -79,8 +79,9 @@ public:
         return result.front();
     }
 
-    /// for a complex dependent type: `X<...>::name::name2::...::nameN`, we can resolve it recursively.
-    /// so we only need to handle the `X<...>::name`, whose prefix is a template specialization type.
+    /// for a complex dependent type: `X<...>::name::name2::...::nameN`, we can resolve it
+    /// recursively. so we only need to handle the `X<...>::name`, whose prefix is a template
+    /// specialization type.
     clang::QualType simplify(const clang::TemplateSpecializationType* templateType,
                              const clang::IdentifierInfo* identifier) {
         // X is a class template or a type alias template
@@ -97,7 +98,8 @@ public:
                 namedDecl->dump();
             }
 
-        } else if(auto aliasTemplateDecl = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(templateDecl)) {
+        } else if(auto aliasTemplateDecl =
+                      llvm::dyn_cast<clang::TypeAliasTemplateDecl>(templateDecl)) {
             // TODO:
         } else {
             templateDecl->dump();
@@ -242,7 +244,8 @@ public:
 
             case NestedNameSpecifier::SpecifierKind::TypeSpecWithTemplate: {
                 llvm::outs() << "------------------ TypeSpecWithTemplate -----------------------\n";
-                // when the kind of TST is TypeSpecWithTemplate, e.g. std::vector<T>::template name<U>::
+                // when the kind of TST is TypeSpecWithTemplate, e.g. std::vector<T>::template
+                // name<U>::
                 TST->dump();
                 return resolve(QualType(TST->getAsType(), 0), II, arguments);
             }
@@ -312,7 +315,8 @@ public:
         }
     }
 
-    QualType resolve(QualType T, const IdentifierInfo* II, ArrayRef<TemplateArgument> arguments = {}) {
+    QualType
+        resolve(QualType T, const IdentifierInfo* II, ArrayRef<TemplateArgument> arguments = {}) {
         if(!T->isDependentType() && arguments.size() == 0) {
             // TODO:
         }
@@ -420,9 +424,9 @@ public:
         std::vector<TemplateArgument> result;
         for(auto arg: arguments) {
             if(arg.getKind() == TemplateArgument::ArgKind::Type) {
+                // check whether it is a TemplateTypeParmType.
                 if(auto type = llvm::dyn_cast<TemplateTypeParmType>(arg.getAsType())) {
                     const TemplateTypeParmDecl* param = type->getDecl();
-
                     if(param && param->hasDefaultArgument()) {
                         result.push_back(param->getDefaultArgument().getArgument());
                         continue;
@@ -443,7 +447,6 @@ public:
                 nullptr,
                 false,
                 dealias(QualType(DTST->getQualifier()->getAsType(), 0)).getTypePtr());
-
             return Ctx.getDependentTemplateSpecializationType(DTST->getKeyword(),
                                                               NNS,
                                                               DTST->getIdentifier(),
@@ -456,13 +459,15 @@ public:
     QualType resolve(QualType type) {
 
         while(true) {
-            // llvm::outs() << "--------------------------------------------------------------------\n";
+            // llvm::outs() <<
+            // "--------------------------------------------------------------------\n";
             // type.dump();
 
             MultiLevelTemplateArgumentList list;
             if(auto DNT = type->getAs<DependentNameType>()) {
                 type = resolve(resolve(DNT->getQualifier(), DNT->getIdentifier()));
-                for(auto begin = arguments.rbegin(), end = arguments.rend(); begin != end; ++begin) {
+                for(auto begin = arguments.rbegin(), end = arguments.rend(); begin != end;
+                    ++begin) {
                     list.addOuterTemplateArguments((*begin)->first, (*begin)->second, true);
                 }
                 type = S.SubstType(dealias(type), list, {}, {});
@@ -480,7 +485,8 @@ public:
                     S.pushCodeSynthesisContext(context);
 
                     list.addOuterTemplateArguments(TATD, args, true);
-                    for(auto begin = arguments.rbegin(), end = arguments.rend(); begin != end; ++begin) {
+                    for(auto begin = arguments.rbegin(), end = arguments.rend(); begin != end;
+                        ++begin) {
                         list.addOuterTemplateArguments((*begin)->first, (*begin)->second, true);
                     }
 
@@ -489,7 +495,8 @@ public:
                     // TATD->getTemplatedDecl()->getUnderlyingType().dump();
                     type = dealias(TATD->getTemplatedDecl()->getUnderlyingType());
                     // llvm::outs() << "arguments:
-                    // -------------------------------------------------------------\n"; list.dump();
+                    // -------------------------------------------------------------\n";
+                    // list.dump();
                     type = S.SubstType(type, list, {}, {});
                     // type.dump();
                     arguments.clear();
@@ -544,7 +551,7 @@ public:
 
         llvm::outs() << "--------------------------------------------------------------------\n";
         Type.dump();
-
+        Type->getCanonicalTypeInternal();
         if(auto TTPT = Type->getAs<TemplateTypeParmType>()) {
             Type->dump();
             std::terminate();
@@ -574,14 +581,16 @@ public:
         S.pushCodeSynthesisContext(context);
 
         if(auto CTD = llvm::dyn_cast<ClassTemplateDecl>(TemplateDecl)) {
-            llvm::outs() << "--------------------------------------------------------------------\n";
+            llvm::outs()
+                << "--------------------------------------------------------------------\n";
             llvm::SmallVector<ClassTemplatePartialSpecializationDecl*> paritals;
             CTD->getPartialSpecializations(paritals);
 
             for(auto partial: paritals) {
                 partial->getInjectedSpecializationType().dump();
             }
-            llvm::outs() << "--------------------------------------------------------------------\n";
+            llvm::outs()
+                << "--------------------------------------------------------------------\n";
             // CTD->findPartialSpecialization()
             auto partial = CTD->findPartialSpecialization(Type);
             if(partial) {
@@ -606,6 +615,10 @@ public:
 
 }  // namespace clang
 
+#define Traverse(NAME) bool Traverse##NAME(clang::NAME* node)
+#define WalkUpFrom(NAME) bool WalkUpFrom##NAME(clang::NAME* node)
+#define VISIT(NAME) bool Visit##NAME(clang::NAME* node)
+
 class ASTVistor : public clang::RecursiveASTVisitor<ASTVistor> {
 private:
     clang::Preprocessor& preprocessor;
@@ -613,14 +626,16 @@ private:
     clang::syntax::TokenBuffer& buffer;
     clang::ASTContext& context;
     clang::Sema& sema;
+    clang::syntax::TokenBuffer& TB;
 
 public:
     ASTVistor(clang::Preprocessor& preprocessor,
               clang::syntax::TokenBuffer& buffer,
               clang::ASTContext& context,
-              clang::Sema& sema) :
+              clang::Sema& sema,
+              clang::syntax::TokenBuffer& TB) :
         preprocessor(preprocessor), sourceManager(preprocessor.getSourceManager()), buffer(buffer),
-        context(context), sema(sema) {}
+        context(context), sema(sema), TB(TB) {}
 
     bool TraverseTranslationUnitDecl(clang::TranslationUnitDecl* decl) {
         for(auto it = decl->decls_begin(), end = decl->decls_end(); it != end; ++it) {
@@ -637,15 +652,122 @@ public:
         return true;
     }
 
-    bool FieldDeclecl(clang::FieldDecl* decl) {
-        llvm::outs() << "Visiting FieldDeclecl: " << decl->getDeclKindName() << "\n";
+    // bool VisitTypeAliasDecl(clang::TypeAliasDecl* decl) {}
+
+    // bool FieldDeclecl(clang::FieldDecl* decl) {
+    //     llvm::outs() << "Visiting FieldDeclecl: " << decl->getDeclKindName() << "\n";
+    //     return true;
+    // }
+    //
+    // bool WalkUpFromCXXRecordDecl(clang::CXXRecordDecl* decl) {
+    //    llvm::outs() << "Visiting CXXRecordDecl\n";
+    //    // clang::TemplateSpecializationType t;
+    //    clang::TemplateSpecializationTypeLoc loc;
+    //
+    //    return true;
+    //}
+    //
+
+    bool VisitCXXStaticCastExpr(clang::CXXStaticCastExpr* expr) {
+        expr->getAngleBrackets().getBegin().dump(sourceManager);
+        expr->getAngleBrackets().getEnd().dump(sourceManager);
         return true;
     }
 
-    bool WalkUpFromCXXRecordDecl(clang::CXXRecordDecl* decl) {
-        llvm::outs() << "Visiting CXXRecordDecl\n";
+    bool VisitTypeLoc(clang::TypeLoc loc) {
+        // loc.dump();
         return true;
     }
+
+    VISIT(DeclaratorDecl) {
+        for(unsigned i = 0; i < node->getNumTemplateParameterLists(); ++i) {
+            if(auto* TPL = node->getTemplateParameterList(i)) {
+                TPL->getLAngleLoc().dump(sourceManager);
+                TPL->getRAngleLoc().dump(sourceManager);
+            }
+        }
+        return true;
+    }
+
+    VISIT(TagDecl) {
+        for(unsigned i = 0; i < node->getNumTemplateParameterLists(); ++i) {
+            if(auto* TPL = node->getTemplateParameterList(i)) {
+                TPL->getLAngleLoc().dump(sourceManager);
+                TPL->getRAngleLoc().dump(sourceManager);
+            }
+        }
+        return true;
+    }
+
+    VISIT(TemplateDecl) {
+        if(clang::TemplateParameterList* params = node->getTemplateParameters()) {
+            auto langle = params->getLAngleLoc();
+            auto rangle = params->getRAngleLoc();
+            langle.dump(sourceManager);
+            rangle.dump(sourceManager);
+        }
+        return true;
+    }
+
+    VISIT(FunctionDecl) {
+        if(auto* args = node->getTemplateSpecializationArgsAsWritten()) {
+            auto langle = args->LAngleLoc;
+            auto rangle = args->RAngleLoc;
+            langle.dump(sourceManager);
+            rangle.dump(sourceManager);
+        }
+        return true;
+    }
+
+    VISIT(ClassTemplateSpecializationDecl) {
+        if(const clang::ASTTemplateArgumentListInfo* args = node->getTemplateArgsAsWritten()) {
+            auto langle = args->getLAngleLoc();
+            auto rangle = args->getRAngleLoc();
+            langle.dump(sourceManager);
+            rangle.dump(sourceManager);
+        }
+        return true;
+    }
+
+    VISIT(ClassTemplatePartialSpecializationDecl) {
+        if(clang::TemplateParameterList* params = node->getTemplateParameters()) {
+            auto langle = params->getLAngleLoc();
+            auto rangle = params->getRAngleLoc();
+            langle.dump(sourceManager);
+            rangle.dump(sourceManager);
+        }
+        return true;
+    }
+
+    // VISIT(FunctionTemplateSpecializationInfo) {
+    //     if(clang::TemplateParameterList* params = node->getTemplateParameters()) {
+    //         auto langle = params->getLAngleLoc();
+    //         auto rangle = params->getRAngleLoc();
+    //     }
+    //     return true;
+    // }
+
+    // bool VisitTemplateSpecializationTypeLoc(clang::TemplateSpecializationTypeLoc loc) {
+    //     // loc.dump();
+    //     auto l_angle = loc.getLAngleLoc();
+    //     l_angle.dump(sourceManager);
+    //     auto r_angle = sourceManager.getFileLoc(loc.getRAngleLoc());
+    //     r_angle.dump(sourceManager);
+    //
+    //    // llvm::outs() << sourceManager.getSpellingColumnNumber(r_angle) << "\n";
+    //    // llvm::outs() << sourceManager.getExpansionColumnNumber(r_angle) << "\n";
+    //
+    //    llvm::outs() << sourceManager.isInMainFile(r_angle) << "\n";
+    //
+    //    auto ID = sourceManager.getFileID(r_angle);
+    //    llvm::outs() << sourceManager.getFilename(r_angle) << "\n";
+    //
+    //    auto tokens = buffer.spelledTokens(sourceManager.getFileID(l_angle));
+    //    for(auto& token: tokens) {
+    //        token.location().dump(sourceManager);
+    //    }
+    //    return true;
+    //}
 };
 
 int main(int argc, const char** argv) {
@@ -693,9 +815,14 @@ int main(int argc, const char** argv) {
     }
 
     clang::syntax::TokenBuffer buffer = std::move(collector).consume();
+    buffer.indexExpandedTokens();
 
     auto tu = instance->getASTContext().getTranslationUnitDecl();
-    ASTVistor visitor{instance->getPreprocessor(), buffer, instance->getASTContext(), instance->getSema()};
+    ASTVistor visitor{instance->getPreprocessor(),
+                      buffer,
+                      instance->getASTContext(),
+                      instance->getSema(),
+                      buffer};
     visitor.TraverseDecl(tu);
 
     action.EndSourceFile();

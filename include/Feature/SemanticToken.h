@@ -6,7 +6,13 @@ namespace clice {
 
 class ParsedAST;
 
+namespace feature {
+
 protocol::SemanticTokens semanticTokens(const ParsedAST& ast);
+
+
+
+}
 
 }  // namespace clice
 

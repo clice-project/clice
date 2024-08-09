@@ -9,7 +9,6 @@ namespace clice {
 class ParsedAST {
 private:
     using Decl = clang::Decl*;
-    using TokenBuffer = clang::syntax::TokenBuffer;
     using ASTConsumer = std::unique_ptr<clang::ASTConsumer>;
 
     struct FrontendAction : public clang::ASTFrontendAction {
@@ -43,9 +42,11 @@ public:
 
     auto& ASTContext() { return instance.getASTContext(); }
 
-    auto& TokensBuffer() { return buffer; }
+    auto& Preprocessor() { return instance.getPreprocessor(); }
 
     auto& SourceManager() { return instance.getSourceManager(); }
+
+    auto& TokenBuffer() { return buffer; }
 
     auto& TranslationUnit() { return *instance.getASTContext().getTranslationUnitDecl(); }
 };

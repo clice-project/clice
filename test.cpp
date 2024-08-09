@@ -1,7 +1,4 @@
-#include <cstdio>
+template<template<typename ...> typename T>
+struct X{
 
-struct X {};
-
-struct Y {
-    int x = 1;
 };
