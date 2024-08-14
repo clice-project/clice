@@ -1,14 +1,18 @@
 #include <Clang/Directive.h>
-#include <vector>
 
 namespace clice {
 
-class DirectiveCollector : clang::PPCallbacks {
+class DirectiveCollector : public PPCallbacks {
+private:
+    Directive& directive;
+
 public:
+    DirectiveCollector(Directive& directive) : directive(directive) {}
+
     virtual ~DirectiveCollector() = default;
 
-    void InclusionDirective(clang::SourceLocation HashLoc,
-                            const clang::Token& IncludeTok,
+    void InclusionDirective(SourceLocation HashLoc,
+                            const Token& IncludeTok,
                             StringRef FileName,
                             bool IsAngled,
                             clang::CharSourceRange FilenameRange,
@@ -19,51 +23,95 @@ public:
                             bool ModuleImported,
                             clang::SrcMgr::CharacteristicKind FileType) override {}
 
-    void moduleImport(clang::SourceLocation ImportLoc,
+    void moduleImport(SourceLocation ImportLoc,
                       clang::ModuleIdPath Path,
                       const clang::Module* Imported) override {}
 
-    void PragmaDirective(clang::SourceLocation Loc, clang::PragmaIntroducerKind Introducer) override {}
+    void PragmaDirective(SourceLocation Loc, clang::PragmaIntroducerKind Introducer) override {
+        directive.pragmas.emplace_back(Loc, Introducer);
+    }
 
-    void MacroExpands(const clang::Token& MacroNameTok,
+    void MacroDefined(const Token& MacroNameTok, const clang::MacroDirective* MD) override {
+        directive.defines.emplace_back(MacroNameTok, MD);
+    }
+
+    void MacroExpands(const Token& MacroNameTok,
                       const clang::MacroDefinition& MD,
-                      clang::SourceRange Range,
+                      SourceRange Range,
                       const clang::MacroArgs* Args) override {}
 
-    void MacroDefined(const clang::Token& MacroNameTok, const clang::MacroDirective* MD) override {}
-
-    void MacroUndefined(const clang::Token& MacroNameTok,
+    void MacroUndefined(const Token& MacroNameTok,
                         const clang::MacroDefinition& MD,
-                        const clang::MacroDirective* Undef) override {}
+                        const clang::MacroDirective* Undef) override {
+        directive.undefs.emplace_back(MacroNameTok, &MD, Undef);
+    }
 
-    void If(clang::SourceLocation Loc,
-            clang::SourceRange ConditionRange,
-            ConditionValueKind ConditionValue) override {}
+    void If(SourceLocation Loc,
+            SourceRange ConditionRange,
+            ConditionValueKind ConditionValue) override {
+        directive.ifBlocks.emplace_back(Directive::If{
+            Loc,
+            {ConditionRange, ConditionValue}
+        });
+    }
 
-    void Elif(clang::SourceLocation Loc,
-              clang::SourceRange ConditionRange,
+    void Elif(SourceLocation Loc,
+              SourceRange ConditionRange,
               ConditionValueKind ConditionValue,
-              clang::SourceLocation IfLoc) override {}
+              SourceLocation IfLoc) override {
+        assert(directive.ifBlocks.back().if_.location == IfLoc &&
+               "The `#elif` directive must be preceded by an `#if` directive.");
+        directive.ifBlocks.back().elifs.emplace_back(Directive::Elif{
+            Loc,
+            {ConditionRange, ConditionValue}
+        });
+    }
 
-    void Ifdef(clang::SourceLocation Loc,
-               const clang::Token& MacroNameTok,
-               const clang::MacroDefinition& MD) override {}
+    void Ifdef(SourceLocation Loc,
+               const Token& MacroNameTok,
+               const clang::MacroDefinition& MD) override {
+        directive.ifdefBlocks.emplace_back(Directive::Ifdef{
+            Loc,
+            {MacroNameTok, MD}
+        });
+    }
 
-    void Elifdef(clang::SourceLocation Loc,
-                 const clang::Token& MacroNameTok,
-                 const clang::MacroDefinition& MD) override {}
+    // call when a `#elifdef` directive is skipped.
+    void Elifdef(SourceLocation Loc, SourceRange ConditionRange, SourceLocation IfLoc) override {
+        assert(directive.ifdefBlocks.back().ifdef.location == IfLoc &&
+               "The `#elifdef` directive must be preceded by an `#ifdef` directive.");
+        // FIXME:
+        directive.ifdefBlocks.back().elifdefs.emplace_back(Directive::Elifdef{
+            Loc,
+            //{ConditionRange, ConditionValueKind::Defined}
+        });
+    }
 
-    void Ifndef(clang::SourceLocation Loc,
-                const clang::Token& MacroNameTok,
+    // call when a `#ifdef` directive is hit.
+    void Elifdef(SourceLocation Loc,
+                 const Token& MacroNameTok,
+                 const clang::MacroDefinition& MD) override {
+        directive.ifdefBlocks.back().elifdefs.emplace_back(Directive::Elifdef{
+            Loc,
+            {MacroNameTok, MD}
+        });
+    }
+
+    void Ifndef(SourceLocation Loc,
+                const Token& MacroNameTok,
                 const clang::MacroDefinition& MD) override {}
 
-    void Elifndef(clang::SourceLocation Loc,
-                  const clang::Token& MacroNameTok,
+    void Elifndef(SourceLocation Loc,
+                  const Token& MacroNameTok,
                   const clang::MacroDefinition& MD) override {}
 
-    void Else(clang::SourceLocation Loc, clang::SourceLocation IfLoc) override {}
+    void Else(SourceLocation Loc, SourceLocation IfLoc) override {}
 
-    void Endif(clang::SourceLocation Loc, clang::SourceLocation IfLoc) override {}
+    void Endif(SourceLocation Loc, SourceLocation IfLoc) override {}
 };
+
+Directive::Directive(clang::Preprocessor& preprocessor) {
+    preprocessor.addPPCallbacks(std::make_unique<DirectiveCollector>(*this));
+}
 
 }  // namespace clice

@@ -4,65 +4,105 @@
 
 using namespace clang;
 
-class PPCallback : public clang::PPCallbacks {
+struct IfBlock {
+    SourceLocation If;
+    std::vector<SourceLocation> Elifs;
+    SourceLocation Else;
+    SourceLocation End;
+};
+
+struct IfdefBlock {
+    SourceLocation If;
+    std::vector<SourceLocation> Elifs;
+    SourceLocation Else;
+    SourceLocation End;
+};
+
+class DirectiveCollector : public clang::PPCallbacks {
 private:
     clang::Preprocessor& pp;
     clang::SourceManager& sm;
 
 public:
-    PPCallback(clang::Preprocessor& pp) : pp(pp), sm(pp.getSourceManager()) {}
+    DirectiveCollector(clang::Preprocessor& pp) : pp(pp), sm(pp.getSourceManager()) {}
 
-    void InclusionDirective(SourceLocation HashLoc,
-                            const Token& IncludeTok,
+    virtual ~DirectiveCollector() = default;
+
+    void InclusionDirective(clang::SourceLocation HashLoc,
+                            const clang::Token& IncludeTok,
                             StringRef FileName,
                             bool IsAngled,
-                            CharSourceRange FilenameRange,
-                            OptionalFileEntryRef File,
+                            clang::CharSourceRange FilenameRange,
+                            clang::OptionalFileEntryRef File,
                             StringRef SearchPath,
                             StringRef RelativePath,
-                            const Module* SuggestedModule,
+                            const clang::Module* SuggestedModule,
                             bool ModuleImported,
-                            SrcMgr::CharacteristicKind FileType) override {
-        if(sm.isInMainFile(HashLoc)) {
-            HashLoc.dump(sm);
-            IncludeTok.getLocation().dump(sm);
-            IncludeTok.getEndLoc().dump(sm);
+                            clang::SrcMgr::CharacteristicKind FileType) override {}
+
+    void moduleImport(clang::SourceLocation ImportLoc,
+                      clang::ModuleIdPath Path,
+                      const clang::Module* Imported) override {}
+
+    void PragmaDirective(clang::SourceLocation Loc,
+                         clang::PragmaIntroducerKind Introducer) override {}
+
+    void MacroExpands(const clang::Token& MacroNameTok,
+                      const clang::MacroDefinition& MD,
+                      clang::SourceRange Range,
+                      const clang::MacroArgs* Args) override {}
+
+    void MacroDefined(const clang::Token& MacroNameTok, const clang::MacroDirective* MD) override {}
+
+    void MacroUndefined(const clang::Token& MacroNameTok,
+                        const clang::MacroDefinition& MD,
+                        const clang::MacroDirective* Undef) override {}
+
+    void If(clang::SourceLocation Loc,
+            clang::SourceRange ConditionRange,
+            ConditionValueKind ConditionValue) override {
+        llvm::outs() << "If\n";
+        Loc.dump(sm);
+        ConditionRange.dump(sm);
+    }
+
+    void Elif(clang::SourceLocation Loc,
+              clang::SourceRange ConditionRange,
+              ConditionValueKind ConditionValue,
+              clang::SourceLocation IfLoc) override {}
+
+    void Else(clang::SourceLocation Loc, clang::SourceLocation IfLoc) override {}
+
+    void Ifdef(clang::SourceLocation Loc,
+               const clang::Token& MacroNameTok,
+               const clang::MacroDefinition& MD) override {
+        llvm::outs() << "Ifdef\n";
+        Loc.dump(sm);
+
+        llvm::outs() << "MacroName: " << pp.getSpelling(MacroNameTok) << "\n";
+        auto info = MD.getMacroInfo();
+        if(info) {
+            info->dump();
         }
     }
 
-    // void MacroExpands(const clang::Token& token,
-    //                   const clang::MacroDefinition& macro,
-    //                   clang::SourceRange range,
-    //                   const clang::MacroArgs* args) override {
-    //     std::string name = pp.getSpelling(token);
-    //     if(name.starts_with("_"))
-    //         return;
-    //
-    //    clang::MacroInfo* info = macro.getMacroInfo();
-    //    // info->isBuiltinMacro();
-    //    // info->isFunctionLike();
-    //    // info->isObjectLike();
-    //    // info->isVariadic();
-    //    // info->getNumParams();
-    //    // info->params();
-    //
-    //    const int size = args->getNumMacroArguments();  // Expanding macro arguments
-    //    for(auto i = 0; i < size; ++i) {
-    //        // get first token of first argument of expanding macro
-    //        const clang::Token* first = args->getUnexpArgument(i);
-    //        // iterate over tokens of first argument of expanding macro
-    //        for(auto j = 0; j < args->getArgLength(first); ++j) {
-    //            const clang::Token& tok = *(first + j);
-    //            //  llvm::outs() << "Arg: " << pp.getSpelling(tok) << "\n";
-    //        }
-    //    }
-    //
-    //    auto expandingRange = sm.getExpansionRange(range);
-    //    auto text = clang::Lexer::getSourceText(expandingRange, sm, pp.getLangOpts());
-    //    llvm::outs() << text << "\n";
-    //}
+    void Elifdef(clang::SourceLocation Loc,
+                 const clang::Token& MacroNameTok,
+                 const clang::MacroDefinition& MD) override {}
 
-    void MacroDefined(const clang::Token& token, const clang::MacroDirective* directive) override {}
+    void Ifndef(clang::SourceLocation Loc,
+                const clang::Token& MacroNameTok,
+                const clang::MacroDefinition& MD) override {}
+
+    void Elifndef(clang::SourceLocation Loc,
+                  const clang::Token& MacroNameTok,
+                  const clang::MacroDefinition& MD) override {}
+
+    void Endif(clang::SourceLocation Loc, clang::SourceLocation IfLoc) override {
+        llvm::outs() << "Endif\n";
+        Loc.dump(sm);
+        IfLoc.dump(sm);
+    }
 };
 
 int main(int argc, const char** argv) {
@@ -123,7 +163,7 @@ int main(int argc, const char** argv) {
     //     // }
     // });
 
-    pp.addPPCallbacks(std::make_unique<PPCallback>(pp));
+    pp.addPPCallbacks(std::make_unique<DirectiveCollector>(pp));
     clang::syntax::TokenCollector collector{pp};
 
     if(auto error = action.Execute()) {
@@ -134,11 +174,12 @@ int main(int argc, const char** argv) {
     auto buffer = std::move(collector).consume();
     buffer.dumpForTests();
     auto tokens = buffer.spelledTokens(sm.getMainFileID());
-    for(auto& token: tokens) {
-
-        llvm::outs() << "Token: " << token.text(sm) << " " << clang::tok::getTokenName(token.kind())
-                     << "\n";
-    }
+    // for(auto& token: tokens) {
+    //
+    //    llvm::outs() << "Token: " << token.text(sm) << " " <<
+    //    clang::tok::getTokenName(token.kind())
+    //                 << "\n";
+    //}
 
     // auto tokens2 = buffer.expandedTokens();
     // for(auto& token: tokens2) {

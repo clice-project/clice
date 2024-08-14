@@ -25,6 +25,7 @@ FIXME:
 - 提供更好的模板代码补全（需要在索引文件里面记录模板实例化），https://github.com/clangd/clangd/issues/443，然后补全的时候获取`.`号前面的表达式类型，之后再这里查找
 - 支持模块：https://github.com/clangd/clangd/issues/1293
 - https://github.com/clangd/clangd/issues/123 优化头文查找
+- 折叠预处理 https://github.com/clangd/clangd/issues/1661
 ## 性能优化
 
 TODO: 寻找核心优化点

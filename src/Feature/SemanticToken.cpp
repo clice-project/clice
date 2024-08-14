@@ -17,8 +17,6 @@ private:
     SemanticTokenType type;
     uint32_t modifiers;
 
-private:
-
 public:
     SemanticToken(SemanticTokenType type, clang::SourceLocation begin, clang::SourceLocation end) :
         range(begin, end), type(type), modifiers(0) {}

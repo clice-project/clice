@@ -10,8 +10,6 @@ namespace feature {
 
 protocol::SemanticTokens semanticTokens(const ParsedAST& ast);
 
-
-
 }
 
 }  // namespace clice

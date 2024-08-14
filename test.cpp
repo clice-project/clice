@@ -1,11 +1,15 @@
-template<typename T>
-struct X{
-    void foo(){};
-};
+#if 1
 
-template<>
-void X<int>::foo(){
+int x = 1;
 
-}
+#else 
 
+int y = 2;
 
+#endif
+
+#ifdef X
+
+int y = 2;
+
+#endif
