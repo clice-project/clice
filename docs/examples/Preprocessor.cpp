@@ -144,7 +144,6 @@ int main(int argc, const char** argv) {
 
     clang::Preprocessor& pp = instance->getPreprocessor();
     auto& sm = pp.getSourceManager();
-
     // pp.setTokenWatcher([&](const clang::Token& token) {
     //     llvm::outs() << "Token: " << pp.getSpelling(token);
     //     auto loc = sm.getSpellingLoc(token.getLocation());

@@ -32,7 +32,8 @@
 *.app
 
 .cache/
-build/
+build*
+temp*
 external/
 logs/
 

@@ -9,7 +9,7 @@ private:
     Directive directive;
     clang::PrecompiledPreamble data;
 
-    Preamble(clang::PrecompiledPreamble&& preamble) : data(std::move(preamble)) {}
+    // Preamble(clang::PrecompiledPreamble&& preamble) : data(std::move(preamble)) {}
 
 public:
     static std::unique_ptr<Preamble>

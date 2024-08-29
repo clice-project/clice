@@ -640,127 +640,31 @@ public:
 
     bool TraverseTranslationUnitDecl(clang::TranslationUnitDecl* decl) {
         for(auto it = decl->decls_begin(), end = decl->decls_end(); it != end; ++it) {
-            auto decl = *it;
-            if(sourceManager.isInMainFile(decl->getLocation())) {
-                TraverseDecl(*it);
-            }
+            TraverseDecl(*it);
+            if(sourceManager.getFilename(sourceManager.getSpellingLoc(it->getLocation())) ==
+               "/usr/include/c++/13/bits/stl_vector.h") {}
         }
         return true;
     }
 
-    bool VisitDecl(clang::Decl* decl) {
-        llvm::outs() << "Visiting Decl: " << decl->getDeclKindName() << "\n";
-        return true;
-    }
-
-    // bool VisitTypeAliasDecl(clang::TypeAliasDecl* decl) {}
-
-    // bool FieldDeclecl(clang::FieldDecl* decl) {
-    //     llvm::outs() << "Visiting FieldDeclecl: " << decl->getDeclKindName() << "\n";
-    //     return true;
-    // }
-    //
-    // bool WalkUpFromCXXRecordDecl(clang::CXXRecordDecl* decl) {
-    //    llvm::outs() << "Visiting CXXRecordDecl\n";
-    //    // clang::TemplateSpecializationType t;
-    //    clang::TemplateSpecializationTypeLoc loc;
-    //
-    //    return true;
-    //}
-    //
-    void addAngle(clang::SourceLocation l, clang::SourceLocation r) {
-        l.dump(sourceManager);
-        r.dump(sourceManager);
-    }
-
-    VISIT(DeclaratorDecl) {
-        for(unsigned i = 0; i < node->getNumTemplateParameterLists(); ++i) {
-            if(auto params = node->getTemplateParameterList(i)) {
-                addAngle(params->getLAngleLoc(), params->getRAngleLoc());
-            }
+    VISIT(ClassTemplateDecl) {
+        clang::DeclRefExpr* node2;
+        if(node->getName() == "vector") {
+            node->getLocation().dump(sourceManager);
         }
         return true;
     }
+};
 
-    VISIT(TagDecl) {
-        for(unsigned i = 0; i < node->getNumTemplateParameterLists(); ++i) {
-            if(auto params = node->getTemplateParameterList(i)) {
-                addAngle(params->getLAngleLoc(), params->getRAngleLoc());
-            }
-        }
-        return true;
-    }
+class CommentHandler : public clang::CommentHandler {
 
-    VISIT(FunctionDecl) {
-        if(auto args = node->getTemplateSpecializationArgsAsWritten()) {
-            addAngle(args->getLAngleLoc(), args->getRAngleLoc());
-        }
-        return true;
-    }
-
-    VISIT(TemplateDecl) {
-        if(auto params = node->getTemplateParameters()) {
-            addAngle(params->getLAngleLoc(), params->getRAngleLoc());
-        }
-        return true;
-    }
-
-    VISIT(ClassTemplateSpecializationDecl) {
-        if(auto args = node->getTemplateArgsAsWritten()) {
-            addAngle(args->getLAngleLoc(), args->getRAngleLoc());
-        }
-        return true;
-    }
-
-    VISIT(ClassTemplatePartialSpecializationDecl) {
-        if(auto params = node->getTemplateParameters()) {
-            addAngle(params->getLAngleLoc(), params->getRAngleLoc());
-        }
-        return true;
-    }
-
-    VISIT(VarTemplateSpecializationDecl) {
-        if(auto args = node->getTemplateArgsAsWritten()) {
-            addAngle(args->LAngleLoc, args->RAngleLoc);
-        }
-        return true;
-    }
-
-    VISIT(VarTemplatePartialSpecializationDecl) {
-        if(auto params = node->getTemplateParameters()) {
-            addAngle(params->getLAngleLoc(), params->getRAngleLoc());
-        }
-        return true;
-    }
-
-    VISIT(CXXNamedCastExpr) {
-        addAngle(node->getAngleBrackets().getBegin(), node->getAngleBrackets().getEnd());
-        return true;
-    }
-
-    VISIT(OverloadExpr) {
-        addAngle(node->getLAngleLoc(), node->getRAngleLoc());
-        return true;
-    }
-
-    VISIT(CXXDependentScopeMemberExpr) {
-        addAngle(node->getLAngleLoc(), node->getRAngleLoc());
-        return true;
-    }
-
-    VISIT(DependentScopeDeclRefExpr) {
-        addAngle(node->getLAngleLoc(), node->getRAngleLoc());
-        return true;
-    }
-
-    VISIT_TYPE(TemplateSpecializationTypeLoc) {
-        addAngle(node.getLAngleLoc(), node.getRAngleLoc());
-        return true;
-    }
-
-    VISIT_TYPE(DependentTemplateSpecializationTypeLoc) {
-        addAngle(node.getLAngleLoc(), node.getRAngleLoc());
-        return true;
+    bool HandleComment(clang::Preprocessor& PP, clang::SourceRange Comment) override {
+        auto& sm = PP.getSourceManager();
+        std::string CommentText = std::string(sm.getCharacterData(Comment.getBegin()),
+                                              sm.getCharacterData(Comment.getEnd()) -
+                                                  sm.getCharacterData(Comment.getBegin()));
+        llvm::outs() << "Comment: " << CommentText << "\n";
+        return false;
     }
 };
 
@@ -801,7 +705,10 @@ int main(int argc, const char** argv) {
         std::terminate();
     }
 
-    clang::syntax::TokenCollector collector{instance->getPreprocessor()};
+    auto& pp = instance->getPreprocessor();
+    pp.addCommentHandler(new CommentHandler());
+    clang::syntax::TokenCollector collector{pp};
+    // pp.addCommentHandler(new CommentHandler());
 
     if(auto error = action.Execute()) {
         llvm::errs() << "Failed to execute action: " << error << "\n";
@@ -811,13 +718,25 @@ int main(int argc, const char** argv) {
     clang::syntax::TokenBuffer buffer = std::move(collector).consume();
     buffer.indexExpandedTokens();
 
+    auto& sm = instance->getSourceManager();
+    auto& fm = instance->getFileManager();
+
+    auto entry = fm.getFileRef("/usr/include/c++/13/vector");
+    auto id = sm.translateFile(*entry);
+    auto tokens = buffer.spelledTokens(id);
+
+    for(auto token: tokens) {
+        llvm::outs() << token.text(sm) << "  ";
+        token.location().dump(sm);
+    }
+
     auto tu = instance->getASTContext().getTranslationUnitDecl();
     ASTVistor visitor{instance->getPreprocessor(),
                       buffer,
                       instance->getASTContext(),
                       instance->getSema(),
                       buffer};
-    visitor.TraverseDecl(tu);
+    // visitor.TraverseDecl(tu);
 
     action.EndSourceFile();
 };

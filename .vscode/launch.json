@@ -32,6 +32,26 @@
             ],
             "cwd": "${workspaceFolder}"
         },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "ASTVisitor",
+            "program": "${workspaceFolder}/build/ASTVisitor",
+            "args": [
+                "/home/ykiko/C++/clice/test.cpp",
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Module",
+            "program": "${workspaceFolder}/build/Module",
+            "args": [
+                "/home/ykiko/C++/clice/main.cpp",
+            ],
+            "cwd": "${workspaceFolder}"
+        },
         //{
         //    "type": "lldb",
         //    "request": "attach",

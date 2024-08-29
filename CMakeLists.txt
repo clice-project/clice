@@ -34,6 +34,7 @@ set(LLVM_LIBS
     clangAST
     clangASTMatchers
     clangBasic
+    clangDependencyScanning
     clangDriver
     clangFormat
     clangFrontend
@@ -46,7 +47,6 @@ set(LLVM_LIBS
     clangToolingInclusions
     clangToolingInclusionsStdlib
     clangToolingSyntax
-    LLVMFrontendOpenMP
 )
 
 set(LINK_LIBS
@@ -89,6 +89,7 @@ if(CLICE_EXAMPLES)
 
     add_example(ASTVisitor docs/examples/ASTVisitor.cpp)
     add_example(CodeCompletion docs/examples/CodeCompletion.cpp)
+    add_example(Module docs/examples/Module.cpp)
     add_example(Preamble docs/examples/Preamble.cpp)
     add_example(Preprocessor docs/examples/Preprocessor.cpp)
     add_example(TreeTransform docs/examples/TreeTransform.cpp)
