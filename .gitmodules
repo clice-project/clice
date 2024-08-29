@@ -7,3 +7,8 @@
 	path = deps/libuv
 	url = https://github.com/libuv/libuv.git
 	branch = v1.x
+
+[submodule "deps/spdlog"]
+	path = deps/spdlog
+	url = https://github.com/gabime/spdlog.git
+	branch = v1.x
