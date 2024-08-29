@@ -1,0 +1,6 @@
+[submodule "deps/llvm"]
+	path = deps/llvm
+	url = https://github.com/llvm/llvm-project.git
+[submodule "deps/libuv"]
+	path = deps/libuv
+	url = https://github.com/libuv/libuv.git
