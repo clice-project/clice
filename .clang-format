@@ -2,7 +2,7 @@
 # compatible with clang-format 18
 
 UseTab: Never
-ColumnLimit: 100
+ColumnLimit: 120
 
 # Indent
 IndentWidth: 4

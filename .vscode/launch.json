@@ -16,48 +16,12 @@
             "type": "lldb",
             "request": "launch",
             "name": "ASTVisitor",
-            "program": "${workspaceFolder}/build/ASTVisitor",
+            "program": "${workspaceFolder}/build/bin/clice",
             "args": [
                 "/home/ykiko/C++/clice/test.cpp",
             ],
             "cwd": "${workspaceFolder}"
         },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Preprocessor",
-            "program": "${workspaceFolder}/build/Preprocessor",
-            "args": [
-                "/home/ykiko/C++/clice/main.cpp",
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "ASTVisitor",
-            "program": "${workspaceFolder}/build/ASTVisitor",
-            "args": [
-                "/home/ykiko/C++/clice/test.cpp",
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Module",
-            "program": "${workspaceFolder}/build/Module",
-            "args": [
-                "/home/ykiko/C++/clice/main.cpp",
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        //{
-        //    "type": "lldb",
-        //    "request": "attach",
-        //    "name": "Attach",
-        //    "program": "${workspaceFolder}/build/clice"
-        //},
     ],
     "compounds": [
         {
