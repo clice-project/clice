@@ -34,9 +34,5 @@
 .cache/
 build*
 temp*
-external/
+deps/
 logs/
-
-# vscode plugin
-vscode-clice/dist/
-vscode-clice/node_modules/

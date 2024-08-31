@@ -23,6 +23,6 @@ int main(int argc, const char** argv) {
         "-Wall",
     };
     auto preamble = clice::Preamble::build("main.cpp", source, args);
-    auto ast = clice::ParsedAST::build("main.cpp", source, args, preamble.get());
-    ast->tu->dump();
+    auto parsedAST = clice::ParsedAST::build("main.cpp", source, args, preamble.get());
+    parsedAST->tuDecl->dump();
 }

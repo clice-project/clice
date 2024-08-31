@@ -14,16 +14,16 @@ class SemanticToken {};
 
 class Highlighter : public clang::RecursiveASTVisitor<Highlighter> {
 public:
-    Highlighter(ParsedAST& ast) : fm(ast.fm), pp(ast.pp), sm(ast.sm), context(ast.context), tb(ast.tb) {}
+    Highlighter(ParsedAST& ast) : fileManager(ast.fileManager), preproc(ast.preproc), sourceManager(ast.sourceManager), context(ast.context), tokenBuffer(ast.tokenBuffer) {}
 
     std::vector<SemanticToken> highlight(llvm::StringRef filepath) {
         std::vector<SemanticToken> result;
 
-        auto entry = fm.getFileRef(filepath);
+        auto entry = fileManager.getFileRef(filepath);
         if(auto error = entry.takeError()) {
             // TODO:
         }
-        auto fileID = sm.translateFile(entry.get());
+        auto fileID = sourceManager.translateFile(entry.get());
 
         this->fileID = fileID;
         this->result = &result;
@@ -47,7 +47,7 @@ public:
         for(auto decl: node->decls()) {
             // we only need to highlight the token in main file.
             // so filter out the nodes which are in headers for better performance.
-            if(sm.isInFileID(decl->getLocation(), fileID)) {
+            if(sourceManager.isInFileID(decl->getLocation(), fileID)) {
                 TraverseDecl(decl);
             }
         }
@@ -147,11 +147,11 @@ public:
     }
 
 private:
-    clang::FileManager& fm;
-    clang::Preprocessor& pp;
-    clang::SourceManager& sm;
+    clang::FileManager& fileManager;
+    clang::Preprocessor& preproc;
+    clang::SourceManager& sourceManager;
     clang::ASTContext& context;
-    clang::syntax::TokenBuffer& tb;
+    clang::syntax::TokenBuffer& tokenBuffer;
 
     clang::FileID fileID;
     std::vector<SemanticToken>* result;

@@ -5,14 +5,15 @@
 namespace clice {
 
 struct ParsedAST {
-    clang::FileManager& fm;
-    clang::Preprocessor& pp;
-    clang::SourceManager& sm;
     clang::ASTContext& context;
-    clang::syntax::TokenBuffer tb;
-    clang::TranslationUnitDecl* tu;
+    clang::Preprocessor& preproc;
+    clang::FileManager& fileManager;
+    clang::SourceManager& sourceManager;
+    clang::syntax::TokenBuffer tokenBuffer;
     std::unique_ptr<clang::FrontendAction> action;
     std::unique_ptr<clang::CompilerInstance> instance;
+
+    clang::TranslationUnitDecl* tuDecl;
 
     static std::unique_ptr<ParsedAST>
         build(llvm::StringRef filename, llvm::StringRef content, std::vector<const char*>& args, Preamble* preamble);

@@ -62,14 +62,15 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
     }
 
     auto result = new ParsedAST{
-        .fm = instance->getFileManager(),
-        .pp = instance->getPreprocessor(),
-        .sm = instance->getSourceManager(),
         .context = instance->getASTContext(),
-        .tb = std::move(collector).consume(),
-        .tu = instance->getASTContext().getTranslationUnitDecl(),
+        .preproc = instance->getPreprocessor(),
+        .fileManager = instance->getFileManager(),
+        .sourceManager = instance->getSourceManager(),
+        .tokenBuffer = std::move(collector).consume(),
         .action = std::move(action),
         .instance = std::move(instance),
+
+        .tuDecl = instance->getASTContext().getTranslationUnitDecl(),
     };
 
     return std::unique_ptr<ParsedAST>{result};
