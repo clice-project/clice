@@ -5,6 +5,7 @@
 namespace clice {
 
 struct ParsedAST {
+    clang::FileManager& fm;
     clang::Preprocessor& pp;
     clang::SourceManager& sm;
     clang::ASTContext& context;

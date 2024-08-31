@@ -62,6 +62,7 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
     }
 
     auto result = new ParsedAST{
+        .fm = instance->getFileManager(),
         .pp = instance->getPreprocessor(),
         .sm = instance->getSourceManager(),
         .context = instance->getASTContext(),
