@@ -1,0 +1,12 @@
+[clang]
+# the path of builtin headers that clang uses
+resource-dir = "${executable}/../lib/clang/${version}"
+# the commands that will be appended to the command line
+append = []
+# the commands that will be removed from the command line
+remove = []
+
+[completion]
+
+
+[inlay-hint]
