@@ -31,6 +31,8 @@ add_executable(clice)
 file(GLOB_RECURSE SRC_FILES "${CMAKE_SOURCE_DIR}/src/*.cpp")
 target_sources(clice PRIVATE ${SRC_FILES})
 
+target_compile_options(clice PRIVATE -fno-rtti)
+
 target_include_directories(clice PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${LLVM_INCLUDE_DIRS}

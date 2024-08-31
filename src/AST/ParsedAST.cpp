@@ -34,11 +34,7 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
     auto instance = std::make_unique<clang::CompilerInstance>();
     instance->setInvocation(std::move(invocation));
 
-    clang::DiagnosticIDs* ids = new clang::DiagnosticIDs();
-    clang::DiagnosticOptions* diag_opts = new clang::DiagnosticOptions();
-    clang::DiagnosticConsumer* consumer = new clang::TextDiagnosticPrinter(llvm::errs(), diag_opts);
-    clang::DiagnosticsEngine* engine = new clang::DiagnosticsEngine(ids, diag_opts, consumer);
-    instance->setDiagnostics(engine);
+    instance->createDiagnostics(new Diagnostic(), true);
 
     // if(auto remappingVSF =
     //        createVFSFromCompilerInvocation(instance->getInvocation(), instance->getDiagnostics(), vfs)) {

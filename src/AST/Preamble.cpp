@@ -12,10 +12,7 @@ std::unique_ptr<Preamble>
     auto bounds = clang::ComputePreambleBounds(invocation->getLangOpts(), *buffer, false);
 
     // create diagnostic engine
-    clang::DiagnosticsEngine* engine =
-        new clang::DiagnosticsEngine(new clang::DiagnosticIDs(),
-                                     new clang::DiagnosticOptions(),
-                                     new clang::TextDiagnosticPrinter(llvm::errs(), new clang::DiagnosticOptions()));
+    auto engine = clang::CompilerInstance::createDiagnostics(&invocation->getDiagnosticOpts(), new Diagnostic());
 
     // if store the preamble in memory, if not, store it in a file(storagePath)
     bool storeInMemory = false;
