@@ -54,14 +54,24 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
         std::terminate();
     }
 
+    clang::syntax::TokenCollector collector(instance->getPreprocessor());
+
     if(auto error = action->Execute()) {
         llvm::errs() << "Failed to execute action: " << error << "\n";
         std::terminate();
     }
 
-    return std::unique_ptr<ParsedAST>{
-        new ParsedAST{std::move(action), std::move(instance)}
+    auto result = new ParsedAST{
+        .pp = instance->getPreprocessor(),
+        .sm = instance->getSourceManager(),
+        .context = instance->getASTContext(),
+        .tb = std::move(collector).consume(),
+        .tu = instance->getASTContext().getTranslationUnitDecl(),
+        .action = std::move(action),
+        .instance = std::move(instance),
     };
+
+    return std::unique_ptr<ParsedAST>{result};
 }
 
 }  // namespace clice
