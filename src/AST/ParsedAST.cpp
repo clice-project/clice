@@ -69,8 +69,6 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
         .tokenBuffer = std::move(collector).consume(),
         .action = std::move(action),
         .instance = std::move(instance),
-
-        .tuDecl = instance->getASTContext().getTranslationUnitDecl(),
     };
 
     return std::unique_ptr<ParsedAST>{result};
