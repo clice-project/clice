@@ -14,7 +14,9 @@ class SemanticToken {};
 
 class Highlighter : public clang::RecursiveASTVisitor<Highlighter> {
 public:
-    Highlighter(ParsedAST& ast) : fileManager(ast.fileManager), preproc(ast.preproc), sourceManager(ast.sourceManager), context(ast.context), tokenBuffer(ast.tokenBuffer) {}
+    Highlighter(ParsedAST& ast) :
+        fileManager(ast.fileManager), preproc(ast.preproc), sourceManager(ast.sourceManager), context(ast.context),
+        tokenBuffer(ast.tokenBuffer) {}
 
     std::vector<SemanticToken> highlight(llvm::StringRef filepath) {
         std::vector<SemanticToken> result;
@@ -45,8 +47,9 @@ private:
 public:
     Traverse(TranslationUnitDecl) {
         for(auto decl: node->decls()) {
-            // we only need to highlight the token in main file.
-            // so filter out the nodes which are in headers for better performance.
+            // FIXME: some decls are located in their parents' file
+            // e.g. `ClassTemplateSpecializationDecl`, find and exclude them
+            node->getLexicalDeclContext();
             if(sourceManager.isInFileID(decl->getLocation(), fileID)) {
                 TraverseDecl(decl);
             }
