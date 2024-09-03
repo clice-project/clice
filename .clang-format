@@ -48,7 +48,7 @@ EmptyLineBeforeAccessModifier: Always
 AllowAllArgumentsOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
 AllowBreakBeforeNoexceptSpecifier: Never
-AllowShortBlocksOnASingleLine: Always
+AllowShortBlocksOnASingleLine: Empty
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortCompoundRequirementOnASingleLine: true
 AllowShortEnumsOnASingleLine: true
@@ -99,4 +99,4 @@ SortIncludes: Never
 SortUsingDeclarations: Never
 IncludeBlocks: Merge
 
-WhitespaceSensitiveMacros: ["PK_PROTECTED", "LUA_PROTECTED"]
+ForEachMacros: ["REFLECTABLE_RECORD"]
