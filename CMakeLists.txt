@@ -28,10 +28,14 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/deps/spdlog)
 
 add_executable(clice)
 
+# apply PCH
+set(PCH_HEADER "${CMAKE_SOURCE_DIR}/include/AST/Diagnostic.h")
+target_precompile_headers(clice PRIVATE ${PCH_HEADER})
+
 file(GLOB_RECURSE SRC_FILES "${CMAKE_SOURCE_DIR}/src/*.cpp")
 target_sources(clice PRIVATE ${SRC_FILES})
 
-target_compile_options(clice PRIVATE -fno-rtti)
+target_compile_options(clice PRIVATE -fno-rtti -O0)
 
 target_include_directories(clice PRIVATE
     ${CMAKE_SOURCE_DIR}/include
