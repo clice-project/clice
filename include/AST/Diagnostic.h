@@ -9,6 +9,7 @@
 #include <clang/Tooling/CompilationDatabase.h>
 #include <clang/Tooling/Syntax/Tokens.h>
 #include <clang/Lex/PPCallbacks.h>
+#include "clang/Sema/TemplateDeduction.h"
 
 namespace clice {
 
