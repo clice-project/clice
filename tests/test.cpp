@@ -42,3 +42,4 @@ struct vector {
     using alloc_type = typename alloc_traits<A>::template rebind<T>::other;
     using reference = typename alloc_traits<alloc_type>::reference;
 };
+
