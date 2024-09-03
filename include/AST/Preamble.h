@@ -1,8 +1,11 @@
 #pragma once
 
-#include "Diagnostic.h"
+#include "Directive.h"
 
 namespace clice {
+
+// FIXME: currently, we do not use preamble.
+// NOTE: if preamble is used for a TU, the header tokens can not find in TokenBuffer.
 
 /// Represents the preamble of a translation unit.
 /// We build preamble for the translation after first edit.

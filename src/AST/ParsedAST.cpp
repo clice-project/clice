@@ -3,6 +3,12 @@
 
 namespace clice {
 
+static void setInvocation(clang::CompilerInvocation& invocation) {
+    clang::LangOptions& langOpts = invocation.getLangOpts();
+    langOpts.CommentOpts.ParseAllComments = true;
+    langOpts.RetainCommentsFromSystemHeaders = true;
+}
+
 std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
                                             llvm::StringRef content,
                                             std::vector<const char*>& args,
@@ -31,6 +37,8 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
                                                           buffer.release());
     }
 
+    invocation->getLangOpts().CommentOpts.ParseAllComments = true;
+
     auto instance = std::make_unique<clang::CompilerInstance>();
     instance->setInvocation(std::move(invocation));
 
@@ -54,7 +62,12 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
         std::terminate();
     }
 
-    clang::syntax::TokenCollector collector(instance->getPreprocessor());
+    auto& preproc = instance->getPreprocessor();
+    clang::syntax::TokenCollector collector(preproc);
+
+    auto directive = std::make_unique<Directive>();
+    preproc.addCommentHandler(directive->handler());
+    preproc.addPPCallbacks(directive->callback());
 
     if(auto error = action->Execute()) {
         llvm::errs() << "Failed to execute action: " << error << "\n";
@@ -68,6 +81,7 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
         .fileManager = instance->getFileManager(),
         .sourceManager = instance->getSourceManager(),
         .tokenBuffer = std::move(collector).consume(),
+        .directive = std::move(directive),
         .action = std::move(action),
         .instance = std::move(instance),
     };

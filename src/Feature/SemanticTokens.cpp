@@ -59,6 +59,8 @@ public:
 
     WalkUpFrom(NamespaceDecl) {}
 
+    VISIT(ImportDecl) {}
+
     VISIT(DeclaratorDecl) {
         for(unsigned i = 0; i < node->getNumTemplateParameterLists(); ++i) {
             if(auto params = node->getTemplateParameterList(i)) {

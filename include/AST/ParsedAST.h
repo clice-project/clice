@@ -11,6 +11,7 @@ struct ParsedAST {
     clang::FileManager& fileManager;
     clang::SourceManager& sourceManager;
     clang::syntax::TokenBuffer tokenBuffer;
+    std::unique_ptr<Directive> directive;
     std::unique_ptr<clang::FrontendAction> action;
     std::unique_ptr<clang::CompilerInstance> instance;
 
