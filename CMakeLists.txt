@@ -4,7 +4,7 @@ project(CLICE)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_RELEASE} -w")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_RELEASE} -w -fno-rtti -O0")
 
 set(LLVM_INSTALL_PATH "${CMAKE_SOURCE_DIR}/deps/llvm/build-install")
 
@@ -59,10 +59,8 @@ add_executable(clice)
 
 target_clang(clice)
 
-file(GLOB_RECURSE SRC_FILES "${CMAKE_SOURCE_DIR}/src/*.cpp")
-target_sources(clice PRIVATE ${SRC_FILES})
-
-target_compile_options(clice PRIVATE -fno-rtti -O0)
+file(GLOB_RECURSE SRC_FILES "${CMAKE_SOURCE_DIR}/src/*/*.cpp")
+target_sources(clice PRIVATE ${SRC_FILES} "${CMAKE_SOURCE_DIR}/src/main.cpp")
 
 target_include_directories(clice PRIVATE
     ${CMAKE_SOURCE_DIR}/deps/libuv/include
@@ -75,5 +73,6 @@ target_link_libraries(clice PRIVATE uv spdlog::spdlog)
 if(CLICE_ENABLE_TEST)
     add_executable(test)
     target_clang(test)
-    target_sources(test PRIVATE ${CMAKE_SOURCE_DIR}/tests/test.cpp)
+    file(GLOB_RECURSE AST_SRC_FILES "${CMAKE_SOURCE_DIR}/src/AST/*.cpp")
+    target_sources(test PRIVATE ${AST_SRC_FILES} "${CMAKE_SOURCE_DIR}/tests/test.cpp")
 endif()

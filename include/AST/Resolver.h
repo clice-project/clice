@@ -2,6 +2,8 @@
 
 #include "ParsedAST.h"
 #include <stack>
+#include <clang/Sema/Lookup.h>
+#include <clang/Sema/Template.h>
 
 namespace clice {
 
@@ -14,129 +16,234 @@ class DependentNameResolver {
 public:
     DependentNameResolver(clang::Sema& sema, clang::ASTContext& context) : sema(sema), context(context) {}
 
-    clang::QualType simplify(clang::DependentNameType type);
-
-    clang::QualType simplify(clang::DependentTemplateSpecializationType type);
-
-    clang::ExprResult simplify(clang::DependentScopeDeclRefExpr* expr);
-
-    clang::ExprResult simplify(clang::CXXDependentScopeMemberExpr* expr);
-
-    clang::ExprResult simplify(clang::UnresolvedLookupExpr* expr);
-
-    clang::DeclResult simplify(clang::UnresolvedUsingValueDecl* decl);
-
-    clang::DeclResult simplify(clang::UnresolvedUsingTypenameDecl* decl);
-
-    clang::ExprResult simplify(clang::CXXUnresolvedConstructExpr* expr);
-
-private:
-    clang::Type* lookup(const clang::CXXRecordDecl* CRD, const clang::IdentifierInfo* II) {
-        auto reuslt = CRD->lookup(II);
-
-        // FIXME: currently, we assume there are no member template specialization
-        // that is the size of the partial specialization is 1,
-        for(auto member: reuslt) {
-            if(auto type = simplify(member)) {
-                return type;
+    std::vector<clang::TemplateArgument> resolve(llvm::ArrayRef<clang::TemplateArgument> arguments) {
+        std::vector<clang::TemplateArgument> result;
+        for(auto arg: arguments) {
+            if(arg.getKind() == clang::TemplateArgument::ArgKind::Type) {
+                // check whether it is a TemplateTypeParmType.
+                if(auto type = llvm::dyn_cast<clang::TemplateTypeParmType>(arg.getAsType())) {
+                    const clang::TemplateTypeParmDecl* param = type->getDecl();
+                    if(param && param->hasDefaultArgument()) {
+                        result.push_back(param->getDefaultArgument().getArgument());
+                        continue;
+                    }
+                }
             }
+            result.push_back(arg);
         }
-
-        for(auto base: CRD->bases()) {
-            if(auto type = simplify(base.getType())) {
-                return type;
-            }
-        }
-
-        return nullptr;
+        return result;
     }
 
-    void simplify(clang::NestedNameSpecifier* NNS, clang::IdentifierInfo* II) {
+    clang::QualType dealias(clang::QualType type) {
+        if(auto DNT = type->getAs<clang::TemplateSpecializationType>()) {
+            return clang::QualType(DNT, 0);
+        } else if(auto DTST = type->getAs<clang::DependentTemplateSpecializationType>()) {
+            auto NNS = clang::NestedNameSpecifier::Create(
+                context,
+                nullptr,
+                false,
+                dealias(clang::QualType(DTST->getQualifier()->getAsType(), 0)).getTypePtr());
+            return context.getDependentTemplateSpecializationType(DTST->getKeyword(),
+                                                                  NNS,
+                                                                  DTST->getIdentifier(),
+                                                                  resolve(DTST->template_arguments()));
+        } else {
+            return type;
+        }
+    }
+
+    clang::QualType resolve(clang::QualType type) {
+        while(true) {
+            // llvm::outs() <<
+            // "--------------------------------------------------------------------\n";
+            // type.dump();
+
+            clang::MultiLevelTemplateArgumentList list;
+            if(auto DNT = type->getAs<clang::DependentNameType>()) {
+                type = resolve(resolve(DNT->getQualifier(), DNT->getIdentifier()));
+                for(auto begin = arguments.rbegin(), end = arguments.rend(); begin != end; ++begin) {
+                    list.addOuterTemplateArguments((*begin)->first, (*begin)->second, true);
+                }
+                type = sema.SubstType(dealias(type), list, {}, {});
+                arguments.clear();
+
+            } else if(auto DTST = type->getAs<clang::DependentTemplateSpecializationType>()) {
+                auto ND = resolve(DTST->getQualifier(), DTST->getIdentifier());
+                if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(ND)) {
+                    auto args = resolve(DTST->template_arguments());
+
+                    clang::Sema::CodeSynthesisContext context;
+                    context.Entity = TATD;
+                    context.Kind = clang::Sema::CodeSynthesisContext::TypeAliasTemplateInstantiation;
+                    context.TemplateArgs = args.data();
+                    sema.pushCodeSynthesisContext(context);
+
+                    list.addOuterTemplateArguments(TATD, args, true);
+                    for(auto begin = arguments.rbegin(), end = arguments.rend(); begin != end; ++begin) {
+                        list.addOuterTemplateArguments((*begin)->first, (*begin)->second, true);
+                    }
+
+                    // llvm::outs() << "before:
+                    // ----------------------------------------------------------------\n";
+                    // TATD->getTemplatedDecl()->getUnderlyingType().dump();
+                    type = dealias(TATD->getTemplatedDecl()->getUnderlyingType());
+                    // llvm::outs() << "arguments:
+                    // -------------------------------------------------------------\n";
+                    // list.dump();
+                    type = sema.SubstType(type, list, {}, {});
+                    // type.dump();
+                    arguments.clear();
+
+                } else {
+                    ND->dump();
+                    std::terminate();
+                }
+                // return resolve(DTST);
+            } else if(auto LRT = type->getAs<clang::LValueReferenceType>()) {
+                type = context.getLValueReferenceType(resolve(LRT->getPointeeType()));
+            } else {
+                return type;
+            }
+        }
+    }
+
+    clang::QualType resolve(clang::NamedDecl* ND) {
+        if(auto TD = llvm::dyn_cast<clang::TypedefDecl>(ND)) {
+            return TD->getUnderlyingType();
+        } else if(auto TAD = llvm::dyn_cast<clang::TypeAliasDecl>(ND)) {
+            return TAD->getUnderlyingType();
+        } else {
+            ND->dump();
+            std::terminate();
+        }
+    }
+
+    clang::NamedDecl* resolve(const clang::NestedNameSpecifier* NNS, const clang::IdentifierInfo* II) {
         switch(NNS->getKind()) {
-            // when NNS is a type, e.g., `std::vector<T>::` or `T::`
-            case clang::NestedNameSpecifier::TypeSpec: {
-                auto type = NNS->getAsType();
-
-                if(auto TST = type->getAs<clang::TemplateSpecializationType>()) {
-                    auto TD = TST->getTemplateName().getAsTemplateDecl();
-                    clang::QualType type;
-                    if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(TD)) {
-                        // `std::vector<T>::`
-                    } else if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(TD)) {
-                        // template<typename T>
-                        // using Vector = std::vector<T>::value_type;
-                        // `Vector<T>::`
-                    } else if(auto TTPD = llvm::dyn_cast<clang::TemplateTemplateParmDecl>(TD)) {
-                        // template<typename T, template<typename> typename List>
-                        // using X = List<T>::value_type;
-                        // `List<T>::`
-                    }
-
-                } else if(auto TTPT = type->getAs<clang::TemplateTypeParmType>()) {
-                    // `T::`
-                }
-            }
-            case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
-                // TODO:
+            // prefix is an identifier, e.g. <...>::name::
+            case clang::NestedNameSpecifier::SpecifierKind::Identifier: {
+                return lookup(resolve(resolve(NNS->getPrefix(), NNS->getAsIdentifier())), II);
             }
 
-            // when NNS is still a dependent name, e.g., `std::vector<T>::value_type::`
-            case clang::NestedNameSpecifier::Identifier: {
-                // TODO:
-                {
-                    auto prefix = NNS->getPrefix();
-                    auto name = NNS->getAsIdentifier();
-                }
+            // prefix is a type, e.g. <...>::typename name::
+            case clang::NestedNameSpecifier::SpecifierKind::TypeSpec:
+            case clang::NestedNameSpecifier::SpecifierKind::TypeSpecWithTemplate: {
+                return lookup(clang::QualType(NNS->getAsType(), 0), II);
+            }
+
+            default: {
+                NNS->dump();
+                std::terminate();
             }
         }
     }
 
-    clang::Type* simplify(clang::QualType);
+    clang::NamedDecl* lookup(clang::QualType Type, const clang::IdentifierInfo* Name) {
+        clang::NamedDecl* TemplateDecl;
+        clang::ArrayRef<clang::TemplateArgument> arguments;
 
-    clang::Type* simplify(const clang::NamedDecl* ND) {}
+        // llvm::outs() << "--------------------------------------------------------------------\n";
 
-    clang::Type* simplify(const clang::TemplateSpecializationType* TST, const clang::IdentifierInfo* II) {
-        auto TD = TST->getTemplateName().getAsTemplateDecl();
-        auto arguments = TST->template_arguments();
+        if(auto TTPT = Type->getAs<clang::TemplateTypeParmType>()) {
+            Type->dump();
+            std::terminate();
+        } else if(auto TST = Type->getAs<clang::TemplateSpecializationType>()) {
+            auto TemplateName = TST->getTemplateName();
+            TemplateDecl = TemplateName.getAsTemplateDecl();
+            arguments = TST->template_arguments();
+        } else if(auto DTST = Type->getAs<clang::DependentTemplateSpecializationType>()) {
+            TemplateDecl = resolve(DTST->getQualifier(), DTST->getIdentifier());
+            arguments = DTST->template_arguments();
+        } else if(auto RT = Type->getAs<clang::RecordType>()) {
+            return RT->getDecl()->lookup(Name).front();
+        } else {
+            Type->dump();
+            std::terminate();
+        }
 
-        if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(TD)) {
-            // `std::vector<T>::`
+        clang::NamedDecl* result;
+        clang::Sema::CodeSynthesisContext context;
 
-            // iterate all partial specializations
-            llvm::SmallVector<clang::ClassTemplatePartialSpecializationDecl*> partials;
-            CTD->getPartialSpecializations(partials);
+        if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(TemplateDecl)) {
+            // always we check main template first
+            result = CTD->getTemplatedDecl()->lookup(Name).front();
+            if(result) {
+                this->arguments.push_back(new std::pair<clang::Decl*, std::vector<clang::TemplateArgument>>{
+                    TemplateDecl,
+                    resolve(arguments),
+                });
+                context.Entity = TemplateDecl;
+                context.Kind = clang::Sema::CodeSynthesisContext::TemplateInstantiation;
+                context.TemplateArgs = this->arguments.back()->second.data();
+                sema.pushCodeSynthesisContext(context);
+            } else {
+                llvm::SmallVector<clang::ClassTemplatePartialSpecializationDecl*> paritals;
+                CTD->getPartialSpecializations(paritals);
 
-            clang::sema::TemplateDeductionInfo Info(CTD->getLocation());
-            for(auto partial: partials) {
-                if(auto error = sema.DeduceTemplateArguments(partial, arguments, Info);
-                   error == clang::TemplateDeductionResult::Success) {
-                    if(auto result = lookup(partial, II)) {
-                        return result;
+                clang::sema::TemplateDeductionInfo info(CTD->getLocation());
+                for(auto partial: paritals) {
+                    auto deduction = sema.DeduceTemplateArguments(partial, arguments, info);
+                    if(deduction == clang::TemplateDeductionResult::Success) {
+                        auto decl = partial->lookup(Name).front();
+                        if(decl) {
+                            result = decl;
+
+                            // TODO: fix resugar
+                            // std::vector<clang::TemplateArgument> arguments;
+                            auto arguments = info.takeSugared();
+                            for(auto& arg: arguments->asArray()) {
+                                arg.dump();
+                                // if(arg.getKind() == clang::TemplateArgument::ArgKind::Type) {
+                                //     auto type = arg.getAsType();
+                                //     type->dump();
+                                //     if(type.isCanonical()) {
+                                //         auto TemplateDecl =
+                                //             llvm::dyn_cast<clang::TemplateDecl>(this->arguments.back()->first);
+                                //         auto params = TemplateDecl->getTemplateParameters();
+                                //         auto TTPT = type->getAs<clang::TemplateTypeParmType>();
+                                //         unsigned Depth = TTPT->getDepth();
+                                //         unsigned Index = TTPT->getIndex();
+                                //         auto* TTPD = dyn_cast<clang::TemplateTypeParmDecl>(params->getParam(Index));
+                                //         arguments.push_back(
+                                //             clang::TemplateArgument(this->context.getTypeDeclType(TTPD)));
+                                //     } else {
+                                //         arguments.push_back(arg);
+                                //     }
+                                // } else {
+                                //     arguments.push_back(arg);
+                                // }
+                            }
+
+                            this->arguments.push_back(new std::pair<clang::Decl*, std::vector<clang::TemplateArgument>>{
+                                partial,
+                                arguments->asArray(),
+                            });
+                            context.Entity = partial;
+                            context.Kind = clang::Sema::CodeSynthesisContext::TemplateInstantiation;
+                            context.TemplateArgs = this->arguments.back()->second.data();
+                            sema.pushCodeSynthesisContext(context);
+                            break;
+                        }
                     }
                 }
             }
 
-            // fallback to main template
-            if(auto result = lookup(CTD->getTemplatedDecl(), II)) {
-                return result;
-            }
-
-        } else if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(TD)) {
-            // template<typename T>
-            // using Vector = std::vector<T>::value_type;
-            // `Vector<T>::`
-        } else if(auto TTPD = llvm::dyn_cast<clang::TemplateTemplateParmDecl>(TD)) {
-            // template<typename T, template<typename> typename List>
-            // using X = List<T>::value_type;
-            // `List<T>::`
+        } else if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(TemplateDecl)) {
+            result = lookup(TATD->getTemplatedDecl()->getUnderlyingType(), Name);
         }
+
+        if(result == nullptr) {
+            Type.dump();
+            std::terminate();
+        }
+
+        return result;
     }
 
 private:
     clang::Sema& sema;
     clang::ASTContext& context;
-    std::stack<clang::TemplateDecl*> templateStack;
-    std::stack<llvm::SmallVector<clang::TemplateArgument>> argumentsStack;
+    std::vector<std::pair<clang::Decl*, std::vector<clang::TemplateArgument>>*> arguments;
 };
 
 }  // namespace clice

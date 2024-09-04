@@ -29,9 +29,9 @@ struct PPCallback : clang::PPCallbacks {
         namespace fs = llvm::sys::fs;
         namespace path = llvm::sys::path;
         llvm::SmallVector<char> RealPath;
-        fs::make_absolute(SearchPath + "/" + RelativePath, RealPath);
-        path::remove_dots(RealPath, /*remove_dot_dot=*/true);
-        llvm::outs() << RealPath << "\n";
+        // fs::make_absolute(SearchPath + "/" + RelativePath, RealPath);
+        // path::remove_dots(RealPath, /*remove_dot_dot=*/true);
+        // llvm::outs() << RealPath << "\n";
     }
 
     // virtual void

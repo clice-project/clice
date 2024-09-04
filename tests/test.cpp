@@ -1,51 +1,56 @@
 #include <AST/Resolver.h>
 
+using namespace clice;
+
+const char* code = R"(
+#include <vector>
+
 template <typename T>
-using void_t = void;
+struct X {};
+
+template <typename T, template <typename ...> typename List>
+struct X<List<T>> {
+    using type = std::vector<T>;
+};
 
 template <typename T, typename U>
-struct replace_first_arg;
-
-template <template <typename...> typename K, typename T, typename U>
-struct replace_first_arg<K<T>, U> {
-    using type = K<U>;
+struct test {
+    using result = typename X<X<U>>::type;
 };
+)";
 
-template <typename A, typename T, typename = void>
-struct rebind : replace_first_arg<A, T> {};
+struct ASTVisitor : public clang::RecursiveASTVisitor<ASTVisitor> {
+    ParsedAST& ast;
 
-template <typename A, typename T>
-struct rebind<A, T, void_t<typename A::template rebind<T>::other>> {
-    using type = typename A::template rebind<T>::other;
-};
-
-template <typename A>
-struct allocator_traits {
-    using value_type = typename A::value_type;
-
-    template <typename T>
-    using rebind_alloc = typename rebind<A, T>::type;
-};
-
-template <typename A, typename = typename A::value_type>
-struct alloc_traits {
-    using base = allocator_traits<A>;
-    using value_type = typename base::value_type;
-    using reference = value_type&;
-
-    template <typename T>
-    struct rebind {
-        using other = typename base::template rebind_alloc<T>;
-    };
-};
-
-template <typename T, typename A = std::allocator<T>>
-struct vector {
-    using alloc_type = typename alloc_traits<A>::template rebind<T>::other;
-    using reference = typename alloc_traits<alloc_type>::reference;
+    bool VisitTypeAliasDecl(clang::TypeAliasDecl* decl) {
+        if(decl->getName() == "result") {
+            auto type = decl->getUnderlyingType();
+            clang::Sema::CodeSynthesisContext context;
+            context.Kind = clang::Sema::CodeSynthesisContext::TemplateInstantiation;
+            context.Entity = decl;
+            context.TemplateArgs = nullptr;
+            ast.sema.pushCodeSynthesisContext(context);
+            auto resolver = DependentNameResolver(ast.sema, ast.context);
+            auto resolved = resolver.resolve(type);
+            resolved->dump();
+        }
+        return true;
+    }
 };
 
 int main() {
-    llvm::outs() << "Hello, World!" << '\n';
+    std::vector<const char*> args{
+        "clang++",
+        "-std=c++20",
+        "main.cpp",
+        "-resource-dir=/home/ykiko/C++/clice2/build/lib/clang/20",
+    };
+    auto ast = ParsedAST::build("main.cpp", code, args, nullptr);
+    auto decl = ast->context.getTranslationUnitDecl();
+
+    ASTVisitor visitor{.ast = *ast};
+
+    visitor.TraverseDecl(decl);
+
     return 0;
 }
