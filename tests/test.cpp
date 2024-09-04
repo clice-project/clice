@@ -1,3 +1,5 @@
+#include <AST/Resolver.h>
+
 template <typename T>
 using void_t = void;
 
@@ -43,3 +45,7 @@ struct vector {
     using reference = typename alloc_traits<alloc_type>::reference;
 };
 
+int main() {
+    llvm::outs() << "Hello, World!" << '\n';
+    return 0;
+}
