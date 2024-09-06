@@ -127,27 +127,6 @@ bool DependentNameResolver::lookup(llvm::SmallVector<clang::NamedDecl*>& result,
     return false;
 }
 
-clang::QualType DependentNameResolver::substitute(clang::QualType type) {
-    clang::MultiLevelTemplateArgumentList list;
-    for(auto begin = frames.rbegin(), end = frames.rend(); begin != end; ++begin) {
-        list.addOuterTemplateArguments(begin->decl, begin->arguments, true);
-    }
-
-    for(auto frame: frames) {
-        clang::Sema::CodeSynthesisContext context;
-        context.Entity = frame.decl;
-        context.TemplateArgs = frame.arguments.data();
-        context.Kind = clang::Sema::CodeSynthesisContext::TemplateInstantiation;
-        sema.pushCodeSynthesisContext(context);
-    }
-
-    auto result = sema.SubstType(type, list, {}, {});
-
-    frames.clear();
-
-    return result;
-}
-
 clang::Decl* DependentNameResolver::substitute(clang::Decl* decl) {
     clang::MultiLevelTemplateArgumentList list;
     for(auto begin = frames.rbegin(), end = frames.rend(); begin != end; ++begin) {
@@ -162,7 +141,8 @@ clang::Decl* DependentNameResolver::substitute(clang::Decl* decl) {
         sema.pushCodeSynthesisContext(context);
     }
 
-    // FIXME: use fake TU
+    // FIXME: use global TU may result misunderstanding result
+    // create some fake namespace to avoid this
     auto result = sema.SubstDecl(decl, context.getTranslationUnitDecl(), list);
 
     frames.clear();

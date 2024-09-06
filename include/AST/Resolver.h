@@ -41,8 +41,6 @@ public:
                 llvm::ArrayRef<clang::TemplateArgument> arguments);
 
     // replace the template arguments in the type, using the arguments in the frame
-    clang::QualType substitute(clang::QualType type);
-
     clang::Decl* substitute(clang::Decl* decl);
 
 private:
