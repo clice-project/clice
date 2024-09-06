@@ -18,6 +18,8 @@ class DependentNameResolver {
 public:
     DependentNameResolver(clang::Sema& sema, clang::ASTContext& context) : sema(sema), context(context) {}
 
+    clang::QualType resolve(clang::NamedDecl* ND);
+
     clang::QualType resolve(clang::QualType type);
 
     clang::QualType resolve(const clang::DependentNameType* DNT);
@@ -28,7 +30,7 @@ public:
                 const clang::IdentifierInfo* II);
 
     bool lookup(llvm::SmallVector<clang::NamedDecl*>& result,
-                const clang::TemplateSpecializationType* TST,
+                const clang::QualType type,
                 const clang::IdentifierInfo* II);
 
     // lookup member in a given class template
@@ -40,6 +42,8 @@ public:
 
     // replace the template arguments in the type, using the arguments in the frame
     clang::QualType substitute(clang::QualType type);
+
+    clang::Decl* substitute(clang::Decl* decl);
 
 private:
     struct Frame {

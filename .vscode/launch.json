@@ -15,7 +15,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "DependentNameResolver",
-            "program": "${workspaceFolder}/build/bin/test",
+            "program": "${workspaceFolder}/build/bin/clice_test",
             "cwd": "${workspaceFolder}"
         }
     ]

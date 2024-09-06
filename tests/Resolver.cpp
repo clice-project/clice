@@ -5,10 +5,18 @@ using namespace clice;
 
 namespace {
 
-struct ASTVisitor : public clang::RecursiveASTVisitor<ASTVisitor> {
-    clang::Sema& sema;
-    clang::QualType& result;
-    clang::ASTContext& context;
+std::vector<const char*> compileArgs = {
+    "clang++",
+    "-std=c++20",
+    "main.cpp",
+    "-resource-dir=../build/lib/clang/20",
+};
+
+struct Visitor : public clang::RecursiveASTVisitor<Visitor> {
+    clang::QualType result;
+    std::unique_ptr<ParsedAST> parsedAST;
+
+    Visitor(const char* code) : parsedAST(ParsedAST::build("main.cpp", code, compileArgs)) {}
 
     bool VisitTypeAliasDecl(clang::TypeAliasDecl* decl) {
         if(decl->getName() == "result") {
@@ -18,23 +26,22 @@ struct ASTVisitor : public clang::RecursiveASTVisitor<ASTVisitor> {
                 context.Kind = clang::Sema::CodeSynthesisContext::TemplateInstantiation;
                 context.Entity = decl;
                 context.TemplateArgs = nullptr;
-                sema.pushCodeSynthesisContext(context);
+                parsedAST->sema.pushCodeSynthesisContext(context);
             }
-            auto resolver = DependentNameResolver(sema, context);
+            auto resolver = DependentNameResolver(parsedAST->sema, parsedAST->context);
             result = resolver.resolve(type);
         }
         return true;
     }
+
+    clang::QualType test() {
+        auto decl = parsedAST->context.getTranslationUnitDecl();
+        TraverseDecl(decl);
+        return result;
+    }
 };
 
-TEST(DependentNameResolver, resolve) {
-    std::vector<const char*> args{
-        "clang++",
-        "-std=c++20",
-        "main.cpp",
-        "-resource-dir=../build/lib/clang/20",
-    };
-
+TEST(DependentNameResolver, single_level_dependent_name) {
     const char* code = R"(
 template <typename ...Ts>
 struct type_list {};
@@ -48,27 +55,95 @@ template <typename X>
 struct test {
     using result = typename A<X>::type;
 };
+
 )";
 
-    auto parsedAST = ParsedAST::build("main.cpp", code, args);
-    auto decl = parsedAST->context.getTranslationUnitDecl();
+    Visitor visitor(code);
+    auto result = visitor.test();
 
-    clang::QualType result;
+    auto TST = result->getAs<clang::TemplateSpecializationType>();
+    ASSERT_TRUE(TST);
+    ASSERT_EQ(TST->getTemplateName().getAsTemplateDecl()->getName(), "type_list");
 
-    ASTVisitor visitor{{}, parsedAST->sema, result, parsedAST->context};
-    visitor.TraverseDecl(decl);
+    auto args = TST->template_arguments();
+    ASSERT_EQ(args.size(), 1);
 
-    {
-        auto TST = result->getAs<clang::TemplateSpecializationType>();
-        ASSERT_TRUE(TST);
-        ASSERT_EQ(TST->getTemplateName().getAsTemplateDecl()->getName(), "type_list");
+    auto T = llvm::dyn_cast<clang::TemplateTypeParmType>(args[0].getAsType());
+    ASSERT_TRUE(T);
+    ASSERT_EQ(T->getDecl()->getName(), "X");
+}
 
-        auto args = TST->template_arguments();
-        ASSERT_EQ(args.size(), 1);
-        auto T = llvm::dyn_cast<clang::TemplateTypeParmType>(args[0].getAsType());
-        ASSERT_TRUE(T);
-        ASSERT_EQ(T->getDecl()->getName(), "X");
-    }
+TEST(DependentNameResolver, multi_level_dependent_name) {
+    const char* code = R"(
+template <typename ...Ts>
+struct type_list {};
+
+template <typename T1>
+struct A {
+    using type = type_list<T1>;
+};
+
+template <typename T2>
+struct B {
+    using type = typename A<T2>::type;
+};
+
+template <typename T3>
+struct C {
+    using type = typename B<T3>::type;
+};
+
+template <typename X>
+struct test {
+    using result = typename C<X>::type;
+};
+
+)";
+    Visitor visitor(code);
+    clang::QualType result = visitor.test();
+
+    auto TST = result->getAs<clang::TemplateSpecializationType>();
+    ASSERT_TRUE(TST);
+    ASSERT_EQ(TST->getTemplateName().getAsTemplateDecl()->getName(), "type_list");
+
+    auto args = TST->template_arguments();
+    ASSERT_EQ(args.size(), 1);
+
+    auto T = llvm::dyn_cast<clang::TemplateTypeParmType>(args[0].getAsType());
+    ASSERT_TRUE(T);
+    ASSERT_EQ(T->getDecl()->getName(), "X");
+}
+
+TEST(DependentNameResolver, dependent_dependent_dependent_name) {
+    const char* code = R"(
+template <typename ...Ts>
+struct type_list {};
+
+template <typename T1>
+struct A {
+    using self = A<T1>;
+    using type = type_list<T1>;
+};
+
+template <typename X>
+struct test {
+    using result = typename A<X>::self::self::self::self::self::type;
+};
+
+)";
+    Visitor visitor(code);
+    clang::QualType result = visitor.test();
+
+    auto TST = result->getAs<clang::TemplateSpecializationType>();
+    ASSERT_TRUE(TST);
+    ASSERT_EQ(TST->getTemplateName().getAsTemplateDecl()->getName(), "type_list");
+
+    auto args = TST->template_arguments();
+    ASSERT_EQ(args.size(), 1);
+
+    auto T = llvm::dyn_cast<clang::TemplateTypeParmType>(args[0].getAsType());
+    ASSERT_TRUE(T);
+    ASSERT_EQ(T->getDecl()->getName(), "X");
 }
 
 }  // namespace
