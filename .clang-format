@@ -32,7 +32,8 @@ AlignArrayOfStructures: Left
 PointerAlignment: Left
 
 BreakAfterAttributes: Leave
-BreakBeforeBinaryOperators: None
+BreakAfterReturnType: Automatic
+PenaltyReturnTypeOnItsOwnLine: 100
 BreakBeforeConceptDeclarations: Always
 BreakBeforeInlineASMColon: OnlyMultiline
 BreakBeforeTernaryOperators: true
@@ -61,7 +62,7 @@ AlwaysBreakBeforeMultilineStrings: true
 AlwaysBreakTemplateDeclarations: Yes
 RequiresClausePosition: OwnLine
 BinPackArguments: false
-BinPackParameters: false
+BinPackParameters: OnePerLine
 
 # Space
 SeparateDefinitionBlocks: Always

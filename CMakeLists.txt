@@ -63,16 +63,22 @@ file(GLOB_RECURSE SRC_FILES "${CMAKE_SOURCE_DIR}/src/*/*.cpp")
 target_sources(clice PRIVATE ${SRC_FILES} "${CMAKE_SOURCE_DIR}/src/main.cpp")
 
 target_include_directories(clice PRIVATE
-    ${CMAKE_SOURCE_DIR}/deps/libuv/include
-    ${CMAKE_SOURCE_DIR}/deps/spdlog/include
-    ${CMAKE_SOURCE_DIR}/deps/toml/include
+    "${CMAKE_SOURCE_DIR}/deps/libuv/include"
+    "${CMAKE_SOURCE_DIR}/deps/spdlog/include"
+    "${CMAKE_SOURCE_DIR}/deps/toml/include"
 )
 
 target_link_libraries(clice PRIVATE uv spdlog::spdlog)
 
 if(CLICE_ENABLE_TEST)
-    add_executable(test)
-    target_clang(test)
+    add_executable(clice_test)
+
+    # add googletest
+    add_subdirectory("${CMAKE_SOURCE_DIR}/deps/googletest")
+    target_include_directories(clice_test PRIVATE "${CMAKE_SOURCE_DIR}/deps/googletest/googletest/include")
+    target_link_libraries(clice_test PRIVATE gtest_main)
+
+    target_clang(clice_test)
     file(GLOB_RECURSE AST_SRC_FILES "${CMAKE_SOURCE_DIR}/src/AST/*.cpp")
-    target_sources(test PRIVATE ${AST_SRC_FILES} "${CMAKE_SOURCE_DIR}/tests/test.cpp")
+    target_sources(clice_test PRIVATE ${AST_SRC_FILES} "${CMAKE_SOURCE_DIR}/tests/Resolver.cpp")
 endif()
