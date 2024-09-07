@@ -3,11 +3,10 @@
 namespace clice {
 
 clang::QualType DependentNameResolver::resolve(clang::NamedDecl* ND) {
-    auto decl = substitute(ND);
-    if(auto TAD = llvm::dyn_cast<clang::TypeAliasDecl>(decl)) {
-        return resolve(TAD->getUnderlyingType());
-    } else if(auto TND = llvm::dyn_cast<clang::TypedefNameDecl>(decl)) {
-        return resolve(TND->getUnderlyingType());
+    if(auto TAD = llvm::dyn_cast<clang::TypeAliasDecl>(ND)) {
+        return resolve(substitute(TAD->getUnderlyingType()));
+    } else if(auto TND = llvm::dyn_cast<clang::TypedefNameDecl>(ND)) {
+        return resolve(substitute(TND->getUnderlyingType()));
     } else {
         std::terminate();
     }
@@ -127,7 +126,40 @@ bool DependentNameResolver::lookup(llvm::SmallVector<clang::NamedDecl*>& result,
     return false;
 }
 
-clang::Decl* DependentNameResolver::substitute(clang::Decl* decl) {
+// FIXME: handle more case
+static bool isalias(clang::QualType type) {
+    if(!type->isDependentType()) {
+        return false;
+    }
+
+    if(auto TAT = type->getAs<clang::TypedefType>()) {
+        return true;
+    } else if(auto DNT = type->getAs<clang::TemplateSpecializationType>()) {
+        return false;
+    } else if(auto DNT = type->getAs<clang::DependentNameType>()) {
+        return isalias(clang::QualType(DNT->getQualifier()->getAsType(), 0));
+    } else {
+        std::terminate();
+    }
+}
+
+clang::QualType DependentNameResolver::dealias(clang::QualType type) {
+    if(!isalias(type)) {
+        return type;
+    }
+
+    if(auto TAT = type->getAs<clang::TypedefType>()) {
+        return dealias(TAT->getDecl()->getUnderlyingType());
+    } else if(auto DNT = type->getAs<clang::DependentNameType>()) {
+        auto type = dealias(clang::QualType(DNT->getQualifier()->getAsType(), 0));
+        auto prefix = clang::NestedNameSpecifier::Create(context, nullptr, false, type.getTypePtr());
+        return context.getDependentNameType(DNT->getKeyword(), prefix, DNT->getIdentifier());
+    } else {
+        std::terminate();
+    }
+}
+
+clang::QualType DependentNameResolver::substitute(clang::QualType type) {
     clang::MultiLevelTemplateArgumentList list;
     for(auto begin = frames.rbegin(), end = frames.rend(); begin != end; ++begin) {
         list.addOuterTemplateArguments(begin->decl, begin->arguments, true);
@@ -141,10 +173,7 @@ clang::Decl* DependentNameResolver::substitute(clang::Decl* decl) {
         sema.pushCodeSynthesisContext(context);
     }
 
-    // FIXME: use global TU may result misunderstanding result
-    // create some fake namespace to avoid this
-    auto result = sema.SubstDecl(decl, context.getTranslationUnitDecl(), list);
-
+    auto result = sema.SubstType(dealias(type), list, {}, {});
     frames.clear();
 
     return result;

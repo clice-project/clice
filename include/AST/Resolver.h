@@ -40,8 +40,14 @@ public:
                 const clang::IdentifierInfo* II,
                 llvm::ArrayRef<clang::TemplateArgument> arguments);
 
-    // replace the template arguments in the type, using the arguments in the frame
-    clang::Decl* substitute(clang::Decl* decl);
+    /// we use `Sema::SubstType` to substitute the template arguments in dependent type.
+    /// but it doesn't substitute the template arguments in alias type.
+    /// i.e. `typename base::type`, when base is `std::vector<T>`, it will ignore the `T`.
+    /// so before actually substituting the type, we need to dealias the type.
+    clang::QualType dealias(clang::QualType type);
+
+    /// replace the template arguments in the type, using the arguments in the frame
+    clang::QualType substitute(clang::QualType type);
 
 private:
     struct Frame {
