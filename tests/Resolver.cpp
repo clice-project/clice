@@ -397,7 +397,25 @@ struct A {};
 
 template <typename X>
 struct test {
-    using result = typename std::vector<std::vector<X>>::reference;
+    using result = typename std::vector<A<X>>::reference;
+};
+)";
+
+    Visitor visitor(code);
+    clang::QualType result = visitor.test();
+    // result->dump();
+}
+
+TEST(DependentNameResolver, std_list) {
+    const char* code = R"(
+#include <list>
+
+template <typename T>
+struct A {};
+
+template <typename X>
+struct test {
+    using result = typename std::list<A<X>>::reference;
 };
 )";
 
