@@ -24,6 +24,8 @@ public:
 
     clang::QualType resolve(const clang::DependentNameType* DNT);
 
+    clang::QualType resolve(const clang::DependentTemplateSpecializationType* DTST);
+
     /// lookup member in a given nested name specifier
     bool lookup(llvm::SmallVector<clang::NamedDecl*>& result,
                 const clang::NestedNameSpecifier* NNS,

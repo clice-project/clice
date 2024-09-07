@@ -21,6 +21,8 @@ clang::QualType DependentNameResolver::resolve(clang::QualType type) {
 
     if(auto DNT = llvm::dyn_cast<clang::DependentNameType>(type)) {
         return resolve(DNT);
+    } else if(auto DTST = llvm::dyn_cast<clang::DependentTemplateSpecializationType>(type)) {
+        return resolve(DTST);
     } else {
         return type;
     }
@@ -34,6 +36,19 @@ clang::QualType DependentNameResolver::resolve(const clang::DependentNameType* D
         DNT->dump();
         std::terminate();
     }
+}
+
+clang::QualType DependentNameResolver::resolve(const clang::DependentTemplateSpecializationType* DTST) {
+    llvm::SmallVector<clang::NamedDecl*> result;
+    if(lookup(result, DTST->getQualifier(), DTST->getIdentifier()) && result.size() == 1) {
+        if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(result.front())) {
+            frames.emplace_back(TATD, DTST->template_arguments());
+            return resolve(substitute(TATD->getTemplatedDecl()->getUnderlyingType()));
+        }
+    }
+
+    DTST->dump();
+    std::terminate();
 }
 
 bool DependentNameResolver::lookup(llvm::SmallVector<clang::NamedDecl*>& result,
@@ -68,13 +83,22 @@ bool DependentNameResolver::lookup(llvm::SmallVector<clang::NamedDecl*>& result,
 bool DependentNameResolver::lookup(llvm::SmallVector<clang::NamedDecl*>& result,
                                    const clang::QualType type,
                                    const clang::IdentifierInfo* II) {
+
+    clang::TemplateDecl* TD;
+    llvm::ArrayRef<clang::TemplateArgument> args;
+
+    // FIXME: consider default arguments
     if(auto TST = type->getAs<clang::TemplateSpecializationType>()) {
-        auto TD = TST->getTemplateName().getAsTemplateDecl();
-        // FIXME: consider default arguments
-        auto args = TST->template_arguments();
-        if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(TD)) {
-            return lookup(result, CTD, II, args);
-        }
+        TD = TST->getTemplateName().getAsTemplateDecl();
+        args = TST->template_arguments();
+    } else if(auto DTST = type->getAs<clang::DependentTemplateSpecializationType>()) {
+    }
+
+    if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(TD)) {
+        return lookup(result, CTD, II, args);
+    } else if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(TD)) {
+        frames.emplace_back(TATD, args);
+        return lookup(result, resolve(substitute(TATD->getTemplatedDecl()->getUnderlyingType())), II);
     }
 
     std::terminate();
