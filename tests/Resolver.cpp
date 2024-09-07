@@ -180,6 +180,42 @@ struct test {
     ASSERT_EQ(T->getDecl()->getName(), "X");
 }
 
+TEST(DependentNameResolver, alias_template_dependent_name) {
+    const char* code = R"(
+template <typename ...Ts>
+struct type_list {};
+
+template <typename T1>
+struct A {
+    using type = T1;
+};
+
+template <typename T2>
+struct B {
+    using base = A<T2>;
+    using type = type_list<typename base::type>;
+};
+
+template <typename X>
+struct test {
+    using result = typename B<X>::type;
+};
+)";
+    Visitor visitor(code);
+    clang::QualType result = visitor.test();
+
+    auto TST = result->getAs<clang::TemplateSpecializationType>();
+    ASSERT_TRUE(TST);
+    ASSERT_EQ(TST->getTemplateName().getAsTemplateDecl()->getName(), "type_list");
+
+    auto args = TST->template_arguments();
+    ASSERT_EQ(args.size(), 1);
+
+    auto T = llvm::dyn_cast<clang::TemplateTypeParmType>(args[0].getAsType());
+    ASSERT_TRUE(T);
+    ASSERT_EQ(T->getDecl()->getName(), "X");
+}
+
 TEST(DependentNameResolver, template_alias_dependent_name) {
     const char* code = R"(
 template <typename ...Ts>
@@ -314,23 +350,61 @@ struct test {
 
     Visitor visitor(code);
     clang::QualType result = visitor.test();
-    result->dump();
+
+    // FIXME: resugar the result
 }
 
-// TEST(DependentNameResolver, std_vector) {
-//     const char* code = R"(
-// #include <vector>
-//
-// template <typename T>
-// struct test {
-//     using result = typename std::vector<T, std::allocator<T>>::reference;
-// };
-//)";
-//
-//     Visitor visitor(code);
-//     clang::QualType result = visitor.test();
-//     result->dump();
-// }
+TEST(DependentNameResolver, dependent_base_name) {
+    const char* code = R"(
+template <typename... Ts>
+struct type_list {};
+
+template <typename T1>
+struct A {
+    using type = type_list<T1>;
+};
+
+template <typename U2>
+struct B : A<U2> {};
+
+template <typename X>
+struct test {
+    using result = typename B<X>::type;
+};
+)";
+
+    Visitor visitor(code);
+    auto result = visitor.test();
+
+    auto TST = result->getAs<clang::TemplateSpecializationType>();
+    ASSERT_TRUE(TST);
+    ASSERT_EQ(TST->getTemplateName().getAsTemplateDecl()->getName(), "type_list");
+
+    auto args = TST->template_arguments();
+    ASSERT_EQ(args.size(), 1);
+
+    auto T = llvm::dyn_cast<clang::TemplateTypeParmType>(args[0].getAsType());
+    ASSERT_TRUE(T);
+    ASSERT_EQ(T->getDecl()->getName(), "X");
+}
+
+TEST(DependentNameResolver, std_vector) {
+    const char* code = R"(
+#include <vector>
+
+template <typename T>
+struct A {};
+
+template <typename X>
+struct test {
+    using result = typename std::vector<std::vector<X>>::reference;
+};
+)";
+
+    Visitor visitor(code);
+    clang::QualType result = visitor.test();
+    result->dump();
+}
 
 }  // namespace
 

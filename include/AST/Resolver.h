@@ -42,6 +42,8 @@ public:
                 const clang::IdentifierInfo* II,
                 llvm::ArrayRef<clang::TemplateArgument> arguments);
 
+    std::vector<clang::TemplateArgument> resugar(llvm::ArrayRef<clang::TemplateArgument> arguments);
+
     /// we use `Sema::SubstType` to substitute the template arguments in dependent type.
     /// but it doesn't substitute the template arguments in alias type.
     /// i.e. `typename base::type`, when base is `std::vector<T>`, it will ignore the `T`.
