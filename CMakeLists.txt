@@ -16,11 +16,24 @@ message(STATUS "Found LLVM: ${LLVM_DIR}, Version: ${LLVM_PACKAGE_VERSION}")
 
 # copy clang builtin headers to output directory
 if(NOT EXISTS "${CMAKE_BINARY_DIR}/lib/clang")
-    set(SOURCE_CLANG_BUILTIN_HEADERS "${LLVM_INSTALL_PATH}/lib/clang")
-    set(DEST_CLANG_BUILTIN_HEADERS "${CMAKE_BINARY_DIR}/lib")
-    message(STATUS "Copying clang builtin headers to ${DEST_CLANG_BUILTIN_HEADERS}")
-    file(MAKE_DIRECTORY ${DEST_CLANG_BUILTIN_HEADERS})
-    file(COPY ${SOURCE_CLANG_BUILTIN_HEADERS} DESTINATION ${DEST_CLANG_BUILTIN_HEADERS})
+    set(CLANG_BUILTIN_HEADERS_SOURCE "${LLVM_INSTALL_PATH}/lib/clang")
+    set(CLANG_BUILTIN_HEADERS_OUTPUT "${CMAKE_BINARY_DIR}/lib")
+    message(STATUS "Copying clang builtin headers to ${CLANG_BUILTIN_HEADERS_OUTPUT}")
+    file(MAKE_DIRECTORY ${CLANG_BUILTIN_HEADERS_OUTPUT})
+    file(COPY ${CLANG_BUILTIN_HEADERS_SOURCE} DESTINATION ${CLANG_BUILTIN_HEADERS_OUTPUT})
+endif()
+
+set(CLICE_CLANG_EXTRA_OUTPUT "${CMAKE_SOURCE_DIR}/deps/clang-extra/include/clang-extra")
+if(NOT EXISTS ${CLICE_CLANG_EXTRA_OUTPUT})
+    set(CLICE_CLANG_EXTRA_SOURCE "${CMAKE_SOURCE_DIR}/deps/llvm/clang/lib/Sema")
+    set(CLICE_CLANG_EXTRA_SOURCE_FILES 
+        ${CLICE_CLANG_EXTRA_SOURCE}/CoroutineStmtBuilder.h
+        ${CLICE_CLANG_EXTRA_SOURCE}/TypeLocBuilder.h
+        ${CLICE_CLANG_EXTRA_SOURCE}/TreeTransform.h
+    )
+    message(STATUS "Copying clang extra headers to ${CLICE_CLANG_EXTRA_SOURCE_FILES}")
+    file(MAKE_DIRECTORY ${CLICE_CLANG_EXTRA_OUTPUT})
+    file(COPY ${CLICE_CLANG_EXTRA_SOURCE_FILES} DESTINATION ${CLICE_CLANG_EXTRA_OUTPUT})
 endif()
 
 function(target_clang target)
@@ -30,6 +43,7 @@ function(target_clang target)
     target_include_directories(${target} PRIVATE 
         ${LLVM_INCLUDE_DIRS}
         ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/deps/clang-extra/include
     )
     target_link_libraries(${target} PRIVATE
         LLVMSupport
