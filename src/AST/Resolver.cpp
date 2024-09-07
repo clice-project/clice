@@ -92,6 +92,13 @@ bool DependentNameResolver::lookup(llvm::SmallVector<clang::NamedDecl*>& result,
         TD = TST->getTemplateName().getAsTemplateDecl();
         args = TST->template_arguments();
     } else if(auto DTST = type->getAs<clang::DependentTemplateSpecializationType>()) {
+        if(lookup(result, DTST->getQualifier(), DTST->getIdentifier()) && result.size() == 1) {
+            TD = llvm::dyn_cast<clang::TemplateDecl>(result.front());
+            args = DTST->template_arguments();
+            result.clear();
+        } else {
+            return false;
+        }
     }
 
     if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(TD)) {
@@ -143,7 +150,8 @@ bool DependentNameResolver::lookup(llvm::SmallVector<clang::NamedDecl*>& result,
         // NOTE: takeSugared will take the ownership of the list
         auto list = info.takeSugared();
         frames.emplace_back(partial, list->asArray());
-        delete list;
+        // FIXME: should we delete the list?
+        // delete list;
         return true;
     }
 
@@ -162,7 +170,10 @@ static bool isalias(clang::QualType type) {
         return false;
     } else if(auto DNT = type->getAs<clang::DependentNameType>()) {
         return isalias(clang::QualType(DNT->getQualifier()->getAsType(), 0));
+    } else if(auto LVRT = type->getAs<clang::LValueReferenceType>()) {
+        return isalias(LVRT->getPointeeType());
     } else {
+        type.dump();
         std::terminate();
     }
 }
@@ -178,6 +189,8 @@ clang::QualType DependentNameResolver::dealias(clang::QualType type) {
         auto type = dealias(clang::QualType(DNT->getQualifier()->getAsType(), 0));
         auto prefix = clang::NestedNameSpecifier::Create(context, nullptr, false, type.getTypePtr());
         return context.getDependentNameType(DNT->getKeyword(), prefix, DNT->getIdentifier());
+    } else if(auto LVRT = type->getAs<clang::LValueReferenceType>()) {
+        return context.getLValueReferenceType(dealias(LVRT->getPointeeType()));
     } else {
         std::terminate();
     }

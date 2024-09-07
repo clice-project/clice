@@ -9,7 +9,7 @@ std::vector<const char*> compileArgs = {
     "clang++",
     "-std=c++20",
     "main.cpp",
-    "-resource-dir=../build/lib/clang/20",
+    "-resource-dir=/home/ykiko/C++/clice2/build/lib/clang/20",
 };
 
 struct Visitor : public clang::RecursiveASTVisitor<Visitor> {
@@ -251,6 +251,86 @@ struct test {
     ASSERT_TRUE(Y);
     ASSERT_EQ(Y->getDecl()->getName(), "Y");
 }
+
+TEST(DependentNameResolver, dependent_member_class_template) {
+    const char* code = R"(
+template <typename... Ts>
+struct type_list {};
+
+template <typename T1>
+struct A {
+    template <typename U1>
+    struct B {
+        using type = type_list<T1, U1>;
+    };
+};
+
+template <typename X, typename Y>
+struct test {
+    using result = typename A<X>::template B<Y>::type;
+};
+)";
+
+    Visitor visitor(code);
+    clang::QualType result = visitor.test();
+
+    auto TST = result->getAs<clang::TemplateSpecializationType>();
+    ASSERT_TRUE(TST);
+    ASSERT_EQ(TST->getTemplateName().getAsTemplateDecl()->getName(), "type_list");
+
+    auto args = TST->template_arguments();
+    ASSERT_EQ(args.size(), 2);
+
+    auto X = llvm::dyn_cast<clang::TemplateTypeParmType>(args[0].getAsType());
+    ASSERT_TRUE(X);
+    ASSERT_EQ(X->getDecl()->getName(), "X");
+
+    auto Y = llvm::dyn_cast<clang::TemplateTypeParmType>(args[1].getAsType());
+    ASSERT_TRUE(Y);
+    ASSERT_EQ(Y->getDecl()->getName(), "Y");
+}
+
+TEST(DependentNameResolver, dependent_partial_name) {
+    const char* code = R"(
+template <typename... Ts>
+struct type_list {};
+
+template <typename T1>
+struct A {};
+
+template <typename U2>
+struct B {};
+
+template <typename U2, template <typename...> typename HKT>
+struct B<HKT<U2>> {
+    using type = type_list<U2>;
+};
+
+template <typename X>
+struct test {
+    using result = typename B<A<X>>::type;
+};
+)";
+
+    Visitor visitor(code);
+    clang::QualType result = visitor.test();
+    result->dump();
+}
+
+// TEST(DependentNameResolver, std_vector) {
+//     const char* code = R"(
+// #include <vector>
+//
+// template <typename T>
+// struct test {
+//     using result = typename std::vector<T, std::allocator<T>>::reference;
+// };
+//)";
+//
+//     Visitor visitor(code);
+//     clang::QualType result = visitor.test();
+//     result->dump();
+// }
 
 }  // namespace
 
