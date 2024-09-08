@@ -43,4 +43,8 @@ struct TextDocumentItem {
     string text;
 };
 
+struct TextDocumentIdentifier {
+    DocumentUri uri;
+};
+
 }  // namespace clice::protocol

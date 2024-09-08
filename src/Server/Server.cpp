@@ -1,10 +1,133 @@
+#include <uv.h>
 #include <Server/Server.h>
+#include <llvm/ADT/SmallString.h>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <Support/FileSystem.h>
+#include <Server/Command.h>
+#include <Support/JSON.h>
+#include <Protocol/Lifecycle/Initialize.h>
 
 namespace clice {
 
+static uv_loop_t* loop;
+static uv_pipe_t stdin_pipe;
+static uv_pipe_t stdout_pipe;
+
+class Buffer {
+    std::vector<char> buffer;
+    std::size_t max = 0;
+
+public:
+    void write(std::string_view message) { buffer.insert(buffer.end(), message.begin(), message.end()); }
+
+    std::string_view read() {
+        std::string_view view = std::string_view(buffer.data(), buffer.size());
+        auto start = view.find("Content-Length: ") + 16;
+        auto end = view.find("\r\n\r\n");
+
+        if(start != std::string_view::npos && end != std::string_view::npos) {
+            std::size_t length = std::stoul(std::string(view.substr(start, end - start)));
+            if(view.size() >= length + end + 4) {
+                this->max = length + end + 4;
+                return view.substr(end + 4, length);
+            }
+        }
+
+        return {};
+    }
+
+    void clear() {
+        if(max != 0) {
+            buffer.erase(buffer.begin(), buffer.begin() + max);
+            max = 0;
+        }
+    }
+};
+
+void alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
+    static llvm::SmallString<4096> buffer;
+    buffer.resize(suggested_size);
+    buf->base = buffer.data();
+    buf->len = buffer.size();
+}
+
+Buffer buffer;
+
+void read_stdin(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+    if(nread > 0) {
+        buffer.write(std::string_view(buf->base, nread));
+        if(auto message = buffer.read(); !message.empty()) {
+            global::server.handleMessage(message);
+        }
+    } else if(nread < 0) {
+        if(nread != UV_EOF) {
+            spdlog::error("Read error: {}", uv_err_name(nread));
+        }
+        uv_close((uv_handle_t*)stream, NULL);
+    }
+}
+
 int Server::run(int argc, const char** argv) {
-    // TODO:
+    // set logger
+    llvm::SmallString<128> temp;
+    temp.append(path::parent_path((path::parent_path(argv[0]))));
+    path::append(temp, "logs");
+    auto error = llvm::sys::fs::make_absolute(temp);
+    path::append(temp, "clice.log");
+    auto logger = spdlog::basic_logger_mt("clice", std::string(temp.str()));
+    logger->flush_on(spdlog::level::trace);
+    spdlog::set_default_logger(logger);
+
+    loop = uv_default_loop();
+    uv_pipe_init(loop, &stdin_pipe, 0);
+    uv_pipe_open(&stdin_pipe, 0);
+
+    uv_pipe_init(loop, &stdout_pipe, 0);
+    uv_pipe_open(&stdout_pipe, 1);
+
+    uv_read_start((uv_stream_t*)&stdin_pipe, alloc_buffer, read_stdin);
+
+    uv_run(loop, UV_RUN_DEFAULT);
+
+    uv_loop_close(loop);
+
     return 0;
+}
+
+void Server::handleMessage(std::string_view message) {
+    auto result = json::parse(message);
+    if(!result) {
+        spdlog::error("Error parsing JSON: {}", llvm::toString(result.takeError()));
+    }
+
+    spdlog::info("Received message: {}", message);
+    auto input = result->getAsObject();
+    auto id = input->get("id");
+    auto method = input->get("method");
+    auto params = input->get("params");
+
+    json::Object response;
+    response.try_emplace("jsonrpc", "2.0");
+    response.try_emplace("id", *id);
+    response.try_emplace("result", json::serialize(protocol::InitializeResult{}));
+
+    llvm::json::Value responseValue = std::move(response);
+
+    std::string s;
+    llvm::raw_string_ostream stream(s);
+    stream << responseValue;
+    stream.flush();
+
+    s = "Content-Length: " + std::to_string(s.size()) + "\r\n\r\n" + s;
+
+    uv_buf_t buf = uv_buf_init(s.data(), s.size());
+    uv_write_t req;
+    auto state = uv_write(&req, (uv_stream_t*)&stdout_pipe, &buf, 1, NULL);
+    if(state < 0) {
+        spdlog::error("Error writing to stdout: {}", uv_strerror(state));
+    }
+    spdlog::info("Sent message: {}", s);
 }
 
 namespace global {

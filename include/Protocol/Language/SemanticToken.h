@@ -12,7 +12,7 @@ enum class SemanticTokenType : uint8_t {
     /// Represents a character literal.
     Char,
     /// Represents a string literal.
-    String,
+    string,
     /// Represents a C/C++ keyword (e.g., `int`, `class`, `struct`).
     Keyword,
     /// Represents a compiler built-in macro, function, or keyword (e.g., `__stdcall`,
@@ -126,10 +126,10 @@ struct SemanticTokensClientCapabilities {
     };
 
     /// The token types that the client supports.
-    std::vector<String> tokenTypes;
+    std::vector<string> tokenTypes;
 
     /// The token modifiers that the client supports.
-    std::vector<String> tokenModifiers;
+    std::vector<string> tokenModifiers;
 
     /// The formats the client supports.
     /// formats: TokenFormat[];
@@ -149,10 +149,10 @@ struct SemanticTokensClientCapabilities {
 
 struct SemanticTokensLegend {
     /// The token types a server uses.
-    std::vector<String> tokenTypes;
+    std::vector<string> tokenTypes;
 
     /// The token modifiers a server uses.
-    std::vector<String> tokenModifiers;
+    std::vector<string> tokenModifiers;
 };
 
 /// Server Capability:
@@ -172,24 +172,20 @@ struct SemanticTokensOptions {
 /// Request:
 /// - method: `textDocument/semanticTokens/full`
 /// - params: `SemanticTokensParams` defined as follows:
-struct SemanticTokensParamsBody {
+
+struct SemanticTokensParams {
     /// The text document.
     TextDocumentIdentifier textDocument;
 };
-
-using SemanticTokensParams = Combine<
-    // WorkDoneProgressParams,
-    // PartialResultParams,
-    SemanticTokensParamsBody>;
 
 /// Response:
 /// - result: `SemanticTokens` defined as follows:
 struct SemanticTokens {
     /// An optional result id.
-    String resultId;
+    string resultId;
 
     /// The actual tokens.
-    std::vector<Integer> data;
+    std::vector<integer> data;
 };
 
 }  // namespace clice::protocol

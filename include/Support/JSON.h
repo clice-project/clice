@@ -19,17 +19,17 @@ constexpr inline bool is_integral_v =
 template <typename T>
 Object serialize(const T& object) {
     Object result;
-    for_each(object, [&]<typename Value>(std::string_view name, Value& value) {
+    for_each(object, [&]<typename Value>(llvm::StringRef name, Value& value) {
         if constexpr(is_array_v<Value>) {
             Array array;
             for(const auto& element: value) {
                 array.push_back(serialize(element));
             }
-            result.try_emplace(llvm::StringRef(name), std::move(array));
+            result.try_emplace(name, std::move(array));
         } else if constexpr(std::is_constructible_v<json::Value, Value&>) {
-            result.try_emplace(llvm::StringRef(name), value);
+            result.try_emplace(name, value);
         } else {
-            result.try_emplace(llvm::StringRef(name), serialize(value));
+            result.try_emplace(name, serialize(value));
         }
     });
     return result;
@@ -38,7 +38,7 @@ Object serialize(const T& object) {
 template <typename T>
 T deserialize(const Object& object) {
     T result;
-    for_each(result, [&]<typename Value>(std::string_view name, Value& value) {
+    for_each(result, [&]<typename Value>(llvm::StringRef name, Value& value) {
         if constexpr(is_array_v<Value>) {
             if(const auto* array = object.getArray(name)) {
                 for(std::size_t i = 0; i < array->size(); ++i) {
