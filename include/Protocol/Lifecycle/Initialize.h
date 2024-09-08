@@ -2,8 +2,15 @@
 
 namespace clice::protocol {
 
+enum class TextDocumentSyncKind {
+    None = 0,
+    Full = 1,
+    Incremental = 2,
+};
+
 struct ServerCapabilities {
     std::string_view positionEncoding = "utf-16";
+    TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::Full;
     SemanticTokensOptions semanticTokensProvider;
 };
 

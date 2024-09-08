@@ -25,8 +25,4 @@ void CompilationDatabase::load(clang::StringRef path) {
     }
 }
 
-namespace global {
-CompilationDatabase CDB;
-}
-
 }  // namespace clice

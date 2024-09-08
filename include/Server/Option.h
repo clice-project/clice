@@ -11,8 +11,4 @@ struct Option {
     void parse(int argc, const char** argv);
 };
 
-namespace global {
-extern struct Option option;
-};
-
 }  // namespace clice

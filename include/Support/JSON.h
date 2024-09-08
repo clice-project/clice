@@ -1,3 +1,5 @@
+#pragma once
+
 #include <llvm/Support/JSON.h>
 #include <Support/Reflection.h>
 #include <array>
@@ -28,6 +30,8 @@ Object serialize(const T& object) {
             result.try_emplace(name, std::move(array));
         } else if constexpr(std::is_constructible_v<json::Value, Value&>) {
             result.try_emplace(name, value);
+        } else if constexpr(std::is_enum_v<Value>) {
+            result.try_emplace(name, static_cast<std::underlying_type_t<Value>>(value));
         } else {
             result.try_emplace(name, serialize(value));
         }

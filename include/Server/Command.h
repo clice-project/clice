@@ -1,3 +1,5 @@
+#pragma once
+
 #include <clang/Tooling/CompilationDatabase.h>
 
 namespace clice {
@@ -11,12 +13,6 @@ public:
 
 private:
     std::unique_ptr<clang::tooling::CompilationDatabase> CDB;
-};
-
-namespace global {
-
-extern CompilationDatabase CDB;
-
 };
 
 }  // namespace clice
