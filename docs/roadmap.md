@@ -1,0 +1,4 @@
+- implement basic server and client
+- implement SemanticTokens
+- implement CodeCompletion 
+- use `TreeTransform` to simplify `DependentNameResolver` 

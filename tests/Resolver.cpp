@@ -421,7 +421,6 @@ struct test {
 
     Visitor visitor(code);
     clang::QualType result = visitor.test();
-    result->dump();
 }
 
 }  // namespace

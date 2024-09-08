@@ -11,8 +11,26 @@ append = []
 # the commands that will be removed from the command line
 remove = []
 
-[completion]
-
 [diagnostic]
+# the maximum number of diagnostics that will be displayed
+max-diagnostic = 100
+
+[completion.keyword]
+# whether to insert snippets when completing keywords
+# if enabled, keywords will be expanded with placeholders for typical usage
+# e.g., "if" will expand to "if (condition) { }"
+snippet = false
+
+[completion.function]
+# whether to insert function arguments as placeholders when completing a function
+# if enabled, arguments will be inserted as placeholders, e.g., fo^ -> foo(int a, int b)
+arguments = false
+
+# whether to insert parentheses when completing a function
+# only applicable when `arguments` is set to false
+# if disabled, only the function name will be inserted, e.g., fo^ -> foo
+parens = false
 
 [inlay-hint]
+# the maximum length of the inlay hint text.
+max-length = 20
