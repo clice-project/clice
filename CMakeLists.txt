@@ -94,5 +94,6 @@ if(CLICE_ENABLE_TEST)
 
     target_clang(clice_test)
     file(GLOB_RECURSE AST_SRC_FILES "${CMAKE_SOURCE_DIR}/src/AST/*.cpp")
-    target_sources(clice_test PRIVATE ${AST_SRC_FILES} "${CMAKE_SOURCE_DIR}/tests/Resolver.cpp")
+    file(GLOB_RECURSE TEST_SRC_FILES "${CMAKE_SOURCE_DIR}/tests/*.cpp")
+    target_sources(clice_test PRIVATE ${AST_SRC_FILES} ${TEST_SRC_FILES})
 endif()
