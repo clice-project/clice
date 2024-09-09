@@ -6,9 +6,10 @@
 #include <Support/FileSystem.h>
 #include <Server/Command.h>
 #include <Support/JSON.h>
-#include <Protocol/Lifecycle/Initialize.h>
 
 namespace clice {
+
+Server Server::instance;
 
 static uv_loop_t* loop;
 static uv_pipe_t stdin_pipe;
@@ -58,7 +59,8 @@ void read_stdin(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     if(nread > 0) {
         buffer.write(std::string_view(buf->base, nread));
         if(auto message = buffer.read(); !message.empty()) {
-            global::server.handleMessage(message);
+            Server::instance.handleMessage(message);
+            buffer.clear();
         }
     } else if(nread < 0) {
         if(nread != UV_EOF) {
@@ -68,13 +70,65 @@ void read_stdin(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     }
 }
 
+Server::Server() {
+    handlers.try_emplace("initialize", [](json::Value& id, json::Value& value) {
+        auto params = value.getAsObject();
+        auto result = instance.initialize(json::deserialize<protocol::InitializeParams>(*params));
+
+        json::Object response;
+        response.try_emplace("jsonrpc", "2.0");
+        response.try_emplace("id", id);
+        response.try_emplace("result", json::serialize(result));
+
+        json::Value responseValue = std::move(response);
+
+        std::string s;
+        llvm::raw_string_ostream stream(s);
+        stream << responseValue;
+        stream.flush();
+
+        s = "Content-Length: " + std::to_string(s.size()) + "\r\n\r\n" + s;
+
+        static uv_buf_t buf = uv_buf_init(s.data(), s.size());
+        static uv_write_t req;
+        auto state = uv_write(&req, (uv_stream_t*)&stdout_pipe, &buf, 1, NULL);
+        if(state < 0) {
+            spdlog::error("Error writing to stdout: {}", uv_strerror(state));
+        }
+    });
+}
+
+auto Server::initialize(protocol::InitializeParams params) -> protocol::InitializeResult {
+    // TODO:
+    return protocol::InitializeResult();
+}
+
 int Server::run(int argc, const char** argv) {
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    argc = argc;
+    argv = argv;
     // set logger
     llvm::SmallString<128> temp;
-    temp.append(path::parent_path((path::parent_path(argv[0]))));
+    // 获取父路径
+    temp.append(path::parent_path(path::parent_path(argv[0])));
     path::append(temp, "logs");
+
+    // 确保路径绝对化
     auto error = llvm::sys::fs::make_absolute(temp);
-    path::append(temp, "clice.log");
+
+    // 获取当前时间并格式化为字符串
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::tm now_tm = *std::localtime(&now_c);
+
+    std::ostringstream timeStream;
+    timeStream << std::put_time(&now_tm, "%Y-%m-%d_%H-%M-%S");  // 格式化为 "YYYY-MM-DD_HH-MM-SS"
+
+    // 将时间戳加入到日志文件名
+    std::string logFileName = "clice_" + timeStream.str() + ".log";
+    path::append(temp, logFileName);
+
+    // 创建 logger
     auto logger = spdlog::basic_logger_mt("clice", std::string(temp.str()));
     logger->flush_on(spdlog::level::trace);
     spdlog::set_default_logger(logger);
@@ -104,34 +158,14 @@ void Server::handleMessage(std::string_view message) {
     spdlog::info("Received message: {}", message);
     auto input = result->getAsObject();
     auto id = input->get("id");
-    auto method = input->get("method");
+    std::string_view method = input->get("method")->getAsString().value();
     auto params = input->get("params");
 
-    json::Object response;
-    response.try_emplace("jsonrpc", "2.0");
-    response.try_emplace("id", *id);
-    response.try_emplace("result", json::serialize(protocol::InitializeResult{}));
-
-    llvm::json::Value responseValue = std::move(response);
-
-    std::string s;
-    llvm::raw_string_ostream stream(s);
-    stream << responseValue;
-    stream.flush();
-
-    s = "Content-Length: " + std::to_string(s.size()) + "\r\n\r\n" + s;
-
-    uv_buf_t buf = uv_buf_init(s.data(), s.size());
-    uv_write_t req;
-    auto state = uv_write(&req, (uv_stream_t*)&stdout_pipe, &buf, 1, NULL);
-    if(state < 0) {
-        spdlog::error("Error writing to stdout: {}", uv_strerror(state));
+    if(auto handler = handlers.find(method); handler != handlers.end()) {
+        handler->second(*id, *params);
+    } else {
+        spdlog::error("Method not found: {}", method);
     }
-    spdlog::info("Sent message: {}", s);
-}
-
-namespace global {
-Server server;
 }
 
 }  // namespace clice

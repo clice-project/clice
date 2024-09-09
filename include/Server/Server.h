@@ -3,23 +3,35 @@
 #include <Server/Option.h>
 #include <Server/Command.h>
 #include <Server/Scheduler .h>
+#include <Protocol/Protocol.h>
 
 namespace clice {
 
-class Server {
-public:
+struct Server {
+    int argc;
+    const char** argv;
+
+    using Handler = llvm::unique_function<void(json::Value&, json::Value&)>;
+
+    Option option;
+    Scheduler scheduler;
+    CompilationDatabase CDB;
+    llvm::StringMap<Handler> handlers;
+
+    static Server instance;
+
+    Server();
+
     int run(int argc, const char** argv);
 
     void handleMessage(std::string_view message);
 
-private:
-    Option option;
-    Scheduler scheduler;
-    CompilationDatabase CDB;
-};
+public:
+    // LSP methods, if the return type is void, the method is used for notification.
+    // otherwise, the method is used for request.
+    auto initialize(protocol::InitializeParams params) -> protocol::InitializeResult;
 
-namespace global {
-extern Server server;
-}
+    void initialized(protocol::InitializedParams params);
+};
 
 }  // namespace clice

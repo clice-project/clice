@@ -6,10 +6,9 @@
     "configurations": [
         {
             "type": "lldb",
-            "request": "launch",
-            "name": "ASTVisitor",
-            "program": "${workspaceFolder}/build/bin/clice",
-            "cwd": "${workspaceFolder}"
+            "request": "attach",
+            "name": "clice",
+            "program": "clice"
         },
         {
             "type": "lldb",

@@ -60,7 +60,9 @@ constexpr auto member_name() {
 template <std::size_t count, typename Object>
 constexpr auto collcet_members(Object&& object) {
     // clang-format off
-    if constexpr(count == 1) {
+    if constexpr(count == 0) {
+        return std::tuple{};
+    } else if constexpr(count == 1) {
         auto&& [a] = object;
         return std::tuple{&a};
     } else if constexpr(count == 2) {
