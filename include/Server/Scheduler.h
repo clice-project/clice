@@ -17,9 +17,7 @@ private:
     };
 
 public:
-    void update(std::string_view path, std::string_view content);
-
-    void dispatch(json::Value&& params);
+    void dispatch(llvm::StringRef method, llvm::Value value);
 
 private:
     llvm::StringMap<TU> files;

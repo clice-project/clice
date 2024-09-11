@@ -22,7 +22,7 @@ using integer = std::int32_t;
 /// range in [0, 2^31- 1]
 using uinteger = std::uint32_t;
 
-using string = std::string;
+using string = std::string_view;
 
 using DocumentUri = std::string;
 

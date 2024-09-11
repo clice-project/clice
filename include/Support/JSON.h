@@ -14,6 +14,9 @@ constexpr inline bool is_array_v = false;
 template <typename T, std::size_t N>
 constexpr inline bool is_array_v<std::array<T, N>> = true;
 
+template <typename T, typename A>
+constexpr inline bool is_array_v<std::vector<T, A>> = true;
+
 template <typename T>
 constexpr inline bool is_string_v = false;
 
@@ -55,39 +58,31 @@ json::Value serialize(const Value& value) {
     }
 }
 
-template <typename T>
-T deserialize(const Object& object) {
-    T result;
-    for_each(result, [&]<typename Value>(llvm::StringRef name, Value& value) {
-        if constexpr(is_array_v<Value>) {
-            if(const auto* array = object.getArray(name)) {
-                for(std::size_t i = 0; i < array->size(); ++i) {
-                    value[i] = deserialize<typename Value::value_type>((*array)[i]);
-                }
-            }
-        } else if constexpr(std::is_same_v<Value, bool>) {
-            if(auto boolean = object.getBoolean(name)) {
-                value = *boolean;
-            }
-        } else if constexpr(is_integral_v<Value>) {
-            if(auto integer = object.getInteger(name)) {
-                value = *integer;
-            }
-        } else if constexpr(is_integral_v<Value>) {
-            if(auto floating = object.getNumber(name)) {
-                value = *floating;
-            }
-        } else if constexpr(std::is_same_v<Value, std::string>) {
-            if(auto string = object.getString(name)) {
-                value = *string;
-            }
-        } else {
-            if(auto subobject = object.getObject(name)) {
-                value = deserialize<Value>(*subobject);
-            }
+template <typename Value>
+Value deserialize(const json::Value& object) {
+    if constexpr(std::is_same_v<Value, bool>) {
+        return object.getAsBoolean().value();
+    } else if constexpr(is_integral_v<Value> || std::is_enum_v<Value>) {
+        return object.getAsInteger().value();
+    } else if constexpr(std::is_floating_point_v<Value>) {
+        return object.getAsNumber().value();
+    } else if constexpr(is_string_v<Value>) {
+        return object.getAsString().value();
+    } else if constexpr(is_array_v<Value>) {
+        Value array;
+        for(const auto& element: *object.getAsArray()) {
+            array.push_back(deserialize<typename Value::value_type>(element));
         }
-    });
-    return result;
+        return array;
+    } else {
+        Value value;
+        for_each(value, [&](llvm::StringRef name, auto& field) {
+            if(auto element = object.getAsObject()->get(name)) {
+                field = deserialize<std::remove_cvref_t<decltype(field)>>(*element);
+            }
+        });
+        return value;
+    }
 }
 
 }  // namespace clice::json

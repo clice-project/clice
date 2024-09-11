@@ -5,10 +5,20 @@
 namespace clice {
 
 struct Option {
-    std::string compile_commands_directory;
-    std::string resource_dictionary;
+    /// predefined variables.
+    struct {
+        int argc;
+        const char** argv;
+        /// clice binary dictionary.
+        std::string binary;
+        /// workplace dictionary.
+        std::string workplace;
+    };
 
-    void parse(int argc, const char** argv);
+    std::string resource_dictionary;
+    std::string compile_commands_directory;
+
+    void parse(std::string_view workplace);
 };
 
 }  // namespace clice

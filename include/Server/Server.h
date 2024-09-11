@@ -2,16 +2,13 @@
 
 #include <Server/Option.h>
 #include <Server/Command.h>
-#include <Server/Scheduler .h>
+#include <Server/Scheduler.h>
 #include <Protocol/Protocol.h>
 
 namespace clice {
 
 struct Server {
-    int argc;
-    const char** argv;
-
-    using Handler = llvm::unique_function<void(json::Value&, json::Value&)>;
+    using Handler = llvm::unique_function<void(json::Value, json::Value)>;
 
     Option option;
     Scheduler scheduler;
@@ -25,6 +22,10 @@ struct Server {
     int run(int argc, const char** argv);
 
     void handleMessage(std::string_view message);
+
+    void notify();
+
+    void response(json::Value id, json::Value result);
 
 public:
     // LSP methods, if the return type is void, the method is used for notification.

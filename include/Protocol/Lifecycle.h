@@ -19,6 +19,15 @@ struct ClientInfo {
 
 struct ClientCapabilities {};
 
+struct Workplace {
+    /// The associated URI for this workspace folder.
+    string uri;
+
+    /// The name of the workspace folder. Used to refer to this
+    /// workspace folder in the user interface.
+    string name;
+};
+
 struct InitializeParams {
     /// Information about the client
     ClientInfo clientInfo;
@@ -33,6 +42,12 @@ struct InitializeParams {
 
     /// The capabilities provided by the client (editor or tool).
     ClientCapabilities capabilities;
+
+    /// The workspace folders configured in the client when the server starts.
+    /// This property is only available if the client supports workspace folders.
+    /// It can be `null` if the client supports workspace folders but none are
+    /// configured.
+    std::vector<Workplace> workspaceFolders;
 };
 
 struct ServerCapabilities {
