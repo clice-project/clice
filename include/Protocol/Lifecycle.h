@@ -50,4 +50,6 @@ struct InitializeResult {
     } serverInfo;
 };
 
+struct InitializedParams {};
+
 }  // namespace clice::protocol

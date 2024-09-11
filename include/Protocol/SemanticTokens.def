@@ -1,5 +1,3 @@
-#pragma once
-
 #ifndef SEMANTIC_TOKEN_TYPE
 #define SEMANTIC_TOKEN_TYPE(...)
 #endif

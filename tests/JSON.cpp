@@ -20,7 +20,7 @@ TEST(JSON, Point) {
     ASSERT_EQ(point.y, 2);
 
     auto result = clice::json::serialize(point);
-    ASSERT_EQ(result, object);
+    ASSERT_EQ(result, json::Value(std::move(object)));
 }
 
 }  // namespace
