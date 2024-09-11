@@ -13,6 +13,8 @@ struct Option {
         std::string binary;
         /// workplace dictionary.
         std::string workplace;
+        /// clang version.
+        std::string clang_version = "20";
     };
 
     std::string resource_dictionary;

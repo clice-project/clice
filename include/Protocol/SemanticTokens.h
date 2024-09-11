@@ -50,4 +50,9 @@ struct SemanticTokensParams {
     TextDocumentIdentifier textDocument;
 };
 
+struct SemanticTokens {
+    /// The actual tokens.
+    std::vector<uinteger> data;
+};
+
 }  // namespace clice::protocol

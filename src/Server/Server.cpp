@@ -79,7 +79,7 @@ Server::Server() {
 
 auto Server::initialize(protocol::InitializeParams params) -> protocol::InitializeResult {
 
-    // instance.option.parse()
+    instance.option.parse("/home/ykiko/C++/test");
 
     return protocol::InitializeResult();
 }

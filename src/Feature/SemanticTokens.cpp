@@ -12,6 +12,14 @@ namespace {
 
 class SemanticToken {};
 
+protocol::SemanticTokens semanticTokens(const ParsedAST& AST, llvm::StringRef filename) {
+    auto entry = AST.fileManager.getFileRef(filename);
+    auto fileID = AST.sourceManager.translateFile(entry.get());
+    auto tokens = AST.tokenBuffer.spelledTokens(fileID);
+
+    
+};
+
 class Highlighter : public clang::RecursiveASTVisitor<Highlighter> {
 public:
     Highlighter(ParsedAST& ast) :
