@@ -61,13 +61,13 @@ json::Value serialize(const Value& value) {
 template <typename Value>
 Value deserialize(const json::Value& object) {
     if constexpr(std::is_same_v<Value, bool>) {
-        return object.getAsBoolean().value();
+        return Value{object.getAsBoolean().value()};
     } else if constexpr(is_integral_v<Value> || std::is_enum_v<Value>) {
         return object.getAsInteger().value();
     } else if constexpr(std::is_floating_point_v<Value>) {
         return object.getAsNumber().value();
     } else if constexpr(is_string_v<Value>) {
-        return object.getAsString().value();
+        return Value{object.getAsString().value()};
     } else if constexpr(is_array_v<Value>) {
         Value array;
         for(const auto& element: *object.getAsArray()) {

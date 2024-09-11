@@ -45,4 +45,9 @@ struct SemanticTokensOptions {
     bool full = true;
 };
 
+struct SemanticTokensParams {
+    /// The text document.
+    TextDocumentIdentifier textDocument;
+};
+
 }  // namespace clice::protocol

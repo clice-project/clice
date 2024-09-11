@@ -1,20 +1,8 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <cstdint>
-#include <optional>
+#include <Support/Reflection.h>
 
 namespace clice::protocol {
-
-// reflectable struct definition
-template <typename... Ts>
-struct Record : Ts... {};
-
-#define CLICE_RECORD(name, ...)                                                                                        \
-    struct name##Body;                                                                                                 \
-    using name = Record<__VA_ARGS__, name##Body>;                                                                      \
-    struct name##Body
 
 /// range in [-2^31, 2^31- 1]
 using integer = std::int32_t;
@@ -45,6 +33,14 @@ struct TextDocumentItem {
 
 struct TextDocumentIdentifier {
     DocumentUri uri;
+};
+
+CLICE_RECORD(VersionedTextDocumentIdentifier, TextDocumentIdentifier) {
+    // The version number of this document.
+    //
+    // The version number of a document will increase after each change,
+    // including undo/redo. The number doesn't need to be consecutive.
+    integer version;
 };
 
 }  // namespace clice::protocol

@@ -139,7 +139,7 @@ void Server::handleMessage(std::string_view message) {
     if(auto handler = handlers.find(method); handler != handlers.end()) {
         handler->second(*id, *params);
     } else {
-        spdlog::error("Method not found: {}", method);
+        scheduler.dispatch(method, *params);
     }
 }
 

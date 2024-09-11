@@ -163,9 +163,49 @@ struct Storage {
     inline static T value;
 };
 
+template <typename Source, typename Target>
+struct replace_cv_ref;
+
+template <typename T, typename Target>
+struct replace_cv_ref<T&, Target> {
+    using type = Target&;
+};
+
+template <typename T, typename Target>
+struct replace_cv_ref<T&&, Target> {
+    using type = Target&&;
+};
+
+template <typename T, typename Target>
+struct replace_cv_ref<const T&, Target> {
+    using type = const Target&;
+};
+
+template <typename T, typename Target>
+struct replace_cv_ref<const T&&, Target> {
+    using type = const Target&&;
+};
+
+template <typename Source, typename Target>
+using replace_cv_ref_t = typename replace_cv_ref<Source, Target>::type;
+
 }  // namespace clice::impl
 
 namespace clice {
+
+template <typename... Ts>
+struct Record;
+
+template <typename T>
+constexpr inline bool is_record_v = false;
+
+template <typename... Ts>
+constexpr inline bool is_record_v<Record<Ts...>> = true;
+
+#define CLICE_RECORD(name, ...)                                                                                        \
+    struct name##Body;                                                                                                 \
+    using name = Record<__VA_ARGS__, name##Body>;                                                                      \
+    struct name##Body
 
 template <typename T>
 concept Reflectable = std::is_aggregate_v<std::decay_t<T>> && std::is_default_constructible_v<std::decay_t<T>>;
@@ -173,12 +213,25 @@ concept Reflectable = std::is_aggregate_v<std::decay_t<T>> && std::is_default_co
 template <Reflectable Object, typename Callback>
 constexpr void for_each(Object&& object, const Callback& callback) {
     using T = std::decay_t<Object>;
-    constexpr auto count = impl::member_count<T>();
-    auto members = impl::collcet_members<count>(object);
-    constexpr auto static_members = impl::collcet_members<count>(impl::Storage<T>::value);
-    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-        (callback(impl::member_name<std::get<Is>(static_members)>(), *std::get<Is>(members)), ...);
-    }(std::make_index_sequence<count>{});
+    if constexpr(is_record_v<T>) {
+        T::for_each(std::forward<Object>(object), callback);
+    } else {
+        constexpr auto count = impl::member_count<T>();
+        auto members = impl::collcet_members<count>(object);
+        constexpr auto static_members = impl::collcet_members<count>(impl::Storage<T>::value);
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (callback(impl::member_name<std::get<Is>(static_members)>(), *std::get<Is>(members)), ...);
+        }(std::make_index_sequence<count>{});
+    }
 }
+
+// reflectable struct definition
+template <typename... Ts>
+struct Record : Ts... {
+    template <typename Object, typename Callback>
+    static void for_each(Object&& object, const Callback& callback) {
+        (clice::for_each(static_cast<impl::replace_cv_ref_t<Object&&, Ts>>(object), callback), ...);
+    }
+};
 
 };  // namespace clice
