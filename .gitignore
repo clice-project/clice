@@ -35,4 +35,3 @@
 build*
 temp*
 deps/
-logs/

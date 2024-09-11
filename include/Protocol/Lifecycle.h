@@ -1,4 +1,6 @@
-#include "../Language/SemanticToken.h"
+#pragma once
+
+#include "SemanticTokens.h"
 
 namespace clice::protocol {
 
