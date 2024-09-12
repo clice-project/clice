@@ -19,6 +19,18 @@ struct ParsedAST {
                                             llvm::StringRef content,
                                             std::vector<const char*>& args,
                                             Preamble* preamble = nullptr);
+
+    clang::FileID getFileID(llvm::StringRef filename) const {
+        auto entry = fileManager.getFileRef(filename);
+        if(!entry) {
+            // TODO:
+        }
+        return sourceManager.translateFile(entry.get());
+    }
+
+    llvm::ArrayRef<clang::syntax::Token> spelledTokens(clang::FileID fileID) const {
+        return tokenBuffer.spelledTokens(fileID);
+    }
 };
 
 }  // namespace clice

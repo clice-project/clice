@@ -139,7 +139,12 @@ void Server::handleMessage(std::string_view message) {
     if(auto handler = handlers.find(method); handler != handlers.end()) {
         handler->second(*id, *params);
     } else {
-        scheduler.dispatch(method, *params);
+        // FIXME: notify do not have a ID.
+        if(id) {
+            scheduler.dispatch(std::move(*id), method, *params);
+        } else {
+            scheduler.dispatch(nullptr, method, *params);
+        }
     }
 }
 
@@ -158,12 +163,15 @@ void Server::response(json::Value id, json::Value result) {
 
     s = "Content-Length: " + std::to_string(s.size()) + "\r\n\r\n" + s;
 
-    static uv_buf_t buf = uv_buf_init(s.data(), s.size());
+    // FIXME: use more flexible way to do this.
+    static uv_buf_t buf;
+    buf = uv_buf_init(s.data(), s.size());
     static uv_write_t req;
     auto state = uv_write(&req, (uv_stream_t*)&stdout_pipe, &buf, 1, NULL);
     if(state < 0) {
         spdlog::error("Error writing to stdout: {}", uv_strerror(state));
     }
+    spdlog::info("Response: {}", s);
 }
 
 }  // namespace clice

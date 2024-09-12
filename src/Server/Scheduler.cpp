@@ -1,10 +1,12 @@
 #include <Server/Scheduler.h>
 #include <Protocol/Protocol.h>
 #include <spdlog/spdlog.h>
+#include <Feature/SemanticTokens.h>
+#include <Server/Server.h>
 
 namespace clice {
 
-void Scheduler::dispatch(std::string_view method, json::Value value) {
+void Scheduler::dispatch(json::Value id, std::string_view method, json::Value value) {
     if(method == "textDocument/didOpen") {
         auto params = json::deserialize<protocol::DidOpenTextDocumentParams>(value);
         std::vector<const char*> compileArgs = {
@@ -20,7 +22,8 @@ void Scheduler::dispatch(std::string_view method, json::Value value) {
     } else if(method == "textDocument/semanticTokens/full") {
         auto params = json::deserialize<protocol::SemanticTokensParams>(value);
         auto AST = files[params.textDocument.uri].ast.get();
-        
+        auto semanticTokens = feature::semanticTokens(*AST, "main.cpp");
+        Server::instance.response(std::move(id), json::serialize(semanticTokens));
     } else {
         spdlog::error("unknown method: {}", method);
     }

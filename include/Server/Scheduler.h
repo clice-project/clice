@@ -1,3 +1,5 @@
+#pragma once
+
 #include <llvm/ADT/StringMap.h>
 #include <Support/JSON.h>
 #include <AST/Preamble.h>
@@ -17,7 +19,7 @@ private:
     };
 
 public:
-    void dispatch(std::string_view method, json::Value value);
+    void dispatch(json::Value id, std::string_view method, json::Value value);
 
 private:
     llvm::StringMap<TU> files;
