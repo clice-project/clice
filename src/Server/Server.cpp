@@ -6,69 +6,14 @@
 #include <Support/FileSystem.h>
 #include <Server/Command.h>
 #include <Support/JSON.h>
+#include <Server/Transport .h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace clice {
 
 Server Server::instance;
 
 static uv_loop_t* loop;
-static uv_pipe_t stdin_pipe;
-static uv_pipe_t stdout_pipe;
-
-class Buffer {
-    std::vector<char> buffer;
-    std::size_t max = 0;
-
-public:
-    void write(std::string_view message) { buffer.insert(buffer.end(), message.begin(), message.end()); }
-
-    std::string_view read() {
-        std::string_view view = std::string_view(buffer.data(), buffer.size());
-        auto start = view.find("Content-Length: ") + 16;
-        auto end = view.find("\r\n\r\n");
-
-        if(start != std::string_view::npos && end != std::string_view::npos) {
-            std::size_t length = std::stoul(std::string(view.substr(start, end - start)));
-            if(view.size() >= length + end + 4) {
-                this->max = length + end + 4;
-                return view.substr(end + 4, length);
-            }
-        }
-
-        return {};
-    }
-
-    void clear() {
-        if(max != 0) {
-            buffer.erase(buffer.begin(), buffer.begin() + max);
-            max = 0;
-        }
-    }
-};
-
-void alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
-    static llvm::SmallString<4096> buffer;
-    buffer.resize(suggested_size);
-    buf->base = buffer.data();
-    buf->len = buffer.size();
-}
-
-Buffer buffer;
-
-void read_stdin(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-    if(nread > 0) {
-        buffer.write(std::string_view(buf->base, nread));
-        if(auto message = buffer.read(); !message.empty()) {
-            Server::instance.handleMessage(message);
-            buffer.clear();
-        }
-    } else if(nread < 0) {
-        if(nread != UV_EOF) {
-            spdlog::error("Read error: {}", uv_err_name(nread));
-        }
-        uv_close((uv_handle_t*)stream, NULL);
-    }
-}
 
 Server::Server() {
     handlers.try_emplace("initialize", [](json::Value id, json::Value value) {
@@ -85,7 +30,7 @@ auto Server::initialize(protocol::InitializeParams params) -> protocol::Initiali
 }
 
 int Server::run(int argc, const char** argv) {
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    std::this_thread::sleep_for(std::chrono::seconds(2));
     option.argc = argc;
     option.argv = argv;
 
@@ -104,18 +49,18 @@ int Server::run(int argc, const char** argv) {
     std::string logFileName = "clice_" + timeStream.str() + ".log";
     path::append(temp, logFileName);
 
-    auto logger = spdlog::basic_logger_mt("clice", std::string(temp.str()));
+    auto logger = spdlog::stdout_color_mt("clice");
     logger->flush_on(spdlog::level::trace);
     spdlog::set_default_logger(logger);
 
     loop = uv_default_loop();
-    uv_pipe_init(loop, &stdin_pipe, 0);
-    uv_pipe_open(&stdin_pipe, 0);
-
-    uv_pipe_init(loop, &stdout_pipe, 0);
-    uv_pipe_open(&stdout_pipe, 1);
-
-    uv_read_start((uv_stream_t*)&stdin_pipe, alloc_buffer, read_stdin);
+    transport = std::make_unique<Socket>(
+        loop,
+        [](std::string_view message) {
+            instance.handleMessage(message);
+        },
+        "127.0.0.1",
+        50505);
 
     uv_run(loop, UV_RUN_DEFAULT);
 
@@ -164,13 +109,7 @@ void Server::response(json::Value id, json::Value result) {
     s = "Content-Length: " + std::to_string(s.size()) + "\r\n\r\n" + s;
 
     // FIXME: use more flexible way to do this.
-    static uv_buf_t buf;
-    buf = uv_buf_init(s.data(), s.size());
-    static uv_write_t req;
-    auto state = uv_write(&req, (uv_stream_t*)&stdout_pipe, &buf, 1, NULL);
-    if(state < 0) {
-        spdlog::error("Error writing to stdout: {}", uv_strerror(state));
-    }
+    transport->write(s);
     spdlog::info("Response: {}", s);
 }
 

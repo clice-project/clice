@@ -6,6 +6,12 @@
     "configurations": [
         {
             "type": "lldb",
+            "request": "launch",
+            "name": "clice_socket",
+            "program": "./build/bin/clice"
+        },
+        {
+            "type": "lldb",
             "request": "attach",
             "name": "clice",
             "program": "clice"
