@@ -12,13 +12,14 @@ auto f() {
     return T::value;
 }
 
+std::vector<const char*> compileArgs = {
+    "clang++",
+    "-std=c++20",
+    "main.cpp",
+    "-resource-dir=/home/ykiko/C++/clice2/build/lib/clang/20",
+};
+
 TEST(test, test) {
-    std::vector<const char*> compileArgs = {
-        "clang++",
-        "-std=c++20",
-        "main.cpp",
-        "-resource-dir=/home/ykiko/C++/clice2/build/lib/clang/20",
-    };
 
     const char* code = R"(
 template<typename T>

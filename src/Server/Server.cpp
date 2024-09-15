@@ -1,25 +1,145 @@
 #include <uv.h>
-#include <Server/Server.h>
-#include <llvm/ADT/SmallString.h>
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/basic_file_sink.h>
-#include <Support/FileSystem.h>
-#include <Server/Command.h>
 #include <Support/JSON.h>
-#include <Server/Transport .h>
-#include <spdlog/sinks/stdout_color_sinks.h>
+#include <Server/Server.h>
+#include <Server/Logger.h>
+#include <Server/Command.h>
 
 namespace clice {
 
 Server Server::instance;
 
-static uv_loop_t* loop;
+namespace {
+
+class MessageBuffer {
+    std::vector<char> buffer;
+    std::size_t max = 0;
+
+public:
+    void write(std::string_view message) { buffer.insert(buffer.end(), message.begin(), message.end()); }
+
+    std::string_view read() {
+        std::string_view view = std::string_view(buffer.data(), buffer.size());
+        auto start = view.find("Content-Length: ") + 16;
+        auto end = view.find("\r\n\r\n");
+
+        if(start != std::string_view::npos && end != std::string_view::npos) {
+            std::size_t length = std::stoul(std::string(view.substr(start, end - start)));
+            if(view.size() >= length + end + 4) {
+                this->max = length + end + 4;
+                return view.substr(end + 4, length);
+            }
+        }
+
+        return {};
+    }
+
+    void clear() {
+        if(max != 0) {
+            buffer.erase(buffer.begin(), buffer.begin() + max);
+            max = 0;
+        }
+    }
+};
+
+uv_loop_t* unique_loop;
+uv_idle_t idle;
+
+static llvm::SmallVector<char, 4096> buffer;
+
+void alloc(uv_handle_t* handle, size_t size, uv_buf_t* buf) {
+    buffer.resize(size);
+    buf->base = buffer.data();
+    buf->len = buffer.size();
+}
+
+MessageBuffer messageBuffer;
+
+void onRead(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+    if(nread > 0) {
+        messageBuffer.write(std::string_view(buf->base, nread));
+    } else if(nread < 0) {
+        logger::error("Read error: {}", uv_strerror(nread));
+    }
+}
+
+struct Pipe {
+    inline static uv_pipe_t stdin;
+    inline static uv_pipe_t stdout;
+
+    static void initialize() {
+        uv_pipe_init(unique_loop, &stdin, 0);
+        uv_pipe_open(&stdin, 0);
+
+        uv_pipe_init(unique_loop, &stdout, 0);
+        uv_pipe_open(&stdout, 1);
+
+        uv_read_start(reinterpret_cast<uv_stream_t*>(&stdin), alloc, onRead);
+    }
+
+    inline static uv_buf_t buf;
+    inline static uv_write_t req;
+
+    static void write(std::string_view message) {
+        buf.base = const_cast<char*>(message.data());
+        buf.len = message.size();
+        int state = uv_write(&req, reinterpret_cast<uv_stream_t*>(&stdout), &buf, 1, nullptr);
+        if(state < 0) {
+            logger::error("Error writing to client: {}", uv_strerror(state));
+        }
+    }
+};
+
+struct Socket {
+    inline static uv_tcp_t server;
+    inline static uv_tcp_t client;
+
+    static void initialize(const char* ip, int port) {
+        uv_tcp_init(unique_loop, &server);
+
+        sockaddr_in addr;
+        uv_ip4_addr(ip, port, &addr);
+
+        uv_tcp_bind(&server, reinterpret_cast<const struct sockaddr*>(&addr), 0);
+        uv_listen(reinterpret_cast<uv_stream_t*>(&server), 1, [](uv_stream_t* server, int status) {
+            if(status < 0) {
+                logger::error("Listen error: {}", uv_strerror(status));
+                return;
+            }
+
+            uv_tcp_init(unique_loop, &client);
+            uv_accept(server, reinterpret_cast<uv_stream_t*>(&client));
+            uv_read_start(reinterpret_cast<uv_stream_t*>(&client), alloc, onRead);
+        });
+    }
+
+    inline static uv_buf_t buf;
+    inline static uv_write_t req;
+
+    static void write(std::string_view message) {
+        buf.base = const_cast<char*>(message.data());
+        buf.len = message.size();
+        int state = uv_write(&req, reinterpret_cast<uv_stream_t*>(&client), &buf, 1, nullptr);
+        if(state < 0) {
+            logger::error("Error writing to client: {}", uv_strerror(state));
+        }
+    }
+};
+
+}  // namespace
 
 Server::Server() {
+
     handlers.try_emplace("initialize", [](json::Value id, json::Value value) {
         auto result = instance.initialize(json::deserialize<protocol::InitializeParams>(value));
         instance.response(std::move(id), json::serialize(result));
     });
+}
+
+void eventloop(uv_idle_t* handle) {
+    if(auto message = messageBuffer.read(); !message.empty()) {
+        Server::instance.handleMessage(message);
+        messageBuffer.clear();
+    }
 }
 
 auto Server::initialize(protocol::InitializeParams params) -> protocol::InitializeResult {
@@ -34,37 +154,17 @@ int Server::run(int argc, const char** argv) {
     option.argc = argc;
     option.argv = argv;
 
-    llvm::SmallString<128> temp;
-    temp.append(path::parent_path(path::parent_path(argv[0])));
-    path::append(temp, "logs");
+    logger::init("console", argv[0]);
 
-    auto error = llvm::sys::fs::make_absolute(temp);
-    auto now = std::chrono::system_clock::now();
-    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    std::tm now_tm = *std::localtime(&now_c);
+    unique_loop = uv_default_loop();
+    Socket::initialize("127.0.0.1", 50505);
 
-    std::ostringstream timeStream;
-    timeStream << std::put_time(&now_tm, "%Y-%m-%d_%H-%M-%S");  // 格式化为 "YYYY-MM-DD_HH-MM-SS"
+    uv_idle_init(unique_loop, &idle);
+    uv_idle_start(&idle, eventloop);
 
-    std::string logFileName = "clice_" + timeStream.str() + ".log";
-    path::append(temp, logFileName);
+    uv_run(unique_loop, UV_RUN_DEFAULT);
 
-    auto logger = spdlog::stdout_color_mt("clice");
-    logger->flush_on(spdlog::level::trace);
-    spdlog::set_default_logger(logger);
-
-    loop = uv_default_loop();
-    transport = std::make_unique<Socket>(
-        loop,
-        [](std::string_view message) {
-            instance.handleMessage(message);
-        },
-        "127.0.0.1",
-        50505);
-
-    uv_run(loop, UV_RUN_DEFAULT);
-
-    uv_loop_close(loop);
+    uv_loop_close(unique_loop);
 
     return 0;
 }
@@ -72,10 +172,10 @@ int Server::run(int argc, const char** argv) {
 void Server::handleMessage(std::string_view message) {
     auto result = json::parse(message);
     if(!result) {
-        spdlog::error("Error parsing JSON: {}", llvm::toString(result.takeError()));
+        logger::error("Error parsing JSON: {}", llvm::toString(result.takeError()));
     }
 
-    spdlog::info("Received message: {}", message);
+    logger::info("Received message: {}", message);
     auto input = result->getAsObject();
     auto id = input->get("id");
     std::string_view method = input->get("method")->getAsString().value();
@@ -109,8 +209,8 @@ void Server::response(json::Value id, json::Value result) {
     s = "Content-Length: " + std::to_string(s.size()) + "\r\n\r\n" + s;
 
     // FIXME: use more flexible way to do this.
-    transport->write(s);
-    spdlog::info("Response: {}", s);
+    Socket::write(s);
+    logger::info("Response: {}", s);
 }
 
 }  // namespace clice

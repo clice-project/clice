@@ -3,7 +3,6 @@
 #include <Server/Option.h>
 #include <Server/Command.h>
 #include <Server/Scheduler.h>
-#include <Server/Transport .h>
 #include <Protocol/Protocol.h>
 
 namespace clice {
@@ -14,7 +13,6 @@ struct Server {
     Scheduler scheduler;
     CompilationDatabase CDB;
     llvm::StringMap<Handler> handlers;
-    std::unique_ptr<Transport> transport;
 
     static Server instance;
 

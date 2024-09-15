@@ -1,4 +1,5 @@
 - implement basic server and client
 - implement SemanticTokens
 - implement CodeCompletion 
-- use `TreeTransform` to simplify `DependentNameResolver` 
+- use `TreeTransform` to simplify `DependentNameResolver`
+- refactor `clang/lib/SemaComplete.cpp`

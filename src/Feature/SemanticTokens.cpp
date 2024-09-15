@@ -5,15 +5,16 @@ namespace clice::feature {
 
 namespace {
 
-#define Traverse(NAME) bool Traverse##NAME(clang::NAME* node)
-#define WalkUpFrom(NAME) bool WalkUpFrom##NAME(clang::NAME* node)
-#define VISIT(NAME) bool Visit##NAME(clang::NAME* node)
-#define VISIT_TYPE(NAME) bool Visit##NAME(clang::NAME node)
-
 struct SemanticToken {
-    std::uint32_t modifiers = 0;
-    clang::SourceRange range;
+    clang::SourceLocation begin;
+    std::size_t length;
     protocol::SemanticTokenType type;
+    std::uint32_t modifiers = 0;
+
+    SemanticToken& addModifier(protocol::SemanticTokenModifier modifier) {
+        modifiers |= 1 << static_cast<std::uint32_t>(modifier);
+        return *this;
+    }
 };
 
 static bool isKeyword(clang::tok::TokenKind kind, llvm::StringRef text, const clang::LangOptions& option) {
@@ -165,81 +166,76 @@ static bool isKeyword(clang::tok::TokenKind kind, llvm::StringRef text, const cl
 
 class HighlightBuilder {
 public:
-    HighlightBuilder(const ParsedAST& parsedAST, llvm::StringRef filename) {
-        auto fileID = parsedAST.getFileID(filename);
-        auto tokens = parsedAST.spelledTokens(fileID);
-        for(auto& token: tokens) {
-            SemanticToken semanticToken;
-            semanticToken.range = clang::SourceRange(token.location(), token.endLocation());
-            if(isKeyword(token.kind(), token.text(parsedAST.sourceManager), parsedAST.context.getLangOpts())) {
-                semanticToken.type = protocol::SemanticTokenType::Keyword;
-            } else {
-                semanticToken.type = protocol::SemanticTokenType::Number;
-            }
-            semanticToken.modifiers = 0;
-            result.emplace_back(std::move(semanticToken));
+    HighlightBuilder(const ParsedAST& parsedAST, llvm::StringRef filename) : AST(parsedAST), filename(filename) {}
+
+    SemanticToken& addToken(protocol::SemanticTokenType type, clang::SourceLocation begin, std::size_t length) {
+        result.emplace_back(begin, length, type, 0);
+        return result.back();
+    }
+
+    SemanticToken& addToken(protocol::SemanticTokenType type, clang::SourceLocation loc) {
+        auto token = AST.tokenBuffer.spelledTokenContaining(loc);
+        if(token) {
+            return addToken(type, token->location(), token->length());
         }
     }
 
-    std::vector<SemanticToken> build() { return std::move(result); }
+    // FIXME: source range can be a multi-line range, split it into multiple tokens
+    // SemanticToken& addToken(protocol::SemanticTokenType type, clang::SourceRange range) {
+    //    SemanticToken token;
+    //    token.begin = range.getBegin();
+    //    token.length =
+    //        AST.sourceManager.getFileOffset(range.getEnd()) - AST.sourceManager.getFileOffset(range.getBegin());
+    //    token.type = type;
+    //    result.emplace_back(std::move(token));
+    //    return result.back();
+    //}
+
+    void addAngle(clang::SourceLocation left, clang::SourceLocation right) {}
+
+    std::vector<SemanticToken> build();
 
 private:
+    const ParsedAST& AST;
+    llvm::StringRef filename;
     std::vector<SemanticToken> result;
 };
 
-class Highlighter : public clang::RecursiveASTVisitor<Highlighter> {
+/// Collect highlight information from AST.
+class HighlightCollector : public clang::RecursiveASTVisitor<HighlightCollector> {
 public:
-    Highlighter(ParsedAST& ast) :
-        fileManager(ast.fileManager), preproc(ast.preproc), sourceManager(ast.sourceManager), context(ast.context),
-        tokenBuffer(ast.tokenBuffer) {}
+    HighlightCollector(const ParsedAST& AST, HighlightBuilder& builder) : AST(AST), builder(builder) {}
 
-    std::vector<SemanticToken> highlight(llvm::StringRef filepath) {
-        std::vector<SemanticToken> result;
+    // Traverse(TranslationUnitDecl) {
+    //     for(auto decl: node->decls()) {
+    //         // FIXME: some decls are located in their parents' file
+    //         // e.g. `ClassTemplateSpecializationDecl`, find and exclude them
+    //         node->getLexicalDeclContext();
+    //         // if(sourceManager.isInFileID(decl->getLocation(), fileID)) {
+    //         //     TraverseDecl(decl);
+    //         // }
+    //     }
+    //     return true;
+    // }
 
-        auto entry = fileManager.getFileRef(filepath);
-        if(auto error = entry.takeError()) {
-            // TODO:
-        }
-        auto fileID = sourceManager.translateFile(entry.get());
+#define Traverse(NAME) bool Traverse##NAME(clang::NAME* node)
+#define WalkUpFrom(NAME) bool WalkUpFrom##NAME(clang::NAME* node)
+#define VISIT(NAME) bool Visit##NAME(clang::NAME* node)
+#define VISIT_TYPE(NAME) bool Visit##NAME(clang::NAME node)
 
-        this->fileID = fileID;
-        this->result = &result;
-
-        // highlight from tokens
-        // TODO: use TokenBuffer to get tokens
-
-        // TODO: highlight from directive
-
-        // highlight from AST
-        TraverseDecl(context.getTranslationUnitDecl());
-
-        return {};
-    }
-
-private:
-    void addAngle(clang::SourceLocation left, clang::SourceLocation right) {}
-
-public:
-    Traverse(TranslationUnitDecl) {
-        for(auto decl: node->decls()) {
-            // FIXME: some decls are located in their parents' file
-            // e.g. `ClassTemplateSpecializationDecl`, find and exclude them
-            node->getLexicalDeclContext();
-            if(sourceManager.isInFileID(decl->getLocation(), fileID)) {
-                TraverseDecl(decl);
-            }
-        }
-        return true;
-    }
-
-    WalkUpFrom(NamespaceDecl) {}
+    // WalkUpFrom(NamespaceDecl) {}
 
     VISIT(ImportDecl) {}
+
+    VISIT(NamespaceDecl) {
+        builder.addToken(protocol::SemanticTokenType::Namespace, node->getLocation());
+        return true;
+    }
 
     VISIT(DeclaratorDecl) {
         for(unsigned i = 0; i < node->getNumTemplateParameterLists(); ++i) {
             if(auto params = node->getTemplateParameterList(i)) {
-                addAngle(params->getLAngleLoc(), params->getRAngleLoc());
+                builder.addAngle(params->getLAngleLoc(), params->getRAngleLoc());
             }
         }
         return true;
@@ -248,7 +244,7 @@ public:
     VISIT(TagDecl) {
         for(unsigned i = 0; i < node->getNumTemplateParameterLists(); ++i) {
             if(auto params = node->getTemplateParameterList(i)) {
-                addAngle(params->getLAngleLoc(), params->getRAngleLoc());
+                builder.addAngle(params->getLAngleLoc(), params->getRAngleLoc());
             }
         }
         return true;
@@ -256,86 +252,156 @@ public:
 
     VISIT(FunctionDecl) {
         if(auto args = node->getTemplateSpecializationArgsAsWritten()) {
-            addAngle(args->getLAngleLoc(), args->getRAngleLoc());
+            builder.addAngle(args->getLAngleLoc(), args->getRAngleLoc());
         }
+        builder.addToken(protocol::SemanticTokenType::Function, node->getLocation());
         return true;
     }
 
     VISIT(TemplateDecl) {
         if(auto params = node->getTemplateParameters()) {
-            addAngle(params->getLAngleLoc(), params->getRAngleLoc());
+            builder.addAngle(params->getLAngleLoc(), params->getRAngleLoc());
         }
         return true;
     }
 
     VISIT(ClassTemplateSpecializationDecl) {
         if(auto args = node->getTemplateArgsAsWritten()) {
-            addAngle(args->getLAngleLoc(), args->getRAngleLoc());
+            builder.addAngle(args->getLAngleLoc(), args->getRAngleLoc());
         }
         return true;
     }
 
     VISIT(ClassTemplatePartialSpecializationDecl) {
         if(auto params = node->getTemplateParameters()) {
-            addAngle(params->getLAngleLoc(), params->getRAngleLoc());
+            builder.addAngle(params->getLAngleLoc(), params->getRAngleLoc());
         }
         return true;
     }
 
     VISIT(VarTemplateSpecializationDecl) {
         if(auto args = node->getTemplateArgsAsWritten()) {
-            addAngle(args->LAngleLoc, args->RAngleLoc);
+            builder.addAngle(args->LAngleLoc, args->RAngleLoc);
         }
         return true;
     }
 
     VISIT(VarTemplatePartialSpecializationDecl) {
         if(auto params = node->getTemplateParameters()) {
-            addAngle(params->getLAngleLoc(), params->getRAngleLoc());
+            builder.addAngle(params->getLAngleLoc(), params->getRAngleLoc());
         }
         return true;
     }
 
     VISIT(CXXNamedCastExpr) {
-        addAngle(node->getAngleBrackets().getBegin(), node->getAngleBrackets().getEnd());
+        builder.addAngle(node->getAngleBrackets().getBegin(), node->getAngleBrackets().getEnd());
         return true;
     }
 
     VISIT(OverloadExpr) {
-        addAngle(node->getLAngleLoc(), node->getRAngleLoc());
+        builder.addAngle(node->getLAngleLoc(), node->getRAngleLoc());
         return true;
     }
 
     VISIT(CXXDependentScopeMemberExpr) {
-        addAngle(node->getLAngleLoc(), node->getRAngleLoc());
+        builder.addAngle(node->getLAngleLoc(), node->getRAngleLoc());
         return true;
     }
 
     VISIT(DependentScopeDeclRefExpr) {
-        addAngle(node->getLAngleLoc(), node->getRAngleLoc());
+        builder.addAngle(node->getLAngleLoc(), node->getRAngleLoc());
+        return true;
+    }
+
+    VISIT_TYPE(DependentNameTypeLoc) {
+        // DependentNameType: `typename T::type`
+        //                                  ^~~~ highlight this
+        builder.addToken(protocol::SemanticTokenType::Type, node.getNameLoc());
         return true;
     }
 
     VISIT_TYPE(TemplateSpecializationTypeLoc) {
-        addAngle(node.getLAngleLoc(), node.getRAngleLoc());
+        node.dump();
+        builder.addAngle(node.getLAngleLoc(), node.getRAngleLoc());
         return true;
     }
 
     VISIT_TYPE(DependentTemplateSpecializationTypeLoc) {
-        addAngle(node.getLAngleLoc(), node.getRAngleLoc());
+        builder.addAngle(node.getLAngleLoc(), node.getRAngleLoc());
         return true;
     }
 
-private:
-    clang::FileManager& fileManager;
-    clang::Preprocessor& preproc;
-    clang::SourceManager& sourceManager;
-    clang::ASTContext& context;
-    clang::syntax::TokenBuffer& tokenBuffer;
+    bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc loc) {
+        if(clang::NestedNameSpecifier* NNS = loc.getNestedNameSpecifier()) {
+            if(NNS->getKind() == clang::NestedNameSpecifier::Identifier) {
+                // NestedNameSpecifier: `T::type::`
+                //                           ^~~~ highlight this
+                builder.addToken(protocol::SemanticTokenType::Type, loc.getLocalBeginLoc());
+            }
+        }
+        return RecursiveASTVisitor::TraverseNestedNameSpecifierLoc(loc);
+    }
 
-    clang::FileID fileID;
-    std::vector<SemanticToken>* result;
+private:
+    const ParsedAST& AST;
+    HighlightBuilder& builder;
 };
+
+std::vector<SemanticToken> HighlightBuilder::build() {
+    auto fileID = AST.getFileID(filename);
+    auto tokens = AST.spelledTokens(fileID);
+
+    // highlight from tokens.
+    for(auto& token: tokens) {
+        protocol::SemanticTokenType type = protocol::SemanticTokenType::LAST_TYPE;
+
+        switch(token.kind()) {
+            case clang::tok::TokenKind::numeric_constant: {
+                type = protocol::SemanticTokenType::Number;
+                break;
+            }
+            case clang::tok::char_constant:
+            case clang::tok::wide_char_constant:
+            case clang::tok::utf8_char_constant:
+            case clang::tok::utf16_char_constant:
+            case clang::tok::utf32_char_constant: {
+                type = protocol::SemanticTokenType::Character;
+                break;
+            }
+            case clang::tok::string_literal:
+            case clang::tok::wide_string_literal:
+            case clang::tok::utf8_string_literal:
+            case clang::tok::utf16_string_literal:
+            case clang::tok::utf32_string_literal: {
+                type = protocol::SemanticTokenType::String;
+                break;
+            }
+            default: {
+                if(isKeyword(token.kind(), token.text(AST.sourceManager), AST.context.getLangOpts())) {
+                    type = protocol::SemanticTokenType::Keyword;
+                    break;
+                }
+            }
+        }
+
+        if(type != protocol::SemanticTokenType::LAST_TYPE) {
+            addToken(type, token.location(), token.length());
+        }
+    }
+
+    // TODO: highlight from preprocessor.
+
+    // highlight from AST.
+    HighlightCollector collector(AST, *this);
+    collector.TraverseTranslationUnitDecl(AST.context.getTranslationUnitDecl());
+    // AST.context.getTranslationUnitDecl()->dump();
+
+    llvm::sort(result, [](const SemanticToken& lhs, const SemanticToken& rhs) {
+        return lhs.begin < rhs.begin;
+    });
+
+    return std::move(result);
+}
 
 }  // namespace
 
@@ -343,18 +409,20 @@ protocol::SemanticTokens semanticTokens(const ParsedAST& AST, llvm::StringRef fi
     HighlightBuilder builder(AST, filename);
     std::vector<SemanticToken> tokens = builder.build();
 
+    // for(auto& token: tokens) {
+    //     spdlog::info("{}", token.dump(AST.sourceManager));
+    // }
+
     protocol::SemanticTokens result;
     unsigned int last_line = 0;
     unsigned int last_column = 0;
     /// FXIME: resolve position encoding
-    for(std::size_t index = 0; index < tokens.size(); ++index) {
-        auto& token = tokens[index];
-        auto line = AST.sourceManager.getPresumedLineNumber(token.range.getBegin()) - 1;
-        auto column = AST.sourceManager.getPresumedColumnNumber(token.range.getBegin()) - 1;
-        auto length = AST.sourceManager.getPresumedColumnNumber(token.range.getEnd()) - column;
+    for(auto& token: tokens) {
+        auto line = AST.sourceManager.getPresumedLineNumber(token.begin) - 1;
+        auto column = AST.sourceManager.getPresumedColumnNumber(token.begin) - 1;
         result.data.push_back(line - last_line);
-        result.data.push_back(column > last_column ? column - last_column : column);
-        result.data.push_back(length);
+        result.data.push_back(line == last_line ? column - last_column : column);
+        result.data.push_back(token.length);
         result.data.push_back(token.type);
         result.data.push_back(token.modifiers);
 

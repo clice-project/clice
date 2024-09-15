@@ -21,7 +21,7 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
     auto invocation = std::make_shared<clang::CompilerInvocation>();
     invocation = clang::createInvocation(args, options);
 
-    auto buffer = llvm::MemoryBuffer::getMemBuffer(content, filename);
+    auto buffer = llvm::MemoryBuffer::getMemBufferCopy(content, filename);
     if(preamble) {
 
         auto bounds = clang::ComputePreambleBounds(invocation->getLangOpts(), *buffer, false);
@@ -42,7 +42,7 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
     auto instance = std::make_unique<clang::CompilerInstance>();
     instance->setInvocation(std::move(invocation));
 
-    instance->createDiagnostics(new Diagnostic(), true);
+    instance->createDiagnostics(new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()), true);
 
     // if(auto remappingVSF =
     //        createVFSFromCompilerInvocation(instance->getInvocation(), instance->getDiagnostics(), vfs)) {

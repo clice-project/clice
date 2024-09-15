@@ -16,7 +16,6 @@ void Scheduler::dispatch(json::Value id, std::string_view method, json::Value va
     if(method == "textDocument/didOpen") {
         auto params = json::deserialize<protocol::DidOpenTextDocumentParams>(value);
         auto AST = ParsedAST::build("main.cpp", params.textDocument.text, compileArgs);
-        spdlog::info("read file: {}", params.textDocument.text);
         files[params.textDocument.uri].ast = std::move(AST);
     } else if(method == "textDocument/didChange") {
         auto params = json::deserialize<protocol::DidChangeTextDocumentParams>(value);
