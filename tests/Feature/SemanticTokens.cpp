@@ -12,33 +12,24 @@ auto f() {
     return T::value;
 }
 
-std::vector<const char*> compileArgs = {
-    "clang++",
-    "-std=c++20",
-    "main.cpp",
-    "-resource-dir=/home/ykiko/C++/clice2/build/lib/clang/20",
-};
-
 TEST(test, test) {
+    std::vector<const char*> compileArgs = {
+        "clang++",
+        "-std=c++20",
+        "main.cpp",
+        "-resource-dir=/home/ykiko/C++/clice2/build/lib/clang/20",
+    };
 
+#include <cstdio>
+    
     const char* code = R"(
-template<typename T>
-struct X {
-    using type = T;
-    static constexpr bool value = true;
-};
-
-template <typename T>
-auto f() {
-    using type = typename X<T>::type::type;
-    return T::value;
-}
+#include <cstdio>
 )";
 
     auto AST = clice::ParsedAST::build("main.cpp", code, compileArgs);
     auto fileID = AST->getFileID("main.cpp");
-    AST->context.getTranslationUnitDecl()->dump();
-    auto semanticTokens = clice::feature::semanticTokens(*AST, "main.cpp");
+    // AST->context.getTranslationUnitDecl()->dump();
+    // auto semanticTokens = clice::feature::semanticTokens(*AST, "main.cpp");
 }
 
 }  // namespace

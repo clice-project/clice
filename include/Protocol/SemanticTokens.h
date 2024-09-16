@@ -23,13 +23,11 @@ struct SemanticTokensLegend {
     std::array<std::string_view, SemanticTokenType::LAST_TYPE> tokenTypes = {
         #define SEMANTIC_TOKEN_TYPE(name, value) value,
         #include "SemanticTokens.def"
-        #undef SEMANTIC_TOKEN_TYPE
     };
 
     std::array<std::string_view, SemanticTokenModifier::LAST_MODIFIER> tokenModifiers = {
         #define SEMANTIC_TOKEN_MODIFIER(name, value) value,
         #include "SemanticTokens.def"
-        #undef SEMANTIC_TOKEN_MODIFIER
     };
 };  // clang-format on
 

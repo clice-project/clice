@@ -72,17 +72,6 @@ SEMANTIC_TOKEN_TYPE(Method, "method")
 /// C/C++ function/method parameter name.
 SEMANTIC_TOKEN_TYPE(Parameter, "parameter")
 
-/// C++ dependent name in a template context (e.g., `name` in `auto y = T::name`
-/// where T is a template parameter).
-/// Note: This includes `T::template name(...)`; it's not possible to distinguish whether a name
-/// is a function or a functor in a dependent context.
-SEMANTIC_TOKEN_TYPE(DependentName, "dependentName")
-
-/// C++ dependent type name (e.g., `type` in `typename std::vector<T>::type` where
-/// T is a template parameter).
-/// Note: This includes `typename T::template type<...>`.
-SEMANTIC_TOKEN_TYPE(DependentType, "dependentType")
-
 /// C++ attribute name(e.g., `nodiscard`, `likely`, `fallthrough`).
 SEMANTIC_TOKEN_TYPE(Attribute, "attribute")
 
@@ -124,3 +113,19 @@ SEMANTIC_TOKEN_MODIFIER(InType, "inType")
 
 /// for overloaded function or operator.
 SEMANTIC_TOKEN_MODIFIER(Overloaded, "overloaded")
+
+/// for name around template arguments(e.g., `foo` in `foo<int>`).
+SEMANTIC_TOKEN_MODIFIER(Templated, "templated")
+
+/// C++ dependent name in a template context (e.g., `name` in `auto y = T::name`
+/// where T is a template parameter).
+/// Note: This includes `T::template name(...)`; it's not possible to distinguish whether a name
+/// is a function or a functor in a dependent context.
+
+/// C++ dependent type name (e.g., `type` in `typename std::vector<T>::type` where
+/// T is a template parameter).
+/// Note: This includes `typename T::template type<...>`.
+SEMANTIC_TOKEN_MODIFIER(Dependent, "dependent")
+
+#undef SEMANTIC_TOKEN_TYPE
+#undef SEMANTIC_TOKEN_MODIFIER

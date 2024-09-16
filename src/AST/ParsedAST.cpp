@@ -65,7 +65,7 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
     auto& preproc = instance->getPreprocessor();
     clang::syntax::TokenCollector collector(preproc);
 
-    auto directive = std::make_unique<Directive>();
+    auto directive = std::make_unique<Directive>(instance->getSourceManager());
     preproc.addCommentHandler(directive->handler());
     preproc.addPPCallbacks(directive->callback());
 

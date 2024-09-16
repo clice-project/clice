@@ -5,9 +5,10 @@ namespace clice {
 // TODO:
 
 struct Directive {
+    clang::SourceManager& sourceManager;
     llvm::StringSet<> includes;
-    std::vector<clang::SourceRange> comments;
-
+    llvm::StringMap<std::vector<clang::SourceRange>> comments;
+    
     clang::CommentHandler* handler();
     std::unique_ptr<clang::PPCallbacks> callback();
 };

@@ -1,6 +1,7 @@
 #pragma once
 
 // support basic reflection through template meta programming
+#include <bit>
 #include <tuple>
 #include <string_view>
 #include <source_location>
@@ -38,7 +39,7 @@ struct Wrapper {
 };
 
 template <Wrapper T>
-constexpr auto member_name() {
+consteval auto member_name() {
     std::string_view name = std::source_location::current().function_name();
 #if __GNUC__ && (!__clang__) && (!_MSC_VER)
     std::size_t start = name.rfind("::") + 2;
@@ -163,6 +164,32 @@ struct Storage {
     inline static T value;
 };
 
+template <auto value>
+consteval auto enum_name() {
+    std::string_view name = std::source_location::current().function_name();
+#if __GNUC__ || __clang__
+    std::size_t start = name.find('=') + 2;
+    std::size_t end = name.size() - 1;
+#elif _MSC_VER
+    std::size_t start = name.find('<') + 1;
+    std::size_t end = name.rfind(">(");
+#else
+    static_assert(false, "Not supported compiler");
+#endif
+    name = name.substr(start, end - start);
+    start = name.rfind("::");
+    return start == std::string_view::npos ? name : name.substr(start + 2);
+}
+
+template <typename T, std::size_t N = 0>
+consteval auto enum_max() {
+    constexpr auto value = std::bit_cast<T>(static_cast<std::underlying_type_t<T>>(N));
+    if constexpr(enum_name<value>().find(")") == std::string_view::npos)
+        return enum_max<T, N + 1>();
+    else
+        return N;
+}
+
 template <typename Source, typename Target>
 struct replace_cv_ref;
 
@@ -233,5 +260,15 @@ struct Record : Ts... {
         (clice::for_each(static_cast<impl::replace_cv_ref_t<Object&&, Ts>>(object), callback), ...);
     }
 };
+
+template <typename T>
+    requires std::is_enum_v<T>
+constexpr auto enum_name(T value) {
+    constexpr auto count = impl::enum_max<T>();
+    constexpr auto names = []<std::size_t... Is>(std::index_sequence<Is...>) {
+        return std::array{impl::enum_name<static_cast<T>(Is)>()...};
+    }(std::make_index_sequence<count>{});
+    return names[static_cast<std::size_t>(value)];
+}
 
 };  // namespace clice
