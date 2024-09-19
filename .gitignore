@@ -34,4 +34,4 @@
 .cache/
 build*
 temp*
-deps/
+deps/clang-extra/

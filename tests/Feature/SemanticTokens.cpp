@@ -21,9 +21,12 @@ TEST(test, test) {
     };
 
 #include <cstdio>
-    
+
     const char* code = R"(
-#include <cstdio>
+// 123
+#if x
+#endif
+// 333
 )";
 
     auto AST = clice::ParsedAST::build("main.cpp", code, compileArgs);

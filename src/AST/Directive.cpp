@@ -1,29 +1,36 @@
-#include "AST/Directive.h"
+#include <AST/Directive.h>
 #include <Support/Reflection.h>
+
 namespace clice {
 
 struct CommentHandler : public clang::CommentHandler {
-    Directive& directive;
+    Directives& directive;
 
-    CommentHandler(Directive& directive) : directive(directive) {}
+    CommentHandler(Directives& directive) : directive(directive) {}
 
     virtual bool HandleComment(clang::Preprocessor& preproc, clang::SourceRange Comment) {
         // directive.comments.push_back(Comment);
+        auto start = directive.sourceManager.getCharacterData(Comment.getBegin());
+        auto end = directive.sourceManager.getCharacterData(Comment.getEnd());
+        llvm::outs() << "Comment: " << llvm::StringRef(start, end - start) << "\n";
         return false;
     }
 };
 
 struct PPCallback : clang::PPCallbacks {
-    PPCallback(Directive& directive) : directive(directive) {}
+    PPCallback(Directives& directive) : directive(directive) {}
 
-    Directive& directive;
+    Directives& directive;
+    clang::FileID currentID;
 
     void FileChanged(clang::SourceLocation loc,
                      clang::PPCallbacks::FileChangeReason reason,
                      clang::SrcMgr::CharacteristicKind fileType,
-                     clang::FileID id) override {
-        llvm::outs() << "FileChanged, reason: " << enum_name(reason) << "\n";
-        loc.dump(directive.sourceManager);
+                     clang::FileID) override {
+        // llvm::outs() << directive.sourceManager.getFileEntryForID(id)->tryGetRealPathName();
+        if(reason == clang::PPCallbacks::FileChangeReason::EnterFile) {
+            currentID = directive.sourceManager.getFileID(loc);
+        }
     }
 
     void InclusionDirective(clang::SourceLocation HashLoc,
@@ -51,7 +58,7 @@ struct PPCallback : clang::PPCallbacks {
     void If(clang::SourceLocation Loc,
             clang::SourceRange ConditionRange,
             clang::PPCallbacks::ConditionValueKind ConditionValue) override {
-        // llvm::outs() << "If\n";
+        llvm::outs() << "If\n";
     }
 
     void Elif(clang::SourceLocation loc,
@@ -87,8 +94,8 @@ struct PPCallback : clang::PPCallbacks {
     void MacroDefined(const clang::Token& MacroNameTok, const clang::MacroDirective* MD) override {}
 };
 
-clang::CommentHandler* Directive::handler() { return new CommentHandler(*this); }
+clang::CommentHandler* Directives::handler() { return new CommentHandler(*this); }
 
-std::unique_ptr<clang::PPCallbacks> Directive::callback() { return std::make_unique<PPCallback>(*this); }
+std::unique_ptr<clang::PPCallbacks> Directives::callback() { return std::make_unique<PPCallback>(*this); }
 
 }  // namespace clice

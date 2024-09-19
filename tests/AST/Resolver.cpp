@@ -1,9 +1,9 @@
-#include <AST/Resolver.h>
 #include <gtest/gtest.h>
-
-using namespace clice;
+#include <AST/Resolver.h>
 
 namespace {
+
+using namespace clice;
 
 std::vector<const char*> compileArgs = {
     "clang++",

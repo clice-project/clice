@@ -25,7 +25,7 @@ SEMANTIC_TOKEN_TYPE(Keyword, "keyword")
 SEMANTIC_TOKEN_TYPE(Builtin, "builtin")
 
 /// preprocessor directive (e.g. `#include`, `#define`, `#ifdef`).
-SEMANTIC_TOKEN_TYPE(Directive, "directive")
+SEMANTIC_TOKEN_TYPE(Directives, "directive")
 
 /// header file (e.g. `"foo.h"` and `<vector>`).
 SEMANTIC_TOKEN_TYPE(Header, "header")
