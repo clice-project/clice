@@ -1,13 +1,7 @@
 #include <AST/ParsedAST.h>
-#include "clang/Lex/PreprocessorOptions.h"
+#include <AST/Compiler.h>
 
 namespace clice {
-
-static void setInvocation(clang::CompilerInvocation& invocation) {
-    clang::LangOptions& langOpts = invocation.getLangOpts();
-    langOpts.CommentOpts.ParseAllComments = true;
-    langOpts.RetainCommentsFromSystemHeaders = true;
-}
 
 std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
                                             llvm::StringRef content,
@@ -18,43 +12,8 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
     clang::CreateInvocationOptions options;
     // options.VFS = vfs;
 
-    auto invocation = std::make_shared<clang::CompilerInvocation>();
-    invocation = clang::createInvocation(args, options);
-
-    auto buffer = llvm::MemoryBuffer::getMemBufferCopy(content, filename);
-    if(preamble) {
-
-        auto bounds = clang::ComputePreambleBounds(invocation->getLangOpts(), *buffer, false);
-
-        // check if the preamble can be reused
-        if(preamble->data.CanReuse(*invocation, *buffer, bounds, *vfs)) {
-            llvm::outs() << "Resued preamble\n";
-            // reuse preamble
-            preamble->data.AddImplicitPreamble(*invocation, vfs, buffer.release());
-        }
-    } else {
-        invocation->getPreprocessorOpts().addRemappedFile(invocation->getFrontendOpts().Inputs[0].getFile(),
-                                                          buffer.release());
-    }
-
-    invocation->getLangOpts().CommentOpts.ParseAllComments = true;
-
-    auto instance = std::make_unique<clang::CompilerInstance>();
-    instance->setInvocation(std::move(invocation));
-
-    instance->createDiagnostics(new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()), true);
-
-    // if(auto remappingVSF =
-    //        createVFSFromCompilerInvocation(instance->getInvocation(), instance->getDiagnostics(), vfs)) {
-    //     vfs = remappingVSF;
-    // }
-    // instance->createFileManager(vfs);
-
-    if(!instance->createTarget()) {
-        llvm::errs() << "Failed to create target\n";
-        std::terminate();
-    }
-
+    auto invocation = createInvocation(filename, content, args, preamble);
+    auto instance = createInstance(std::move(invocation));
     auto action = std::make_unique<clang::SyntaxOnlyAction>();
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
@@ -65,7 +24,7 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
     auto& preproc = instance->getPreprocessor();
     clang::syntax::TokenCollector collector(preproc);
 
-    auto directive = std::make_unique<Directives>(instance->getSourceManager());
+    auto directive = std::make_unique<Directives>(instance->getPreprocessor(), instance->getSourceManager());
     preproc.addCommentHandler(directive->handler());
     preproc.addPPCallbacks(directive->callback());
 

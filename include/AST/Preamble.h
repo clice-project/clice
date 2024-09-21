@@ -13,8 +13,9 @@ namespace clice {
 struct Preamble {
     clang::PrecompiledPreamble data;
 
-    static std::unique_ptr<Preamble>
-        build(llvm::StringRef filename, llvm::StringRef content, std::vector<const char*>& args);
+    static std::unique_ptr<Preamble> build(llvm::StringRef filename,
+                                           llvm::StringRef content,
+                                           std::vector<const char*>& args);
 };
 
 }  // namespace clice

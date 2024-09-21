@@ -1,5 +1,6 @@
 #include <AST/Directive.h>
 #include <Support/Reflection.h>
+#include <clang/Lex/MacroArgs.h>
 
 namespace clice {
 
@@ -12,7 +13,7 @@ struct CommentHandler : public clang::CommentHandler {
         // directive.comments.push_back(Comment);
         auto start = directive.sourceManager.getCharacterData(Comment.getBegin());
         auto end = directive.sourceManager.getCharacterData(Comment.getEnd());
-        llvm::outs() << "Comment: " << llvm::StringRef(start, end - start) << "\n";
+        // llvm::outs() << "Comment: " << llvm::StringRef(start, end - start) << "\n";
         return false;
     }
 };
@@ -58,7 +59,7 @@ struct PPCallback : clang::PPCallbacks {
     void If(clang::SourceLocation Loc,
             clang::SourceRange ConditionRange,
             clang::PPCallbacks::ConditionValueKind ConditionValue) override {
-        llvm::outs() << "If\n";
+        // llvm::outs() << "If\n";
     }
 
     void Elif(clang::SourceLocation loc,
@@ -92,6 +93,37 @@ struct PPCallback : clang::PPCallbacks {
     void Endif(clang::SourceLocation loc, clang::SourceLocation ifLoc) override {}
 
     void MacroDefined(const clang::Token& MacroNameTok, const clang::MacroDirective* MD) override {}
+
+    void MacroExpands(const clang::Token& MacroNameTok,
+                      const clang::MacroDefinition& MD,
+                      clang::SourceRange Range,
+                      const clang::MacroArgs* Args) override {
+        // llvm::outs() << "------------------------\n";
+        // auto info = MD.getMacroInfo();
+        // if(info->isObjectLike()) {
+        //     Range = clang::SourceRange(MacroNameTok.getLocation(), MacroNameTok.getEndLoc());
+        // } else if(info->isFunctionLike()) {
+        //     // MacroNameTok.getLocation().dump(directive.sourceManager);
+        // }
+        // Range.getBegin().dump(directive.sourceManager);
+        // Range.getEnd().dump(directive.sourceManager);
+        // auto s = directive.sourceManager.getCharacterData(Range.getBegin());
+        // auto e = directive.sourceManager.getCharacterData(Range.getEnd());
+        //// llvm::outs() << llvm::StringRef(s, e - s) << "\n";
+        //
+        // llvm::outs() << directive.preproc.getSpelling(MacroNameTok) << " ";
+        // if(Args) {
+        //    auto size = Args->getNumMacroArguments();
+        //    for(int i = 0; i < size; i++) {
+        //        auto arg = Args->getUnexpArgument(i);
+        //        auto len = Args->getArgLength(arg);
+        //        for(int j = 0; j < len; j++) {
+        //            llvm::outs() << directive.preproc.getSpelling(arg[j]) << " ";
+        //        }
+        //    }
+        //}
+        // llvm::outs() << "\n";
+    }
 };
 
 clang::CommentHandler* Directives::handler() { return new CommentHandler(*this); }

@@ -8,18 +8,18 @@
             "type": "lldb",
             "request": "launch",
             "name": "clice_socket",
-            "program": "./build/bin/clice"
+            "program": "${workspaceFolder}/build/bin/clice"
         },
         {
             "type": "lldb",
             "request": "attach",
-            "name": "clice",
+            "name": "clice_attach",
             "program": "clice"
         },
         {
             "type": "lldb",
             "request": "launch",
-            "name": "DependentNameResolver",
+            "name": "clice_test",
             "program": "${workspaceFolder}/build/bin/clice_test",
             "cwd": "${workspaceFolder}"
         }

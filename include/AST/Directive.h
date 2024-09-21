@@ -36,6 +36,7 @@ struct Directive {
 };
 
 struct Directives {
+    clang::Preprocessor& preproc;
     clang::SourceManager& sourceManager;
     llvm::DenseMap<clang::FileID, Directive> x;
 

@@ -23,14 +23,21 @@ TEST(test, test) {
 #include <cstdio>
 
     const char* code = R"(
-// 123
-#if x
-#endif
-// 333
+void f();
+
+void f() {}
 )";
 
-    auto AST = clice::ParsedAST::build("main.cpp", code, compileArgs);
+    auto preamble = clice::Preamble::build("main.cpp", code, compileArgs);
+    auto AST = clice::ParsedAST::build("main.cpp", code, compileArgs, preamble.get());
     auto fileID = AST->getFileID("main.cpp");
+    auto tokens = AST->tokenBuffer.spelledTokens(fileID);
+    AST->context.getTranslationUnitDecl()->dump();
+
+    // for(auto& token: tokens) {
+    //     llvm::outs() << token.text(AST->sourceManager) << "\n";
+    // }
+
     // AST->context.getTranslationUnitDecl()->dump();
     // auto semanticTokens = clice::feature::semanticTokens(*AST, "main.cpp");
 }
