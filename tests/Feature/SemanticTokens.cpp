@@ -17,19 +17,17 @@ TEST(test, test) {
         "clang++",
         "-std=c++20",
         "main.cpp",
-        "-resource-dir=/home/ykiko/C++/clice2/build/lib/clang/20",
+        "-resource-dir",
+        "/home/ykiko/C++/clice2/build/lib/clang/20",
     };
 
 #include <cstdio>
 
     const char* code = R"(
-void f();
-
-void f() {}
+#include <stddef.h>
 )";
 
-    auto preamble = clice::Preamble::build("main.cpp", code, compileArgs);
-    auto AST = clice::ParsedAST::build("main.cpp", code, compileArgs, preamble.get());
+    auto AST = clice::ParsedAST::build("main.cpp", code, compileArgs);
     auto fileID = AST->getFileID("main.cpp");
     auto tokens = AST->tokenBuffer.spelledTokens(fileID);
     AST->context.getTranslationUnitDecl()->dump();

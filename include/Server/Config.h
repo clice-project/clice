@@ -20,13 +20,13 @@ struct ServerOption {
 struct FrontendOption {
     std::vector<std::string> append;
     std::vector<std::string> remove;
-    std::string resource_dictionary = "${executable}/../lib/clang/${llvm_version}";
+    std::string resource_dictionary = "${binary}/../lib/clang/${llvm_version}";
     std::string compile_commands_directory = "${workplace}/build";
 };
 
-ServerOption& server();
+const ServerOption& server();
 
-FrontendOption& frontend();
+const FrontendOption& frontend();
 
 };  // namespace clice::config
 

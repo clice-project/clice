@@ -9,7 +9,8 @@ std::vector<const char*> compileArgs = {
     "clang++",
     "-std=c++20",
     "main.cpp",
-    "-resource-dir=/home/ykiko/C++/clice2/build/lib/clang/20",
+    "-resource-dir",
+    "/home/ykiko/C++/clice2/build/lib/clang/20",
 };
 
 struct Visitor : public clang::RecursiveASTVisitor<Visitor> {

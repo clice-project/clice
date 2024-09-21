@@ -9,7 +9,6 @@ namespace clice {
 struct Server {
     using Handler = llvm::unique_function<void(json::Value, json::Value)>;
     Scheduler scheduler;
-    CompilationDatabase CDB;
     llvm::StringMap<Handler> handlers;
 
     static Server instance;

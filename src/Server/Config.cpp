@@ -7,18 +7,23 @@
 
 namespace clice::config {
 
+namespace {
+
+/// predefined variables.
+llvm::StringMap<std::string> predefined = {
+    /// the directory of the workplace.
+    {"workplace",    ""     },
+    /// the directory of the executable.
+    {"binary",       ""     },
+    /// the version of the clice.
+    {"version",      "0.0.1"},
+    /// the version of dependent llvm.
+    {"llvm_version", "20"   },
+};
+
 struct Config {
     ServerOption server;
     FrontendOption frontend;
-};
-
-namespace {
-
-llvm::StringMap<std::string> predefined = {
-    {"workplace",    ""     }, /// the directory of the workplace.
-    {"executable",   ""     }, /// the directory of the executable.
-    {"version",      "0.0.1"}, /// the version of the clice.
-    {"llvm_version", "20"   }, /// the version of dependent llvm.
 };
 
 /// global config instance.
@@ -56,7 +61,7 @@ std::string replace(std::string_view text) {
 }  // namespace
 
 int parse(int argc, const char** argv) {
-    predefined["executable"] = argv[0];
+    predefined["binary"] = path::parent_path(argv[0]);
 
     // FIXME:
     // if(version) {
@@ -80,16 +85,14 @@ void initialize(std::string_view workplace) {
 
     refl::walk(config, [&]<typename Field>(std::string_view name, Field& field) {
         if constexpr(std::is_same_v<Field, std::string>) {
-            llvm::outs() << "replace: " << field << '\n';
             field = replace(field);
-            llvm::outs() << "with: " << field << '\n';
         }
     });
     return;
 }
 
-ServerOption& server() { return config.server; }
+const ServerOption& server() { return config.server; }
 
-FrontendOption& frontend() { return config.frontend; }
+const FrontendOption& frontend() { return config.frontend; }
 
 }  // namespace clice::config

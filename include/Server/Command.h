@@ -4,15 +4,33 @@
 
 namespace clice {
 
-class CompilationDatabase {
+namespace command {
 
+std::vector<const char*> decorate(const clang::tooling::CompileCommand& command);
+
+class Command {
 public:
-    void load(clang::StringRef path);
+    /// according to config, decorate the input command.
+    /// e.g. add `resource-dir`, remove or transform unsupported flags like `/std:lastest`.
+    Command(const clang::tooling::CompileCommand& command);
 
-    std::vector<const char*> lookup(clang::StringRef path);
+    Command& append(llvm::StringRef arg) {
+        auto data = allocator.Allocate<char>(arg.size() + 1);
+        if(!arg.empty()) {
+            std::memcpy(data, arg.data(), arg.size());
+        }
+        data[arg.size()] = '\0';
+        args.push_back(data);
+        return *this;
+    }
 
 private:
-    std::unique_ptr<clang::tooling::CompilationDatabase> CDB;
+    std::vector<const char*> args;
+    llvm::BumpPtrAllocator allocator;
 };
+
+// TODO: compile database logic
+
+}  // namespace command
 
 }  // namespace clice

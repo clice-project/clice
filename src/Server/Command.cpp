@@ -1,28 +1,21 @@
+#include <Server/Logger.h>
+#include <Server/Config.h>
 #include <Server/Command.h>
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/basic_file_sink.h>
 
 namespace clice {
 
-std::vector<const char*> CompilationDatabase::lookup(clang::StringRef path) {
-    auto& command = CDB->getCompileCommands(path).front();
-    std::vector<const char*> args;
+namespace command {
+
+Command::Command(const clang::tooling::CompileCommand& command) {
+    // FIXME:
     for(auto& arg: command.CommandLine) {
-        // TODO:
-        // some modification
-        args.push_back(arg.c_str());
+        append(arg);
     }
-    return args;
+
+    append("-resource-dir");
+    append(config::frontend().resource_dictionary);
 }
 
-void CompilationDatabase::load(clang::StringRef path) {
-    std::string error;
-    CDB = clang::tooling::CompilationDatabase::loadFromDirectory(path, error);
-    if(!CDB) {
-        spdlog::error("Failed to load compilation database: {}", error);
-        spdlog::default_logger()->flush();
-        std::terminate();
-    }
-}
+}  // namespace command
 
 }  // namespace clice
