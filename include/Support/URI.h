@@ -23,7 +23,9 @@ public:
     /// Returns decoded body e.g. "/D41946"
     llvm::StringRef body() const { return m_body; }
 
-    static llvm::Expected<URI> parse(llvm::StringRef text);
+    static llvm::Expected<URI> parse(llvm::StringRef content);
+
+    static std::string resolve(llvm::StringRef content);
 
 private:
     std::string m_scheme;

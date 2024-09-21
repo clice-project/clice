@@ -1,4 +1,5 @@
 #include <Support/URI.h>
+#include <Support/FileSystem.h>
 
 namespace clice {
 
@@ -59,6 +60,18 @@ llvm::Expected<URI> URI::parse(llvm::StringRef content) {
     result.m_body = decodePercent(uri);
 
     return result;
+}
+
+std::string URI::resolve(llvm::StringRef content) {
+    auto uri = parse(content);
+    if(!uri) {
+        std::terminate();
+    }
+    llvm::SmallString<128> result;
+    if(auto err = fs::real_path(uri->body(), result)) {
+        std::terminate();
+    }
+    return result.str().str();
 }
 
 }  // namespace clice

@@ -51,7 +51,7 @@ json::Value serialize(const Value& value) {
         return array;
     } else {
         json::Object object;
-        for_each(value, [&](llvm::StringRef name, const auto& field) {
+        refl::foreach(value, [&](llvm::StringRef name, const auto& field) {
             object.try_emplace(name, serialize(field));
         });
         return object;
@@ -76,7 +76,7 @@ Value deserialize(const json::Value& object) {
         return array;
     } else {
         Value value;
-        for_each(value, [&](llvm::StringRef name, auto& field) {
+        refl::foreach(value, [&](llvm::StringRef name, auto& field) {
             if(auto element = object.getAsObject()->get(name)) {
                 field = deserialize<std::remove_cvref_t<decltype(field)>>(*element);
             }

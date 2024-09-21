@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Server/Option.h>
 #include <Server/Command.h>
 #include <Server/Scheduler.h>
 #include <Protocol/Protocol.h>
@@ -9,7 +8,6 @@ namespace clice {
 
 struct Server {
     using Handler = llvm::unique_function<void(json::Value, json::Value)>;
-    Option option;
     Scheduler scheduler;
     CompilationDatabase CDB;
     llvm::StringMap<Handler> handlers;

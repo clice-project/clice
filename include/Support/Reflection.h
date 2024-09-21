@@ -218,7 +218,7 @@ using replace_cv_ref_t = typename replace_cv_ref<Source, Target>::type;
 
 }  // namespace clice::impl
 
-namespace clice {
+namespace clice::refl {
 
 template <typename... Ts>
 struct Record;
@@ -231,17 +231,17 @@ constexpr inline bool is_record_v<Record<Ts...>> = true;
 
 #define CLICE_RECORD(name, ...)                                                                                        \
     struct name##Body;                                                                                                 \
-    using name = Record<__VA_ARGS__, name##Body>;                                                                      \
+    using name = clice::refl::Record<__VA_ARGS__, name##Body>;                                                         \
     struct name##Body
 
 template <typename T>
 concept Reflectable = std::is_aggregate_v<std::decay_t<T>> && std::is_default_constructible_v<std::decay_t<T>>;
 
 template <Reflectable Object, typename Callback>
-constexpr void for_each(Object&& object, const Callback& callback) {
+constexpr void foreach(Object&& object, const Callback& callback) {
     using T = std::decay_t<Object>;
     if constexpr(is_record_v<T>) {
-        T::for_each(std::forward<Object>(object), callback);
+        T::foreach(std::forward<Object>(object), callback);
     } else {
         constexpr auto count = impl::member_count<T>();
         auto members = impl::collcet_members<count>(object);
@@ -256,10 +256,21 @@ constexpr void for_each(Object&& object, const Callback& callback) {
 template <typename... Ts>
 struct Record : Ts... {
     template <typename Object, typename Callback>
-    static void for_each(Object&& object, const Callback& callback) {
-        (clice::for_each(static_cast<impl::replace_cv_ref_t<Object&&, Ts>>(object), callback), ...);
+    static void foreach(Object&& object, const Callback& callback) {
+        (clice::refl::foreach(static_cast<impl::replace_cv_ref_t<Object&&, Ts>>(object), callback), ...);
     }
 };
+
+template <Reflectable Object, typename Callback>
+constexpr void walk(Object&& object, const Callback& callback) {
+    clice::refl::foreach(object, [&]<typename Field>(std::string_view name, Field& field) {
+        if constexpr(Reflectable<Field>) {
+            walk(field, callback);
+        } else {
+            callback(name, field);
+        }
+    });
+}
 
 template <typename T>
     requires std::is_enum_v<T>
@@ -271,4 +282,4 @@ constexpr auto enum_name(T value) {
     return names[static_cast<std::size_t>(value)];
 }
 
-};  // namespace clice
+};  // namespace clice::refl

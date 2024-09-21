@@ -1,15 +1,21 @@
-[clang]
-# the
-compile-commands-directory = ""
+[server]
+# "pipe" or "socket"
+mode = "pipe"
+port = 50051
+address = "127.0.0.1"
 
-# the path of builtin headers that clang uses
-resource-directory = "${executable}/../lib/clang/${version}"
-
+[frontend]
 # the commands that will be appended to the command line
 append = []
 
 # the commands that will be removed from the command line
 remove = []
+
+# the
+compile-commands-directory = ""
+
+# the path of builtin headers that clang uses
+resource-directory = "${executable}/../lib/clang/${version}"
 
 [diagnostic]
 # the maximum number of diagnostics that will be displayed

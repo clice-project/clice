@@ -3,6 +3,8 @@
 #include <Server/Server.h>
 #include <Server/Logger.h>
 #include <Server/Command.h>
+#include <Server/Config.h>
+#include <Support/URI.h>
 
 namespace clice {
 
@@ -143,18 +145,18 @@ void eventloop(uv_idle_t* handle) {
 }
 
 auto Server::initialize(protocol::InitializeParams params) -> protocol::InitializeResult {
-
-    instance.option.parse("/home/ykiko/C++/test");
-
+    config::initialize(URI::resolve(params.workspaceFolders[0].uri));
     return protocol::InitializeResult();
 }
 
 int Server::run(int argc, const char** argv) {
     std::this_thread::sleep_for(std::chrono::seconds(2));
-    option.argc = argc;
-    option.argv = argv;
 
     logger::init("console", argv[0]);
+
+    if(auto err = config::parse(argc, argv); err < 0) {
+        return err;
+    };
 
     unique_loop = uv_default_loop();
     Socket::initialize("127.0.0.1", 50505);
