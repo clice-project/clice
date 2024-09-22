@@ -30,7 +30,7 @@ TEST(test, test) {
     auto AST = clice::ParsedAST::build("main.cpp", code, compileArgs);
     auto fileID = AST->getFileID("main.cpp");
     auto tokens = AST->tokenBuffer.spelledTokens(fileID);
-    AST->context.getTranslationUnitDecl()->dump();
+    // AST->context.getTranslationUnitDecl()->dump();
 
     // for(auto& token: tokens) {
     //     llvm::outs() << token.text(AST->sourceManager) << "\n";
