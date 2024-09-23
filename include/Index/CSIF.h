@@ -3,12 +3,15 @@
 #include <Support/ADT.h>
 #include <Protocol/Basic.h>
 
-namespace clice::protocol {
+#include "SymbolID.h"
+
+namespace clice {
 
 struct Symbol;
 struct Occurrence;
-struct Diagnostic;
-struct InlayHint;
+
+// struct Diagnostic {};
+// struct InlayHint {};
 
 /// CSIF stands for "C/C++ Semantic Index Format".
 /// It is an efficient binary format for storing the semantic information of C/C++ source code.
@@ -16,9 +19,9 @@ struct InlayHint;
 /// [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html).
 struct CSIF {
     /// The version of the CSIF format.
-    StringRef version = "0.0.1";
+    StringRef version;
     /// The language of the source code, currently only supports "c" and "c++".
-    StringRef language = "c++";
+    StringRef language;
     /// The URI of the source file.
     StringRef uri;
     /// The context of the source file, used to check whether need to re-index the source file.
@@ -30,15 +33,15 @@ struct CSIF {
     ArrayRef<Symbol> symbols;
     /// The occurrences in the source file.
     ArrayRef<Occurrence> occurrences;
-    /// The diagnostics in the source file.
-    ArrayRef<Diagnostic> diagnostics;
     /// The semantic tokens in the source file.
     ArrayRef<std::uint32_t> semanticTokens;
-    /// The inlay hints in the source file.
-    ArrayRef<InlayHint> inlayHints;
-};
 
-struct SymbolID {};
+    // FIXME:
+    /// The diagnostics in the source file.
+    // ArrayRef<Diagnostic> diagnostics;
+    /// The inlay hints in the source file.
+    // ArrayRef<InlayHint> inlayHints;
+};
 
 enum Role {
     Declaration,
@@ -59,7 +62,7 @@ struct Relation {
     /// The role of the relation.
     Role role;
     /// The range of the target, maybe empty.
-    Range range;
+    // Range range;
 };
 
 struct Symbol {
@@ -78,9 +81,9 @@ struct Occurrence {
     /// The ID of the symbol.
     SymbolID symbol;
     /// The range of the occurrence.
-    Range range;
+    // Range range;
     /// The role of the occurrence.
     Role role;
 };
 
-}  // namespace clice::protocol
+}  // namespace clice

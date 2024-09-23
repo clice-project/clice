@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <Index/Index.h>
+#include <Index/SymbolCollector.h>
 #include <AST/Compiler.h>
 
 using namespace clice;
@@ -25,7 +25,7 @@ void f() {
     auto invocation = createInvocation("main.cpp", code, compileArgs);
     auto instance = createInstance(std::move(invocation));
 
-    auto indexConsumer = std::make_shared<IndexConsumer>();
+    auto indexConsumer = std::make_shared<SymbolCollector>();
     clang::index::IndexingOptions indexOptions;
     auto action = clang::index::createIndexingAction(indexConsumer, indexOptions);
 
