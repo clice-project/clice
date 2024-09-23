@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <Index/SymbolSlab.h>
 #include <Index/SymbolCollector.h>
 #include <AST/Compiler.h>
 
@@ -25,7 +26,8 @@ void f() {
     auto invocation = createInvocation("main.cpp", code, compileArgs);
     auto instance = createInstance(std::move(invocation));
 
-    auto indexConsumer = std::make_shared<SymbolCollector>();
+    SymbolSlab slab;
+    auto indexConsumer = std::make_shared<SymbolCollector>(slab);
     clang::index::IndexingOptions indexOptions;
     auto action = clang::index::createIndexingAction(indexConsumer, indexOptions);
 

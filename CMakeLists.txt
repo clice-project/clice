@@ -93,7 +93,12 @@ if(CLICE_ENABLE_TEST)
     target_link_libraries(clice_test PRIVATE gtest_main)
 
     target_clang(clice_test)
-    file(GLOB_RECURSE AST_SRC_FILES "${CMAKE_SOURCE_DIR}/src/AST/*.cpp" "${CMAKE_SOURCE_DIR}/src/Feature/*.cpp" "${CMAKE_SOURCE_DIR}/src/Support/*.cpp")
+    file(GLOB_RECURSE AST_SRC_FILES 
+        "${CMAKE_SOURCE_DIR}/src/AST/*.cpp" 
+        "${CMAKE_SOURCE_DIR}/src/Index/*.cpp" 
+        "${CMAKE_SOURCE_DIR}/src/Feature/*.cpp" 
+        "${CMAKE_SOURCE_DIR}/src/Support/*.cpp"
+    )
     file(GLOB_RECURSE TEST_SRC_FILES "${CMAKE_SOURCE_DIR}/tests/*/*.cpp")
     target_sources(clice_test PRIVATE ${AST_SRC_FILES} ${TEST_SRC_FILES})
 endif()
