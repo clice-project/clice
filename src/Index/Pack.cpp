@@ -5,6 +5,9 @@ namespace clice {
 
 namespace {
 
+// FIXME: figure out the influence of alignment, padding and endianness.
+// Add some tests to verify the correctness of the implementation.
+
 template <typename T>
 constexpr bool is_array_ref_v = false;
 

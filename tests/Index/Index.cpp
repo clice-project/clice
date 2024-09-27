@@ -19,8 +19,8 @@ template<typename T, typename U> struct X {};
 template<typename T> struct X<T, T> {};
 
 void f() {
-    X<int, int> x;
     X<char, int> y;
+    X<int, int> x;
 }
 )";
     auto invocation = createInvocation("main.cpp", code, compileArgs);
@@ -44,7 +44,7 @@ void f() {
         std::terminate();
     }
 
-    instance->getASTContext().getTranslationUnitDecl()->dump();
+    // instance->getASTContext().getTranslationUnitDecl()->dump();
 
     action->EndSourceFile();
 }

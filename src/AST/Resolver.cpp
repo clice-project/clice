@@ -1,5 +1,4 @@
 #include "AST/Resolver.h"
-#include "clang-extra/TreeTransform.h"
 
 namespace clice {
 

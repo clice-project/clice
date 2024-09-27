@@ -1,3 +1,6 @@
+#include <clang/Index/USRGeneration.h>
+
+#include <Index/SymbolSlab.h>
 #include <Index/SymbolCollector.h>
 
 namespace clice {

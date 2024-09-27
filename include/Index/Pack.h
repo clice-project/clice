@@ -22,7 +22,7 @@ namespace clice {
 // - `string data`: Contains all string characters, stored sequentially.
 
 /// Pack the CSIF into a binary buffer.
-std::unique_ptr<char[]> pack(const CSIF& csif);
+std::unique_ptr<char[]> pack(CSIF csif);
 
 /// Unpack the binary buffer into a CSIF.
 /// NOTE: the data should be mutable. when the first load it,

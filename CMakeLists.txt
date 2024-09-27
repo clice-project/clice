@@ -4,7 +4,6 @@ project(CLICE)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_RELEASE} -fno-rtti -g -O0")
 
 set(LLVM_INSTALL_PATH "${CMAKE_SOURCE_DIR}/deps/llvm/build-install")
 
@@ -47,6 +46,7 @@ function(target_clang target)
     )
     target_link_libraries(${target} PRIVATE
         LLVMSupport
+        LLVMFrontendOpenMP
         clangAST
         clangASTMatchers
         clangBasic

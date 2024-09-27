@@ -31,6 +31,7 @@
 *.out
 *.app
 
+.txt
 .cache/
 build*
 temp*
