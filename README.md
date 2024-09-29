@@ -42,6 +42,54 @@ clangd only emits limited semantic tokens. It doesn't support literals, comments
 
 ## Support non self contained files
 
+What is a self contained file? A self contained file is a file that can be compiled independently. For example, suppose we have the following files:
+
+```cpp
+// a.h
+struct A {};
+
+struct B {
+    A a;
+};
+
+// main.cpp
+#include <a.h>
+```
+
+If we want to split the `B` struct into a separate file, normal way is to put `struct B` into `b.h` and include `a.h` in `b.h`. Then `b.h` is a self contained file.
+
+```cpp
+// a.h
+struct A {};
+
+// b.h
+#include <a.h>
+
+struct B {
+    A a;
+};
+
+// main.cpp
+#include <b.h>
+```
+
+Another way is to put `struct B` into `b.h` and doesn't include `a.h` in `b.h`. Then `b.h` is a non self contained file.
+
+```cpp
+// a.h
+struct A {};
+
+// b.h
+struct B {
+    A a;
+};
+
+// main.cpp
+#include <a.h>
+#include <b.h>
+```
+
+
 non self contained files are files that cannot be compiled independently. They are widely used in C++ projects, including libstdc++. clangd doesn't support non self contained files, so if you open the header file of libstdc++, you will get a lot of errors. But clice can handle this.
 
 ## Support more code actions
