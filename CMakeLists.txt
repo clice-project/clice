@@ -22,22 +22,9 @@ if(NOT EXISTS "${CMAKE_BINARY_DIR}/lib/clang")
     file(COPY ${CLANG_BUILTIN_HEADERS_SOURCE} DESTINATION ${CLANG_BUILTIN_HEADERS_OUTPUT})
 endif()
 
-set(CLICE_CLANG_EXTRA_OUTPUT "${CMAKE_SOURCE_DIR}/deps/clang-extra/include/clang-extra")
-if(NOT EXISTS ${CLICE_CLANG_EXTRA_OUTPUT})
-    set(CLICE_CLANG_EXTRA_SOURCE "${CMAKE_SOURCE_DIR}/deps/llvm/clang/lib/Sema")
-    set(CLICE_CLANG_EXTRA_SOURCE_FILES 
-        ${CLICE_CLANG_EXTRA_SOURCE}/CoroutineStmtBuilder.h
-        ${CLICE_CLANG_EXTRA_SOURCE}/TypeLocBuilder.h
-        ${CLICE_CLANG_EXTRA_SOURCE}/TreeTransform.h
-    )
-    message(STATUS "Copying clang extra headers to ${CLICE_CLANG_EXTRA_SOURCE_FILES}")
-    file(MAKE_DIRECTORY ${CLICE_CLANG_EXTRA_OUTPUT})
-    file(COPY ${CLICE_CLANG_EXTRA_SOURCE_FILES} DESTINATION ${CLICE_CLANG_EXTRA_OUTPUT})
-endif()
-
 function(target_clang target)
     target_precompile_headers(${target} PRIVATE 
-        "${CMAKE_SOURCE_DIR}/include/AST/Diagnostic.h"
+        "${CMAKE_SOURCE_DIR}/include/Compiler/Diagnostic.h"
     )
     target_include_directories(${target} PRIVATE 
         ${LLVM_INCLUDE_DIRS}
@@ -94,7 +81,7 @@ if(CLICE_ENABLE_TEST)
 
     target_clang(clice_test)
     file(GLOB_RECURSE AST_SRC_FILES 
-        "${CMAKE_SOURCE_DIR}/src/AST/*.cpp" 
+        "${CMAKE_SOURCE_DIR}/src/Compiler/*.cpp" 
         "${CMAKE_SOURCE_DIR}/src/Index/*.cpp" 
         "${CMAKE_SOURCE_DIR}/src/Feature/*.cpp" 
         "${CMAKE_SOURCE_DIR}/src/Support/*.cpp"

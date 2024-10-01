@@ -33,6 +33,7 @@
 
 .txt
 .cache/
-build*
 temp*
-deps/clang-extra/
+/build*
+
+
