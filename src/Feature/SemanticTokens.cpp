@@ -1,4 +1,4 @@
-#include "AST/ParsedAST.h"
+#include "Compiler/ParsedAST.h"
 #include "Feature/SemanticTokens.h"
 
 namespace clice::feature {
@@ -180,7 +180,6 @@ public:
         if(token) {
             return addToken(type, token->location(), token->length());
         }
-        
     }
 
     // FIXME: source range can be a multi-line range, split it into multiple tokens
@@ -255,9 +254,13 @@ public:
 
     // WalkUpFrom(NamespaceDecl) {}
 
-    VISIT(ImportDecl) { return true; }
+    VISIT(ImportDecl) {
+        return true;
+    }
 
-    VISIT(NamedDecl) { return true; }
+    VISIT(NamedDecl) {
+        return true;
+    }
 
     VISIT(NamespaceDecl) {
         builder.addToken(protocol::SemanticTokenType::Namespace, node->getLocation());

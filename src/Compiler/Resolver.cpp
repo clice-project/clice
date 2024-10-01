@@ -1,6 +1,13 @@
-#include "AST/Resolver.h"
+#include <Compiler/Resolver.h>
+#include <clang/Sema/TreeTransform.h>
 
 namespace clice {
+
+namespace {
+
+class TemplateResolver {};
+
+}  // namespace
 
 clang::QualType DependentNameResolver::resolve(clang::NamedDecl* ND) {
     if(auto TAD = llvm::dyn_cast<clang::TypeAliasDecl>(ND)) {

@@ -1,4 +1,4 @@
-#include "AST/Diagnostic.h"
+#include "Compiler/Diagnostic.h"
 
 namespace clice {
 

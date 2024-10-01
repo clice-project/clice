@@ -1,5 +1,5 @@
-#include <AST/Compiler.h>
-#include <AST/Preamble.h>
+#include <Compiler/Compiler.h>
+#include <Compiler/Preamble.h>
 
 #include <clang/Lex/PreprocessorOptions.h>
 

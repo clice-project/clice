@@ -1,5 +1,5 @@
-#include <AST/ParsedAST.h>
-#include <AST/Compiler.h>
+#include <Compiler/ParsedAST.h>
+#include <Compiler/Compiler.h>
 
 namespace clice {
 

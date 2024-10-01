@@ -1,4 +1,4 @@
-#include <AST/Preamble.h>
+#include <Compiler/Preamble.h>
 
 namespace clice {
 

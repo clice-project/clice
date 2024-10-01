@@ -1,4 +1,4 @@
-#include <AST/Directive.h>
+#include <Compiler/Directive.h>
 #include <Support/Reflection.h>
 #include <clang/Lex/MacroArgs.h>
 

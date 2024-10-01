@@ -2,8 +2,8 @@
 
 #include <llvm/ADT/StringMap.h>
 #include <Support/JSON.h>
-#include <AST/Preamble.h>
-#include <AST/ParsedAST.h>
+#include <Compiler/Preamble.h>
+#include <Compiler/ParsedAST.h>
 
 namespace clice {
 
