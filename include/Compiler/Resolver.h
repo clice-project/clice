@@ -7,6 +7,16 @@
 
 namespace clice {
 
+class TemplateResolver {
+public:
+    TemplateResolver(clang::Sema& sema) : sema(sema) {}
+
+    clang::QualType resolve(clang::QualType type);
+
+private:
+    clang::Sema& sema;
+};
+
 /// This class is used to resolve dependent names in the AST.
 /// For dependent names, we cannot know the any information about the name until
 /// the template is instantiated. This can be frustrating, you cannot get
