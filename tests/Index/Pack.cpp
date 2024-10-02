@@ -17,4 +17,11 @@ TEST(clice, pack) {
     x.emplace_back(1);
 }
 
+consteval void f(){
+    auto p = &f;
+    p();
+}
+
+
+
 }  // namespace

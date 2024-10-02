@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <AST/ParsedAST.h>
+#include <Compiler/ParsedAST.h>
 #include <Feature/SemanticTokens.h>
 
 namespace {

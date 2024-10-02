@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <Index/SymbolSlab.h>
 #include <Index/SymbolCollector.h>
-#include <AST/Compiler.h>
+#include <Compiler/Compiler.h>
 
 using namespace clice;
 
