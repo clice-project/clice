@@ -87,5 +87,5 @@ if(CLICE_ENABLE_TEST)
         "${CMAKE_SOURCE_DIR}/src/Support/*.cpp"
     )
     file(GLOB_RECURSE TEST_SRC_FILES "${CMAKE_SOURCE_DIR}/tests/*/*.cpp")
-    target_sources(clice_test PRIVATE ${AST_SRC_FILES} ${TEST_SRC_FILES})
+    target_sources(clice_test PRIVATE ${AST_SRC_FILES} ${TEST_SRC_FILES} ${CMAKE_SOURCE_DIR}/tests/main.cpp)
 endif()
