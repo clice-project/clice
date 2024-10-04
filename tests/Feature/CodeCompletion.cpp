@@ -62,6 +62,9 @@ TEST(clice, CodeCompletion) {
     instance->setCodeCompletionConsumer(new CodeCompletionConsumer());
     auto action = std::make_unique<clang::SyntaxOnlyAction>();
 
+    // FIXME: test with preamble build, note we need to set `MaxLines` to avoid the bound exceed the location of non
+    // self contained file.
+
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         llvm::errs() << "Failed to begin source file\n";
         std::terminate();
