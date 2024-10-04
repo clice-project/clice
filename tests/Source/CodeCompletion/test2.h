@@ -1,0 +1,3 @@
+inline void bar() {
+    fo
+}
