@@ -9,7 +9,7 @@ int parse(int argc, const char** argv);
 
 /// initialize the config, replace all predefined variables in the config file.
 /// called in `Server::initialize`.
-void initialize(std::string_view workplace);
+void init(std::string_view workplace);
 
 struct ServerOption {
     std::string mode;

@@ -18,7 +18,8 @@ struct ParsedAST {
     static std::unique_ptr<ParsedAST> build(llvm::StringRef filename,
                                             llvm::StringRef content,
                                             std::vector<const char*>& args,
-                                            Preamble* preamble = nullptr);
+                                            Preamble* preamble = nullptr,
+                                            clang::CodeCompleteConsumer* consumer = nullptr);
 
     clang::FileID getFileID(llvm::StringRef filename) const {
         auto entry = fileManager.getFileRef(filename);

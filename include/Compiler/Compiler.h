@@ -16,4 +16,15 @@ std::unique_ptr<clang::CompilerInvocation> createInvocation(StringRef filename,
 
 std::unique_ptr<clang::CompilerInstance> createInstance(std::shared_ptr<clang::CompilerInvocation> invocation);
 
+
+
+/// - build AST
+/// - build module
+/// - build preamble
+/// - build CodeCompletion
+class Compiler {
+public:
+    Compiler();
+};
+
 }  // namespace clice

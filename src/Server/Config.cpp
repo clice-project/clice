@@ -80,7 +80,7 @@ int parse(int argc, const char** argv) {
     return 0;
 }
 
-void initialize(std::string_view workplace) {
+void init(std::string_view workplace) {
     predefined["workplace"] = workplace;
 
     refl::walk(config, [&]<typename Field>(std::string_view name, Field& field) {
@@ -91,8 +91,12 @@ void initialize(std::string_view workplace) {
     return;
 }
 
-const ServerOption& server() { return config.server; }
+const ServerOption& server() {
+    return config.server;
+}
 
-const FrontendOption& frontend() { return config.frontend; }
+const FrontendOption& frontend() {
+    return config.frontend;
+}
 
 }  // namespace clice::config

@@ -2,7 +2,6 @@
 #include <Support/JSON.h>
 #include <Server/Server.h>
 #include <Server/Logger.h>
-#include <Server/Command.h>
 #include <Server/Config.h>
 #include <Support/URI.h>
 
@@ -17,7 +16,9 @@ class MessageBuffer {
     std::size_t max = 0;
 
 public:
-    void write(std::string_view message) { buffer.insert(buffer.end(), message.begin(), message.end()); }
+    void write(std::string_view message) {
+        buffer.insert(buffer.end(), message.begin(), message.end());
+    }
 
     std::string_view read() {
         std::string_view view = std::string_view(buffer.data(), buffer.size());
@@ -145,7 +146,7 @@ void eventloop(uv_idle_t* handle) {
 }
 
 auto Server::initialize(protocol::InitializeParams params) -> protocol::InitializeResult {
-    config::initialize(URI::resolve(params.workspaceFolders[0].uri));
+    config::init(URI::resolve(params.workspaceFolders[0].uri));
     return protocol::InitializeResult();
 }
 

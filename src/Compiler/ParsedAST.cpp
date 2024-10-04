@@ -6,7 +6,8 @@ namespace clice {
 std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
                                             llvm::StringRef content,
                                             std::vector<const char*>& args,
-                                            Preamble* preamble) {
+                                            Preamble* preamble,
+                                            clang::CodeCompleteConsumer* consumer) {
     auto vfs = llvm::vfs::getRealFileSystem();
 
     clang::CreateInvocationOptions options;
@@ -27,6 +28,10 @@ std::unique_ptr<ParsedAST> ParsedAST::build(llvm::StringRef filename,
     auto directive = std::make_unique<Directives>(instance->getPreprocessor(), instance->getSourceManager());
     preproc.addCommentHandler(directive->handler());
     preproc.addPPCallbacks(directive->callback());
+
+    if(consumer) {
+        instance->setCodeCompletionConsumer(consumer);
+    }
 
     if(auto error = action->Execute()) {
         llvm::errs() << "Failed to execute action: " << error << "\n";
