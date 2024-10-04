@@ -1,6 +1,10 @@
 #pragma once
 
-namespace clice::dependency {
+#include <Support/ADT.h>
+
+namespace clice::dependencies {
+
+void load(ArrayRef<StringRef> dirs);
 
 /// Record the include graph of the translation unit.
 struct IncludeGraph {};
