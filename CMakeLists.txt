@@ -76,8 +76,11 @@ if(CLICE_ENABLE_TEST)
 
     # add googletest
     add_subdirectory("${CMAKE_SOURCE_DIR}/deps/googletest")
-    target_include_directories(clice_test PRIVATE "${CMAKE_SOURCE_DIR}/deps/googletest/googletest/include")
-    target_link_libraries(clice_test PRIVATE gtest_main)
+    target_include_directories(clice_test PRIVATE 
+        "${CMAKE_SOURCE_DIR}/deps/googletest/googletest/include"
+        "${CMAKE_SOURCE_DIR}/deps/spdlog/include"
+    )
+    target_link_libraries(clice_test PRIVATE gtest_main spdlog::spdlog)
 
     target_clang(clice_test)
     file(GLOB_RECURSE AST_SRC_FILES 
@@ -86,6 +89,6 @@ if(CLICE_ENABLE_TEST)
         "${CMAKE_SOURCE_DIR}/src/Feature/*.cpp" 
         "${CMAKE_SOURCE_DIR}/src/Support/*.cpp"
     )
-    file(GLOB_RECURSE TEST_SRC_FILES "${CMAKE_SOURCE_DIR}/tests/*/*.cpp")
+    file(GLOB TEST_SRC_FILES "${CMAKE_SOURCE_DIR}/tests/*/*.cpp")
     target_sources(clice_test PRIVATE ${AST_SRC_FILES} ${TEST_SRC_FILES} ${CMAKE_SOURCE_DIR}/tests/main.cpp)
 endif()

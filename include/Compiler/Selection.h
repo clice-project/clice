@@ -13,11 +13,10 @@ namespace clice {
 
 class SelectionTree {
 public:
-
-
-    SelectionTree(clang::ASTContext& context, const clang::syntax::TokenBuffer& tokens, unsigned start, unsigned end);
-
-private:
+    SelectionTree(clang::ASTContext& context,
+                  const clang::syntax::TokenBuffer& tokens,
+                  clang::SourceLocation begin,
+                  clang::SourceLocation end);
 };
 
 }  // namespace clice

@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <llvm/Support/CommandLine.h>
 
+namespace clice {
+
 llvm::cl::opt<std::string> test_dir_path("test-dir",
                                          llvm::cl::desc("specify the test source directory path"),
                                          llvm::cl::value_desc("path"),
@@ -9,6 +11,8 @@ llvm::cl::opt<std::string> test_dir_path("test-dir",
 std::string test_dir() {
     return test_dir_path;
 }
+
+}  // namespace clice
 
 int main(int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);

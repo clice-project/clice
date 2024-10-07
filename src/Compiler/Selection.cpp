@@ -6,57 +6,47 @@ namespace {
 
 class SelectionBuilder {
 public:
+    SelectionBuilder(clang::SourceRange input, clang::ASTContext& context) : input(input), context(context) {}
+
     void push() {}
 
     void pop() {}
 
-    template <typename Callback>
-    bool hook(const clang::Stmt* stmt, const Callback& callback) {
-        auto range = stmt->getSourceRange();
+    template <typename Node>
+    bool isSkippable(const Node* node) {
+        if constexpr(std::is_same_v<Node, clang::Decl>) {
+            if(llvm::dyn_cast<clang::TranslationUnitDecl>(node)) {
+                return false;
+            }
+        }
+
+        clang::SourceRange range;
+        if constexpr(std::is_base_of_v<Node, clang::Attr>) {
+            range = node->getRange();
+        } else {
+            range = node->getSourceRange();
+        }
+
+        if(range.isInvalid()) {
+            return true;
+        }
+
+        range.dump(context.getSourceManager());
+        return input.getBegin() > range.getEnd() || input.getEnd() < range.getBegin();
+    }
+
+    template <typename Node, typename Callback>
+    bool hook(const Node* node, const Callback& callback) {
+        if(isSkippable(node)) {
+            return true;
+        }
+
         return callback();
     }
 
-    template <typename Callback>
-    bool hook(const clang::TypeLoc& loc, const Callback& callback) {
-        auto range = loc.getSourceRange();
-        return callback();
-    }
-
-    template <typename Callback>
-    bool hook(const clang::Attr* attr, const Callback& callback) {
-        auto range = attr->getRange();
-        return callback();
-    }
-
-    template <typename Callback>
-    bool hook(const clang::Decl* decl, const Callback& callback) {
-        auto range = decl->getSourceRange();
-        return callback();
-    }
-
-    template <typename Callback>
-    bool hook(const clang::NestedNameSpecifierLoc& NNS, const Callback& callback) {
-        auto range = NNS.getSourceRange();
-        return callback();
-    }
-
-    template <typename Callback>
-    bool hook(const clang::TemplateArgumentLoc& argument, const Callback& callback) {
-        auto range = argument.getSourceRange();
-        return callback();
-    }
-
-    template <typename Callback>
-    bool hook(const clang::CXXBaseSpecifier& base, const Callback& callback) {
-        auto range = base.getSourceRange();
-        return callback();
-    }
-
-    template <typename Callback>
-    bool hook(const clang::CXXCtorInitializer* init, const Callback& callback) {
-        auto range = init->getSourceRange();
-        return callback();
-    }
+private:
+    clang::SourceRange input;
+    clang::ASTContext& context;
 };
 
 class SelectionCollector : public clang::RecursiveASTVisitor<SelectionCollector> {
@@ -78,7 +68,7 @@ public:
     }
 
     bool TraverseTypeLoc(clang::TypeLoc loc) {
-        return builder.hook(loc, [&] {
+        return builder.hook(&loc, [&] {
             return Base::TraverseTypeLoc(loc);
         });
     }
@@ -102,19 +92,19 @@ public:
     }
 
     bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc NNS) {
-        return builder.hook(NNS, [&] {
+        return builder.hook(&NNS, [&] {
             return Base::TraverseNestedNameSpecifierLoc(NNS);
         });
     }
 
     bool TraverseTemplateArgumentLoc(const clang::TemplateArgumentLoc& argument) {
-        return builder.hook(argument, [&] {
+        return builder.hook(&argument, [&] {
             return Base::TraverseTemplateArgumentLoc(argument);
         });
     }
 
     bool TraverseCXXBaseSpecifier(const clang::CXXBaseSpecifier& base) {
-        return builder.hook(base, [&] {
+        return builder.hook(&base, [&] {
             return Base::TraverseCXXBaseSpecifier(base);
         });
     }
@@ -135,5 +125,16 @@ private:
 };
 
 }  // namespace
+
+SelectionTree::SelectionTree(clang::ASTContext& context,
+                             const clang::syntax::TokenBuffer& tokens,
+                             clang::SourceLocation begin,
+                             clang::SourceLocation end) {
+
+    SelectionBuilder builder({begin, end}, context);
+    SelectionCollector collector(builder);
+    collector.TraverseAST(context);
+    // context.getTranslationUnitDecl()->dump();
+}
 
 }  // namespace clice

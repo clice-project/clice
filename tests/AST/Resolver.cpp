@@ -58,23 +58,11 @@ void match(clang::QualType type, std::string name, std::initializer_list<std::st
 }
 
 TEST(clice, TemplateResolver) {
-    // FIXME: more flexible
-    auto path = test_dir() + "/TemplateResolver";
-    std::error_code error;
-    fs::directory_iterator iter(path, error);
-    fs::directory_iterator end;
-    while(!error && iter != end) {
-        auto file = iter->path();
-        llvm::outs() << "test: " << file << " " << error.message() << "\n";
-        auto buffer = llvm::MemoryBuffer::getFile(file);
-        if(!buffer) {
-            llvm::outs() << "failed to open file: " << buffer.getError().message() << file << "\n";
-        }
-        auto content = buffer.get()->getBuffer();
+    foreachFile("TemplateResolver", [&](std::string file, llvm::StringRef content) {
         Visitor visitor(content);
         visitor.test();
-        iter.increment(error);
-    }
+        llvm::outs() << fmt::format(fg(fmt::color::yellow_green), "[TemplateResolver: {}]\n", file);
+    });
 }
 
 }  // namespace
