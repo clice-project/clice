@@ -18,9 +18,9 @@ TEST(clice, SelectionTree) {
         auto AST = ParsedAST::build("main.cpp", content, compileArgs);
         auto id = AST->getFileID("main.cpp");
         auto& sm = AST->context.getSourceManager();
-        auto begin = sm.translateLineCol(id, 1, 5);
-        auto end = sm.translateLineCol(id, 1, 8);
-        SelectionTree tree(AST->context, AST->tokenBuffer, begin, end);
+        auto begin = sm.translateLineCol(id, 2, 6);
+        auto end = sm.translateLineCol(id, 2, 12);
+        SelectionTree tree(sm.getFileOffset(begin), sm.getFileOffset(end), AST->context, AST->tokenBuffer);
     });
 }
 

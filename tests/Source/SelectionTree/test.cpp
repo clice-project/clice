@@ -1,1 +1,3 @@
-int foo = 122;
+struct X {
+    int xxxxxxx;
+};

@@ -13,10 +13,21 @@ namespace clice {
 
 class SelectionTree {
 public:
-    SelectionTree(clang::ASTContext& context,
-                  const clang::syntax::TokenBuffer& tokens,
-                  clang::SourceLocation begin,
-                  clang::SourceLocation end);
+    struct Node {
+        Node* parent;
+        clang::DynTypedNode node;
+        llvm::SmallVector<const Node*> children;
+    };
+
+    SelectionTree() = default;
+
+    SelectionTree(std::uint32_t begin,
+                  std::uint32_t end,
+                  clang::ASTContext& context,
+                  clang::syntax::TokenBuffer& tokens);
+
+    Node* root;
+    std::deque<Node> storage;
 };
 
 }  // namespace clice

@@ -1,4 +1,8 @@
-#include "Compiler/Selection.h"
+
+
+#include <stack>
+
+#include <Compiler/Selection.h>
 
 namespace clice {
 
@@ -6,33 +10,61 @@ namespace {
 
 class SelectionBuilder {
 public:
-    SelectionBuilder(clang::SourceRange input, clang::ASTContext& context) : input(input), context(context) {}
+    SelectionBuilder(std::uint32_t begin,
+                     std::uint32_t end,
+                     clang::ASTContext& context,
+                     clang::syntax::TokenBuffer& buffer) : context(context), buffer(buffer) {
+        // The location in clang AST is token-based, of course. Because the parser
+        // processes tokens from the lexer. So we need to find boundary tokens at first.
+        auto& sm = context.getSourceManager();  // FIXME: support other file.
+        auto tokens = buffer.spelledTokens(sm.getMainFileID());
 
-    void push() {}
+        left = std::to_address(std::partition_point(tokens.begin(), tokens.end(), [&](const auto& token) {
+            // int       xxxx = 3;
+            //       ^^^^^^
+            // expect to find the first token whose end location is greater than or equal to `begin`.
+            return sm.getFileOffset(token.endLocation()) < begin;
+        }));
 
-    void pop() {}
+        rigth = std::to_address(std::partition_point(tokens.rbegin(), tokens.rend(), [&](const auto& token) {
+            // int xxxx        = 3;
+            //      ^^^^^^
+            // expect to find the first token whose start location is less than or equal to `end`.
+            return sm.getFileOffset(token.location()) > end;
+        }));
+
+        if(left == tokens.end() || rigth == tokens.end()) {
+            std::terminate();
+            return;
+        }
+    }
+
+    template <typename Node>
+    auto getSourceRange(const Node* node) -> clang::SourceRange {
+        if constexpr(std::is_base_of_v<Node, clang::Attr>) {
+            return node->getRange();
+        } else {
+            return node->getSourceRange();
+        }
+    }
 
     template <typename Node>
     bool isSkippable(const Node* node) {
-        if constexpr(std::is_same_v<Node, clang::Decl>) {
-            if(llvm::dyn_cast<clang::TranslationUnitDecl>(node)) {
-                return false;
+        if constexpr(requires { node->isImplicit(); }) {
+            if(node->isImplicit()) {
+                return true;
             }
         }
 
-        clang::SourceRange range;
-        if constexpr(std::is_base_of_v<Node, clang::Attr>) {
-            range = node->getRange();
-        } else {
-            range = node->getSourceRange();
-        }
-
+        auto range = getSourceRange(node);
         if(range.isInvalid()) {
             return true;
         }
 
-        range.dump(context.getSourceManager());
-        return input.getBegin() > range.getEnd() || input.getEnd() < range.getBegin();
+        // range.dump(context.getSourceManager());
+        // dump(node);
+
+        return false;
     }
 
     template <typename Node, typename Callback>
@@ -41,35 +73,97 @@ public:
             return true;
         }
 
-        return callback();
+        storage.emplace_back(SelectionTree::Node{nullptr, clang::DynTypedNode::create(*node)});
+        auto range = getSourceRange(node);
+
+        llvm::outs() << "-----------------------------------------\n";
+        range.dump(context.getSourceManager());
+        clang::SourceRange(left->location(), rigth->location()).dump(context.getSourceManager());
+
+        // FIXME: currently we only consider fully nested case.
+        // consider supporting partially nested case.
+
+        if(range.getBegin() < left->location() && range.getEnd() > rigth->location()) {
+            // if the source range of node contains the boundary tokens, its
+            // children may be selected. so traverse them recursively.
+            llvm::outs() << "select\n";
+            stack.emplace(&storage.back());
+            bool ret = callback();
+            return ret;
+        }
+
+        // if the boundary tokens contain the source range of node, it means
+        // the node is selected. store the father node and skip its children.
+        if(left->location() <= range.getBegin() && rigth->location() >= range.getEnd()) {
+            if(!stack.empty()) {
+                llvm::outs() << "selected\n";
+                stack.top()->children.push_back(&storage.back());
+            }
+            return true;
+        }
+
+        return true;
     }
 
+    template <typename Node>
+    void dump(const Node* node) {
+        if constexpr(requires { node->dump(); }) {
+            node->dump();
+        }
+
+        if constexpr(std::is_same_v<Node, clang::NestedNameSpecifierLoc>) {
+            const clang::NestedNameSpecifierLoc& NNSL = *node;
+            NNSL.getNestedNameSpecifier()->dump();
+            llvm::outs() << "\n";
+        }
+
+        if constexpr(std::is_same_v<Node, clang::Attr>) {
+            const clang::Attr& attr = *node;
+            attr.getScopeLoc().dump(context.getSourceManager());
+            attr.printPretty(llvm::outs(), context.getPrintingPolicy());
+            llvm::outs() << "\n";
+        }
+    }
+
+    using Node = SelectionTree::Node;
+
+    SelectionTree build();
+
 private:
-    clang::SourceRange input;
+    /// the two boundary tokens.
+    const clang::syntax::Token* left;
+    const clang::syntax::Token* rigth;
     clang::ASTContext& context;
+    clang::syntax::TokenBuffer& buffer;
+    /// father nodes stack.
+    std::stack<Node*> stack;
+    std::deque<Node> storage;
 };
 
+/*/
+
+/*/
 class SelectionCollector : public clang::RecursiveASTVisitor<SelectionCollector> {
 public:
     SelectionCollector(SelectionBuilder& builder) : builder(builder) {}
 
     using Base = clang::RecursiveASTVisitor<SelectionCollector>;
 
-    bool TraverseStmt(clang::Stmt* stmt) {
-        return builder.hook(stmt, [&] {
-            return Base::TraverseStmt(stmt);
+    bool TraverseDecl(clang::Decl* decl) {
+        /// `TranslationUnitDecl` has invalid location information.
+        /// So we process it separately.
+        if(llvm::isa_and_nonnull<clang::TranslationUnitDecl>(decl)) {
+            return Base::TraverseDecl(decl);
+        }
+
+        return builder.hook(decl, [&] {
+            return Base::TraverseDecl(decl);
         });
     }
 
-    /// we don't care about the type without location information.
-    /// so just skip all its children.
-    bool TraverseType(clang::QualType type) {
-        return true;
-    }
-
-    bool TraverseTypeLoc(clang::TypeLoc loc) {
-        return builder.hook(&loc, [&] {
-            return Base::TraverseTypeLoc(loc);
+    bool TraverseStmt(clang::Stmt* stmt) {
+        return builder.hook(stmt, [&] {
+            return Base::TraverseStmt(stmt);
         });
     }
 
@@ -79,16 +173,29 @@ public:
         });
     }
 
-    bool TraverseDecl(clang::Decl* decl) {
-        return builder.hook(decl, [&] {
-            return Base::TraverseDecl(decl);
-        });
+    /// we don't care about the node without location information, so skip them.
+    bool shouldWalkTypesOfTypeLocs() {
+        return false;
     }
 
-    /// we don't care about the name without location information.
-    /// so just skip all its children.
-    bool TraverseNestedNameSpecifier(clang::NestedNameSpecifier* NNS) {
+    bool TraverseType(clang::QualType) {
         return true;
+    }
+
+    bool TraverseNestedNameSpecifier(clang::NestedNameSpecifier*) {
+        return true;
+    }
+
+    bool TraverseTypeLoc(clang::TypeLoc loc) {
+        /// clang currently doesn't record any information for `QualifiedTypeLoc`.
+        /// It has same location with its inner type. So we just ignore it.
+        if(auto QTL = loc.getAs<clang::QualifiedTypeLoc>()) {
+            return TraverseTypeLoc(QTL.getUnqualifiedLoc());
+        }
+
+        return builder.hook(&loc, [&] {
+            return Base::TraverseTypeLoc(loc);
+        });
     }
 
     bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc NNS) {
@@ -115,6 +222,12 @@ public:
         });
     }
 
+    // bool TraverseDeclarationNameInfo(clang::DeclarationNameInfo info) {
+    //     return builder.hook(&info, [&] {
+    //         return Base::TraverseDeclarationNameInfo(info);
+    //     });
+    // }
+
     // FIXME: figure out concept in clang AST.
     bool TraverseConceptReference(clang::ConceptReference* concept_) {
         return true;
@@ -124,17 +237,37 @@ private:
     SelectionBuilder& builder;
 };
 
+SelectionTree SelectionBuilder::build() {
+    SelectionCollector collector(*this);
+    collector.TraverseAST(context);
+
+    SelectionTree tree;
+    tree.root = stack.empty() ? nullptr : stack.top();
+    tree.storage = std::move(storage);
+    return tree;
+}
+
+void dump(const SelectionTree::Node* node, clang::ASTContext& context) {
+    if(node) {
+        node->node.dump(llvm::outs(), context);
+        for(auto child: node->children) {
+            dump(child, context);
+        }
+    }
+}
+
 }  // namespace
 
-SelectionTree::SelectionTree(clang::ASTContext& context,
-                             const clang::syntax::TokenBuffer& tokens,
-                             clang::SourceLocation begin,
-                             clang::SourceLocation end) {
+SelectionTree::SelectionTree(std::uint32_t begin,
+                             std::uint32_t end,
+                             clang::ASTContext& context,
+                             clang::syntax::TokenBuffer& tokens) {
 
-    SelectionBuilder builder({begin, end}, context);
-    SelectionCollector collector(builder);
-    collector.TraverseAST(context);
-    // context.getTranslationUnitDecl()->dump();
+    SelectionBuilder builder(begin, end, context, tokens);
+    auto tree = builder.build();
+    root = tree.root;
+    llvm::outs() << "----------------------------------------\n";
+    dump(root, context);
 }
 
 }  // namespace clice
