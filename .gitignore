@@ -33,6 +33,7 @@
 
 .txt
 .cache/
+note.md
 temp*
 /build*
 
