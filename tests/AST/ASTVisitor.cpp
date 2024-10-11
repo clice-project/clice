@@ -23,6 +23,16 @@ struct Visitor : public clang::RecursiveASTVisitor<Visitor> {
     bool VisitVarDecl(clang::VarDecl* decl) {
         if(decl->getName() == "x") {
             decl->getType()->dump();
+            decl->getType()->castAs<clang::AutoType>()->getDeducedType().dump();
+            
+            auto expr = llvm::dyn_cast<clang::CallExpr>(decl->getInit());
+            auto unresolved = llvm::dyn_cast<clang::UnresolvedLookupExpr>(expr->getCallee());
+
+
+            for(auto decl: unresolved->decls()) {
+                llvm::outs() << "--------------------------\n";
+                decl->dump();
+            }
         }
 
         return true;

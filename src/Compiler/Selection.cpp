@@ -83,15 +83,6 @@ public:
         // FIXME: currently we only consider fully nested case.
         // consider supporting partially nested case.
 
-        if(range.getBegin() < left->location() && range.getEnd() > rigth->location()) {
-            // if the source range of node contains the boundary tokens, its
-            // children may be selected. so traverse them recursively.
-            llvm::outs() << "select\n";
-            stack.emplace(&storage.back());
-            bool ret = callback();
-            return ret;
-        }
-
         // if the boundary tokens contain the source range of node, it means
         // the node is selected. store the father node and skip its children.
         if(left->location() <= range.getBegin() && rigth->location() >= range.getEnd()) {
@@ -100,6 +91,15 @@ public:
                 stack.top()->children.push_back(&storage.back());
             }
             return true;
+        }
+
+        if(range.getBegin() <= left->location() && range.getEnd() >= rigth->location()) {
+            // if the source range of node contains the boundary tokens, its
+            // children may be selected. so traverse them recursively.
+            llvm::outs() << "select\n";
+            stack.emplace(&storage.back());
+            bool ret = callback();
+            return ret;
         }
 
         return true;

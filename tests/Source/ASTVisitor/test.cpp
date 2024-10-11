@@ -1,3 +1,6 @@
+template <typename U>
+void foo(U) {}
+
 template <typename T>
 int foo(T) {}
 
