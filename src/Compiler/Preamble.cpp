@@ -7,7 +7,9 @@ public:
     std::optional<clang::syntax::TokenCollector> collector;
 
 public:
-    void BeforeExecute(clang::CompilerInstance& CI) override { collector.emplace(CI.getPreprocessor()); }
+    void BeforeExecute(clang::CompilerInstance& CI) override {
+        collector.emplace(CI.getPreprocessor());
+    }
 
     void AfterExecute(clang::CompilerInstance& CI) override {
         auto tokens = std::move(collector.value()).consume();

@@ -19,6 +19,8 @@ public:
 
     clang::QualType resolve(clang::QualType type);
 
+    // TODO:
+    // use a relative clear way to resolve `UnresolvedLookupExpr`.
 private:
     clang::Sema& sema;
 };

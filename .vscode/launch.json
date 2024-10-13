@@ -21,6 +21,10 @@
             "request": "launch",
             "name": "clice_test",
             "program": "${workspaceFolder}/build/bin/clice_test",
+            "args": [
+                "--test-dir=/home/ykiko/C++/clice2/tests/Source",
+                "--gtest_filter=clice.Compiler"
+            ],
             "cwd": "${workspaceFolder}"
         }
     ]
