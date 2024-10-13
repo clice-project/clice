@@ -34,7 +34,7 @@ public:
                   llvm::StringRef filepath);
 
     /// build PreCompiledModule.
-    void buildPCM();
+    void buildPCM(llvm::StringRef filename, llvm::StringRef content, llvm::ArrayRef<const char*> args);
 
     /// build AST.
     void buildAST();

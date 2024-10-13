@@ -29,7 +29,7 @@ TEST(clice, ModuleScanner) {
     });
 }
 
-TEST(clice, Compiler) {
+TEST(clice, PCH) {
     const char* code = R"(
 #include <cstdio>
 
@@ -53,6 +53,54 @@ int main(){
 
     auto invocation = createInvocation("main.cpp", code, compileArgs);
     compiler.applyPCH(*invocation, "main.cpp", code, "/home/ykiko/C++/clice2/build/cache/xxx.pch");
+    auto instance = createInstance(std::move(invocation));
+    auto action = std::make_unique<clang::SyntaxOnlyAction>();
+
+    if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
+        llvm::errs() << "Failed to begin source file\n";
+        std::terminate();
+    }
+
+    if(auto error = action->Execute()) {
+        llvm::errs() << "Failed to execute action: " << error << "\n";
+        std::terminate();
+    }
+
+    instance->getASTContext().getTranslationUnitDecl()->dump();
+}
+
+TEST(clice, PCM) {
+    const char* mod = R"(
+export module M;
+
+export constexpr int f() {
+    return 42;
+}
+)";
+
+    const char* code = R"(
+import M;
+
+int main() {
+    constexpr int x = f();
+    return x;
+}
+)";
+
+    std::vector<const char*> compileArgs = {
+        "clang++",
+        "-std=c++20",
+        "main.cpp",
+        "-resource-dir",
+        "/home/ykiko/C++/clice2/build/lib/clang/20",
+    };
+
+    Compiler compiler;
+    compiler.buildPCM("main.cpp", mod, compileArgs);
+
+    auto invocation = createInvocation("main.cpp", code, compileArgs);
+    // compiler.applyPCH(*invocation, "main.cpp", code, "/home/ykiko/C++/clice2/build/cache/xxx.pch");
+    invocation->getHeaderSearchOpts().PrebuiltModuleFiles.emplace("M", "/home/ykiko/C++/clice2/build/cache/xxx.pcm");
     auto instance = createInstance(std::move(invocation));
     auto action = std::make_unique<clang::SyntaxOnlyAction>();
 

@@ -113,18 +113,9 @@ void Compiler::buildPCH(llvm::StringRef filename, llvm::StringRef content, llvm:
         std::terminate();
     }
 
-    instance->getASTContext().getTranslationUnitDecl()->dump();
+    // instance->getASTContext().getTranslationUnitDecl()->dump();
 
     action.EndSourceFile();
-
-    // auto err = instance->ExecuteAction(action);
-    //
-    ////
-    //
-    // if(!err) {
-    //    llvm::outs() << "Error has occured!!";
-    //    std::terminate();
-    //}
 }
 
 void Compiler::applyPCH(clang::CompilerInvocation& invocation,
@@ -144,6 +135,29 @@ void Compiler::applyPCH(clang::CompilerInvocation& invocation,
     PreprocessorOpts.ImplicitPCHInclude = filepath;
 
     PreprocessorOpts.UsePredefines = false;
+}
+
+void Compiler::buildPCM(llvm::StringRef filename, llvm::StringRef content, llvm::ArrayRef<const char*> args) {
+    auto invocation = createInvocation(filename, content, args);
+
+    auto instance = createInstance(std::move(invocation));
+
+    auto& frontend = instance->getFrontendOpts();
+    frontend.OutputFile = "/home/ykiko/C++/clice2/build/cache/xxx.pcm";
+
+    auto action = clang::GenerateReducedModuleInterfaceAction();
+
+    if(!action.BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
+        llvm::errs() << "Failed to begin source file\n";
+        std::terminate();
+    }
+
+    if(auto error = action.Execute()) {
+        llvm::errs() << "Failed to execute action: " << error << "\n";
+        std::terminate();
+    }
+
+    action.EndSourceFile();
 }
 
 }  // namespace clice
