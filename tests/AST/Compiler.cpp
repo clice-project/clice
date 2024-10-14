@@ -48,25 +48,18 @@ int main(){
         "/home/ykiko/C++/clice2/build/lib/clang/20",
     };
 
-    Compiler compiler;
-    compiler.buildPCH("main.cpp", code, compileArgs);
-
-    auto invocation = createInvocation("main.cpp", code, compileArgs);
-    compiler.applyPCH(*invocation, "main.cpp", code, "/home/ykiko/C++/clice2/build/cache/xxx.pch");
-    auto instance = createInstance(std::move(invocation));
-    auto action = std::make_unique<clang::SyntaxOnlyAction>();
-
-    if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
-        llvm::errs() << "Failed to begin source file\n";
-        std::terminate();
+    auto bounds = clang::Lexer::ComputePreamble(code, {}, false);
+    {
+        Compiler compiler("main.cpp", code, compileArgs);
+        compiler.generatePCH("/home/ykiko/C++/clice2/build/cache/xxx.pch",
+                             bounds.Size,
+                             bounds.PreambleEndsAtStartOfLine);
     }
 
-    if(auto error = action->Execute()) {
-        llvm::errs() << "Failed to execute action: " << error << "\n";
-        std::terminate();
-    }
-
-    instance->getASTContext().getTranslationUnitDecl()->dump();
+    Compiler compiler("main.cpp", code, compileArgs);
+    compiler.applyPCH("/home/ykiko/C++/clice2/build/cache/xxx.pch", bounds.Size, bounds.PreambleEndsAtStartOfLine);
+    compiler.buildAST();
+    compiler.tu()->dump();
 }
 
 TEST(clice, PCM) {
@@ -79,7 +72,13 @@ export constexpr int f() {
 )";
 
     const char* code = R"(
+module;
+
+export module Main;
+
 import M;
+
+module: private;
 
 int main() {
     constexpr int x = f();
@@ -95,26 +94,34 @@ int main() {
         "/home/ykiko/C++/clice2/build/lib/clang/20",
     };
 
-    Compiler compiler;
-    compiler.buildPCM("main.cpp", mod, compileArgs);
-
-    auto invocation = createInvocation("main.cpp", code, compileArgs);
-    // compiler.applyPCH(*invocation, "main.cpp", code, "/home/ykiko/C++/clice2/build/cache/xxx.pch");
-    invocation->getHeaderSearchOpts().PrebuiltModuleFiles.emplace("M", "/home/ykiko/C++/clice2/build/cache/xxx.pcm");
-    auto instance = createInstance(std::move(invocation));
-    auto action = std::make_unique<clang::SyntaxOnlyAction>();
-
-    if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
-        llvm::errs() << "Failed to begin source file\n";
-        std::terminate();
+    {
+        Compiler compiler("main.cpp", mod, compileArgs);
+        compiler.generatePCM("/home/ykiko/C++/clice2/build/cache/M.pcm");
     }
 
-    if(auto error = action->Execute()) {
-        llvm::errs() << "Failed to execute action: " << error << "\n";
-        std::terminate();
-    }
+    static Compiler compiler("main.cpp", code, compileArgs);
+    compiler.applyPCM("/home/ykiko/C++/clice2/build/cache/M.pcm", "M");
+    compiler.buildAST();
+    compiler.tu()->dump();
 
-    instance->getASTContext().getTranslationUnitDecl()->dump();
+    class ModuleVisitor : public clang::RecursiveASTVisitor<ModuleVisitor> {
+    public:
+        bool VisitImportDecl(clang::ImportDecl* decl) {
+            for(auto loc: decl->getIdentifierLocs()) {
+                loc.dump(compiler.srcMgr());
+            }
+            auto mod = decl->getImportedModule();
+            mod->DefinitionLoc.dump(compiler.srcMgr());
+            // llvm::outs() << "Module: " << decl->getImportedModule()->getFullModuleName() << "\n";
+
+            return true;
+        }
+    };
+
+    ModuleVisitor visitor;
+    visitor.TraverseAST(compiler.context());
+
+    // instance->getASTContext().getTranslationUnitDecl()->dump();
 }
 
 }  // namespace

@@ -54,110 +54,118 @@ std::unique_ptr<clang::CompilerInstance> createInstance(std::shared_ptr<clang::C
     return instance;
 }
 
-void buildModule() {
-    clang::CompilerInvocation invocation;
+Compiler::Compiler(llvm::StringRef filepath,
+                   llvm::StringRef content,
+                   llvm::ArrayRef<const char*> args,
+                   llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs) : filepath(filepath), content(content) {
+    // TODO: figure out should we use createInvocation?
+    clang::CreateInvocationOptions options;
+    auto invocation = clang::createInvocation(args, options);
 
-    invocation.getLangOpts().SkipODRCheckInGMF = true;
+    instance = std::make_unique<clang::CompilerInstance>();
 
-    auto& search = invocation.getHeaderSearchOpts();
-    search.ValidateASTInputFilesContent = true;
+    instance->setInvocation(std::move(invocation));
 
-    // TODO: insert all module name with their corresponding module files.
-    auto& prebuilts = search.PrebuiltModuleFiles;
+    instance->createDiagnostics(new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()), true);
 
-    // TODO: must set pcm output file.
-    auto& frontend = invocation.getFrontendOpts();
-    frontend.OutputFile = "...";
-
-    auto instance = createInstance(std::make_shared<clang::CompilerInvocation>(invocation));
-
-    clang::GenerateReducedModuleInterfaceAction action;
-    instance->ExecuteAction(action);
-
-    // TODO: check this.
-    instance->getDiagnostics().hasErrorOccurred();
+    if(!instance->createTarget()) {
+        llvm::errs() << "Failed to create target\n";
+        std::terminate();
+    }
 }
 
-void Compiler::buildPCH(llvm::StringRef filename, llvm::StringRef content, llvm::ArrayRef<const char*> args) {
-    // compute preamble bounds, i.e. the range of the preamble.
-    // if MaxLines set to false(0), i.e. limit the number of lines.
-    auto bounds = clang::Lexer::ComputePreamble(content, {}, false);
+Compiler::~Compiler() {
+    if(action) {
+        action->EndSourceFile();
+    }
+}
 
-    auto invocation = createInvocation(filename, content.substr(0, bounds.Size), args);
-
-    auto instance = createInstance(std::move(invocation));
-
-    auto& frontend = instance->getFrontendOpts();
-    frontend.OutputFile = "/home/ykiko/C++/clice2/build/cache/xxx.pch";
-
+bool Compiler::applyPCH(llvm::StringRef filepath, std::uint32_t bound, bool endAtStart) {
+    // TODO: check reuseable?
     auto& preproc = instance->getPreprocessorOpts();
-    preproc.PrecompiledPreambleBytes.first = 0;
-    preproc.PrecompiledPreambleBytes.second = false;
-    preproc.GeneratePreamble = true;
+    preproc.UsePredefines = false;
+    preproc.ImplicitPCHInclude = filepath;
+    preproc.PrecompiledPreambleBytes.first = bound;
+    preproc.PrecompiledPreambleBytes.second = endAtStart;
+    preproc.DisablePCHOrModuleValidation = clang::DisableValidationForModuleKind::PCH;
+    return true;
+}
 
-    llvm::outs() << "bounds size: " << bounds.Size << "\n";
+bool Compiler::applyPCM(llvm::StringRef filepath, llvm::StringRef name) {
+    // TODO: check reuseable?
+    instance->getHeaderSearchOpts().PrebuiltModuleFiles.try_emplace(name.str(), filepath);
+    return true;
+}
 
-    // use to collect information in the process of building preamble, such as include files and macros
-    // TODO: inherit from clang::PreambleCallbacks and collect the information
-    clang::PreambleCallbacks callbacks = {};
+void Compiler::generatePCH(llvm::StringRef outpath, std::uint32_t bound, bool endAtStart) {
+    action = std::make_unique<clang::GeneratePCHAction>();
 
-    auto action = clang::GeneratePCHAction();
+    instance->getFrontendOpts().OutputFile = outpath;
 
-    if(!action.BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
+    auto buffer = llvm::MemoryBuffer::getMemBufferCopy(content.substr(0, bound));
+    instance->getPreprocessorOpts().addRemappedFile(filepath, buffer.release());
+
+    if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         llvm::errs() << "Failed to begin source file\n";
         std::terminate();
     }
 
-    if(auto error = action.Execute()) {
+    if(auto error = action->Execute()) {
         llvm::errs() << "Failed to execute action: " << error << "\n";
         std::terminate();
     }
-
-    // instance->getASTContext().getTranslationUnitDecl()->dump();
-
-    action.EndSourceFile();
 }
 
-void Compiler::applyPCH(clang::CompilerInvocation& invocation,
-                        llvm::StringRef filename,
-                        llvm::StringRef content,
-                        llvm::StringRef filepath) {
+void Compiler::generatePCM(llvm::StringRef outpath) {
+    action = std::make_unique<clang::GenerateReducedModuleInterfaceAction>();
 
-    auto bounds = clang::Lexer::ComputePreamble(content, invocation.getLangOpts(), false);
+    instance->getFrontendOpts().OutputFile = outpath;
 
-    auto& PreprocessorOpts = invocation.getPreprocessorOpts();
+    auto buffer = llvm::MemoryBuffer::getMemBufferCopy(content);
+    instance->getPreprocessorOpts().addRemappedFile(filepath, buffer.release());
 
-    PreprocessorOpts.PrecompiledPreambleBytes.first = bounds.Size;
-    PreprocessorOpts.PrecompiledPreambleBytes.second = bounds.PreambleEndsAtStartOfLine;
-    PreprocessorOpts.DisablePCHOrModuleValidation = clang::DisableValidationForModuleKind::PCH;
+    llvm::outs() << "file: " << filepath << "\n";
 
-    // key point
-    PreprocessorOpts.ImplicitPCHInclude = filepath;
-
-    PreprocessorOpts.UsePredefines = false;
-}
-
-void Compiler::buildPCM(llvm::StringRef filename, llvm::StringRef content, llvm::ArrayRef<const char*> args) {
-    auto invocation = createInvocation(filename, content, args);
-
-    auto instance = createInstance(std::move(invocation));
-
-    auto& frontend = instance->getFrontendOpts();
-    frontend.OutputFile = "/home/ykiko/C++/clice2/build/cache/xxx.pcm";
-
-    auto action = clang::GenerateReducedModuleInterfaceAction();
-
-    if(!action.BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
+    if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         llvm::errs() << "Failed to begin source file\n";
         std::terminate();
     }
 
-    if(auto error = action.Execute()) {
+    if(auto error = action->Execute()) {
         llvm::errs() << "Failed to execute action: " << error << "\n";
         std::terminate();
     }
+}
 
-    action.EndSourceFile();
+void Compiler::codeCompletion(llvm::StringRef filepath,
+                              std::uint32_t line,
+                              std::uint32_t column,
+                              clang::CodeCompleteConsumer* consumer) {
+    instance->setCodeCompletionConsumer(consumer);
+
+    auto& codeComplete = instance->getFrontendOpts().CodeCompletionAt;
+    codeComplete.FileName = filepath;
+    codeComplete.Line = line;
+    codeComplete.Column = column;
+
+    buildAST();
+}
+
+void Compiler::buildAST() {
+    action = std::make_unique<clang::SyntaxOnlyAction>();
+
+    auto buffer = llvm::MemoryBuffer::getMemBufferCopy(content);
+    instance->getPreprocessorOpts().addRemappedFile(filepath, buffer.release());
+
+    if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
+        llvm::errs() << "Failed to begin source file\n";
+        std::terminate();
+    }
+
+    if(auto error = action->Execute()) {
+        llvm::errs() << "Failed to execute action: " << error << "\n";
+        std::terminate();
+    }
 }
 
 }  // namespace clice

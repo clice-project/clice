@@ -23,7 +23,7 @@
             "program": "${workspaceFolder}/build/bin/clice_test",
             "args": [
                 "--test-dir=/home/ykiko/C++/clice2/tests/Source",
-                "--gtest_filter=clice.Compiler"
+                "--gtest_filter=clice.PCM"
             ],
             "cwd": "${workspaceFolder}"
         }

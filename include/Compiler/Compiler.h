@@ -16,32 +16,58 @@ std::unique_ptr<clang::CompilerInvocation> createInvocation(StringRef filename,
 
 std::unique_ptr<clang::CompilerInstance> createInstance(std::shared_ptr<clang::CompilerInvocation> invocation);
 
-/// - build AST
-/// - build module
-/// - build preamble
-/// - build CodeCompletion
 class Compiler {
 public:
-    Compiler(  // clang::DiagnosticsEngine& engine,
-        llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs = llvm::vfs::getRealFileSystem()) : vfs(vfs) {}
+    Compiler(llvm::StringRef filepath,
+             llvm::StringRef content,
+             llvm::ArrayRef<const char*> args,
+             llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs = llvm::vfs::getRealFileSystem());
 
-    /// build PreCompiledHeader.
-    void buildPCH(llvm::StringRef filename, llvm::StringRef content, llvm::ArrayRef<const char*> args);
+    ~Compiler();
 
-    void applyPCH(clang::CompilerInvocation& invocation,
-                  llvm::StringRef filename,
-                  llvm::StringRef content,
-                  llvm::StringRef filepath);
+    /// Is success, return true.
+    bool applyPCH(llvm::StringRef filepath, std::uint32_t bound, bool endAtStart = false);
 
-    /// build PreCompiledModule.
-    void buildPCM(llvm::StringRef filename, llvm::StringRef content, llvm::ArrayRef<const char*> args);
+    bool applyPCM(llvm::StringRef filepath, llvm::StringRef name);
 
     /// build AST.
     void buildAST();
 
+    /// Generate the PCH(PreCompiledHeader) to output path. Generally execute `clang::GeneratePCHAction`.
+    /// The Header part of the source file is stored in the PCH file. Bound is the size of the header part.
+    void generatePCH(llvm::StringRef outpath, std::uint32_t bound, bool endAtStart = false);
+
+    /// Generate the PCM(PreCompiledModule) to output path. Generally execute
+    /// `clang::GenerateReducedModuleInterfaceAction`.
+    void generatePCM(llvm::StringRef outpath);
+
+    void codeCompletion(llvm::StringRef filepath,
+                        std::uint32_t line,
+                        std::uint32_t column,
+                        clang::CodeCompleteConsumer* consumer);
+
+    clang::Sema& sema() {
+        return instance->getSema();
+    }
+
+    clang::SourceManager& srcMgr() {
+        return instance->getSourceManager();
+    }
+
+    clang::ASTContext& context() {
+        return instance->getASTContext();
+    }
+
+    clang::TranslationUnitDecl* tu() {
+        return instance->getASTContext().getTranslationUnitDecl();
+    }
+
 private:
-    // clang::DiagnosticsEngine& engine;
-    llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs;
+    std::string filepath;
+    std::string content;
+    std::unique_ptr<clang::FrontendAction> action;
+    std::unique_ptr<clang::CompilerInstance> instance;
+    std::unique_ptr<clang::syntax::TokenBuffer> buffer;
 };
 
 }  // namespace clice
