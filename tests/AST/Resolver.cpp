@@ -1,5 +1,6 @@
 #include "../Test.h"
 #include <Compiler/Resolver.h>
+#include <Compiler/Compiler.h>
 
 namespace {
 
@@ -16,13 +17,15 @@ std::vector<const char*> compileArgs = {
 struct Visitor : public clang::RecursiveASTVisitor<Visitor> {
     clang::QualType result;
     clang::QualType expect;
-    std::unique_ptr<ParsedAST> parsedAST;
+    clice::Compiler compiler;
 
-    Visitor(llvm::StringRef content) : parsedAST(ParsedAST::build("main.cpp", content, compileArgs)) {}
+    Visitor(llvm::StringRef content) : compiler("main.cpp", content, compileArgs) {
+        compiler.buildAST();
+    }
 
     bool VisitTypeAliasDecl(clang::TypeAliasDecl* decl) {
         if(decl->getName() == "result") {
-            TemplateResolver resolver(parsedAST->sema);
+            TemplateResolver resolver(compiler.sema());
             result = resolver.resolve(decl->getUnderlyingType());
         }
 
@@ -34,7 +37,7 @@ struct Visitor : public clang::RecursiveASTVisitor<Visitor> {
     }
 
     void test() {
-        auto decl = parsedAST->context.getTranslationUnitDecl();
+        auto decl = compiler.context().getTranslationUnitDecl();
         TraverseDecl(decl);
         EXPECT_EQ(result.getCanonicalType(), expect.getCanonicalType());
     }

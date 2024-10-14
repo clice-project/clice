@@ -53,29 +53,11 @@ private:
 TEST(clice, CodeCompletion) {
     auto invocation = clang::createInvocation(compileArgs, {});
 
-    auto& opt = invocation->getFrontendOpts().CodeCompletionAt;
-    opt.FileName = "/home/ykiko/C++/clice2/tests/Source/CodeCompletion/test2.h";
-    opt.Line = 2;
-    opt.Column = 7;
-
-    auto instance = createInstance(std::move(invocation));
-    instance->setCodeCompletionConsumer(new CodeCompletionConsumer());
-    auto action = std::make_unique<clang::SyntaxOnlyAction>();
-
-    // FIXME: test with preamble build, note we need to set `MaxLines` to avoid the bound exceed the location of non
-    // self contained file.
-
-    if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
-        llvm::errs() << "Failed to begin source file\n";
-        std::terminate();
-    }
-
-    if(auto error = action->Execute()) {
-        llvm::errs() << "Failed to execute action: " << error << "\n";
-        std::terminate();
-    }
-
-    instance->getASTContext().getTranslationUnitDecl()->dump();
+    Compiler compiler(compileArgs);
+    compiler.codeCompletion("/home/ykiko/C++/clice2/tests/Source/CodeCompletion/test.cpp",
+                            2,
+                            7,
+                            new CodeCompletionConsumer());
 }
 
 }  // namespace

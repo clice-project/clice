@@ -1,5 +1,6 @@
 #include "../Test.h"
 #include <Compiler/Resolver.h>
+#include <Compiler/Compiler.h>
 
 namespace {
 
@@ -16,31 +17,16 @@ std::vector<const char*> compileArgs = {
 struct Visitor : public clang::RecursiveASTVisitor<Visitor> {
     clang::QualType result;
     clang::QualType expect;
-    std::unique_ptr<ParsedAST> parsedAST;
+    clice::Compiler compiler;
 
-    Visitor(llvm::StringRef content) : parsedAST(ParsedAST::build("main.cpp", content, compileArgs)) {}
-
-    bool VisitVarDecl(clang::VarDecl* decl) {
-        if(decl->getName() == "x") {
-            decl->getType()->dump();
-            decl->getType()->castAs<clang::AutoType>()->getDeducedType().dump();
-            
-            auto expr = llvm::dyn_cast<clang::CallExpr>(decl->getInit());
-            auto unresolved = llvm::dyn_cast<clang::UnresolvedLookupExpr>(expr->getCallee());
-
-
-            for(auto decl: unresolved->decls()) {
-                llvm::outs() << "--------------------------\n";
-                decl->dump();
-            }
-        }
-
-        return true;
+    Visitor(llvm::StringRef content) : compiler("main.cpp", content, compileArgs) {
+        compiler.buildAST();
     }
 
     void test() {
-        auto decl = parsedAST->context.getTranslationUnitDecl();
+        auto decl = compiler.context().getTranslationUnitDecl();
         TraverseDecl(decl);
+        EXPECT_EQ(result.getCanonicalType(), expect.getCanonicalType());
     }
 };
 

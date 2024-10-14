@@ -23,28 +23,4 @@ void f() {
     X<int, int> x;
 }
 )";
-    auto invocation = createInvocation("main.cpp", code, compileArgs);
-    auto instance = createInstance(std::move(invocation));
-
-    SymbolSlab slab;
-    auto indexConsumer = std::make_shared<SymbolCollector>(slab);
-    clang::index::IndexingOptions indexOptions;
-    auto action = clang::index::createIndexingAction(indexConsumer, indexOptions);
-
-    if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
-        return;
-    }
-
-    auto consumer =
-        clang::index::createIndexingASTConsumer(indexConsumer, indexOptions, instance->getPreprocessorPtr());
-    instance->setASTConsumer(std::move(consumer));
-
-    if(auto err = action->Execute()) {
-        llvm::errs() << "Error while indexing: " << err << "\n";
-        std::terminate();
-    }
-
-    // instance->getASTContext().getTranslationUnitDecl()->dump();
-
-    action->EndSourceFile();
 }

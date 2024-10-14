@@ -9,12 +9,12 @@ namespace clice {
 
 class Preamble;
 
-std::unique_ptr<clang::CompilerInvocation> createInvocation(StringRef filename,
-                                                            StringRef content,
-                                                            llvm::ArrayRef<const char*> args,
-                                                            Preamble* preamble = nullptr);
-
-std::unique_ptr<clang::CompilerInstance> createInstance(std::shared_ptr<clang::CompilerInvocation> invocation);
+// std::unique_ptr<clang::CompilerInvocation> createInvocation(StringRef filename,
+//                                                             StringRef content,
+//                                                             llvm::ArrayRef<const char*> args,
+//                                                             Preamble* preamble = nullptr);
+//
+// std::unique_ptr<clang::CompilerInstance> createInstance(std::shared_ptr<clang::CompilerInvocation> invocation);
 
 class Compiler {
 public:
@@ -22,6 +22,10 @@ public:
              llvm::StringRef content,
              llvm::ArrayRef<const char*> args,
              llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs = llvm::vfs::getRealFileSystem());
+
+    Compiler(llvm::ArrayRef<const char*> args,
+             llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs = llvm::vfs::getRealFileSystem()) :
+        Compiler("", "", args, vfs) {}
 
     ~Compiler();
 
@@ -61,6 +65,9 @@ public:
     clang::TranslationUnitDecl* tu() {
         return instance->getASTContext().getTranslationUnitDecl();
     }
+
+private:
+    void ExecuteAction();
 
 private:
     std::string filepath;
