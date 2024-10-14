@@ -1,3 +1,5 @@
+#! /usr/bin/bash
+
 cmake -B build-runtime -S ./runtimes -G Ninja \
 -DCMAKE_BUILD_TYPE=Release \
 -DLLVM_ENABLE_PROJECTS="clang" \

@@ -7,6 +7,7 @@
 #include <Support/FileSystem.h>
 #include <llvm/ADT/SmallString.h>
 
+#include <iomanip>
 namespace clice::logger {
 
 inline auto init(std::string_view type, std::string_view filepath) {
