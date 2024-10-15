@@ -2,6 +2,7 @@
 #include <Compiler/Preamble.h>
 
 #include <clang/Lex/PreprocessorOptions.h>
+#include <clang/Frontend/TextDiagnosticPrinter.h>
 
 namespace clice {
 
@@ -9,13 +10,15 @@ static void setInvocation(clang::CompilerInvocation& invocation) {
     clang::LangOptions& langOpts = invocation.getLangOpts();
     langOpts.CommentOpts.ParseAllComments = true;
     langOpts.RetainCommentsFromSystemHeaders = true;
+
+    // FIXME: add more.
 }
 
 Compiler::Compiler(llvm::StringRef filepath,
                    llvm::StringRef content,
                    llvm::ArrayRef<const char*> args,
                    llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs) : filepath(filepath), content(content) {
-    // TODO: figure out should we use createInvocation?
+    // FIXME: figure out should we use createInvocation?
     clang::CreateInvocationOptions options;
     auto invocation = clang::createInvocation(args, options);
 
@@ -23,6 +26,7 @@ Compiler::Compiler(llvm::StringRef filepath,
 
     instance->setInvocation(std::move(invocation));
 
+    // FIXME: customize DiagnosticConsumer
     instance->createDiagnostics(new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()), true);
 
     if(!instance->createTarget()) {
@@ -32,7 +36,7 @@ Compiler::Compiler(llvm::StringRef filepath,
 }
 
 bool Compiler::applyPCH(llvm::StringRef filepath, std::uint32_t bound, bool endAtStart) {
-    // TODO: check reuseable?
+    // FIXME: check reuseable?
     auto& preproc = instance->getPreprocessorOpts();
     preproc.UsePredefines = false;
     preproc.ImplicitPCHInclude = filepath;
@@ -43,7 +47,7 @@ bool Compiler::applyPCH(llvm::StringRef filepath, std::uint32_t bound, bool endA
 }
 
 bool Compiler::applyPCM(llvm::StringRef filepath, llvm::StringRef name) {
-    // TODO: check reuseable?
+    // FIXME: check reuseable?
     instance->getHeaderSearchOpts().PrebuiltModuleFiles.try_emplace(name.str(), filepath);
     return true;
 }
@@ -89,10 +93,24 @@ void Compiler::ExecuteAction() {
         std::terminate();
     }
 
+    auto& preproc = instance->getPreprocessor();
+
+    // FIXME: add PPCallbacks to collect information.
+
+    // Beacuse CompilerInstance may create new Preprocessor in `BeginSourceFile`,
+    // So we must need to create TokenCollector here.
+    clang::syntax::TokenCollector collector{preproc};
+
+    // FIXME: clang-tidy, include-fixer, etc?
+
     if(auto error = action->Execute()) {
         llvm::errs() << "Failed to execute action: " << error << "\n";
         std::terminate();
     }
+
+    // Build TokenBuffer and index expanded tokens for improving performance.
+    buffer = std::make_unique<clang::syntax::TokenBuffer>(std::move(collector).consume());
+    buffer->indexExpandedTokens();
 }
 
 Compiler::~Compiler() {

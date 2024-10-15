@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Directive.h"
+#include <Compiler/Clang.h>
 
 namespace clice {
 

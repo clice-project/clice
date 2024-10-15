@@ -1,9 +1,6 @@
 #pragma once
 
-#include "ParsedAST.h"
-#include <clang/Sema/Lookup.h>
-#include <clang/Sema/Template.h>
-#include <stack>
+#include <Compiler/Clang.h>
 
 namespace clice {
 
@@ -21,6 +18,7 @@ public:
 
     // TODO:
     // use a relative clear way to resolve `UnresolvedLookupExpr`.
+
 private:
     clang::Sema& sema;
 };

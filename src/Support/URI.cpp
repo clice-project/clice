@@ -1,6 +1,6 @@
 #include <Support/URI.h>
 #include <Support/FileSystem.h>
-
+#include <Support/ADT.h>
 namespace clice {
 
 /// returns true if the scheme is valid according to RFC 3986.

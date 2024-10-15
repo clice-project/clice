@@ -19,28 +19,28 @@ struct Occurrence;
 /// [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html).
 struct CSIF {
     /// The version of the CSIF format.
-    StringRef version;
+    llvm::StringRef version;
     /// The language of the source code, currently only supports "c" and "c++".
-    StringRef language;
+    llvm::StringRef language;
     /// The URI of the source file.
-    StringRef uri;
+    llvm::StringRef uri;
     /// The context of the source file, used to check whether need to re-index the source file.
-    StringRef content;
+    llvm::StringRef content;
     /// The commands used to compile the source file.
-    ArrayRef<StringRef> commands;
+    llvm::ArrayRef<llvm::StringRef> commands;
 
     /// The symbols in the source file.
-    ArrayRef<Symbol> symbols;
+    llvm::ArrayRef<Symbol> symbols;
     /// The occurrences in the source file.
-    ArrayRef<Occurrence> occurrences;
+    llvm::ArrayRef<Occurrence> occurrences;
     /// The semantic tokens in the source file.
-    ArrayRef<std::uint32_t> semanticTokens;
+    llvm::ArrayRef<std::uint32_t> semanticTokens;
 
     // FIXME:
     /// The diagnostics in the source file.
-    // ArrayRef<Diagnostic> diagnostics;
+    // llvm::ArrayRef<Diagnostic> diagnostics;
     /// The inlay hints in the source file.
-    // ArrayRef<InlayHint> inlayHints;
+    // llvm::ArrayRef<InlayHint> inlayHints;
 };
 
 enum Role {
@@ -69,12 +69,12 @@ struct Symbol {
     /// The ID of the symbol.
     SymbolID id;
     /// display when hover.
-    StringRef document;
+    llvm::StringRef document;
 
     // TODO: append more useful information.
 
     /// The relations of the symbol.
-    ArrayRef<Relation> relations;
+    llvm::ArrayRef<Relation> relations;
 };
 
 struct Occurrence {

@@ -25,16 +25,16 @@ struct Metadata {
 
 class Encoder {
 public:
-    void encode(StringRef& string) {
+    void encode(llvm::StringRef& string) {
         std::size_t offset = stringData.size();
         stringData.insert(stringData.end(), string.begin(), string.end());
         stringData.push_back('\0');
         // modify pointer to offset
-        string = StringRef(reinterpret_cast<char*>(offset), string.size());
+        string = llvm::StringRef(reinterpret_cast<char*>(offset), string.size());
     }
 
     template <typename T>
-    void encode(ArrayRef<T>& array) {
+    void encode(llvm::ArrayRef<T>& array) {
         std::size_t offset = arrayData.size();
         arrayData.reserve(arrayData.size() + array.size() * sizeof(T));
         for(auto elem: array) {
@@ -44,7 +44,7 @@ public:
             arrayData.insert(arrayData.end(), begin, begin + sizeof(T));
         }
         // modify pointer to offset
-        array = ArrayRef<T>(reinterpret_cast<T*>(offset), array.size());
+        array = llvm::ArrayRef<T>(reinterpret_cast<T*>(offset), array.size());
     }
 
     template <typename T>
@@ -91,13 +91,13 @@ private:
 
 class Decoder {
 public:
-    void decode(StringRef& string) {
-        string = StringRef(data + stringOffset, string.size());
+    void decode(llvm::StringRef& string) {
+        string = llvm::StringRef(data + stringOffset, string.size());
     }
 
     template <typename T>
-    void decode(ArrayRef<T>& array) {
-        array = ArrayRef<T>(reinterpret_cast<T*>(data + arrayOffset), array.size());
+    void decode(llvm::ArrayRef<T>& array) {
+        array = llvm::ArrayRef<T>(reinterpret_cast<T*>(data + arrayOffset), array.size());
         for(auto& elem: array) {
             decodeMemberRef(const_cast<T&>(elem));
         }

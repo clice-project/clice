@@ -1,5 +1,6 @@
 #include "../Test.h"
 #include <Compiler/Selection.h>
+#include <Compiler/Compiler.h>
 
 namespace {
 
@@ -15,13 +16,22 @@ using namespace clice;
 
 TEST(clice, SelectionTree) {
     foreachFile("SelectionTree", [](std::string file, llvm::StringRef content) {
-        // auto compiler = Compiler("main.cpp", content, compileArgs);
-        // auto AST = ParsedAST::build("main.cpp", content, compileArgs);
-        // auto id = AST->getFileID("main.cpp");
-        // auto& sm = AST->context.getSourceManager();
-        // auto begin = sm.translateLineCol(id, 7, 17);
-        // auto end = sm.translateLineCol(id, 7, 17);
-        // SelectionTree tree(sm.getFileOffset(begin), sm.getFileOffset(end), AST->context, AST->tokenBuffer);
+        auto compiler = Compiler("main.cpp", content, compileArgs);
+        compiler.buildAST();
+        auto& fileMgr = compiler.fileMgr();
+        auto entry = fileMgr.getFileRef("main.cpp");
+        if(!entry) {
+            llvm::outs() << "Failed to get file id\n";
+            std::terminate();
+        }
+        auto& srcMgr = compiler.srcMgr();
+        auto id = srcMgr.translateFile(*entry);
+        auto begin = srcMgr.translateLineCol(id, 7, 17);
+        auto end = srcMgr.translateLineCol(id, 7, 17);
+        SelectionTree tree(srcMgr.getFileOffset(begin),
+                           srcMgr.getFileOffset(end),
+                           compiler.context(),
+                           compiler.tokBuf());
     });
 }
 

@@ -1,4 +1,6 @@
-#include "Diagnostic.h"
+#pragma once
+
+#include <Compiler/Clang.h>
 
 namespace clice {
 

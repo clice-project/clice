@@ -1,20 +1,8 @@
 #pragma once
 
-#include <Support/ADT.h>
-#include <clang/Frontend/CompilerInstance.h>
+#include <Compiler/Clang.h>
 
 namespace clice {
-
-// TODO:
-
-class Preamble;
-
-// std::unique_ptr<clang::CompilerInvocation> createInvocation(StringRef filename,
-//                                                             StringRef content,
-//                                                             llvm::ArrayRef<const char*> args,
-//                                                             Preamble* preamble = nullptr);
-//
-// std::unique_ptr<clang::CompilerInstance> createInstance(std::shared_ptr<clang::CompilerInvocation> invocation);
 
 class Compiler {
 public:
@@ -34,7 +22,7 @@ public:
 
     bool applyPCM(llvm::StringRef filepath, llvm::StringRef name);
 
-    /// build AST.
+    /// Build AST.
     void buildAST();
 
     /// Generate the PCH(PreCompiledHeader) to output path. Generally execute `clang::GeneratePCHAction`.
@@ -45,6 +33,7 @@ public:
     /// `clang::GenerateReducedModuleInterfaceAction`.
     void generatePCM(llvm::StringRef outpath);
 
+    /// Run code complete in given file and location.
     void codeCompletion(llvm::StringRef filepath,
                         std::uint32_t line,
                         std::uint32_t column,
@@ -52,6 +41,10 @@ public:
 
     clang::Sema& sema() {
         return instance->getSema();
+    }
+
+    clang::FileManager& fileMgr() {
+        return instance->getFileManager();
     }
 
     clang::SourceManager& srcMgr() {
@@ -64,6 +57,10 @@ public:
 
     clang::TranslationUnitDecl* tu() {
         return instance->getASTContext().getTranslationUnitDecl();
+    }
+
+    clang::syntax::TokenBuffer& tokBuf() {
+        return *buffer;
     }
 
 private:

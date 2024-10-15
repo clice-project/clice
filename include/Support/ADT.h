@@ -9,9 +9,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SmallString.h>
 
+#include <llvm/ADT/StringExtras.h>
+
 namespace clice {
-using llvm::ArrayRef;
-using llvm::StringRef;
-using llvm::SmallVector;
-using llvm::SmallString;
 }  // namespace clice

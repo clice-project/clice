@@ -7,7 +7,7 @@ namespace clice::dependencies {
 namespace {
 
 /// module name -> file path.
-llvm::StringMap<StringRef> moduleMap;
+llvm::StringMap<llvm::StringRef> moduleMap;
 llvm::BumpPtrAllocator allocator;
 
 void scan() {
@@ -23,7 +23,7 @@ void scan() {
 
 }  // namespace
 
-void load(ArrayRef<StringRef> dirs) {
+void load(llvm::ArrayRef<llvm::StringRef> dirs) {
     for(auto dir: dirs) {
 
         std::string message;

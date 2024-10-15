@@ -1,5 +1,6 @@
-#include "ParsedAST.h"
-#include <clang/AST/ASTTypeTraits.h>
+#pragma once
+
+#include <Compiler/Clang.h>
 
 namespace clice {
 
