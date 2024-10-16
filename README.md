@@ -2,6 +2,7 @@
 
 clice is a new language server for c/c++. It is still in the early stages of development, so just wait for a few months.
 
+Current progress is recorded in issues, feel free to share your ideas and suggestions!
 
 # Why write a new language server?
 
