@@ -4,47 +4,58 @@
 
 namespace clice {
 
-class SymbolID {
-public:
-    SymbolID() = default;
-
-    explicit SymbolID(llvm::StringRef USR) {
-        this->USR = USR;
-        m_hash = llvm::xxHash64(USR);
-    }
-
-    bool operator== (const SymbolID&) const = default;
-
-    llvm::hash_code hash() const {
-        return m_hash;
-    }
-
-private:
+/// A unique identifier for a symbol.
+struct SymbolID {
+    std::uint64_t value;
     llvm::StringRef USR;
-    std::uint64_t m_hash;
+
+    static SymbolID fromKind(std::uint64_t value) {
+        return SymbolID{value, ""};
+    }
+
+    /// Create a SymbolID from a USR. Note that SymbolID doesn't own the USR string.
+    static SymbolID fromUSR(llvm::StringRef USR) {
+        return SymbolID{llvm::hash_value(USR), USR};
+    }
+
+    friend bool operator== (const SymbolID&, const SymbolID&) = default;
+
+    friend std::strong_ordering operator<=> (const SymbolID& lhs, const SymbolID& rhs) {
+        auto cmp = lhs.value <=> rhs.value;
+        if(cmp != std::strong_ordering::equal) {
+            return cmp;
+        }
+        return lhs.USR.compare(rhs.USR) <=> 0;
+    }
+
+    bool isUSR() const {
+        return !USR.empty();
+    }
 };
 
 }  // namespace clice
 
 namespace llvm {
 
+using clice::SymbolID;
+
 template <>
-struct DenseMapInfo<clice::SymbolID> {
-    inline static clice::SymbolID getEmptyKey() {
-        static clice::SymbolID EMPTY_KEY("EMPTY_KEY");
+struct DenseMapInfo<SymbolID> {
+    inline static SymbolID getEmptyKey() {
+        static SymbolID EMPTY_KEY = SymbolID::fromKind(std::numeric_limits<uint64_t>::max());
         return EMPTY_KEY;
     }
 
-    inline static clice::SymbolID getTombstoneKey() {
-        static clice::SymbolID TOMBSTONE_KEY("TOMBSTONE_KEY");
+    inline static SymbolID getTombstoneKey() {
+        static SymbolID TOMBSTONE_KEY = SymbolID::fromKind(std::numeric_limits<uint64_t>::max() - 1);
         return TOMBSTONE_KEY;
     }
 
-    inline static llvm::hash_code getHashValue(const clice::SymbolID& ID) {
-        return ID.hash();
+    inline static llvm::hash_code getHashValue(const SymbolID& ID) {
+        return ID.value;
     }
 
-    inline static bool isEqual(const clice::SymbolID& LHS, const clice::SymbolID& RHS) {
+    inline static bool isEqual(const SymbolID& LHS, const SymbolID& RHS) {
         return LHS == RHS;
     }
 };

@@ -44,6 +44,7 @@ struct CSIF {
 };
 
 enum Role {
+    Keyword,
     Declaration,
     Definition,
     Reference,
@@ -52,8 +53,15 @@ enum Role {
     Override,
     Write,
     Read,
+    
+    ExplicitInstantiation,
+    ImplicitInstantiation,
     // TODO:
 };
+
+inline bool isRole(Role role, Role target) {
+    return role & target;
+}
 
 struct Relation {
     /// The target of the relation. For declaration and definition, it's empty.
@@ -63,6 +71,14 @@ struct Relation {
     Role role;
     /// The range of the target, maybe empty.
     // Range range;
+};
+
+enum class SymbolKind {
+    Module,
+    Namespace,
+    Class,
+    Struct,
+    Local,
 };
 
 struct Symbol {
