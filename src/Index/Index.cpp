@@ -9,7 +9,8 @@ class SymbolCollector : public clang::RecursiveASTVisitor<SymbolCollector> {
     using Base = clang::RecursiveASTVisitor<SymbolCollector>;
 
 public:
-    SymbolCollector(SymbolSlab& builder) : builder(builder) {}
+    SymbolCollector(SymbolSlab& slab, clang::ASTContext& context) :
+        slab(slab), context(context), srcMgr(context.getSourceManager()) {}
 
     bool TraverseDecl(clang::Decl* decl) {
         /// `TranslationUnitDecl` has invalid location information.
@@ -18,7 +19,18 @@ public:
             return Base::TraverseDecl(decl);
         }
 
-        builder.addSymbol(decl);
+        if(decl->isImplicit()) {
+            return true;
+        }
+
+        slab.addSymbol(decl);
+        llvm::outs() << "------------------------------------------\n";
+        decl->dump();
+
+        llvm::SmallString<128> USR;
+        clang::index::generateUSRForDecl(decl, USR);
+        llvm::outs() << "USR: " << USR << "\n";
+
         // TODO: generate SymbolID for every decl.
         // Distinguish linkage, for no or internal linkage.
         // For them, relation lookup is only occurred in current TU.
@@ -132,7 +144,30 @@ public:
     }
 
     VISIT_TYOELOC(TemplateSpecializationTypeLoc) {
-        auto range = loc.getTemplateNameLoc();
+        auto name = loc.getTypePtr()->getTemplateName().getUnderlying();
+        auto decl = name.getAsTemplateDecl();
+        if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(decl)) {
+            auto nameLoc = loc.getTemplateNameLoc();
+            auto line = srcMgr.getPresumedLineNumber(nameLoc);
+            auto column = srcMgr.getPresumedColumnNumber(nameLoc);
+            protocol::Range range = {line,
+                                     column,
+                                     line,
+                                     static_cast<protocol::uinteger>(column + decl->getName().size())};
+
+            void* ptr = CTD;
+            clang::ClassTemplateSpecializationDecl* decl2 =
+                CTD->findSpecialization(loc.getTypePtr()->template_arguments(), ptr);
+            auto main = decl2->getSpecializedTemplateOrPartial();
+
+            if(main.is<clang::ClassTemplateDecl*>()) {
+                auto decl3 = main.get<clang::ClassTemplateDecl*>();
+                slab.addOccurrence(decl3, range, Role::ExplicitInstantiation);
+            } else {
+                auto decl3 = main.get<clang::ClassTemplatePartialSpecializationDecl*>();
+                slab.addOccurrence(decl3, range, Role::ExplicitInstantiation);
+            }
+        }
         return true;
     }
 
@@ -140,14 +175,16 @@ public:
     // MemberPointerTypeLoc
 
 private:
-    SymbolSlab& builder;
+    SymbolSlab& slab;
+    clang::ASTContext& context;
+    clang::SourceManager& srcMgr;
 };
 
 }  // namespace
 
 CSIF SymbolSlab::index(clang::ASTContext& context) {
     CSIF csif;
-    SymbolCollector collector(*this);
+    SymbolCollector collector(*this, context);
     collector.TraverseAST(context);
 
     csif.version = "0.1";

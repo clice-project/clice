@@ -3,20 +3,29 @@
 
 namespace clice {
 
+std::size_t SymbolSlab::lookup(const clang::Decl* decl) {
+    auto iter = cache.find(decl);
+    if(iter == cache.end()) {
+        llvm::outs() << "SymbolSlab::lookup: decl not found\n";
+        std::terminate();
+    }
+    return iter->second;
+}
+
 SymbolSlab& SymbolSlab::addSymbol(const clang::Decl* decl) {
     // Generate and save USR.
     llvm::SmallString<128> USR;
     clang::index::generateUSRForDecl(decl, USR);
-    saver.save(USR.str());
 
-    if(cache.contains(decl)) {
-        llvm::outs() << "SymbolSlab::addSymbol: decl already exists\n";
-        std::terminate();
+    if(!symbolIndex.contains(SymbolID::fromUSR(USR))) {
+        auto ID = SymbolID::fromUSR(saver.save(USR.str()));
+        symbols.emplace_back(ID);
+        cache.try_emplace(decl, symbols.size() - 1);
+        symbolIndex.try_emplace(ID, symbols.size() - 1);
+    } else {
+        cache.try_emplace(decl, symbolIndex[SymbolID::fromUSR(USR)]);
     }
 
-    auto index = symbols.size();
-    symbols.emplace_back(SymbolID::fromUSR(USR.str()));
-    cache.try_emplace(decl, index);
     return *this;
 }
 

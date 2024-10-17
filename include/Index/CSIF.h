@@ -71,7 +71,7 @@ struct Relation {
     /// The role of the relation.
     Role role;
     /// The range of the target, maybe empty.
-    // Range range;
+    protocol::Range range;
 };
 
 enum class SymbolKind {

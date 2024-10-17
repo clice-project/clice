@@ -1,13 +1,14 @@
-namespace {
+template <typename T, typename U>
+struct X {
+    using type = char;
+};
+
 template <typename T>
-struct A {};
+struct X<T, T> {
+    using type = int;
+};
 
-template <>
-struct A<int> {};
-
-}  // namespace
-
-int main() {
-    A<int> a;
-    return 0;
+void f() {
+    typename X<char, int>::type y;
+    typename X<int, int>::type x;
 }
