@@ -1,8 +1,8 @@
 #pragma once
 
+#include <array>
 #include <llvm/Support/JSON.h>
 #include <Support/Reflection.h>
-#include <array>
 
 namespace clice::json {
 
@@ -18,6 +18,9 @@ template <typename T, typename A>
 constexpr inline bool is_array_v<std::vector<T, A>> = true;
 
 template <typename T>
+constexpr inline bool is_array_v<llvm::ArrayRef<T>> = true;
+
+template <typename T>
 constexpr inline bool is_string_v = false;
 
 template <>
@@ -31,7 +34,8 @@ constexpr inline bool is_string_v<llvm::StringRef> = true;
 
 template <typename T>
 constexpr inline bool is_integral_v =
-    std::is_same_v<T, int> || std::is_same_v<T, unsigned> || std::is_same_v<T, long> || std::is_same_v<T, long long>;
+    std::is_same_v<T, int> || std::is_same_v<T, unsigned> || std::is_same_v<T, long> ||
+    std::is_same_v<T, unsigned long> || std::is_same_v<T, long long> || std::is_same_v<T, unsigned long long>;
 
 template <typename Value>
 json::Value serialize(const Value& value) {

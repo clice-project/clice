@@ -3,7 +3,7 @@
 #include <Support/ADT.h>
 #include <Protocol/Basic.h>
 
-#include "SymbolID.h"
+#include <Index/Symbol.h>
 
 namespace clice {
 
@@ -33,8 +33,9 @@ struct CSIF {
     llvm::ArrayRef<Symbol> symbols;
     /// The occurrences in the source file.
     llvm::ArrayRef<Occurrence> occurrences;
-    /// The semantic tokens in the source file.
-    llvm::ArrayRef<std::uint32_t> semanticTokens;
+
+    ///// The semantic tokens in the source file.
+    // llvm::ArrayRef<std::uint32_t> semanticTokens;
 
     // FIXME:
     /// The diagnostics in the source file.
@@ -53,7 +54,7 @@ enum Role {
     Override,
     Write,
     Read,
-    
+
     ExplicitInstantiation,
     ImplicitInstantiation,
     // TODO:
@@ -83,7 +84,7 @@ enum class SymbolKind {
 
 struct Symbol {
     /// The ID of the symbol.
-    SymbolID id;
+    SymbolID ID;
     /// display when hover.
     llvm::StringRef document;
 
@@ -97,7 +98,7 @@ struct Occurrence {
     /// The ID of the symbol.
     SymbolID symbol;
     /// The range of the occurrence.
-    // Range range;
+    protocol::Range range;
     /// The role of the occurrence.
     Role role;
 };

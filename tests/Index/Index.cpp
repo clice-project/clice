@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
-#include <Index/Index.h>
+#include <Index/SymbolSlab.h>
+#include <Support/JSON.h>
+#include <Compiler/Compiler.h>
 
 using namespace clice;
 
-TEST(clice_test, index) {
+TEST(clice, Index) {
     std::vector<const char*> compileArgs = {
         "clang++",
         "-std=c++20",
@@ -21,4 +23,11 @@ void f() {
     X<int, int> x;
 }
 )";
+
+    Compiler compiler("main.cpp", code, compileArgs);
+    compiler.buildAST();
+    SymbolSlab slab;
+    auto csif = slab.index(compiler.context());
+    auto value = json::serialize(csif);
+    llvm::outs() << value << "\n";
 }
