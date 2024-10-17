@@ -19,6 +19,8 @@ public:
     // TODO:
     // use a relative clear way to resolve `UnresolvedLookupExpr`.
 
+
+    // TODO: desugar UsingType.
 private:
     clang::Sema& sema;
 };

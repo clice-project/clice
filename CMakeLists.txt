@@ -24,7 +24,7 @@ endif()
 
 function(target_clang target)
     target_precompile_headers(${target} PRIVATE 
-        "${CMAKE_SOURCE_DIR}/include/Compiler/Diagnostic.h"
+        "${CMAKE_SOURCE_DIR}/include/Compiler/Clang.h"
     )
     target_include_directories(${target} PRIVATE 
         ${LLVM_INCLUDE_DIRS}

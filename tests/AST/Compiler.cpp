@@ -69,6 +69,8 @@ export module M;
 export constexpr int f() {
     return 42;
 }
+
+export void x;
 )";
 
     const char* code = R"(
@@ -98,6 +100,8 @@ int main() {
         Compiler compiler("main.cpp", mod, compileArgs);
         compiler.generatePCM("/home/ykiko/C++/clice2/build/cache/M.pcm");
     }
+
+    llvm::outs() << "=====================\n";
 
     static Compiler compiler("main.cpp", code, compileArgs);
     compiler.applyPCM("/home/ykiko/C++/clice2/build/cache/M.pcm", "M");

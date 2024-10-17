@@ -9,11 +9,13 @@ public:
     Compiler(llvm::StringRef filepath,
              llvm::StringRef content,
              llvm::ArrayRef<const char*> args,
+             clang::DiagnosticConsumer* consumer = nullptr,
              llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs = llvm::vfs::getRealFileSystem());
 
     Compiler(llvm::ArrayRef<const char*> args,
+             clang::DiagnosticConsumer* consumer = nullptr,
              llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs = llvm::vfs::getRealFileSystem()) :
-        Compiler("", "", args, vfs) {}
+        Compiler("", "", args, consumer, vfs) {}
 
     ~Compiler();
 

@@ -1,10 +1,13 @@
-template <typename U>
-void foo(U) {}
-
+namespace {
 template <typename T>
-int foo(T) {}
+struct A {};
 
-template <typename T>
-void bar(T t) {
-    auto x = foo(t);
+template <>
+struct A<int> {};
+
+}  // namespace
+
+int main() {
+    A<int> a;
+    return 0;
 }

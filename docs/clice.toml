@@ -40,3 +40,9 @@ parens = false
 [inlay-hint]
 # the maximum length of the inlay hint text.
 max-length = 20
+
+# If array initializer elements are more than this, no inlay hints will be shown.
+max-array-elements = 3
+
+# Show implicit cast as hint like `1 as int`
+implicit-cast = true

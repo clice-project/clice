@@ -17,6 +17,7 @@ static void setInvocation(clang::CompilerInvocation& invocation) {
 Compiler::Compiler(llvm::StringRef filepath,
                    llvm::StringRef content,
                    llvm::ArrayRef<const char*> args,
+                   clang::DiagnosticConsumer* consumer,
                    llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs) : filepath(filepath), content(content) {
     // FIXME: figure out should we use createInvocation?
     clang::CreateInvocationOptions options;
@@ -27,7 +28,12 @@ Compiler::Compiler(llvm::StringRef filepath,
     instance->setInvocation(std::move(invocation));
 
     // FIXME: customize DiagnosticConsumer
-    instance->createDiagnostics(new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()), true);
+    if(consumer) {
+        instance->createDiagnostics(consumer, true);
+    } else {
+        instance->createDiagnostics(new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()),
+                                    true);
+    }
 
     if(!instance->createTarget()) {
         llvm::errs() << "Failed to create target\n";
@@ -74,10 +80,10 @@ void Compiler::codeCompletion(llvm::StringRef filepath,
                               std::uint32_t line,
                               std::uint32_t column,
                               clang::CodeCompleteConsumer* consumer) {
-    auto& codeComplete = instance->getFrontendOpts().CodeCompletionAt;
-    codeComplete.FileName = filepath;
-    codeComplete.Line = line;
-    codeComplete.Column = column;
+    auto& completion = instance->getFrontendOpts().CodeCompletionAt;
+    completion.FileName = filepath;
+    completion.Line = line;
+    completion.Column = column;
     instance->setCodeCompletionConsumer(consumer);
     buildAST();
 }

@@ -147,6 +147,13 @@ void eventloop(uv_idle_t* handle) {
 
 auto Server::initialize(protocol::InitializeParams params) -> protocol::InitializeResult {
     config::init(URI::resolve(params.workspaceFolders[0].uri));
+
+    // TODO: sacn module:
+
+    // TODO: load index result
+
+    // TODO: initialize dependencies
+
     return protocol::InitializeResult();
 }
 
