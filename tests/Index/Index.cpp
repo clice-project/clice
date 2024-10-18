@@ -25,5 +25,6 @@ TEST(clice, Index) {
         llvm::raw_fd_ostream fileStream("output.json", EC);
         fileStream << value << "\n";
         llvm::outs() << value << "\n";
+        // compiler.context().getTranslationUnitDecl()->dump();
     });
 }

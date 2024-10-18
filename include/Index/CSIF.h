@@ -44,42 +44,55 @@ struct CSIF {
     // llvm::ArrayRef<InlayHint> inlayHints;
 };
 
-enum Role {
-    Keyword,
+/// Note that it's possible to have multiple roles at the same time.
+enum class Role {
+    Invalid,
     Declaration,
     Definition,
     Reference,
-    TypeDefinition,
-    Base,
-    Override,
-    Write,
+    // Write Relation.
     Read,
+    Write,
+    Interface,
+    Implementation,
+    /// When target is a type definition of source, source is possible type or constructor.
+    TypeDefinition,
 
-    ExplicitInstantiation,
+    /// When target is a base class of source.
+    Base,
+    /// When target is a derived class of source.
+    Derived,
+
+    /// When target is a constructor of source.
+    Constructor,
+    /// When target is a destructor of source.
+    Destructor,
+
+    /// When target is a partial specialization of source.
+    PartialSpecialization,
+    /// When target is a full specialization of source.
+    FullSpecialization,
+    /// When target is an explicit instantiation of source.
     ImplicitInstantiation,
-    // TODO:
+
+    // When target is a caller of source.
+    Caller,
+    // When target is a callee of source.
+    Callee,
 };
 
-inline bool isRole(Role role, Role target) {
-    return role & target;
-}
-
-struct Relation {
-    /// The target of the relation. For declaration and definition, it's empty.
-    /// For reference, it's the ID of the symbol which references.
-    SymbolID target;
-    /// The role of the relation.
-    Role role;
-    /// The range of the target, maybe empty.
+struct Location {
+    proto::DocumentUri uri;
     proto::Range range;
 };
 
-enum class SymbolKind {
-    Module,
-    Namespace,
-    Class,
-    Struct,
-    Local,
+/// If symbol A has a relation to symbol B with role R.
+/// For example, `Caller`. Then we say B is a caller of A.
+struct Relation {
+    /// The role of the relation.
+    Role role;
+    /// The location of the related symbol.
+    Location location;
 };
 
 struct Symbol {
@@ -98,12 +111,11 @@ struct Occurrence {
     /// The ID of the symbol.
     SymbolID symbol;
     /// The range of the occurrence.
-    proto::Range range;
-    /// The role of the occurrence.
-    Role role;
+    Location location;
 };
 
 enum BuiltinSymbolKind {
+
 #define SYMBOL(name, description) name,
 #include <Index/Symbols.def>
 #undef SYMBOL

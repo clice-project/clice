@@ -15,13 +15,15 @@ public:
 
     SymbolSlab& addSymbol(const clang::NamedDecl* decl);
 
-    SymbolSlab& addOccurrence(const clang::NamedDecl* decl, clang::SourceLocation range, Role role);
-
-    SymbolSlab& addOccurrence(const clang::NamedDecl* decl, clang::SourceRange range, Role role);
-
     SymbolSlab& addOccurrence(int Kind, clang::SourceLocation location);
 
-    SymbolSlab& addRelation(const clang::NamedDecl* from, const clang::NamedDecl* to, Role role);
+    SymbolSlab& addOccurrence(const clang::NamedDecl* decl, clang::SourceLocation location);
+
+    SymbolSlab& addOccurrence(const clang::NamedDecl* decl, clang::SourceRange range);
+
+    SymbolSlab& addRelation(const clang::NamedDecl* from, clang::SourceLocation location, std::initializer_list<Role> roles);
+
+    SymbolSlab& addRelation(const clang::NamedDecl* from, clang::SourceRange range, std::initializer_list<Role> roles);
 
 private:
     clang::Sema& sema;

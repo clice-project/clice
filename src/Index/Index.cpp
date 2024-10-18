@@ -80,6 +80,23 @@ public:
 #define VISIT_DECL(name) bool Visit##name(const clang::name* decl)
 #define VISIT_TYOELOC(name) bool Visit##name(clang::name loc)
 
+    VISIT_DECL(NamedDecl) {
+        // Every NamedDecl has a name should have a symbol.
+        // FIXME: add linkage information. when find information for external linkage,
+        // We need to cross reference with other TUs.
+        slab.addSymbol(decl);
+
+        // FIXME: For some declaration with relation, we need to resolve them separately.
+        // e.g. ClassTemplateSpecializationDecl <-> ClassTemplateDecl
+        return true;
+    }
+
+    VISIT_DECL(VarDecl) {
+        llvm::outs() << "-------------------------\n";
+        decl->getTypeSourceInfo()->getTypeLoc().dump();
+        return true;
+    }
+
     // TODO: ... add occurrence and relation.
 
     VISIT_TYOELOC(BuiltinTypeLoc) {
@@ -89,18 +106,10 @@ public:
         return true;
     }
 
-    VISIT_TYOELOC(RecordTypeLoc) {
-        auto range = loc.getSourceRange();
-        return true;
-    }
-
-    VISIT_TYOELOC(EnumTypeLoc) {
-        auto range = loc.getSourceRange();
-        return true;
-    }
-
-    VISIT_TYOELOC(TypedefTypeLoc) {
-        auto range = loc.getSourceRange();
+    bool VisitTagTypeLoc(clang ::TagTypeLoc loc) {
+        auto decl = loc.getTypePtr()->getDecl();
+        auto location = loc.getNameLoc();
+        slab.addOccurrence(decl, location).addRelation(decl, location, {Role::Reference});
         return true;
     }
 
@@ -125,18 +134,21 @@ public:
         return true;
     }
 
-    VISIT_DECL(NamedDecl) {
-        // Every NamedDecl has a name should have a symbol.
-        // FIXME: add linkage information. when find information for external linkage,
-        // We need to cross reference with other TUs.
-        slab.addSymbol(decl);
-
-        // FIXME: For some declaration with relation, we need to resolve them separately.
-        // e.g. ClassTemplateSpecializationDecl <-> ClassTemplateDecl
+    bool VisitTypedefTypeLoc(clang::TypedefTypeLoc loc) {
+        auto decl = loc.getTypePtr()->getDecl();
+        auto location = loc.getNameLoc();
+        slab.addOccurrence(decl, location).addRelation(decl, location, {Role::Reference});
         return true;
     }
 
-    VISIT_DECL(ClassTemplateDecl) {
+    bool VisitUsingTypeLoc(clang::UsingTypeLoc loc) {
+        auto decl = loc.getTypePtr()->getFoundDecl();
+        auto location = loc.getNameLoc();
+        slab.addOccurrence(decl, location).addRelation(decl, location, {Role::Reference});
+        return true;
+    }
+
+    bool VisitClassTemplateDecl(const clang::ClassTemplateDecl* decl) {
         auto name = decl->getDeclName();
         return true;
     }
@@ -165,25 +177,30 @@ public:
                 if(!spec->isExplicitInstantiationOrSpecialization()) {
                     auto specialized = spec->getSpecializedTemplateOrPartial();
                     if(auto CTD = specialized.dyn_cast<clang::ClassTemplateDecl*>()) {
-                        slab.addOccurrence(CTD, nameLoc, Role::ImplicitInstantiation);
+                        slab.addOccurrence(CTD, nameLoc)
+                            .addRelation(CTD, nameLoc, {Role::Reference, Role::ImplicitInstantiation});
                     } else {
                         auto PSD = specialized.get<clang::ClassTemplatePartialSpecializationDecl*>();
-                        slab.addOccurrence(PSD, nameLoc, Role::ImplicitInstantiation);
+                        slab.addOccurrence(PSD, nameLoc)
+                            .addRelation(PSD, nameLoc, {Role::Reference, Role::ImplicitInstantiation})
+                            .addRelation(CTD, nameLoc, {Role::Reference});
                     }
                 } else {
                     // full specialization
-                    slab.addOccurrence(spec, nameLoc, Role::ExplicitInstantiation);
+                    slab.addOccurrence(spec, nameLoc)
+                        .addRelation(spec, nameLoc, {Role::Reference, Role::FullSpecialization});
                 }
             }
         } else if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(decl)) {
             // Beacuse type alias template is not allowed to have partial and full specialization,
             // So we do notin
-            slab.addOccurrence(TATD, nameLoc, Role::ExplicitInstantiation);
+            slab.addOccurrence(TATD, nameLoc)
+                .addRelation(TATD, nameLoc, {Role::Reference, Role::ImplicitInstantiation});
         }
         return true;
     }
 
-    // TODO. TemplateTypeParmTypeLoc, UsingType, AttributedTypeLoc, MacroQualifiedTypeLoc, ParenType, AdjustedTypeLoc
+    // TODO. TemplateTypeParmTypeLoc, AttributedTypeLoc, MacroQualifiedTypeLoc, ParenType, AdjustedTypeLoc
     // MemberPointerTypeLoc
 
 private:
@@ -203,6 +220,11 @@ CSIF SymbolSlab::index() {
     csif.language = "C++";
     csif.symbols = symbols;
     csif.occurrences = occurrences;
+
+    for(std::size_t i = 0; i < relations.size(); ++i) {
+        symbols[i].relations = relations[i];
+    }
+
     return csif;
 };
 
