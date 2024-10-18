@@ -7,19 +7,26 @@ namespace clice {
 
 class SymbolSlab {
 public:
-    CSIF index(clang::Sema& sema, clang::syntax::TokenBuffer& tokBuf);
+    SymbolSlab(clang::Sema& sema, clang::syntax::TokenBuffer& tokBuf) : sema(sema), tokBuf(tokBuf) {}
 
-    std::size_t lookup(const clang::Decl* decl);
+    CSIF index();
 
-    SymbolSlab& addSymbol(const clang::Decl* decl);
+    std::size_t lookup(const clang::NamedDecl* decl);
 
-    SymbolSlab& addOccurrence(const clang::Decl* decl, proto::Range range, Role role);
+    SymbolSlab& addSymbol(const clang::NamedDecl* decl);
 
-    SymbolSlab& addOccurrence(int Kind, proto::Range range);
+    SymbolSlab& addOccurrence(const clang::NamedDecl* decl, clang::SourceLocation range, Role role);
 
-    SymbolSlab& addRelation(const clang::Decl* from, const clang::Decl* to, Role role);
+    SymbolSlab& addOccurrence(const clang::NamedDecl* decl, clang::SourceRange range, Role role);
+
+    SymbolSlab& addOccurrence(int Kind, clang::SourceLocation location);
+
+    SymbolSlab& addRelation(const clang::NamedDecl* from, const clang::NamedDecl* to, Role role);
 
 private:
+    clang::Sema& sema;
+    clang::syntax::TokenBuffer& tokBuf;
+
     llvm::BumpPtrAllocator allocator;
     llvm::StringSaver saver{allocator};
 

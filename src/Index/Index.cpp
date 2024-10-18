@@ -11,38 +11,6 @@ public:
     SymbolCollector(SymbolSlab& slab, clang::ASTContext& context) :
         slab(slab), context(context), srcMgr(context.getSourceManager()) {}
 
-    bool TraverseDecl(clang::Decl* decl) {
-        /// `TranslationUnitDecl` has invalid location information.
-        /// So we process it separately.
-        if(llvm::isa_and_nonnull<clang::TranslationUnitDecl>(decl)) {
-            return Base::TraverseDecl(decl);
-        }
-
-        if(decl->isImplicit()) {
-            return true;
-        }
-
-        slab.addSymbol(decl);
-        llvm::outs() << "------------------------------------------\n";
-        decl->dump();
-
-        // TODO: generate SymbolID for every decl.
-        // Distinguish linkage, for no or internal linkage.
-        // For them, relation lookup is only occurred in current TU.
-
-        return Base::TraverseDecl(decl);
-    }
-
-    // FIXME: check DeclRefExpr, MemberExpr, etc.
-
-    bool TraverseStmt(clang::Stmt* stmt) {
-        return Base::TraverseStmt(stmt);
-    }
-
-    bool TraverseAttr(clang::Attr* attr) {
-        return Base::TraverseAttr(attr);
-    }
-
     /// we don't care about the node without location information, so skip them.
     constexpr bool shouldWalkTypesOfTypeLocs [[gnu::const]] () {
         return false;
@@ -101,18 +69,22 @@ public:
     }
 
     bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc NNS) {
-        // TODO: use TemplateResolver here.
+        // FIXME: use TemplateResolver here.
+
         auto range = NNS.getSourceRange();
         auto range2 = NNS.getLocalSourceRange();
 
         return Base::TraverseNestedNameSpecifierLoc(NNS);
     }
 
+#define VISIT_DECL(name) bool Visit##name(const clang::name* decl)
 #define VISIT_TYOELOC(name) bool Visit##name(clang::name loc)
 
     // TODO: ... add occurrence and relation.
 
     VISIT_TYOELOC(BuiltinTypeLoc) {
+        // FIXME: ....
+        // possible multiple tokens, ... map them to BuiltinKind.
         auto range = loc.getSourceRange();
         return true;
     }
@@ -127,18 +99,20 @@ public:
         return true;
     }
 
-    VISIT_TYOELOC(ElaboratedTypeLoc) {
-        auto loc1 = loc.getElaboratedKeywordLoc();
+    VISIT_TYOELOC(TypedefTypeLoc) {
+        auto range = loc.getSourceRange();
+        return true;
+    }
 
-        auto line = srcMgr.getPresumedLineNumber(loc1);
-        auto column = srcMgr.getPresumedColumnNumber(loc1);
-
+    bool VisitElaboratedTypeLoc(clang ::ElaboratedTypeLoc loc) {
+        // FIXME: check the keyword.
+        auto keywordLoc = loc.getElaboratedKeywordLoc();
         switch(loc.getTypePtr()->getKeyword()) {
             case clang::ElaboratedTypeKeyword::Struct:
             case clang::ElaboratedTypeKeyword::Class:
             case clang::ElaboratedTypeKeyword::Union:
             case clang::ElaboratedTypeKeyword::Enum: {
-                slab.addOccurrence(BuiltinSymbolKind::elaborated_type_specifier, {line, column});
+                slab.addOccurrence(BuiltinSymbolKind::elaborated_type_specifier, keywordLoc);
             }
 
             case clang::ElaboratedTypeKeyword::Typename: {
@@ -148,39 +122,63 @@ public:
             case clang::ElaboratedTypeKeyword::Interface: {
             }
         };
-        loc1.dump(srcMgr);
-        return true;
-        // render keyword.
-    }
-
-    VISIT_TYOELOC(TypedefTypeLoc) {
-        auto range = loc.getSourceRange();
         return true;
     }
 
-    VISIT_TYOELOC(TemplateSpecializationTypeLoc) {
-        // TODO: add Relation.
+    VISIT_DECL(NamedDecl) {
+        // Every NamedDecl has a name should have a symbol.
+        // FIXME: add linkage information. when find information for external linkage,
+        // We need to cross reference with other TUs.
+        slab.addSymbol(decl);
 
-        auto name = loc.getTypePtr()->getTemplateName().getUnderlying();
-        auto decl = name.getAsTemplateDecl();
+        // FIXME: For some declaration with relation, we need to resolve them separately.
+        // e.g. ClassTemplateSpecializationDecl <-> ClassTemplateDecl
+        return true;
+    }
+
+    VISIT_DECL(ClassTemplateDecl) {
+        auto name = decl->getDeclName();
+        return true;
+    }
+
+    bool VisitTemplateSpecializationTypeLoc(clang::TemplateSpecializationTypeLoc loc) {
+        auto nameLoc = loc.getTemplateNameLoc();
+        const clang::TemplateSpecializationType* TST = loc.getTypePtr();
+        clang::TemplateName name = TST->getTemplateName();
+        clang::TemplateDecl* decl = name.getAsTemplateDecl();
+
+        // FIXME: record relation.
+
+        // For a template specialization type, the template name is possibly a ClassTemplateDecl or a
+        // TypeAliasTemplateDecl.
         if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(decl)) {
-            auto nameLoc = loc.getTemplateNameLoc();
-            auto line = srcMgr.getPresumedLineNumber(nameLoc);
-            auto column = srcMgr.getPresumedColumnNumber(nameLoc);
-            proto::Range range = {line, column, line, static_cast<proto::uinteger>(column + decl->getName().size())};
-
-            void* ptr = CTD;
-            clang::ClassTemplateSpecializationDecl* decl2 =
-                CTD->findSpecialization(loc.getTypePtr()->template_arguments(), ptr);
-            auto main = decl2->getSpecializedTemplateOrPartial();
-
-            if(main.is<clang::ClassTemplateDecl*>()) {
-                auto decl3 = main.get<clang::ClassTemplateDecl*>();
-                slab.addOccurrence(decl3, range, Role::ExplicitInstantiation);
-            } else {
-                auto decl3 = main.get<clang::ClassTemplatePartialSpecializationDecl*>();
-                slab.addOccurrence(decl3, range, Role::ExplicitInstantiation);
+            // Dependent types are all handled in `TraverseNestedNameSpecifierLoc`.
+            if(TST->isDependentType()) {
+                return true;
             }
+
+            // For non dependent types, it must has been instantiated(implicit or explicit).
+            // Find instantiated decl for it, main, partial specialization, full specialization?.
+            void* pos;
+            if(auto spec = CTD->findSpecialization(TST->template_arguments(), pos)) {
+                // If it's not full(explicit) specialization, find the primary template.
+                if(!spec->isExplicitInstantiationOrSpecialization()) {
+                    auto specialized = spec->getSpecializedTemplateOrPartial();
+                    if(auto CTD = specialized.dyn_cast<clang::ClassTemplateDecl*>()) {
+                        slab.addOccurrence(CTD, nameLoc, Role::ImplicitInstantiation);
+                    } else {
+                        auto PSD = specialized.get<clang::ClassTemplatePartialSpecializationDecl*>();
+                        slab.addOccurrence(PSD, nameLoc, Role::ImplicitInstantiation);
+                    }
+                } else {
+                    // full specialization
+                    slab.addOccurrence(spec, nameLoc, Role::ExplicitInstantiation);
+                }
+            }
+        } else if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(decl)) {
+            // Beacuse type alias template is not allowed to have partial and full specialization,
+            // So we do notin
+            slab.addOccurrence(TATD, nameLoc, Role::ExplicitInstantiation);
         }
         return true;
     }
@@ -196,7 +194,7 @@ private:
 
 }  // namespace
 
-CSIF SymbolSlab::index(clang::Sema& sema, clang::syntax::TokenBuffer& tokBuf) {
+CSIF SymbolSlab::index() {
     CSIF csif;
     SymbolCollector collector(*this, sema.getASTContext());
     collector.TraverseAST(sema.getASTContext());

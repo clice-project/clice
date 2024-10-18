@@ -3,7 +3,7 @@
 
 namespace clice {
 
-std::size_t SymbolSlab::lookup(const clang::Decl* decl) {
+std::size_t SymbolSlab::lookup(const clang::NamedDecl* decl) {
     auto iter = cache.find(decl);
     if(iter == cache.end()) {
         llvm::outs() << "SymbolSlab::lookup: decl not found\n";
@@ -12,7 +12,7 @@ std::size_t SymbolSlab::lookup(const clang::Decl* decl) {
     return iter->second;
 }
 
-SymbolSlab& SymbolSlab::addSymbol(const clang::Decl* decl) {
+SymbolSlab& SymbolSlab::addSymbol(const clang::NamedDecl* decl) {
     // Generate and save USR.
     llvm::SmallString<128> USR;
     clang::index::generateUSRForDecl(decl, USR);
@@ -29,19 +29,31 @@ SymbolSlab& SymbolSlab::addSymbol(const clang::Decl* decl) {
     return *this;
 }
 
-SymbolSlab& SymbolSlab::addOccurrence(const clang::Decl* decl, proto::Range range, Role role) {
+SymbolSlab& SymbolSlab::addOccurrence(const clang::NamedDecl* decl, clang::SourceLocation range, Role role) {
+    auto& srcMgr = sema.getSourceManager();
     auto ID = symbols[lookup(decl)].ID;
-    occurrences.emplace_back(Occurrence{ID, range, role});
+    auto line = srcMgr.getPresumedLineNumber(range);
+    auto column = srcMgr.getPresumedColumnNumber(range);
+    occurrences.emplace_back(Occurrence{ID, line, column, line, column, role});
     return *this;
 }
 
-SymbolSlab& SymbolSlab::addOccurrence(int Kind, proto::Range range) {
+SymbolSlab& SymbolSlab::addOccurrence(const clang::NamedDecl* decl, clang::SourceRange range, Role role) {
+    auto ID = symbols[lookup(decl)].ID;
+    auto& srcMgr = sema.getSourceManager();
+    auto line = srcMgr.getPresumedLineNumber(range.getBegin());
+    auto column = srcMgr.getPresumedColumnNumber(range.getBegin());
+    occurrences.emplace_back(Occurrence{ID, line, column, line, column, role});
+    return *this;
+}
+
+SymbolSlab& SymbolSlab::addOccurrence(int Kind, clang::SourceLocation loc) {
     auto ID = SymbolID::fromKind(Kind);
-    occurrences.emplace_back(Occurrence{ID, range, Role::Reference});
+    // occurrences.emplace_back(Occurrence{ID, range, Role::Reference});
     return *this;
 }
 
-SymbolSlab& SymbolSlab::addRelation(const clang::Decl* from, const clang::Decl* to, Role role) {
+SymbolSlab& SymbolSlab::addRelation(const clang::NamedDecl* from, const clang::NamedDecl* to, Role role) {
     std::size_t index = lookup(from);
     SymbolID fromID = symbols[index].ID;
     SymbolID toID = symbols[lookup(to)].ID;
