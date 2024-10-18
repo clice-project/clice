@@ -2,7 +2,7 @@
 
 #include <Support/Reflection.h>
 
-namespace clice::protocol {
+namespace clice::proto {
 
 /// range in [-2^31, 2^31- 1]
 using integer = std::int32_t;
@@ -43,4 +43,4 @@ CLICE_RECORD(VersionedTextDocumentIdentifier, TextDocumentIdentifier) {
     integer version;
 };
 
-}  // namespace clice::protocol
+}  // namespace clice::proto

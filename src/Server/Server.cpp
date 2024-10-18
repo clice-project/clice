@@ -133,7 +133,7 @@ struct Socket {
 Server::Server() {
 
     handlers.try_emplace("initialize", [](json::Value id, json::Value value) {
-        auto result = instance.initialize(json::deserialize<protocol::InitializeParams>(value));
+        auto result = instance.initialize(json::deserialize<proto::InitializeParams>(value));
         instance.response(std::move(id), json::serialize(result));
     });
 }
@@ -145,7 +145,7 @@ void eventloop(uv_idle_t* handle) {
     }
 }
 
-auto Server::initialize(protocol::InitializeParams params) -> protocol::InitializeResult {
+auto Server::initialize(proto::InitializeParams params) -> proto::InitializeResult {
     config::init(URI::resolve(params.workspaceFolders[0].uri));
 
     // TODO: sacn module:
@@ -154,7 +154,7 @@ auto Server::initialize(protocol::InitializeParams params) -> protocol::Initiali
 
     // TODO: initialize dependencies
 
-    return protocol::InitializeResult();
+    return proto::InitializeResult();
 }
 
 int Server::run(int argc, const char** argv) {

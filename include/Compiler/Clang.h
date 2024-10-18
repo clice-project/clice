@@ -6,3 +6,4 @@
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/FrontendActions.h>
 #include <clang/Tooling/Syntax/Tokens.h>
+#include <clang/Sema/Sema.h>

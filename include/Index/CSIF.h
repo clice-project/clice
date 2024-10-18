@@ -3,7 +3,7 @@
 #include <Support/ADT.h>
 #include <Protocol/Basic.h>
 
-#include <Index/Symbol.h>
+#include <Index/SymbolID.h>
 
 namespace clice {
 
@@ -71,7 +71,7 @@ struct Relation {
     /// The role of the relation.
     Role role;
     /// The range of the target, maybe empty.
-    protocol::Range range;
+    proto::Range range;
 };
 
 enum class SymbolKind {
@@ -98,9 +98,15 @@ struct Occurrence {
     /// The ID of the symbol.
     SymbolID symbol;
     /// The range of the occurrence.
-    protocol::Range range;
+    proto::Range range;
     /// The role of the occurrence.
     Role role;
+};
+
+enum BuiltinSymbolKind {
+#define SYMBOL(name, description) name,
+#include <Index/Symbols.def>
+#undef SYMBOL
 };
 
 }  // namespace clice

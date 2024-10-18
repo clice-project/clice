@@ -7,6 +7,6 @@ struct ParsedAST;
 }
 
 namespace clice::feature {
-protocol::SemanticTokens semanticTokens(const ParsedAST& AST, llvm::StringRef filename);
+proto::SemanticTokens semanticTokens(const ParsedAST& AST, llvm::StringRef filename);
 }  // namespace clice::feature
 

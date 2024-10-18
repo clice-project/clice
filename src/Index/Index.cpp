@@ -1,5 +1,4 @@
 #include <Index/SymbolSlab.h>
-#include <clang/Index/USRGeneration.h>
 
 namespace clice {
 
@@ -26,10 +25,6 @@ public:
         slab.addSymbol(decl);
         llvm::outs() << "------------------------------------------\n";
         decl->dump();
-
-        llvm::SmallString<128> USR;
-        clang::index::generateUSRForDecl(decl, USR);
-        llvm::outs() << "USR: " << USR << "\n";
 
         // TODO: generate SymbolID for every decl.
         // Distinguish linkage, for no or internal linkage.
@@ -134,6 +129,26 @@ public:
 
     VISIT_TYOELOC(ElaboratedTypeLoc) {
         auto loc1 = loc.getElaboratedKeywordLoc();
+
+        auto line = srcMgr.getPresumedLineNumber(loc1);
+        auto column = srcMgr.getPresumedColumnNumber(loc1);
+
+        switch(loc.getTypePtr()->getKeyword()) {
+            case clang::ElaboratedTypeKeyword::Struct:
+            case clang::ElaboratedTypeKeyword::Class:
+            case clang::ElaboratedTypeKeyword::Union:
+            case clang::ElaboratedTypeKeyword::Enum: {
+                slab.addOccurrence(BuiltinSymbolKind::elaborated_type_specifier, {line, column});
+            }
+
+            case clang::ElaboratedTypeKeyword::Typename: {
+            }
+
+            case clang::ElaboratedTypeKeyword::None:
+            case clang::ElaboratedTypeKeyword::Interface: {
+            }
+        };
+        loc1.dump(srcMgr);
         return true;
         // render keyword.
     }
@@ -144,16 +159,15 @@ public:
     }
 
     VISIT_TYOELOC(TemplateSpecializationTypeLoc) {
+        // TODO: add Relation.
+
         auto name = loc.getTypePtr()->getTemplateName().getUnderlying();
         auto decl = name.getAsTemplateDecl();
         if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(decl)) {
             auto nameLoc = loc.getTemplateNameLoc();
             auto line = srcMgr.getPresumedLineNumber(nameLoc);
             auto column = srcMgr.getPresumedColumnNumber(nameLoc);
-            protocol::Range range = {line,
-                                     column,
-                                     line,
-                                     static_cast<protocol::uinteger>(column + decl->getName().size())};
+            proto::Range range = {line, column, line, static_cast<proto::uinteger>(column + decl->getName().size())};
 
             void* ptr = CTD;
             clang::ClassTemplateSpecializationDecl* decl2 =
@@ -182,10 +196,10 @@ private:
 
 }  // namespace
 
-CSIF SymbolSlab::index(clang::ASTContext& context) {
+CSIF SymbolSlab::index(clang::Sema& sema, clang::syntax::TokenBuffer& tokBuf) {
     CSIF csif;
-    SymbolCollector collector(*this, context);
-    collector.TraverseAST(context);
+    SymbolCollector collector(*this, sema.getASTContext());
+    collector.TraverseAST(sema.getASTContext());
 
     csif.version = "0.1";
     csif.language = "C++";

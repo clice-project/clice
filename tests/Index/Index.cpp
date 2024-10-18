@@ -15,24 +15,14 @@ TEST(clice, Index) {
         "/home/ykiko/C++/clice2/build/lib/clang/20",
     };
     const char* code = R"(
-template<typename T, typename U> struct X {
-    using type = char;
-};
-
-template<typename T> struct X<T, T> {
-    using type = int;
-};
-
-void f() {
-    typename X<char, int>::type y;
-    typename X<int, int>::type x;
-}
+struct X { };
+struct X x;
 )";
 
     Compiler compiler("main.cpp", code, compileArgs);
     compiler.buildAST();
     SymbolSlab slab;
-    auto csif = slab.index(compiler.context());
+    auto csif = slab.index(compiler.sema(), compiler.tokBuf());
     auto value = json::serialize(csif);
     std::error_code EC;
     llvm::raw_fd_ostream fileStream("output.json", EC);

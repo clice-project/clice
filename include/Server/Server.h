@@ -25,9 +25,9 @@ struct Server {
 public:
     // LSP methods, if the return type is void, the method is used for notification.
     // otherwise, the method is used for request.
-    auto initialize(protocol::InitializeParams params) -> protocol::InitializeResult;
+    auto initialize(proto::InitializeParams params) -> proto::InitializeResult;
 
-    void initialized(protocol::InitializedParams params);
+    void initialized(proto::InitializedParams params);
 };
 
 }  // namespace clice

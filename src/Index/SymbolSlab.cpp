@@ -29,9 +29,15 @@ SymbolSlab& SymbolSlab::addSymbol(const clang::Decl* decl) {
     return *this;
 }
 
-SymbolSlab& SymbolSlab::addOccurrence(const clang::Decl* decl, protocol::Range range, Role role) {
+SymbolSlab& SymbolSlab::addOccurrence(const clang::Decl* decl, proto::Range range, Role role) {
     auto ID = symbols[lookup(decl)].ID;
     occurrences.emplace_back(Occurrence{ID, range, role});
+    return *this;
+}
+
+SymbolSlab& SymbolSlab::addOccurrence(int Kind, proto::Range range) {
+    auto ID = SymbolID::fromKind(Kind);
+    occurrences.emplace_back(Occurrence{ID, range, Role::Reference});
     return *this;
 }
 

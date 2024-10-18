@@ -2,7 +2,7 @@
 
 #include "Basic.h"
 
-namespace clice::protocol {
+namespace clice::proto {
 
 // clang-format off
 enum SemanticTokenType : uint8_t {
@@ -53,4 +53,4 @@ struct SemanticTokens {
     std::vector<uinteger> data;
 };
 
-}  // namespace clice::protocol
+}  // namespace clice::proto

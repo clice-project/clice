@@ -2,7 +2,7 @@
 
 #include "SemanticTokens.h"
 
-namespace clice::protocol {
+namespace clice::proto {
 
 enum class TextDocumentSyncKind {
     None = 0,
@@ -67,4 +67,4 @@ struct InitializeResult {
 
 struct InitializedParams {};
 
-}  // namespace clice::protocol
+}  // namespace clice::proto

@@ -8,10 +8,10 @@ namespace {
 struct SemanticToken {
     clang::SourceLocation begin;
     std::size_t length;
-    protocol::SemanticTokenType type;
+    proto::SemanticTokenType type;
     std::uint32_t modifiers = 0;
 
-    SemanticToken& addModifier(protocol::SemanticTokenModifier modifier) {
+    SemanticToken& addModifier(proto::SemanticTokenModifier modifier) {
         modifiers |= 1 << static_cast<std::uint32_t>(modifier);
         return *this;
     }
@@ -170,12 +170,12 @@ class HighlightBuilder {
 public:
     HighlightBuilder(const ParsedAST& parsedAST, llvm::StringRef filename) : AST(parsedAST), filename(filename) {}
 
-    SemanticToken& addToken(protocol::SemanticTokenType type, clang::SourceLocation begin, std::size_t length) {
+    SemanticToken& addToken(proto::SemanticTokenType type, clang::SourceLocation begin, std::size_t length) {
         result.emplace_back(begin, length, type, 0);
         return result.back();
     }
 
-    SemanticToken& addToken(protocol::SemanticTokenType type, clang::SourceLocation loc) {
+    SemanticToken& addToken(proto::SemanticTokenType type, clang::SourceLocation loc) {
         auto token = AST.tokenBuffer.spelledTokenContaining(loc);
         if(token) {
             return addToken(type, token->location(), token->length());
@@ -183,7 +183,7 @@ public:
     }
 
     // FIXME: source range can be a multi-line range, split it into multiple tokens
-    // SemanticToken& addToken(protocol::SemanticTokenType type, clang::SourceRange range) {
+    // SemanticToken& addToken(proto::SemanticTokenType type, clang::SourceRange range) {
     //    SemanticToken token;
     //    token.begin = range.getBegin();
     //    token.length =
@@ -204,20 +204,20 @@ public:
         right.dump(AST.sourceManager);
 
         if(auto token = AST.tokenBuffer.spelledTokenContaining(left)) {
-            addToken(protocol::SemanticTokenType::Angle, token->location(), token->length())
-                .addModifier(protocol::SemanticTokenModifier::Left);
+            addToken(proto::SemanticTokenType::Angle, token->location(), token->length())
+                .addModifier(proto::SemanticTokenModifier::Left);
         }
 
         // RLoc might be pointing at a virtual buffer when it's part of a `>>` token.
         auto loc = AST.sourceManager.getFileLoc(right);
         if(auto token = AST.tokenBuffer.spelledTokenContaining(loc)) {
             if(token->kind() == clang::tok::greater) {
-                addToken(protocol::SemanticTokenType::Angle, loc, 1)
-                    .addModifier(protocol::SemanticTokenModifier::Right);
+                addToken(proto::SemanticTokenType::Angle, loc, 1)
+                    .addModifier(proto::SemanticTokenModifier::Right);
             } else if(token->kind() == clang::tok::greatergreater) {
                 // TODO: split `>>` into two tokens
-                addToken(protocol::SemanticTokenType::Angle, loc, 2)
-                    .addModifier(protocol::SemanticTokenModifier::Right);
+                addToken(proto::SemanticTokenType::Angle, loc, 2)
+                    .addModifier(proto::SemanticTokenModifier::Right);
             }
         }
     }
@@ -263,12 +263,12 @@ public:
     }
 
     VISIT(NamespaceDecl) {
-        builder.addToken(protocol::SemanticTokenType::Namespace, node->getLocation());
+        builder.addToken(proto::SemanticTokenType::Namespace, node->getLocation());
         return true;
     }
 
     VISIT(VarDecl) {
-        builder.addToken(protocol::SemanticTokenType::Variable, node->getLocation());
+        builder.addToken(proto::SemanticTokenType::Variable, node->getLocation());
         return true;
     }
 
@@ -294,7 +294,7 @@ public:
         if(auto args = node->getTemplateSpecializationArgsAsWritten()) {
             builder.addAngle(args->getLAngleLoc(), args->getRAngleLoc());
         }
-        builder.addToken(protocol::SemanticTokenType::Function, node->getLocation());
+        builder.addToken(proto::SemanticTokenType::Function, node->getLocation());
         return true;
     }
 
@@ -339,7 +339,7 @@ public:
     }
 
     VISIT(DeclRefExpr) {
-        builder.addToken(protocol::SemanticTokenType::Variable, node->getLocation());
+        builder.addToken(proto::SemanticTokenType::Variable, node->getLocation());
         node->getEnumConstantDecl();
         builder.addAngle(node->getLAngleLoc(), node->getRAngleLoc());
         return true;
@@ -355,8 +355,8 @@ public:
         //       ^  ^^^^^~~~ Angles
         //       ^~~~ DependentValue
         builder.addAngle(node->getLAngleLoc(), node->getRAngleLoc());
-        builder.addToken(protocol::SemanticTokenType::Variable, node->getLocation())
-            .addModifier(protocol::SemanticTokenModifier::Dependent);
+        builder.addToken(proto::SemanticTokenType::Variable, node->getLocation())
+            .addModifier(proto::SemanticTokenModifier::Dependent);
         return true;
     }
 
@@ -368,22 +368,22 @@ public:
     VISIT_TYPE(RecordTypeLoc) {
         // `struct X x;`
         //         ^ Type
-        builder.addToken(protocol::SemanticTokenType::Type, node.getNameLoc());
+        builder.addToken(proto::SemanticTokenType::Type, node.getNameLoc());
         return true;
     }
 
     VISIT_TYPE(DependentNameTypeLoc) {
         // `typename T::type`
         //               ^~~~ DependentType
-        builder.addToken(protocol::SemanticTokenType::Type, node.getNameLoc())
-            .addModifier(protocol::SemanticTokenModifier::Dependent);
+        builder.addToken(proto::SemanticTokenType::Type, node.getNameLoc())
+            .addModifier(proto::SemanticTokenModifier::Dependent);
         return true;
     }
 
     VISIT_TYPE(TemplateTypeParmTypeLoc) {
         // `typename T::type`
         //           ^~~~ Type
-        builder.addToken(protocol::SemanticTokenType::Type, node.getNameLoc());
+        builder.addToken(proto::SemanticTokenType::Type, node.getNameLoc());
         return true;
     }
 
@@ -392,8 +392,8 @@ public:
         //     ^    ^~~~ Angles
         //     ^~~~ Type
         builder.addAngle(node.getLAngleLoc(), node.getRAngleLoc());
-        builder.addToken(protocol::SemanticTokenType::Type, node.getTemplateNameLoc())
-            .addModifier(protocol::SemanticTokenModifier::Templated);
+        builder.addToken(proto::SemanticTokenType::Type, node.getTemplateNameLoc())
+            .addModifier(proto::SemanticTokenModifier::Templated);
         return true;
     }
 
@@ -407,8 +407,8 @@ public:
             if(NNS->getKind() == clang::NestedNameSpecifier::Identifier) {
                 // `T::type::`
                 //      ^~~~ DependentType
-                builder.addToken(protocol::SemanticTokenType::Type, loc.getLocalBeginLoc())
-                    .addModifier(protocol::SemanticTokenModifier::Dependent);
+                builder.addToken(proto::SemanticTokenType::Type, loc.getLocalBeginLoc())
+                    .addModifier(proto::SemanticTokenModifier::Dependent);
             }
         }
         return RecursiveASTVisitor::TraverseNestedNameSpecifierLoc(loc);
@@ -425,11 +425,11 @@ std::vector<SemanticToken> HighlightBuilder::build() {
 
     // highlight from tokens.
     for(auto& token: tokens) {
-        protocol::SemanticTokenType type = protocol::SemanticTokenType::LAST_TYPE;
+        proto::SemanticTokenType type = proto::SemanticTokenType::LAST_TYPE;
 
         switch(token.kind()) {
             case clang::tok::TokenKind::numeric_constant: {
-                type = protocol::SemanticTokenType::Number;
+                type = proto::SemanticTokenType::Number;
                 break;
             }
             case clang::tok::char_constant:
@@ -437,7 +437,7 @@ std::vector<SemanticToken> HighlightBuilder::build() {
             case clang::tok::utf8_char_constant:
             case clang::tok::utf16_char_constant:
             case clang::tok::utf32_char_constant: {
-                type = protocol::SemanticTokenType::Character;
+                type = proto::SemanticTokenType::Character;
                 break;
             }
             case clang::tok::string_literal:
@@ -445,18 +445,18 @@ std::vector<SemanticToken> HighlightBuilder::build() {
             case clang::tok::utf8_string_literal:
             case clang::tok::utf16_string_literal:
             case clang::tok::utf32_string_literal: {
-                type = protocol::SemanticTokenType::String;
+                type = proto::SemanticTokenType::String;
                 break;
             }
             default: {
                 if(isKeyword(token.kind(), token.text(AST.sourceManager), AST.context.getLangOpts())) {
-                    type = protocol::SemanticTokenType::Keyword;
+                    type = proto::SemanticTokenType::Keyword;
                     break;
                 }
             }
         }
 
-        if(type != protocol::SemanticTokenType::LAST_TYPE) {
+        if(type != proto::SemanticTokenType::LAST_TYPE) {
             addToken(type, token.location(), token.length());
         }
     }
@@ -477,11 +477,11 @@ std::vector<SemanticToken> HighlightBuilder::build() {
 
 }  // namespace
 
-protocol::SemanticTokens semanticTokens(const ParsedAST& AST, llvm::StringRef filename) {
+proto::SemanticTokens semanticTokens(const ParsedAST& AST, llvm::StringRef filename) {
     HighlightBuilder builder(AST, filename);
     std::vector<SemanticToken> tokens = builder.build();
 
-    protocol::SemanticTokens result;
+    proto::SemanticTokens result;
     unsigned int last_line = 0;
     unsigned int last_column = 0;
     /// FXIME: resolve position encoding

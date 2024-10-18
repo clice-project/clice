@@ -2,7 +2,7 @@
 
 #include "Basic.h"
 
-namespace clice::protocol {
+namespace clice::proto {
 
 struct DidOpenTextDocumentParams {
     /// The document that was opened.
@@ -23,4 +23,4 @@ struct DidChangeTextDocumentParams {
     std::vector<TextDocumentContentChangeEvent> contentChanges;
 };
 
-}  // namespace clice::protocol
+}  // namespace clice::proto

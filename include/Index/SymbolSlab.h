@@ -1,18 +1,21 @@
 #pragma once
 
 #include <Index/CSIF.h>
+#include <Compiler/Clang.h>
 
 namespace clice {
 
 class SymbolSlab {
 public:
-    CSIF index(clang::ASTContext& context);
+    CSIF index(clang::Sema& sema, clang::syntax::TokenBuffer& tokBuf);
 
     std::size_t lookup(const clang::Decl* decl);
 
     SymbolSlab& addSymbol(const clang::Decl* decl);
 
-    SymbolSlab& addOccurrence(const clang::Decl* decl, protocol::Range range, Role role);
+    SymbolSlab& addOccurrence(const clang::Decl* decl, proto::Range range, Role role);
+
+    SymbolSlab& addOccurrence(int Kind, proto::Range range);
 
     SymbolSlab& addRelation(const clang::Decl* from, const clang::Decl* to, Role role);
 
