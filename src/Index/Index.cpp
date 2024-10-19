@@ -1,4 +1,4 @@
-#include <Index/SymbolSlab.h>
+#include <Index/Indexer.h>
 
 namespace clice {
 
@@ -8,7 +8,7 @@ class SymbolCollector : public clang::RecursiveASTVisitor<SymbolCollector> {
     using Base = clang::RecursiveASTVisitor<SymbolCollector>;
 
 public:
-    SymbolCollector(SymbolSlab& slab, clang::ASTContext& context) :
+    SymbolCollector(Indexer& slab, clang::ASTContext& context) :
         slab(slab), context(context), srcMgr(context.getSourceManager()) {}
 
     /// we don't care about the node without location information, so skip them.
@@ -176,7 +176,7 @@ public:
                 // If it's not full(explicit) specialization, find the primary template.
                 if(!spec->isExplicitInstantiationOrSpecialization()) {
                     auto specialized = spec->getSpecializedTemplateOrPartial();
-                    if(auto CTD = specialized.dyn_cast<clang::ClassTemplateDecl*>()) {
+                    if(specialized.is<clang::ClassTemplateDecl*>()) {
                         slab.addOccurrence(CTD, nameLoc)
                             .addRelation(CTD, nameLoc, {Role::Reference, Role::ImplicitInstantiation});
                     } else {
@@ -204,26 +204,37 @@ public:
     // MemberPointerTypeLoc
 
 private:
-    SymbolSlab& slab;
+    Indexer& slab;
     clang::ASTContext& context;
     clang::SourceManager& srcMgr;
 };
 
 }  // namespace
 
-CSIF SymbolSlab::index() {
+CSIF Indexer::index() {
     CSIF csif;
     SymbolCollector collector(*this, sema.getASTContext());
     collector.TraverseAST(sema.getASTContext());
+
+    for(std::size_t i = 0; i < relations.size(); ++i) {
+        llvm::sort(relations[i], [](const Relation& lhs, const Relation& rhs) {
+            return lhs.location < rhs.location;
+        });
+
+        symbols[i].relations = relations[i];
+    }
+
+    llvm::sort(symbols, [](const Symbol& lhs, const Symbol& rhs) {
+        return lhs.ID < rhs.ID;
+    });
+    llvm::sort(occurrences, [](const Occurrence& lhs, const Occurrence& rhs) {
+        return lhs.location < rhs.location;
+    });
 
     csif.version = "0.1";
     csif.language = "C++";
     csif.symbols = symbols;
     csif.occurrences = occurrences;
-
-    for(std::size_t i = 0; i < relations.size(); ++i) {
-        symbols[i].relations = relations[i];
-    }
 
     return csif;
 };

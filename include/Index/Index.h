@@ -84,6 +84,8 @@ enum class Role {
 struct Location {
     proto::DocumentUri uri;
     proto::Range range;
+
+    friend std::strong_ordering operator<=> (const Location& lhs, const Location& rhs) = default;
 };
 
 /// If symbol A has a relation to symbol B with role R.
@@ -93,6 +95,8 @@ struct Relation {
     Role role;
     /// The location of the related symbol.
     Location location;
+
+    friend std::strong_ordering operator<=> (const Relation& lhs, const Relation& rhs) = default;
 };
 
 struct Symbol {

@@ -17,11 +17,15 @@ using DocumentUri = std::string;
 struct Position {
     uinteger line;
     uinteger character;
+
+    friend std::strong_ordering operator<=> (const Position& lhs, const Position& rhs) = default;
 };
 
 struct Range {
     Position start;
     Position end;
+
+    friend std::strong_ordering operator<=> (const Range& lhs, const Range& rhs) = default;
 };
 
 struct TextDocumentItem {
