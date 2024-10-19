@@ -1,4 +1,4 @@
-#include "../Test.h"
+#include <Test/Test.h>
 #include <Compiler/Resolver.h>
 #include <Compiler/Compiler.h>
 
