@@ -91,27 +91,6 @@ public:
         return true;
     }
 
-    VISIT_DECL(FunctionDecl) {
-        currentFunction = decl;
-        return true;
-    }
-
-    bool VisitCallExpr(clang::CallExpr* expr) {
-        if(!currentFunction) {
-            std::terminate();
-        }
-
-        slab.addRelation(currentFunction, expr->getCallee()->getSourceRange(), {Role::Callee});
-        auto decl = llvm::dyn_cast<clang::NamedDecl>(expr->getCalleeDecl());
-        if(decl) {
-            slab.addRelation(decl, expr->getCallee()->getSourceRange(), {Role::Reference, Role::Caller});
-        } else {
-            std::terminate();
-        }
-        
-        return true;
-    }
-
     VISIT_DECL(VarDecl) {
         llvm::outs() << "-------------------------\n";
         decl->getTypeSourceInfo()->getTypeLoc().dump();
@@ -127,7 +106,7 @@ public:
         return true;
     }
 
-    bool VisitTagTypeLoc(clang::TagTypeLoc loc) {
+    bool VisitTagTypeLoc(clang ::TagTypeLoc loc) {
         auto decl = loc.getTypePtr()->getDecl();
         auto location = loc.getNameLoc();
         slab.addOccurrence(decl, location).addRelation(decl, location, {Role::Reference});
@@ -228,8 +207,6 @@ private:
     Indexer& slab;
     clang::ASTContext& context;
     clang::SourceManager& srcMgr;
-
-    const clang::FunctionDecl* currentFunction = nullptr;
 };
 
 }  // namespace

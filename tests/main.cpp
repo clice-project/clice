@@ -1,4 +1,4 @@
-#include <Test/Test.h>
+#include <gtest/gtest.h>
 #include <llvm/Support/CommandLine.h>
 
 namespace clice {

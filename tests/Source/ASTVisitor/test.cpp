@@ -1,9 +1,14 @@
-void g();
+template <typename T, typename U>
+struct X {
+    using type = char;
+};
+
+template <typename T>
+struct X<T, T> {
+    using type = int;
+};
 
 void f() {
-    int x;
-    auto f2 = [x]() {
-    };
-    f2();
-    g();
+    typename X<char, int>::type y;
+    typename X<int, int>::type x;
 }

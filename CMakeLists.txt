@@ -29,6 +29,7 @@ function(target_clang target)
     target_include_directories(${target} PRIVATE 
         ${LLVM_INCLUDE_DIRS}
         ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/deps/clang-extra/include
     )
     target_link_libraries(${target} PRIVATE
         LLVMSupport

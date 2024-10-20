@@ -1,4 +1,4 @@
-#include <Test/Test.h>
+#include "../Test.h"
 #include <Compiler/Compiler.h>
 #include <clang/Tooling/DependencyScanning/DependencyScanningTool.h>
 

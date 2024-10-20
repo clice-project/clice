@@ -1,4 +1,4 @@
-#include <Test/Test.h>
+#include "../Test.h"
 #include <Compiler/Selection.h>
 #include <Compiler/Compiler.h>
 

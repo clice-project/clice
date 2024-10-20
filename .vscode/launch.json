@@ -48,17 +48,6 @@
                 "--gtest_filter=clice.Index"
             ],
             "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "GotoDefinition",
-            "program": "${workspaceFolder}/build/bin/clice_test",
-            "args": [
-                "--test-dir=/home/ykiko/C++/clice2/tests/Source",
-                "--gtest_filter=clice.GotoDefinition"
-            ],
-            "cwd": "${workspaceFolder}"
         }
     ]
 }

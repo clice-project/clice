@@ -1,6 +1,8 @@
-#include <Test/Test.h>
+#include "../Test.h"
 #include <Compiler/Resolver.h>
 #include <Compiler/Compiler.h>
+#include <clang/Index/USRGeneration.h>
+#include <Support/Reflection.h>
 
 namespace {
 
@@ -24,17 +26,22 @@ struct Visitor : public clang::RecursiveASTVisitor<Visitor> {
         compiler.buildAST();
     }
 
-    bool VisitCallExpr(clang::CallExpr* expr) {
-        auto callee = expr->getCalleeDecl();
-        callee->dump();
-        auto range = expr->getCallee()->getSourceRange();
-        // slab.addOccurrence(callee, range);
+    bool shouldVisitTemplateInstantiations() const {
+        return true;
+    }
+
+    bool VisitNamedDecl(clang::NamedDecl* decl) {
+        llvm::outs() << "deck: " << decl->getName() << "\n";
+        llvm::outs() << "linkage: " << refl::enum_name(decl->getLinkageInternal()) << "\n";
+        decl->getFormalLinkage();
+        llvm::SmallString<128> USR;
+        clang::index::generateUSRForDecl(decl, USR);
+        llvm::outs() << "USR: " << USR << "\n";
         return true;
     }
 
     void test() {
         auto decl = compiler.context().getTranslationUnitDecl();
-        // decl->dump();
         TraverseDecl(decl);
         // EXPECT_EQ(result.getCanonicalType(), expect.getCanonicalType());
         // compiler.context().getTranslationUnitDecl()->dump();

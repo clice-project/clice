@@ -1,20 +1,11 @@
-#include <Test/Test.h>
+#include <gtest/gtest.h>
 #include <Index/Indexer.h>
+#include <Support/JSON.h>
 #include <Compiler/Compiler.h>
-#include <Test/Index.h>
-
-namespace {
+#include <Support/FileSystem.h>
+#include "../Test.h"
 
 using namespace clice;
-
-bool TestGotoDefinition(int a, int b) {
-    llvm::outs() << "TestGotoDefinition\n";
-    llvm::outs() << a << " " << b << "\n";
-    return true;
-}
-
-REGISTER(test::GotoDefinition, TestGotoDefinition)
-
 std::vector<const char*> compileArgs = {
     "clang++",
     "-std=c++20",
@@ -36,33 +27,3 @@ TEST(clice, Index) {
         llvm::outs() << value << "\n";
     });
 }
-
-TEST(clice, GotoDefinition) {
-    const char* code = R"(
-namespace test {
-
-template <typename... Ts>
-struct Hook {
-    consteval Hook() {}
-
-    consteval Hook(Ts... args) {}
-};
-
-using GotoDefinition = Hook<int, int>;
-}
-
-namespace Cases {
-
-test::GotoDefinition case1(100, 2);
-
-};
-    )";
-    REGISTER(test::GotoDefinition, TestGotoDefinition);
-    Compiler compiler("main.cpp", code, compileArgs);
-    compiler.buildAST();
-    auto& context = compiler.context();
-    exec(context);
-}
-
-}  // namespace
-
