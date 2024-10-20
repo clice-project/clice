@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <Index/Indexer.h>
+#include <Index/Loader.h>
 #include <Support/JSON.h>
 #include <Compiler/Compiler.h>
 #include <Support/FileSystem.h>
@@ -24,6 +25,16 @@ TEST(clice, Index) {
         std::error_code EC;
         llvm::raw_fd_ostream fileStream("output.json", EC);
         fileStream << value << "\n";
-        llvm::outs() << value << "\n";
+
+        llvm::outs() << "Index symbol count: " << csif.symbols.size() << "\n";
+        // llvm::outs() << value << "\n";
+
+        if(filepath.ends_with("ClassTemplate.cpp")) {
+            Loader loader(csif, nullptr);
+            Location location;
+            location.range = {14, 1, 14, 2};
+            auto& sym = loader.locate(location);
+            llvm::outs() << sym.document << "\n";
+        }
     });
 }

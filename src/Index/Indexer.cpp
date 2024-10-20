@@ -5,13 +5,32 @@ namespace clice {
 
 namespace {
 
-Location toLocation(clang::SourceRange loc, clang::SourceManager& srcMgr) {
-    Location location;
-    location.uri = srcMgr.getFilename(loc.getBegin());
-    location.range.start.line = srcMgr.getPresumedLineNumber(loc.getBegin());
-    location.range.start.character = srcMgr.getPresumedColumnNumber(loc.getBegin());
-    location.range.end.line = srcMgr.getPresumedLineNumber(loc.getEnd());
-    location.range.end.character = srcMgr.getPresumedColumnNumber(loc.getEnd());
+Location toRange(clang::SourceRange range, clang::syntax::TokenBuffer& tokBuf) {
+    auto& srcMgr = tokBuf.sourceManager();
+    Location location{};
+    location.uri = srcMgr.getFilename(range.getBegin());
+    /// It's impossible that a range has crossed multiple files.
+    assert(location.uri == srcMgr.getFilename(range.getEnd()));
+
+    if(range.getBegin().isMacroID() || range.getEnd().isMacroID()) {
+        range.dump(srcMgr);
+        return location;
+    }
+
+    auto begin = tokBuf.spelledTokenContaining(range.getBegin());
+    auto end = tokBuf.spelledTokenContaining(range.getEnd());
+
+    if(!begin || !end) {
+        // FIXME:
+        std::terminate();
+    }
+
+    location.range.start.line = srcMgr.getPresumedLineNumber(begin->location());
+    location.range.start.character = srcMgr.getPresumedColumnNumber(begin->location());
+
+    location.range.end.line = srcMgr.getPresumedLineNumber(end->endLocation());
+    location.range.end.character = srcMgr.getPresumedColumnNumber(end->endLocation());
+
     return location;
 }
 
@@ -54,7 +73,7 @@ Indexer& Indexer::addOccurrence(const clang::NamedDecl* decl, clang::SourceRange
 
     auto ID = symbols[lookup(decl)].ID;
     auto& srcMgr = sema.getSourceManager();
-    occurrences.emplace_back(Occurrence{ID, toLocation(range.getBegin(), srcMgr)});
+    occurrences.emplace_back(Occurrence{ID, toRange(range, tokBuf)});
     return *this;
 }
 
@@ -64,7 +83,7 @@ Indexer& Indexer::addOccurrence(int Kind, clang::SourceLocation loc) {
     }
 
     auto ID = SymbolID::fromKind(Kind);
-    occurrences.emplace_back(Occurrence{ID, toLocation(loc, sema.getSourceManager())});
+    occurrences.emplace_back(Occurrence{ID, toRange(loc, tokBuf)});
     return *this;
 }
 
@@ -78,7 +97,7 @@ Indexer& Indexer::addRelation(const clang::NamedDecl* from,
     auto index = lookup(from);
     auto& relations = this->relations[index];
     for(auto role: roles) {
-        relations.emplace_back(Relation{role, toLocation(range, sema.getSourceManager())});
+        relations.emplace_back(Relation{role, toRange(range, tokBuf)});
     }
     return *this;
 }

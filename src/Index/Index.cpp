@@ -92,8 +92,8 @@ public:
     }
 
     VISIT_DECL(VarDecl) {
-        llvm::outs() << "-------------------------\n";
-        decl->getTypeSourceInfo()->getTypeLoc().dump();
+        // llvm::outs() << "-------------------------\n";
+        // decl->getTypeSourceInfo()->getTypeLoc().dump();
         return true;
     }
 
