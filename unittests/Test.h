@@ -4,6 +4,7 @@
 
 #include <Support/FileSystem.h>
 #include <spdlog/fmt/bundled/color.h>
+#include <llvm/Support/MemoryBuffer.h>
 
 namespace clice {
 std::string test_dir();

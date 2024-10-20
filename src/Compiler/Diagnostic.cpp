@@ -4,7 +4,7 @@
 #include <clang/Basic/DiagnosticIDs.h>
 #include <clang/Basic/AllDiagnostics.h>
 
-#include <spdlog/fmt/bundled/color.h>
+// #include <spdlog/fmt/bundled/color.h>
 
 namespace clice {
 
@@ -113,10 +113,10 @@ void DiagnosticCollector::HandleDiagnostic(clang::DiagnosticsEngine::Level level
     llvm::SmallString<128> message;
     diagnostic.FormatDiagnostic(message);
     // diagnostic.getLocation();
-    fmt::print(fg(fmt::color::red),
-               "[Diagnostic, kind: {}, message: {}]\n",
-               refl::enum_name(level),
-               message.str().str());
+    // fmt::print(fg(fmt::color::red),
+    //           "[Diagnostic, kind: {}, message: {}]\n",
+    //           refl::enum_name(level),
+    //           message.str().str());
     diagnostic.getLocation().dump(diagnostic.getDiags()->getSourceManager());
     // get diagnostic text.
     auto id = diagnostic.getID();

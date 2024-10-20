@@ -4,6 +4,7 @@
 #include <Server/Logger.h>
 #include <Support/Reflection.h>
 #include <Support/FileSystem.h>
+#include <llvm/ADT/StringMap.h>
 
 namespace clice::config {
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <llvm/Support/Path.h>
 #include <llvm/Support/FileSystem.h>
 
 namespace clice {
