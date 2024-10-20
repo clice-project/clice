@@ -22,7 +22,7 @@
             "name": "clice_test",
             "program": "${workspaceFolder}/build/bin/clice_test",
             "args": [
-                "--test-dir=/home/ykiko/C++/clice2/tests/Source",
+                "--test-dir=/home/ykiko/C++/clice2/tests",
                 "--gtest_filter=clice.PCM"
             ],
             "cwd": "${workspaceFolder}"
@@ -33,7 +33,7 @@
             "name": "TemplateResolver",
             "program": "${workspaceFolder}/build/bin/clice_test",
             "args": [
-                "--test-dir=/home/ykiko/C++/clice2/tests/Source",
+                "--test-dir=/home/ykiko/C++/clice2/tests",
                 "--gtest_filter=clice.TemplateResolver"
             ],
             "cwd": "${workspaceFolder}"
@@ -44,7 +44,7 @@
             "name": "Index",
             "program": "${workspaceFolder}/build/bin/clice_test",
             "args": [
-                "--test-dir=/home/ykiko/C++/clice2/tests/Source",
+                "--test-dir=/home/ykiko/C++/clice2/tests",
                 "--gtest_filter=clice.Index"
             ],
             "cwd": "${workspaceFolder}"
