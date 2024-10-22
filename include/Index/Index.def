@@ -1,0 +1,67 @@
+#ifndef MAKE_CLANGD_HAPPY
+
+#include <Support/ADT.h>
+
+template <typename T>
+using Ref = T;
+
+using llvm::ArrayRef;
+using llvm::StringRef;
+
+struct Position {};
+
+enum RelationKind : std::uint32_t {};
+
+#endif
+
+/// If USR is not empty, value is the hash of USR.
+/// Otherwise, value is used to represent the kind of builtin symbols.
+struct SymbolID {
+    std::uint64_t value;
+    StringRef USR;
+};
+
+struct Location {
+    Position begin;
+    Position end;
+    StringRef file;
+};
+
+struct Relation {
+    RelationKind kind;
+    Ref<Location> location;
+};
+
+struct Symbol {
+    Ref<SymbolID> ID;
+    /// The name of this symbol.
+    StringRef name;
+    /// The document of this symbol.
+    StringRef document;
+    ArrayRef<Relation> relations;
+};
+
+/// Represents a symbol occurrence in the source code.
+struct Occurrence {
+    Ref<SymbolID> symbol;
+    Ref<Location> location;
+};
+
+struct Index {
+    /// The version of the index format.
+    StringRef version;
+    /// The language of the indexed code, currently only supports "C" and "C++".
+    StringRef language;
+    /// The URI of the source file.
+    StringRef URI;
+    /// The context of the source file.
+    StringRef context;
+    /// The commands used to compile the source file.
+    ArrayRef<StringRef> commands;
+    /// All the symbols in the source file.
+    ArrayRef<Symbol> symbols;
+    /// All the occurrences in the source file.
+    ArrayRef<Occurrence> occurrences;
+};
+
+#undef MAKE_CLANGD_HAPPY

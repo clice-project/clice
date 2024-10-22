@@ -2,11 +2,11 @@
 
 #include <Index/Index.h>
 
-namespace clice {
+namespace clice::index::in {
 
 class Loader {
 public:
-    Loader(CSIF csif, char* data) : csif(csif), data(data) {}
+    Loader(Index csif, char* data) : csif(csif), data(data) {}
 
     const Symbol& locate(Location loc) const {
         auto iter = std::partition_point(csif.occurrences.begin(), csif.occurrences.end(), [&](const auto& occurrence) {
@@ -30,8 +30,8 @@ public:
     }
 
 private:
-    CSIF csif;
+    Index csif;
     char* data;
 };
 
-}  // namespace clice
+}  // namespace clice::index::in

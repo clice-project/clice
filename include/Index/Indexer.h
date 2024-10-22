@@ -3,13 +3,13 @@
 #include <Index/Index.h>
 #include <Compiler/Clang.h>
 
-namespace clice {
+namespace clice::index::in {
 
 class Indexer {
 public:
     Indexer(clang::Sema& sema, clang::syntax::TokenBuffer& tokBuf) : sema(sema), tokBuf(tokBuf) {}
 
-    CSIF index();
+    Index index();
 
     std::size_t lookup(const clang::NamedDecl* decl);
 
@@ -19,7 +19,9 @@ public:
 
     Indexer& addOccurrence(const clang::NamedDecl* decl, clang::SourceRange range);
 
-    Indexer& addRelation(const clang::NamedDecl* from, clang::SourceRange range, std::initializer_list<Role> roles);
+    Indexer& addRelation(const clang::NamedDecl* from,
+                         clang::SourceRange range,
+                         std::initializer_list<RelationKind> roles);
 
 private:
     clang::Sema& sema;
@@ -36,5 +38,5 @@ private:
     llvm::DenseMap<const clang::Decl*, std::size_t> cache;
 };
 
-}  // namespace clice
+}  // namespace clice::index::in
 

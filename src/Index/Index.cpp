@@ -1,6 +1,6 @@
 #include <Index/Indexer.h>
 
-namespace clice {
+namespace clice::index::in {
 
 namespace {
 
@@ -109,7 +109,7 @@ public:
     bool VisitTagTypeLoc(clang ::TagTypeLoc loc) {
         auto decl = loc.getTypePtr()->getDecl();
         auto location = loc.getNameLoc();
-        slab.addOccurrence(decl, location).addRelation(decl, location, {Role::Reference});
+        slab.addOccurrence(decl, location).addRelation(decl, location, {RelationKind::Reference});
         return true;
     }
 
@@ -121,7 +121,7 @@ public:
             case clang::ElaboratedTypeKeyword::Class:
             case clang::ElaboratedTypeKeyword::Union:
             case clang::ElaboratedTypeKeyword::Enum: {
-                slab.addOccurrence(BuiltinSymbolKind::elaborated_type_specifier, keywordLoc);
+                // slab.addOccurrence(BuiltinSymbolKind::elaborated_type_specifier, keywordLoc);
             }
 
             case clang::ElaboratedTypeKeyword::Typename: {
@@ -137,14 +137,14 @@ public:
     bool VisitTypedefTypeLoc(clang::TypedefTypeLoc loc) {
         auto decl = loc.getTypePtr()->getDecl();
         auto location = loc.getNameLoc();
-        slab.addOccurrence(decl, location).addRelation(decl, location, {Role::Reference});
+        slab.addOccurrence(decl, location).addRelation(decl, location, {RelationKind::Reference});
         return true;
     }
 
     bool VisitUsingTypeLoc(clang::UsingTypeLoc loc) {
         auto decl = loc.getTypePtr()->getFoundDecl();
         auto location = loc.getNameLoc();
-        slab.addOccurrence(decl, location).addRelation(decl, location, {Role::Reference});
+        slab.addOccurrence(decl, location).addRelation(decl, location, {RelationKind::Reference});
         return true;
     }
 
@@ -178,24 +178,24 @@ public:
                     auto specialized = spec->getSpecializedTemplateOrPartial();
                     if(specialized.is<clang::ClassTemplateDecl*>()) {
                         slab.addOccurrence(CTD, nameLoc)
-                            .addRelation(CTD, nameLoc, {Role::Reference, Role::ImplicitInstantiation});
+                            .addRelation(CTD, nameLoc, {RelationKind::Reference, RelationKind::ImplicitInstantiation});
                     } else {
                         auto PSD = specialized.get<clang::ClassTemplatePartialSpecializationDecl*>();
                         slab.addOccurrence(PSD, nameLoc)
-                            .addRelation(PSD, nameLoc, {Role::Reference, Role::ImplicitInstantiation})
-                            .addRelation(CTD, nameLoc, {Role::Reference});
+                            .addRelation(PSD, nameLoc, {RelationKind::Reference, RelationKind::ImplicitInstantiation})
+                            .addRelation(CTD, nameLoc, {RelationKind::Reference});
                     }
                 } else {
                     // full specialization
                     slab.addOccurrence(spec, nameLoc)
-                        .addRelation(spec, nameLoc, {Role::Reference, Role::FullSpecialization});
+                        .addRelation(spec, nameLoc, {RelationKind::Reference, RelationKind::FullSpecialization});
                 }
             }
         } else if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(decl)) {
             // Beacuse type alias template is not allowed to have partial and full specialization,
             // So we do notin
             slab.addOccurrence(TATD, nameLoc)
-                .addRelation(TATD, nameLoc, {Role::Reference, Role::ImplicitInstantiation});
+                .addRelation(TATD, nameLoc, {RelationKind::Reference, RelationKind::ImplicitInstantiation});
         }
         return true;
     }
@@ -211,8 +211,8 @@ private:
 
 }  // namespace
 
-CSIF Indexer::index() {
-    CSIF csif;
+Index Indexer::index() {
+    Index csif;
     SymbolCollector collector(*this, sema.getASTContext());
     collector.TraverseAST(sema.getASTContext());
 
@@ -227,6 +227,7 @@ CSIF Indexer::index() {
     llvm::sort(symbols, [](const Symbol& lhs, const Symbol& rhs) {
         return lhs.ID < rhs.ID;
     });
+
     llvm::sort(occurrences, [](const Occurrence& lhs, const Occurrence& rhs) {
         return lhs.location < rhs.location;
     });
@@ -239,4 +240,4 @@ CSIF Indexer::index() {
     return csif;
 };
 
-}  // namespace clice
+}  // namespace clice::index::in

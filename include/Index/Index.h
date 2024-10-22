@@ -3,49 +3,18 @@
 #include <Support/ADT.h>
 #include <Protocol/Basic.h>
 
-#include <Index/SymbolID.h>
+// #include <Index/SymbolID.h>
 
-namespace clice {
+namespace clice::index {
 
-struct Symbol;
-struct Occurrence;
+/// Note that we have two kinds of `Index` definitions. One for collecting data from AST,
+/// and the other is used to serialize data to the binary format. The key difference is that
+/// one uses pointers and the other uses offsets to store data. All structures that uses ArrayRef
+/// or StringRef are defined in `Index.def` so that they could have different definitions in
+/// context.
 
-// struct Diagnostic {};
-// struct InlayHint {};
-
-/// CSIF stands for "C/C++ Semantic Index Format".
-/// It is an efficient binary format for storing the semantic information of C/C++ source code.
-/// The main references are [SCIP](https://sourcegraph.com/blog/announcing-scip) and
-/// [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html).
-struct CSIF {
-    /// The version of the CSIF format.
-    llvm::StringRef version;
-    /// The language of the source code, currently only supports "c" and "c++".
-    llvm::StringRef language;
-    /// The URI of the source file.
-    llvm::StringRef uri;
-    /// The context of the source file, used to check whether need to re-index the source file.
-    llvm::StringRef content;
-    /// The commands used to compile the source file.
-    llvm::ArrayRef<llvm::StringRef> commands;
-
-    /// The symbols in the source file.
-    llvm::ArrayRef<Symbol> symbols;
-    /// The occurrences in the source file.
-    llvm::ArrayRef<Occurrence> occurrences;
-
-    ///// The semantic tokens in the source file.
-    // llvm::ArrayRef<std::uint32_t> semanticTokens;
-
-    // FIXME:
-    /// The diagnostics in the source file.
-    // llvm::ArrayRef<Diagnostic> diagnostics;
-    /// The inlay hints in the source file.
-    // llvm::ArrayRef<InlayHint> inlayHints;
-};
-
-/// Note that it's possible to have multiple roles at the same time.
-enum class Role {
+/// Used to discribe the kind of relation between two symbols.
+enum RelationKind : std::uint32_t {
     Invalid,
     Declaration,
     Definition,
@@ -81,48 +50,100 @@ enum class Role {
     Callee,
 };
 
-struct Location {
-    proto::DocumentUri uri;
-    proto::Range range;
+/// Represent a position in the source code, the line and column are 1-based.
+struct Position {
+    std::uint32_t line;
+    std::uint32_t column;
 
-    friend std::strong_ordering operator<=> (const Location& lhs, const Location& rhs) = default;
+    friend std::strong_ordering operator<=> (const Position&, const Position&) = default;
 };
 
-/// If symbol A has a relation to symbol B with role R.
-/// For example, `Caller`. Then we say B is a caller of A.
-struct Relation {
-    /// The role of the relation.
-    Role role;
-    /// The location of the related symbol.
-    Location location;
+}  // namespace clice::index
 
-    friend std::strong_ordering operator<=> (const Relation& lhs, const Relation& rhs) = default;
+namespace clice::index::in {
+
+template <typename T>
+using Ref = T;
+
+using llvm::ArrayRef;
+using llvm::StringRef;
+
+#define MAKE_CLANGD_HAPPY
+#include "Index.def"
+
+inline SymbolID kindToSymbolID(std::uint64_t kind) {
+    return SymbolID{kind, ""};
+}
+
+inline SymbolID USRToSymbolID(llvm::StringRef USR) {
+    return SymbolID{llvm::hash_value(USR), USR};
+}
+
+inline std::strong_ordering operator<=> (const SymbolID& lhs, const SymbolID& rhs) {
+    auto cmp = lhs.value <=> rhs.value;
+    if(cmp != std::strong_ordering::equal) {
+        return cmp;
+    }
+    return lhs.USR.compare(rhs.USR) <=> 0;
+}
+
+inline std::strong_ordering operator<=> (const Location& lhs, const Location& rhs) {
+    auto cmp = lhs.file.compare(rhs.file);
+    if(cmp != 0) {
+        return cmp <=> 0;
+    }
+    return std::tuple{lhs.begin, lhs.end} <=> std::tuple{rhs.begin, rhs.end};
 };
 
-struct Symbol {
-    /// The ID of the symbol.
-    SymbolID ID;
-    /// display when hover.
-    llvm::StringRef document;
+}  // namespace clice::index::in
 
-    // TODO: append more useful information.
+namespace llvm {
 
-    /// The relations of the symbol.
-    llvm::ArrayRef<Relation> relations;
+using clice::index::in::kindToSymbolID;
+using SymbolID = clice::index::in::SymbolID;
+
+template <>
+struct DenseMapInfo<SymbolID> {
+    inline static SymbolID getEmptyKey() {
+        static SymbolID EMPTY_KEY = kindToSymbolID(std::numeric_limits<uint64_t>::max());
+        return EMPTY_KEY;
+    }
+
+    inline static SymbolID getTombstoneKey() {
+        static SymbolID TOMBSTONE_KEY = kindToSymbolID(std::numeric_limits<uint64_t>::max() - 1);
+        return TOMBSTONE_KEY;
+    }
+
+    inline static llvm::hash_code getHashValue(const SymbolID& ID) {
+        return ID.value;
+    }
+
+    inline static bool isEqual(const SymbolID& LHS, const SymbolID& RHS) {
+        return LHS.value == RHS.value && LHS.USR == RHS.USR;
+    }
 };
 
-struct Occurrence {
-    /// The ID of the symbol.
-    SymbolID symbol;
-    /// The range of the occurrence.
-    Location location;
+}  // namespace llvm
+
+namespace clice::index::out {
+
+/// Because `SymbolID` and `Location` are duplicate referenced by `Relation`, `Symbol` and `Occurrence`,
+/// To save space, we use offsets to index them.
+template <typename T>
+struct Ref {
+    std::uint32_t offset;
 };
 
-enum BuiltinSymbolKind {
-
-#define SYMBOL(name, description) name,
-#include <Index/Symbols.def>
-#undef SYMBOL
+template <typename T>
+struct ArrayRef {
+    std::uint32_t offset;
+    std::uint32_t length;
 };
 
-}  // namespace clice
+using StringRef = ArrayRef<char>;
+
+#define MAKE_CLANGD_HAPPY
+#include "Index.def"
+
+}  // namespace clice::index::out
+

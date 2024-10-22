@@ -1,16 +1,16 @@
 #include <Index/Indexer.h>
 #include <clang/Index/USRGeneration.h>
 
-namespace clice {
+namespace clice::index::in {
 
 namespace {
 
 Location toRange(clang::SourceRange range, clang::syntax::TokenBuffer& tokBuf) {
     auto& srcMgr = tokBuf.sourceManager();
     Location location{};
-    location.uri = srcMgr.getFilename(range.getBegin());
+    location.file = srcMgr.getFilename(range.getBegin());
     /// It's impossible that a range has crossed multiple files.
-    assert(location.uri == srcMgr.getFilename(range.getEnd()));
+    assert(location.file == srcMgr.getFilename(range.getEnd()));
 
     if(range.getBegin().isMacroID() || range.getEnd().isMacroID()) {
         range.dump(srcMgr);
@@ -25,11 +25,11 @@ Location toRange(clang::SourceRange range, clang::syntax::TokenBuffer& tokBuf) {
         std::terminate();
     }
 
-    location.range.start.line = srcMgr.getPresumedLineNumber(begin->location());
-    location.range.start.character = srcMgr.getPresumedColumnNumber(begin->location());
+    location.begin.line = srcMgr.getPresumedLineNumber(begin->location());
+    location.begin.column = srcMgr.getPresumedColumnNumber(begin->location());
 
-    location.range.end.line = srcMgr.getPresumedLineNumber(end->endLocation());
-    location.range.end.character = srcMgr.getPresumedColumnNumber(end->endLocation());
+    location.end.line = srcMgr.getPresumedLineNumber(end->endLocation());
+    location.end.column = srcMgr.getPresumedColumnNumber(end->endLocation());
 
     return location;
 }
@@ -51,16 +51,16 @@ Indexer& Indexer::addSymbol(const clang::NamedDecl* decl) {
     llvm::SmallString<128> USR;
     clang::index::generateUSRForDecl(decl, USR);
 
-    if(!symbolIndex.contains(SymbolID::fromUSR(USR))) {
-        auto ID = SymbolID::fromUSR(saver.save(USR.str()));
+    if(!symbolIndex.contains(USRToSymbolID(USR))) {
+        auto ID = USRToSymbolID(saver.save(USR.str()));
         symbols.emplace_back(ID);
+        Symbol symbol;
         symbols.back().document = saver.save(decl->getNameAsString());
-
         cache.try_emplace(decl, symbols.size() - 1);
         symbolIndex.try_emplace(ID, symbols.size() - 1);
         relations.emplace_back();
     } else {
-        cache.try_emplace(decl, symbolIndex[SymbolID::fromUSR(USR)]);
+        cache.try_emplace(decl, symbolIndex[USRToSymbolID(USR)]);
     }
 
     return *this;
@@ -82,14 +82,14 @@ Indexer& Indexer::addOccurrence(int Kind, clang::SourceLocation loc) {
         return *this;
     }
 
-    auto ID = SymbolID::fromKind(Kind);
+    auto ID = kindToSymbolID(Kind);
     occurrences.emplace_back(Occurrence{ID, toRange(loc, tokBuf)});
     return *this;
 }
 
 Indexer& Indexer::addRelation(const clang::NamedDecl* from,
                               clang::SourceRange range,
-                              std::initializer_list<Role> roles) {
+                              std::initializer_list<RelationKind> roles) {
     if(range.isInvalid()) {
         return *this;
     }
@@ -102,4 +102,4 @@ Indexer& Indexer::addRelation(const clang::NamedDecl* from,
     return *this;
 }
 
-}  // namespace clice
+}  // namespace clice::index::in

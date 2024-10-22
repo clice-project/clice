@@ -6,6 +6,8 @@
 #include <string_view>
 #include <source_location>
 
+#include <Support/TypeTraits.h>
+
 namespace clice::impl {
 
 struct Any {
@@ -190,32 +192,6 @@ consteval auto enum_max() {
         return N;
 }
 
-template <typename Source, typename Target>
-struct replace_cv_ref;
-
-template <typename T, typename Target>
-struct replace_cv_ref<T&, Target> {
-    using type = Target&;
-};
-
-template <typename T, typename Target>
-struct replace_cv_ref<T&&, Target> {
-    using type = Target&&;
-};
-
-template <typename T, typename Target>
-struct replace_cv_ref<const T&, Target> {
-    using type = const Target&;
-};
-
-template <typename T, typename Target>
-struct replace_cv_ref<const T&&, Target> {
-    using type = const Target&&;
-};
-
-template <typename Source, typename Target>
-using replace_cv_ref_t = typename replace_cv_ref<Source, Target>::type;
-
 }  // namespace clice::impl
 
 namespace clice::refl {
@@ -257,7 +233,7 @@ template <typename... Ts>
 struct Record : Ts... {
     template <typename Object, typename Callback>
     static void foreach(Object&& object, const Callback& callback) {
-        (clice::refl::foreach(static_cast<impl::replace_cv_ref_t<Object&&, Ts>>(object), callback), ...);
+        (clice::refl::foreach(static_cast<replace_cv_ref_t<Object&&, Ts>>(object), callback), ...);
     }
 };
 

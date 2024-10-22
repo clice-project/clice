@@ -19,7 +19,7 @@ TEST(clice, Index) {
     foreachFile("Index", [](llvm::StringRef filepath, llvm::StringRef content) {
         Compiler compiler("main.cpp", content, compileArgs);
         compiler.buildAST();
-        Indexer slab(compiler.sema(), compiler.tokBuf());
+        index::in::Indexer slab(compiler.sema(), compiler.tokBuf());
         auto csif = slab.index();
         auto value = json::serialize(csif);
         std::error_code EC;
@@ -30,9 +30,9 @@ TEST(clice, Index) {
         // llvm::outs() << value << "\n";
 
         if(filepath.ends_with("ClassTemplate.cpp")) {
-            Loader loader(csif, nullptr);
-            Location location;
-            location.range = {14, 1, 14, 2};
+            index::in::Loader loader(csif, nullptr);
+            index::in::Location location;
+            location = {14, 1, 14, 2};
             auto& sym = loader.locate(location);
             llvm::outs() << sym.document << "\n";
         }
