@@ -49,4 +49,13 @@ struct identity {
     using type = T;
 };
 
+template <typename T, template <typename...> typename HKT>
+constexpr bool is_specialization_of = false;
+
+template <template <typename...> typename HKT, typename... Args>
+constexpr bool is_specialization_of<HKT<Args...>, HKT> = true;
+
+template <typename T>
+constexpr inline bool dependent_false = false;
+
 }  // namespace clice

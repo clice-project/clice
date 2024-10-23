@@ -1,16 +1,18 @@
 #ifndef MAKE_CLANGD_HAPPY
 
-#include <Support/ADT.h>
+#include <cstdint>
 
 template <typename T>
 using Ref = T;
 
-using llvm::ArrayRef;
-using llvm::StringRef;
+template <typename T>
+struct ArrayRef {};
+
+using StringRef = ArrayRef<char>;
 
 struct Position {};
 
-enum RelationKind : std::uint32_t {};
+enum RelationKind {};
 
 #endif
 

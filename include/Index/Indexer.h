@@ -3,13 +3,13 @@
 #include <Index/Index.h>
 #include <Compiler/Clang.h>
 
-namespace clice::index::in {
+namespace clice::index {
 
 class Indexer {
 public:
     Indexer(clang::Sema& sema, clang::syntax::TokenBuffer& tokBuf) : sema(sema), tokBuf(tokBuf) {}
 
-    Index index();
+    in::Index index();
 
     std::size_t lookup(const clang::NamedDecl* decl);
 
@@ -30,13 +30,13 @@ private:
     llvm::BumpPtrAllocator allocator;
     llvm::StringSaver saver{allocator};
 
-    std::vector<Symbol> symbols;
-    std::vector<Occurrence> occurrences;
-    std::vector<std::vector<Relation>> relations;
+    std::vector<in::Symbol> symbols;
+    std::vector<in::Occurrence> occurrences;
+    std::vector<std::vector<in::Relation>> relations;
 
-    llvm::DenseMap<SymbolID, std::size_t> symbolIndex;
+    llvm::DenseMap<in::SymbolID, std::size_t> symbolIndex;
     llvm::DenseMap<const clang::Decl*, std::size_t> cache;
 };
 
-}  // namespace clice::index::in
+}  // namespace clice::index
 

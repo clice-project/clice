@@ -2,36 +2,37 @@
 
 #include <Index/Index.h>
 
-namespace clice::index::in {
+namespace clice::index {
 
 class Loader {
 public:
-    Loader(Index csif, char* data) : csif(csif), data(data) {}
+    Loader(char* data) : data(data), index(*reinterpret_cast<out::Index*>(data)) {
+        // llvm::outs() << "Symbol count: " << index.symbols.length << "\n";
+        int x = 1;
+    }
 
-    const Symbol& locate(Location loc) const {
-        auto iter = std::partition_point(csif.occurrences.begin(), csif.occurrences.end(), [&](const auto& occurrence) {
-            return occurrence.location < loc;
-        });
+    const out::Symbol& locate(in::SymbolID symbolID);
 
-        if(iter == csif.occurrences.end()) {
-            std::terminate();
-        }
+    in::SymbolID locate(in::Location location);
 
-        auto id = iter->symbol;
-        auto symbol = std::partition_point(csif.symbols.begin(), csif.symbols.end(), [&](const auto& symbol) {
-            return symbol.ID < id;
-        });
+    template <typename T>
+    const T& access(out::Ref<T> ref) {
+        return *reinterpret_cast<const T*>(data + ref.offset);
+    }
 
-        if(symbol == csif.symbols.end()) {
-            std::terminate();
-        }
+    llvm::StringRef make_string(out::StringRef ref) {
+        return {data + ref.offset, ref.length};
+    }
 
-        return *symbol;
+    template <typename T>
+    std::pair<const T*, const T*> make_range(out::ArrayRef<T> array) {
+        const T* begin = reinterpret_cast<const T*>(data + array.offset);
+        return {begin, begin + array.length};
     }
 
 private:
-    Index csif;
     char* data;
+    const out::Index& index;
 };
 
-}  // namespace clice::index::in
+}  // namespace clice::index

@@ -258,4 +258,16 @@ constexpr auto enum_name(T value) {
     return names[static_cast<std::size_t>(value)];
 }
 
+template <typename T, typename U, typename Callback>
+constexpr auto foreach(T&& t, U&& u, const Callback& callback) {
+    constexpr auto count1 = impl::member_count<std::decay_t<T>>();
+    constexpr auto count2 = impl::member_count<std::decay_t<U>>();
+    static_assert(count1 == count2, "Member count mismatch");
+    auto members1 = impl::collcet_members<count1>(t);
+    auto members2 = impl::collcet_members<count2>(u);
+    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+        (callback(*std::get<Is>(members1), *std::get<Is>(members2)), ...);
+    }(std::make_index_sequence<count1>{});
+}
+
 };  // namespace clice::refl
