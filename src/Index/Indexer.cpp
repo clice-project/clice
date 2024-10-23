@@ -1,13 +1,13 @@
 #include <Index/Indexer.h>
 #include <clang/Index/USRGeneration.h>
 
-namespace clice::index::in {
+namespace clice::index {
 
 namespace {
 
-Location toRange(clang::SourceRange range, clang::syntax::TokenBuffer& tokBuf) {
+in::Location toRange(clang::SourceRange range, clang::syntax::TokenBuffer& tokBuf) {
     auto& srcMgr = tokBuf.sourceManager();
-    Location location{};
+    in::Location location{};
     location.file = srcMgr.getFilename(range.getBegin());
     /// It's impossible that a range has crossed multiple files.
     assert(location.file == srcMgr.getFilename(range.getEnd()));
@@ -51,16 +51,16 @@ Indexer& Indexer::addSymbol(const clang::NamedDecl* decl) {
     llvm::SmallString<128> USR;
     clang::index::generateUSRForDecl(decl, USR);
 
-    if(!symbolIndex.contains(USRToSymbolID(USR))) {
-        auto ID = USRToSymbolID(saver.save(USR.str()));
+    if(!symbolIndex.contains(in::USRToSymbolID(USR))) {
+        auto ID = in::USRToSymbolID(saver.save(USR.str()));
         symbols.emplace_back(ID);
-        Symbol symbol;
+        in::Symbol symbol;
         symbols.back().document = saver.save(decl->getNameAsString());
         cache.try_emplace(decl, symbols.size() - 1);
         symbolIndex.try_emplace(ID, symbols.size() - 1);
         relations.emplace_back();
     } else {
-        cache.try_emplace(decl, symbolIndex[USRToSymbolID(USR)]);
+        cache.try_emplace(decl, symbolIndex[in::USRToSymbolID(USR)]);
     }
 
     return *this;
@@ -73,7 +73,7 @@ Indexer& Indexer::addOccurrence(const clang::NamedDecl* decl, clang::SourceRange
 
     auto ID = symbols[lookup(decl)].ID;
     auto& srcMgr = sema.getSourceManager();
-    occurrences.emplace_back(Occurrence{ID, toRange(range, tokBuf)});
+    occurrences.emplace_back(in::Occurrence{ID, toRange(range, tokBuf)});
     return *this;
 }
 
@@ -82,8 +82,8 @@ Indexer& Indexer::addOccurrence(int Kind, clang::SourceLocation loc) {
         return *this;
     }
 
-    auto ID = kindToSymbolID(Kind);
-    occurrences.emplace_back(Occurrence{ID, toRange(loc, tokBuf)});
+    auto ID = in::kindToSymbolID(Kind);
+    occurrences.emplace_back(in::Occurrence{ID, toRange(loc, tokBuf)});
     return *this;
 }
 
@@ -97,9 +97,9 @@ Indexer& Indexer::addRelation(const clang::NamedDecl* from,
     auto index = lookup(from);
     auto& relations = this->relations[index];
     for(auto role: roles) {
-        relations.emplace_back(Relation{role, toRange(range, tokBuf)});
+        relations.emplace_back(in::Relation{role, toRange(range, tokBuf)});
     }
     return *this;
 }
 
-}  // namespace clice::index::in
+}  // namespace clice::index

@@ -1,6 +1,6 @@
 #include <Index/Indexer.h>
 
-namespace clice::index::in {
+namespace clice::index {
 
 namespace {
 
@@ -211,24 +211,24 @@ private:
 
 }  // namespace
 
-Index Indexer::index() {
-    Index csif;
+in::Index Indexer::index() {
+    in::Index csif;
     SymbolCollector collector(*this, sema.getASTContext());
     collector.TraverseAST(sema.getASTContext());
 
     for(std::size_t i = 0; i < relations.size(); ++i) {
-        llvm::sort(relations[i], [](const Relation& lhs, const Relation& rhs) {
+        llvm::sort(relations[i], [](const in::Relation& lhs, const in::Relation& rhs) {
             return lhs.location < rhs.location;
         });
 
         symbols[i].relations = relations[i];
     }
 
-    llvm::sort(symbols, [](const Symbol& lhs, const Symbol& rhs) {
+    llvm::sort(symbols, [](const in::Symbol& lhs, const in::Symbol& rhs) {
         return lhs.ID < rhs.ID;
     });
 
-    llvm::sort(occurrences, [](const Occurrence& lhs, const Occurrence& rhs) {
+    llvm::sort(occurrences, [](const in::Occurrence& lhs, const in::Occurrence& rhs) {
         return lhs.location < rhs.location;
     });
 
@@ -240,4 +240,4 @@ Index Indexer::index() {
     return csif;
 };
 
-}  // namespace clice::index::in
+}  // namespace clice::index
