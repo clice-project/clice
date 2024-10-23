@@ -42,7 +42,7 @@ Packer::Layout Packer::Layout::from(const in::Index& index) {
 
 void Packer::pack(in::ArrayRef<in::Symbol> in, out::ArrayRef<out::Symbol>& out) {
     out.offset = layout.symbolBegin + symbols.size() * sizeof(out::Symbol);
-    out.length = layout.symbolCount;
+    out.length = in.size();
     for(auto& symbol: in) {
         pack(symbol, symbols.emplace_back());
     }
@@ -50,7 +50,7 @@ void Packer::pack(in::ArrayRef<in::Symbol> in, out::ArrayRef<out::Symbol>& out) 
 
 void Packer::pack(in::ArrayRef<in::Occurrence> in, out::ArrayRef<out::Occurrence>& out) {
     out.offset = layout.occurrenceBegin + occurrences.size() * sizeof(out::Occurrence);
-    out.length = layout.occurrenceCount;
+    out.length = in.size();
     for(auto& occurrence: in) {
         pack(occurrence, occurrences.emplace_back());
     }
@@ -58,7 +58,7 @@ void Packer::pack(in::ArrayRef<in::Occurrence> in, out::ArrayRef<out::Occurrence
 
 void Packer::pack(in::ArrayRef<in::Relation> in, out::ArrayRef<out::Relation>& out) {
     out.offset = layout.relationBegin + relations.size() * sizeof(out::Relation);
-    out.length = layout.relationCount;
+    out.length = in.size();
     for(auto& relation: in) {
         pack(relation, relations.emplace_back());
     }
@@ -66,30 +66,44 @@ void Packer::pack(in::ArrayRef<in::Relation> in, out::ArrayRef<out::Relation>& o
 
 void Packer::pack(in::ArrayRef<in::StringRef> in, out::ArrayRef<out::StringRef>& out) {
     out.offset = layout.stringBegin + strings.size() * sizeof(out::StringRef);
-    out.length = layout.stringCount;
+    out.length = in.size();
     for(auto& string: in) {
         pack(string, strings.emplace_back());
     }
 }
 
 void Packer::pack(in::SymbolID in, out::Ref<out::SymbolID>& out) {
-    out.offset = layout.symbolIDBegin + symbolIDs.size() * sizeof(out::SymbolID);
-    pack(in, symbolIDs.emplace_back());
+    const auto index = symbolIDs.size();
+    auto [iter, success] = symbolIDcache.try_emplace(in, index);
+    if(success) {
+        out.offset = layout.symbolIDBegin + index * sizeof(out::SymbolID);
+        pack(in, symbolIDs.emplace_back());
+    } else {
+        out.offset = layout.symbolIDBegin + iter->second * sizeof(out::SymbolID);
+    }
 }
 
 void Packer::pack(in::Location in, out::Ref<out::Location>& out) {
-    out.offset = layout.locationBegin + locations.size() * sizeof(out::Location);
-    pack(in, locations.emplace_back());
+    const auto index = locations.size();
+    auto [iter, success] = locationCache.try_emplace(in, index);
+    if(success) {
+        out.offset = layout.locationBegin + index * sizeof(out::Location);
+        pack(in, locations.emplace_back());
+    } else {
+        out.offset = layout.locationBegin + iter->second * sizeof(out::Location);
+    }
 }
 
 void Packer::pack(in::StringRef in, out::StringRef& out) {
     out.offset = layout.charBegin + chars.size();
     out.length = in.size();
-    chars.insert(chars.end(), in.begin(), in.end());
-    chars.push_back('\0');
+    if(out.length != 0) {
+        chars.insert(chars.end(), in.begin(), in.end());
+        chars.push_back('\0');
+    }
 }
 
-std::vector<char> Packer::pack(in::Index inIndex) {
+std::vector<char> Packer::pack(const in::Index& inIndex) {
     layout = Layout::from(inIndex);
     symbols.reserve(layout.symbolCount);
     occurrences.reserve(layout.occurrenceCount);

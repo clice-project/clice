@@ -101,6 +101,7 @@ namespace llvm {
 
 using clice::index::in::kindToSymbolID;
 using SymbolID = clice::index::in::SymbolID;
+using Location = clice::index::in::Location;
 
 template <>
 struct DenseMapInfo<SymbolID> {
@@ -120,6 +121,25 @@ struct DenseMapInfo<SymbolID> {
 
     inline static bool isEqual(const SymbolID& LHS, const SymbolID& RHS) {
         return LHS.value == RHS.value && LHS.USR == RHS.USR;
+    }
+};
+
+template <>
+struct DenseMapInfo<Location> {
+    inline static Location getEmptyKey() {
+        return Location{};
+    }
+
+    inline static Location getTombstoneKey() {
+        return Location{.file = "Tombstone"};
+    }
+
+    inline static llvm::hash_code getHashValue(const Location& location) {
+        return llvm::hash_combine(location.file, location.begin.line, location.begin.column, location.end.line, location.end.column);
+    }
+
+    inline static bool isEqual(const Location& LHS, const Location& RHS) {
+        return LHS <=> RHS == std::strong_ordering::equal;
     }
 };
 

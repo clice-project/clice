@@ -9,8 +9,9 @@ in::SymbolID Loader::locate(in::Location location) {
     auto result = std::partition_point(begin, end, [&](const out::Occurrence& occurrence) {
         auto& loc = access(occurrence.location);
         in::Location decodedLoc = {loc.begin, loc.end, make_string(loc.file)};
-        llvm::outs() << "Decoded location: " << decodedLoc.begin.line << " " << decodedLoc.begin.column << "\n";
-        return decodedLoc >= location;
+        llvm::outs() << "Decoded location: " << decodedLoc.begin.line << " " << decodedLoc.begin.column
+                     << decodedLoc.file << "\n";
+        return decodedLoc < location;
     });
 
     if(result == end) {

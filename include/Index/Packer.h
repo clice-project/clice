@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Index.h"
+#include "llvm/ADT/DenseMap.h"
 
 namespace clice::index {
 
@@ -8,7 +9,7 @@ class Packer {
 public:
     Packer() = default;
 
-    std::vector<char> pack(in::Index index);
+    std::vector<char> pack(const in::Index& index);
 
 private:
     struct Layout {
@@ -52,6 +53,8 @@ private:
     std::vector<out::SymbolID> symbolIDs;
     std::vector<out::Location> locations;
     std::vector<char> chars;
+    llvm::DenseMap<in::SymbolID, std::size_t> symbolIDcache;
+    llvm::DenseMap<in::Location, std::size_t> locationCache;
 };
 
 }  // namespace clice::index
