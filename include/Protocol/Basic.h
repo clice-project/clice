@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstdint>
+#include <string>
+#include <vector>
+#include <array>
 #include <Support/Reflection.h>
 
 namespace clice::proto {

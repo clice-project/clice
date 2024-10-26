@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
-#include <Compiler/ParsedAST.h>
+// #include <Compiler/ParsedAST.h>
 #include <Feature/SemanticTokens.h>
 
 namespace {
 
-using namespace clang;
+// using namespace clang;
 
 template <typename T>
 auto f() {

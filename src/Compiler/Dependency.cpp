@@ -1,4 +1,4 @@
-#include <Compiler/Dependency.h>
+
 #include <clang/Tooling/CompilationDatabase.h>
 #include <clang/Tooling/DependencyScanning/DependencyScanningTool.h>
 

@@ -2,8 +2,6 @@
 
 #include <llvm/ADT/StringMap.h>
 #include <Support/JSON.h>
-#include <Compiler/Preamble.h>
-#include <Compiler/ParsedAST.h>
 
 namespace clice {
 
@@ -11,11 +9,11 @@ namespace clice {
 class Scheduler {
 private:
     struct TU {
-        using message = llvm::unique_function<json::Object()>;
-        std::string content;
-        std::deque<message> messages;
-        std::unique_ptr<ParsedAST> ast;
-        std::unique_ptr<Preamble> preamble;
+        // using message = llvm::unique_function<json::Object()>;
+        // std::string content;
+        // std::deque<message> messages;
+        // std::unique_ptr<ParsedAST> ast;
+        // std::unique_ptr<Preamble> preamble;
     };
 
 public:

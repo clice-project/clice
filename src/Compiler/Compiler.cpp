@@ -1,6 +1,4 @@
 #include <Compiler/Compiler.h>
-#include <Compiler/Preamble.h>
-
 #include <clang/Lex/PreprocessorOptions.h>
 #include <clang/Frontend/TextDiagnosticPrinter.h>
 

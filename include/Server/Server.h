@@ -2,6 +2,7 @@
 
 #include <Server/Scheduler.h>
 #include <Protocol/Protocol.h>
+#include <llvm/ADT/FunctionExtras.h>
 
 namespace clice {
 
