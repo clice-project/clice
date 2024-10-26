@@ -1,5 +1,6 @@
 #include <Compiler/Directive.h>
 #include <Support/Reflection.h>
+#include <clang/Lex/MacroInfo.h>
 #include <clang/Lex/MacroArgs.h>
 
 namespace clice {
@@ -18,21 +19,30 @@ struct CommentHandler : public clang::CommentHandler {
     }
 };
 
-struct PPCallback : clang::PPCallbacks {
-    PPCallback(Directives& directive) : directive(directive) {}
+struct PragmaHandler : public clang::PragmaHandler {
+    virtual void HandlePragma(clang::Preprocessor& PP, clang::PragmaIntroducer Introducer, clang::Token& FirstToken) {
+        // TODO:
+    }
 
-    Directives& directive;
+    /// getIfNamespace - If this is a namespace, return it.  This is equivalent to
+    /// using a dynamic_cast, but doesn't require RTTI.
+    virtual clang::PragmaNamespace* getIfNamespace() {
+        return nullptr;
+    }
+};
+
+struct PPCallback : clang::PPCallbacks {
+    PPCallback(clang::Preprocessor& preproc) : preproc(preproc), srcMgr(preproc.getSourceManager()) {}
+
+    clang::Preprocessor& preproc;
+    clang::SourceManager& srcMgr;
+    ;
     clang::FileID currentID;
 
     void FileChanged(clang::SourceLocation loc,
                      clang::PPCallbacks::FileChangeReason reason,
                      clang::SrcMgr::CharacteristicKind fileType,
-                     clang::FileID) override {
-        // llvm::outs() << directive.sourceManager.getFileEntryForID(id)->tryGetRealPathName();
-        if(reason == clang::PPCallbacks::FileChangeReason::EnterFile) {
-            currentID = directive.sourceManager.getFileID(loc);
-        }
-    }
+                     clang::FileID) override {}
 
     void InclusionDirective(clang::SourceLocation HashLoc,
                             const clang::Token& IncludeTok,
@@ -92,42 +102,67 @@ struct PPCallback : clang::PPCallbacks {
 
     void Endif(clang::SourceLocation loc, clang::SourceLocation ifLoc) override {}
 
-    void MacroDefined(const clang::Token& MacroNameTok, const clang::MacroDirective* MD) override {}
+    void MacroDefined(const clang::Token& MacroNameTok, const clang::MacroDirective* MD) override {
+        if(MD) {
+            auto info = MD->getMacroInfo();
+            // llvm::outs() << "is builtin: " << info->isBuiltinMacro() << "\n";
+            if(!info->isBuiltinMacro()) {
+                auto location = MacroNameTok.getLocation();
+                if(!srcMgr.isWrittenInBuiltinFile(location) && !srcMgr.isWrittenInCommandLineFile(location)) {
+                    MacroNameTok.getLocation().dump(srcMgr);
+                    // srcMgr.getIncludeLoc(srcMgr.getFileID(MacroNameTok.getLocation())).dump(srcMgr);
+                    llvm::outs() << preproc.getSpelling(MacroNameTok) << "\n";
+                }
+                auto def = MD->getDefinition();
+            }
+            // MD->dump();
+        }
+    }
 
     void MacroExpands(const clang::Token& MacroNameTok,
                       const clang::MacroDefinition& MD,
                       clang::SourceRange Range,
                       const clang::MacroArgs* Args) override {
-        // llvm::outs() << "------------------------\n";
+        auto info = MD.getMacroInfo();
+        llvm::outs() << "------------------------\n";
         // auto info = MD.getMacroInfo();
-        // if(info->isObjectLike()) {
-        //     Range = clang::SourceRange(MacroNameTok.getLocation(), MacroNameTok.getEndLoc());
-        // } else if(info->isFunctionLike()) {
-        //     // MacroNameTok.getLocation().dump(directive.sourceManager);
-        // }
-        // Range.getBegin().dump(directive.sourceManager);
-        // Range.getEnd().dump(directive.sourceManager);
-        // auto s = directive.sourceManager.getCharacterData(Range.getBegin());
-        // auto e = directive.sourceManager.getCharacterData(Range.getEnd());
-        //// llvm::outs() << llvm::StringRef(s, e - s) << "\n";
-        //
-        // llvm::outs() << directive.preproc.getSpelling(MacroNameTok) << " ";
-        // if(Args) {
-        //    auto size = Args->getNumMacroArguments();
-        //    for(int i = 0; i < size; i++) {
-        //        auto arg = Args->getUnexpArgument(i);
-        //        auto len = Args->getArgLength(arg);
-        //        for(int j = 0; j < len; j++) {
-        //            llvm::outs() << directive.preproc.getSpelling(arg[j]) << " ";
-        //        }
-        //    }
-        //}
-        // llvm::outs() << "\n";
+        if(info->isObjectLike()) {
+            Range = clang::SourceRange(MacroNameTok.getLocation(), MacroNameTok.getEndLoc());
+        } else if(info->isFunctionLike()) {
+            // MacroNameTok.getLocation().dump(srcMgr);
+        }
+        Range.dump(srcMgr);
+        auto s = srcMgr.getCharacterData(Range.getBegin());
+        auto e = srcMgr.getCharacterData(Range.getEnd());
+        llvm::outs() << llvm::StringRef(s, e - s) << "\n";
+
+        llvm::outs() << preproc.getSpelling(MacroNameTok) << " ";
+        if(Args) {
+            auto size = Args->getNumMacroArguments();
+            for(int i = 0; i < size; i++) {
+                auto arg = Args->getUnexpArgument(i);
+                auto len = Args->getArgLength(arg);
+                for(int j = 0; j < len; j++) {
+                    llvm::outs() << preproc.getSpelling(arg[j]) << " ";
+                }
+            }
+        }
+        llvm::outs() << "\n";
+    }
+
+    void MacroUndefined(const clang::Token& MacroNameTok,
+                        const clang::MacroDefinition& MD,
+                        const clang::MacroDirective* Undef) override {
+        // TODO:
     }
 };
 
-clang::CommentHandler* Directives::handler() { return new CommentHandler(*this); }
+clang::CommentHandler* Directives::handler() {
+    // return new CommentHandler(*this);
+}
 
-std::unique_ptr<clang::PPCallbacks> Directives::callback() { return std::make_unique<PPCallback>(*this); }
+std::unique_ptr<clang::PPCallbacks> Directives::callback() {
+    // return std::make_unique<PPCallback>(*this);
+}
 
 }  // namespace clice

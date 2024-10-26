@@ -47,3 +47,20 @@ struct Directives {
 };
 
 }  // namespace clice
+
+namespace clice2 {
+
+struct Directive {
+
+};
+
+// A class that record detailed information about preprocessing, like `TokenBuffer`.
+class PPBuffer {
+private:
+    llvm::DenseMap<clang::FileID, Directive> directives;
+};
+
+class PPCollector : public clang::PPCallbacks {
+};
+
+}  // namespace clice2

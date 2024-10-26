@@ -100,7 +100,6 @@ void Compiler::ExecuteAction() {
     }
 
     auto& preproc = instance->getPreprocessor();
-
     // FIXME: add PPCallbacks to collect information.
 
     // Beacuse CompilerInstance may create new Preprocessor in `BeginSourceFile`,
