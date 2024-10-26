@@ -1,4 +1,4 @@
-#include <Compiler/Resolver.h>
+#include <AST/Resolver.h>
 #include <clang/Sema/Template.h>
 #include <clang/Sema/TreeTransform.h>
 #include <clang/Sema/TemplateDeduction.h>

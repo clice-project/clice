@@ -1,5 +1,5 @@
 #include "../Test.h"
-#include <Compiler/Selection.h>
+#include <AST/Selection.h>
 #include <Compiler/Compiler.h>
 
 namespace {

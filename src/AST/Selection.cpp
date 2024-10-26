@@ -2,7 +2,7 @@
 
 #include <stack>
 
-#include <Compiler/Selection.h>
+#include <AST/Selection.h>
 
 namespace clice {
 

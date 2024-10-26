@@ -1,5 +1,5 @@
 #include "../Test.h"
-#include <Compiler/Resolver.h>
+#include <AST/Resolver.h>
 #include <Compiler/Compiler.h>
 
 namespace {
