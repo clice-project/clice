@@ -1,57 +1,34 @@
-#include "../Test.h"
-#include <Compiler/Resolver.h>
+#include <gtest/gtest.h>
+#include <Support/JSON.h>
 #include <Compiler/Compiler.h>
-#include <clang/Index/USRGeneration.h>
-#include <Support/Reflection.h>
+#include <Support/FileSystem.h>
+#include "../Test.h"
 
 namespace {
 
 using namespace clice;
 
-std::vector<const char*> compileArgs = {
-    "clang++",
-    "-std=c++20",
-    "main.cpp",
-    "-resource-dir",
-    "/home/ykiko/C++/clice2/build/lib/clang/20",
-};
-
-struct Visitor : public clang::RecursiveASTVisitor<Visitor> {
-    clang::QualType result;
-    clang::QualType expect;
-    clice::Compiler compiler;
-    using Base = clang::RecursiveASTVisitor<Visitor>;
-
-    Visitor(llvm::StringRef content) : compiler("main.cpp", content, compileArgs) {
-        compiler.buildAST();
-    }
-
-    bool shouldVisitTemplateInstantiations() const {
-        return true;
-    }
-
-    bool VisitNamedDecl(clang::NamedDecl* decl) {
-        llvm::outs() << "deck: " << decl->getName() << "\n";
-        llvm::outs() << "linkage: " << refl::enum_name(decl->getLinkageInternal()) << "\n";
-        decl->getFormalLinkage();
-        llvm::SmallString<128> USR;
-        clang::index::generateUSRForDecl(decl, USR);
-        llvm::outs() << "USR: " << USR << "\n";
-        return true;
-    }
-
-    void test() {
-        auto decl = compiler.context().getTranslationUnitDecl();
-        TraverseDecl(decl);
-        // EXPECT_EQ(result.getCanonicalType(), expect.getCanonicalType());
-        // compiler.context().getTranslationUnitDecl()->dump();
-    }
-};
-
 TEST(clice, ASTVisitor) {
-    foreachFile("ASTVisitor", [&](std::string file, llvm::StringRef content) {
-        Visitor visitor(content);
-        visitor.test();
+    foreachFile("ASTVisitor", [](std::string filepath, llvm::StringRef content) {
+        if(filepath.ends_with("test.cpp")) {
+            std::vector<const char*> compileArgs = {
+                "clang++",
+                "-std=c++20",
+                filepath.c_str(),
+                "-resource-dir",
+                "/home/ykiko/C++/clice2/build/lib/clang/20",
+            };
+            Compiler compiler(compileArgs);
+            compiler.buildAST();
+            auto macros = compiler.pp().macros();
+            for(auto& macro: macros) {
+                auto& s = macro.first;
+                auto& state = macro.second;
+                state.getLatest();
+                //  llvm::outs() << macro.first << " " << macro.second << "\n";
+            }
+            // compiler.tu()->dump();
+        }
     });
 }
 

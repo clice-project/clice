@@ -1,14 +1,11 @@
-template <typename T, typename U>
-struct X {
-    using type = char;
-};
+#include "test.h"
 
-template <typename T>
-struct X<T, T> {
-    using type = int;
-};
+int x = ADD(ADD(1, 2), 2);
 
-void f() {
-    typename X<char, int>::type y;
-    typename X<int, int>::type x;
-}
+int y = ADD2(1, 2);
+
+
+
+void test();
+
+void test() {}

@@ -41,6 +41,10 @@ public:
                         std::uint32_t column,
                         clang::CodeCompleteConsumer* consumer);
 
+    clang::Preprocessor& pp() {
+        return instance->getPreprocessor();
+    }
+
     clang::Sema& sema() {
         return instance->getSema();
     }
