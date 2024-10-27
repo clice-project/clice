@@ -1,13 +1,14 @@
-#include <Compiler/CodeComplete.h>
-#include <clang/Lex/CodeCompletionHandler.h>
+#include <Basic/SourceCode.h>
+#include <Compiler/Compiler.h>
+#include <Feature/CodeCompletion.h>
 
-namespace clice {
+namespace clice::feature {
 
 namespace {
 
-class CodeCompleteConsumer final : public clang::CodeCompleteConsumer {
+class CodeCompletionCollector final : public clang::CodeCompleteConsumer {
 public:
-    CodeCompleteConsumer(clang::CodeCompleteOptions options) :
+    CodeCompletionCollector(clang::CodeCompleteOptions options) :
         clang::CodeCompleteConsumer(options), allocator(new clang::GlobalCodeCompletionAllocator()),
         info(allocator) {
         // TODO:
@@ -41,21 +42,6 @@ public:
         }
     }
 
-    void ProcessOverloadCandidates(clang::Sema& sema,
-                                   unsigned CurrentArg,
-                                   OverloadCandidate* candidates,
-                                   unsigned count,
-                                   clang::SourceLocation openParLoc,
-                                   bool braced) final {
-        llvm::outs() << "ProcessOverloadCandidates\n";
-        auto range = llvm::make_range(candidates, candidates + count);
-        for(auto& candidate: range) {
-            switch(candidate.getKind()) {
-                // case
-            }
-        }
-    }
-
     clang::CodeCompletionAllocator& getAllocator() final {
         return *allocator;
     }
@@ -71,4 +57,11 @@ private:
 
 }  // namespace
 
-}  // namespace clice
+std::vector<proto::CompletionItem> codeCompletion(Compiler& compiler,
+                                                  llvm::StringRef filepath,
+                                                  proto::Position position,
+                                                  const config::CodeCompletionOption& option) {
+    // TODO: decode here.
+}
+
+}  // namespace clice::feature

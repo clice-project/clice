@@ -78,11 +78,25 @@ void Compiler::generatePCM(llvm::StringRef outpath) {
 }
 
 void Compiler::codeCompletion(llvm::StringRef filepath, std::uint32_t line, std::uint32_t column) {
-    auto& completion = instance->getFrontendOpts().CodeCompletionAt;
-    completion.FileName = filepath;
-    completion.Line = line;
-    completion.Column = column;
-    buildAST();
+    auto& location = instance->getFrontendOpts().CodeCompletionAt;
+    location.FileName = filepath;
+    location.Line = line;
+    location.Column = column;
+
+    if(content != "") {
+        auto buffer = llvm::MemoryBuffer::getMemBufferCopy(content);
+        instance->getPreprocessorOpts().addRemappedFile(filepath, buffer.release());
+    }
+
+    if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
+        llvm::errs() << "Failed to begin source file\n";
+        std::terminate();
+    }
+
+    if(auto error = action->Execute()) {
+        llvm::errs() << "Failed to execute action: " << error << "\n";
+        std::terminate();
+    }
 }
 
 void Compiler::ExecuteAction() {
@@ -102,7 +116,7 @@ void Compiler::ExecuteAction() {
     // Beacuse CompilerInstance may create new Preprocessor in `BeginSourceFile`,
     // So we must need to create TokenCollector here.
     // clang::syntax::TokenCollector collector{preproc};
-    CodeCompleteCollector collect2(*instance);
+    // CodeCompleteCollector collect2(*instance);
 
     // FIXME: clang-tidy, include-fixer, etc?
 

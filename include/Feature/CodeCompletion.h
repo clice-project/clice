@@ -77,7 +77,8 @@ struct CodeCompletionOption {
 namespace clice::feature {
 
 /// Run code completion in given file and location. `compiler` should be
-/// set properly if any PCH or PCM is needed.
+/// set properly if any PCH or PCM is needed. Each completion requires a
+/// new compiler instance.
 std::vector<proto::CompletionItem> codeCompletion(Compiler& compiler,
                                                   llvm::StringRef filepath,
                                                   proto::Position position,
