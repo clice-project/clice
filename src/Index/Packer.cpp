@@ -123,7 +123,9 @@ std::vector<char> Packer::pack(const in::Index& inIndex) {
 
     std::vector<char> binary = {};
     binary.reserve(layout.binarySize);
-    binary.insert(binary.end(), reinterpret_cast<char*>(&outIndex), reinterpret_cast<char*>(&outIndex + 1));
+    binary.insert(binary.end(),
+                  reinterpret_cast<char*>(&outIndex),
+                  reinterpret_cast<char*>(&outIndex + 1));
     binary.insert(binary.end(),
                   reinterpret_cast<char*>(symbols.data()),
                   reinterpret_cast<char*>(symbols.data() + symbols.size()));

@@ -6,7 +6,7 @@ namespace clice::proto {
 
 struct CompletionClientCapabilities {};
 
-enum CompletionItemKind {
+enum class CompletionItemKind {
     Text = 1,
     Method = 2,
     Function = 3,

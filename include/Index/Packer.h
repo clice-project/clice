@@ -2,6 +2,7 @@
 
 #include "Index.h"
 #include "llvm/ADT/DenseMap.h"
+#include <Support/Reflection.h>
 
 namespace clice::index {
 

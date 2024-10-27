@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Support/ADT.h>
-#include <Protocol/Basic.h>
 
 // #include <Index/SymbolID.h>
 
@@ -135,7 +134,11 @@ struct DenseMapInfo<Location> {
     }
 
     inline static llvm::hash_code getHashValue(const Location& location) {
-        return llvm::hash_combine(location.file, location.begin.line, location.begin.column, location.end.line, location.end.column);
+        return llvm::hash_combine(location.file,
+                                  location.begin.line,
+                                  location.begin.column,
+                                  location.end.line,
+                                  location.end.column);
     }
 
     inline static bool isEqual(const Location& LHS, const Location& RHS) {
@@ -147,8 +150,8 @@ struct DenseMapInfo<Location> {
 
 namespace clice::index::out {
 
-/// Because `SymbolID` and `Location` are duplicate referenced by `Relation`, `Symbol` and `Occurrence`,
-/// To save space, we use offsets to index them.
+/// Because `SymbolID` and `Location` are duplicate referenced by `Relation`, `Symbol` and
+/// `Occurrence`, To save space, we use offsets to index them.
 template <typename T>
 struct Ref {
     std::uint32_t offset;

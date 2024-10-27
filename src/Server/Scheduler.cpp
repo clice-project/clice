@@ -1,5 +1,4 @@
 #include <Server/Scheduler.h>
-#include <Protocol/Protocol.h>
 #include <spdlog/spdlog.h>
 #include <Feature/SemanticTokens.h>
 #include <Server/Server.h>
