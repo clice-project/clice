@@ -37,7 +37,10 @@ public:
     void generatePCM(llvm::StringRef outpath);
 
     /// Run code complete in given file and location.
-    void codeCompletion(llvm::StringRef filepath, std::uint32_t line, std::uint32_t column);
+    void codeCompletion(llvm::StringRef filepath,
+                        std::uint32_t line,
+                        std::uint32_t column,
+                        clang::CodeCompleteConsumer* consumer);
 
     clang::Preprocessor& pp() {
         return instance->getPreprocessor();

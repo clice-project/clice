@@ -41,22 +41,22 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "CodeCompletion",
+            "name": "Index",
             "program": "${workspaceFolder}/build/bin/clice-tests",
             "args": [
                 "--test-dir=/home/ykiko/C++/clice2/tests",
-                "--gtest_filter=clice.CodeCompletion"
+                "--gtest_filter=clice.Index"
             ],
             "cwd": "${workspaceFolder}"
         },
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Index",
+            "name": "CodeCompletion",
             "program": "${workspaceFolder}/build/bin/clice-tests",
             "args": [
                 "--test-dir=/home/ykiko/C++/clice2/tests",
-                "--gtest_filter=clice.Index"
+                "--gtest_filter=CodeCompletion.*"
             ],
             "cwd": "${workspaceFolder}"
         }

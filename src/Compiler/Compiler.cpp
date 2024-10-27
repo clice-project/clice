@@ -77,7 +77,10 @@ void Compiler::generatePCM(llvm::StringRef outpath) {
     ExecuteAction();
 }
 
-void Compiler::codeCompletion(llvm::StringRef filepath, std::uint32_t line, std::uint32_t column) {
+void Compiler::codeCompletion(llvm::StringRef filepath,
+                              std::uint32_t line,
+                              std::uint32_t column,
+                              clang::CodeCompleteConsumer* consumer) {
     auto& location = instance->getFrontendOpts().CodeCompletionAt;
     location.FileName = filepath;
     location.Line = line;
@@ -87,6 +90,10 @@ void Compiler::codeCompletion(llvm::StringRef filepath, std::uint32_t line, std:
         auto buffer = llvm::MemoryBuffer::getMemBufferCopy(content);
         instance->getPreprocessorOpts().addRemappedFile(filepath, buffer.release());
     }
+
+    instance->setCodeCompletionConsumer(consumer);
+
+    action = std::make_unique<clang::SyntaxOnlyAction>();
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         llvm::errs() << "Failed to begin source file\n";

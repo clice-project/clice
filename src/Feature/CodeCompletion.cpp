@@ -62,6 +62,11 @@ std::vector<proto::CompletionItem> codeCompletion(Compiler& compiler,
                                                   proto::Position position,
                                                   const config::CodeCompletionOption& option) {
     // TODO: decode here.
+    compiler.codeCompletion(filepath,
+                            position.line,
+                            position.character,
+                            new CodeCompletionCollector({}));
+    return {};
 }
 
 }  // namespace clice::feature
