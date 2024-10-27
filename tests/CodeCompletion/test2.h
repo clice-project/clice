@@ -1,3 +1,3 @@
 inline void bar() {
-    fo
+    // fo
 }

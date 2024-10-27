@@ -1,6 +1,7 @@
 #include <Compiler/Compiler.h>
 #include <clang/Lex/PreprocessorOptions.h>
 #include <clang/Frontend/TextDiagnosticPrinter.h>
+#include <Compiler/CodeComplete.h>
 
 namespace clice {
 
@@ -16,7 +17,8 @@ Compiler::Compiler(llvm::StringRef filepath,
                    llvm::StringRef content,
                    llvm::ArrayRef<const char*> args,
                    clang::DiagnosticConsumer* consumer,
-                   llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs) : filepath(filepath), content(content) {
+                   llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs) :
+    filepath(filepath), content(content) {
     // FIXME: figure out should we use createInvocation?
     clang::CreateInvocationOptions options;
     auto invocation = clang::createInvocation(args, options);
@@ -29,8 +31,9 @@ Compiler::Compiler(llvm::StringRef filepath,
     if(consumer) {
         instance->createDiagnostics(consumer, true);
     } else {
-        instance->createDiagnostics(new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()),
-                                    true);
+        instance->createDiagnostics(
+            new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()),
+            true);
     }
 
     if(!instance->createTarget()) {
@@ -74,15 +77,11 @@ void Compiler::generatePCM(llvm::StringRef outpath) {
     ExecuteAction();
 }
 
-void Compiler::codeCompletion(llvm::StringRef filepath,
-                              std::uint32_t line,
-                              std::uint32_t column,
-                              clang::CodeCompleteConsumer* consumer) {
+void Compiler::codeCompletion(llvm::StringRef filepath, std::uint32_t line, std::uint32_t column) {
     auto& completion = instance->getFrontendOpts().CodeCompletionAt;
     completion.FileName = filepath;
     completion.Line = line;
     completion.Column = column;
-    instance->setCodeCompletionConsumer(consumer);
     buildAST();
 }
 
@@ -102,7 +101,8 @@ void Compiler::ExecuteAction() {
 
     // Beacuse CompilerInstance may create new Preprocessor in `BeginSourceFile`,
     // So we must need to create TokenCollector here.
-    clang::syntax::TokenCollector collector{preproc};
+    // clang::syntax::TokenCollector collector{preproc};
+    CodeCompleteCollector collect2(*instance);
 
     // FIXME: clang-tidy, include-fixer, etc?
 
@@ -112,8 +112,8 @@ void Compiler::ExecuteAction() {
     }
 
     // Build TokenBuffer and index expanded tokens for improving performance.
-    buffer = std::make_unique<clang::syntax::TokenBuffer>(std::move(collector).consume());
-    buffer->indexExpandedTokens();
+    // buffer = std::make_unique<clang::syntax::TokenBuffer>(std::move(collector).consume());
+    // buffer->indexExpandedTokens();
 }
 
 Compiler::~Compiler() {

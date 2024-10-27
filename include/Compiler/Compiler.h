@@ -27,8 +27,9 @@ public:
     /// Build AST.
     void buildAST();
 
-    /// Generate the PCH(PreCompiledHeader) to output path. Generally execute `clang::GeneratePCHAction`.
-    /// The Header part of the source file is stored in the PCH file. Bound is the size of the header part.
+    /// Generate the PCH(PreCompiledHeader) to output path. Generally execute
+    /// `clang::GeneratePCHAction`. The Header part of the source file is stored in the PCH file.
+    /// Bound is the size of the header part.
     void generatePCH(llvm::StringRef outpath, std::uint32_t bound, bool endAtStart = false);
 
     /// Generate the PCM(PreCompiledModule) to output path. Generally execute
@@ -36,10 +37,7 @@ public:
     void generatePCM(llvm::StringRef outpath);
 
     /// Run code complete in given file and location.
-    void codeCompletion(llvm::StringRef filepath,
-                        std::uint32_t line,
-                        std::uint32_t column,
-                        clang::CodeCompleteConsumer* consumer);
+    void codeCompletion(llvm::StringRef filepath, std::uint32_t line, std::uint32_t column);
 
     clang::Preprocessor& pp() {
         return instance->getPreprocessor();
