@@ -205,13 +205,14 @@ constexpr inline bool is_record_v = false;
 template <typename... Ts>
 constexpr inline bool is_record_v<Record<Ts...>> = true;
 
-#define CLICE_RECORD(name, ...)                                                                                        \
-    struct name##Body;                                                                                                 \
-    using name = clice::refl::Record<__VA_ARGS__, name##Body>;                                                         \
+#define CLICE_RECORD(name, ...)                                                                    \
+    struct name##Body;                                                                             \
+    using name = clice::refl::Record<__VA_ARGS__, name##Body>;                                     \
     struct name##Body
 
 template <typename T>
-concept Reflectable = std::is_aggregate_v<std::decay_t<T>> && std::is_default_constructible_v<std::decay_t<T>>;
+concept Reflectable =
+    std::is_aggregate_v<std::decay_t<T>> && std::is_default_constructible_v<std::decay_t<T>>;
 
 template <Reflectable Object, typename Callback>
 constexpr void foreach(Object&& object, const Callback& callback) {
@@ -223,7 +224,8 @@ constexpr void foreach(Object&& object, const Callback& callback) {
         auto members = impl::collcet_members<count>(object);
         constexpr auto static_members = impl::collcet_members<count>(impl::Storage<T>::value);
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            (callback(impl::member_name<std::get<Is>(static_members)>(), *std::get<Is>(members)), ...);
+            (callback(impl::member_name<std::get<Is>(static_members)>(), *std::get<Is>(members)),
+             ...);
         }(std::make_index_sequence<count>{});
     }
 }
@@ -268,6 +270,32 @@ constexpr auto foreach(T&& t, U&& u, const Callback& callback) {
     [&]<std::size_t... Is>(std::index_sequence<Is...>) {
         (callback(*std::get<Is>(members1), *std::get<Is>(members2)), ...);
     }(std::make_index_sequence<count1>{});
+}
+
+template <typename T, typename U>
+constexpr auto equal(T&& t, U&& u) {
+    bool result = true;
+    refl::foreach(t, u, [&](const auto& lhs, const auto& rhs) {
+        if constexpr(requires { lhs == rhs; }) {
+            result &= (lhs == rhs);
+        } else {
+            refl::equal(lhs, rhs);
+        }
+    });
+    return result;
+}
+
+template <typename T, typename U>
+constexpr auto less(T&& t, U&& u) {
+    bool result = false;
+    refl::foreach(t, u, [&](const auto& lhs, const auto& rhs) {
+        if constexpr(requires { lhs < rhs; }) {
+            result |= (lhs < rhs);
+        } else {
+            result |= refl::less(lhs, rhs);
+        }
+    });
+    return result;
 }
 
 };  // namespace clice::refl

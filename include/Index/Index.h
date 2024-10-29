@@ -1,172 +1,78 @@
-#pragma once
+#ifndef MAKE_CLANGD_HAPPY
+/// This file is non self contained, which clangd supports.
+/// So made up some types to make clangd happy.
 
-#include <Support/ADT.h>
+#include <cstdint>
+#include <limits>
 
-// #include <Index/SymbolID.h>
+enum RelationKind {};
 
-namespace clice::index {
+struct Position {};
 
-/// Note that we have two kinds of `Index` definitions. One for collecting data from AST,
-/// and the other is used to serialize data to the binary format. The key difference is that
-/// one uses pointers and the other uses offsets to store data. All structures that uses ArrayRef
-/// or StringRef are defined in `Index.def` so that they could have different definitions in
-/// context.
-
-/// Used to discribe the kind of relation between two symbols.
-enum RelationKind : std::uint32_t {
-    Invalid,
-    Declaration,
-    Definition,
-    Reference,
-    // Write Relation.
-    Read,
-    Write,
-    Interface,
-    Implementation,
-    /// When target is a type definition of source, source is possible type or constructor.
-    TypeDefinition,
-
-    /// When target is a base class of source.
-    Base,
-    /// When target is a derived class of source.
-    Derived,
-
-    /// When target is a constructor of source.
-    Constructor,
-    /// When target is a destructor of source.
-    Destructor,
-
-    /// When target is a partial specialization of source.
-    PartialSpecialization,
-    /// When target is a full specialization of source.
-    FullSpecialization,
-    /// When target is an explicit instantiation of source.
-    ImplicitInstantiation,
-
-    // When target is a caller of source.
-    Caller,
-    // When target is a callee of source.
-    Callee,
-};
-
-/// Represent a position in the source code, the line and column are 1-based.
-struct Position {
-    std::uint32_t line;
-    std::uint32_t column;
-
-    friend std::strong_ordering operator<=> (const Position&, const Position&) = default;
-};
-
-}  // namespace clice::index
-
-namespace clice::index::in {
+struct Location {};
 
 template <typename T>
-using Ref = T;
-
-using llvm::ArrayRef;
-using llvm::StringRef;
-
-#define MAKE_CLANGD_HAPPY
-#include "Index.def"
-
-inline SymbolID kindToSymbolID(std::uint64_t kind) {
-    return SymbolID{kind, ""};
-}
-
-inline SymbolID USRToSymbolID(llvm::StringRef USR) {
-    return SymbolID{llvm::hash_value(USR), USR};
-}
-
-inline std::strong_ordering operator<=> (const SymbolID& lhs, const SymbolID& rhs) {
-    auto cmp = lhs.value <=> rhs.value;
-    if(cmp != std::strong_ordering::equal) {
-        return cmp;
-    }
-    return lhs.USR.compare(rhs.USR) <=> 0;
-}
-
-inline std::strong_ordering operator<=> (const Location& lhs, const Location& rhs) {
-    auto cmp = lhs.file.compare(rhs.file);
-    if(cmp != 0) {
-        return cmp <=> 0;
-    }
-    return std::tuple{lhs.begin, lhs.end} <=> std::tuple{rhs.begin, rhs.end};
-};
-
-}  // namespace clice::index::in
-
-namespace llvm {
-
-using clice::index::in::kindToSymbolID;
-using SymbolID = clice::index::in::SymbolID;
-using Location = clice::index::in::Location;
-
-template <>
-struct DenseMapInfo<SymbolID> {
-    inline static SymbolID getEmptyKey() {
-        static SymbolID EMPTY_KEY = kindToSymbolID(std::numeric_limits<uint64_t>::max());
-        return EMPTY_KEY;
-    }
-
-    inline static SymbolID getTombstoneKey() {
-        static SymbolID TOMBSTONE_KEY = kindToSymbolID(std::numeric_limits<uint64_t>::max() - 1);
-        return TOMBSTONE_KEY;
-    }
-
-    inline static llvm::hash_code getHashValue(const SymbolID& ID) {
-        return ID.value;
-    }
-
-    inline static bool isEqual(const SymbolID& LHS, const SymbolID& RHS) {
-        return LHS.value == RHS.value && LHS.USR == RHS.USR;
-    }
-};
-
-template <>
-struct DenseMapInfo<Location> {
-    inline static Location getEmptyKey() {
-        return Location{};
-    }
-
-    inline static Location getTombstoneKey() {
-        return Location{.file = "Tombstone"};
-    }
-
-    inline static llvm::hash_code getHashValue(const Location& location) {
-        return llvm::hash_combine(location.file,
-                                  location.begin.line,
-                                  location.begin.column,
-                                  location.end.line,
-                                  location.end.column);
-    }
-
-    inline static bool isEqual(const Location& LHS, const Location& RHS) {
-        return LHS <=> RHS == std::strong_ordering::equal;
-    }
-};
-
-}  // namespace llvm
-
-namespace clice::index::out {
-
-/// Because `SymbolID` and `Location` are duplicate referenced by `Relation`, `Symbol` and
-/// `Occurrence`, To save space, we use offsets to index them.
-template <typename T>
-struct Ref {
-    std::uint32_t offset;
-};
+using Value = T;
 
 template <typename T>
-struct ArrayRef {
-    std::uint32_t offset;
-    std::uint32_t length;
+struct Array {};
+
+using String = Array<char>;
+
+#endif
+
+#undef MAKE_CLANGD_HAPPY
+
+struct File {
+    String path;
+    // TODO: some flags.
+    /// Include location of the file if any.
+    Value<Location> include;
 };
 
-using StringRef = ArrayRef<char>;
+struct SymbolID {
+    uint64_t value;
+    String USR;
+};
 
-#define MAKE_CLANGD_HAPPY
-#include "Index.def"
+struct Relation {
+    RelationKind kind;
+    Value<Location> location;
+    Value<SymbolID> related;
+};
 
-}  // namespace clice::index::out
+struct Symbol {
+    Value<SymbolID> id;
+    /// The name of this symbol.
+    String name;
+    /// The document of this symbol.
+    String document;
+    // TODO: ... more useful fields.
+    /// The relations of this symbol.
+    Array<Relation> relations;
+};
+
+struct Occurrence {
+    Value<Location> location;
+    Value<SymbolID> target;
+};
+
+struct Index {
+    /// The version of the index format.
+    String version;
+    /// The language of the indexed code, currently only supports "C" and "C++".
+    String language;
+    /// The filepath of the source file.
+    String path;
+    /// The context of the source file.
+    String context;
+    /// The commands used to compile the source file.
+    Array<String> commands;
+    /// All files occurred in compilation.
+    Array<File> files;
+    /// All the symbols in the source file, sorted by `Symbol::SymbolID`.
+    Array<Symbol> symbols;
+    /// All the occurrences in the source file, sorted by `Occurrence::Location`.
+    Array<Occurrence> occurrences;
+};
 

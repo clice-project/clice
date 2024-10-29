@@ -12,7 +12,4 @@
 
 #include <llvm/ADT/StringExtras.h>
 
-
-
-namespace clice {
-}  // namespace clice
+namespace clice {}  // namespace clice
