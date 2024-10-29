@@ -16,6 +16,7 @@
 [submodule "deps/toml"]
 	path = deps/toml
 	url = https://github.com/marzer/tomlplusplus.git
+	
 [submodule "deps/googletest"]
 	path = deps/googletest
 	url = https://github.com/google/googletest.git
