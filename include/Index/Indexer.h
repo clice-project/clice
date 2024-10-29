@@ -1,5 +1,9 @@
 #pragma once
 
+namespace clang {
+class Sema;
+}
+
 namespace clice::index {
 
 /// Used to discribe the kind of relation between two symbols.

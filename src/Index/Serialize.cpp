@@ -8,6 +8,7 @@ json::Value toJson(const memory::Index& index) {
 
 std::vector<char> toBinary(const memory::Index& index) {
     // TODO:
+    return {};
 }
 
 }  // namespace clice::index

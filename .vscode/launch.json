@@ -45,7 +45,7 @@
             "program": "${workspaceFolder}/build/bin/clice-tests",
             "args": [
                 "--test-dir=/home/ykiko/C++/clice2/tests",
-                "--gtest_filter=clice.Index"
+                "--gtest_filter=Index.index"
             ],
             "cwd": "${workspaceFolder}"
         },

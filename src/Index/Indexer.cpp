@@ -1,5 +1,6 @@
-#include <Index/Indexer.h>
 #include <clang/Index/USRGeneration.h>
+#include <Support/FileSystem.h>
+#include <Index/Indexer.h>
 #include <Support/Reflection.h>
 
 namespace clice::index {
@@ -7,25 +8,95 @@ namespace clice::index {
 namespace {
 
 /// The `Indexer` is used to collect data from the AST and generate an index.
-class Indexer {
+class IndexBuilder {
 public:
-    Indexer(clang::Sema& sema) :
+    IndexBuilder(clang::Sema& sema) :
         sema(sema), context(sema.getASTContext()), srcMgr(context.getSourceManager()) {}
 
-    /// Try to add a new file to the index, return corresponding index in the `Index::files`.
-    /// If the file is already in the index, return the index directly.
-    uint32_t addFile(clang::FileID id);
+    Location toLocation(clang::SourceRange range) {
+        Location location = {};
+        auto begin = range.getBegin();
+        auto end = range.getEnd();
 
-    Location toLocation(clang::SourceRange range);
+        if(begin.isInvalid() && end.isInvalid()) {
+            return location;
+        }
+
+        // if(range.isValid() && srcMgr.getIncludeLoc(srcMgr.getFileID(begin)).isInvalid()) {
+        //     if(srcMgr.getFileID(begin) != srcMgr.getMainFileID()) {
+        //         begin.dump(srcMgr);
+        //         srcMgr.getIncludeLoc(srcMgr.getFileID(begin)).dump(srcMgr);
+        //         llvm::outs() << "Invalid range\n";
+        //     }
+        // }
+
+        // FIXME: position encoding ?
+        location.begin.line = srcMgr.getPresumedLineNumber(begin);
+        location.begin.column = srcMgr.getPresumedColumnNumber(begin);
+        location.end.line = srcMgr.getPresumedLineNumber(end);
+        location.end.column = srcMgr.getPresumedColumnNumber(end);
+
+        auto& files = result.files;
+        auto id = srcMgr.getFileID(begin);
+        auto index = files.size();
+        auto [iter, success] = fileCache.try_emplace(id, index);
+        location.file = iter->second;
+
+        if(success) {
+            files.emplace_back();
+            if(auto entry = srcMgr.getFileEntryRefForID(id)) {
+                llvm::SmallString<128> path;
+                if(auto error = fs::real_path(entry->getName(), path)) {
+                    llvm::outs() << error.message() << "\n";
+                }
+                // FIXME: relative path.
+                files.back().path = path.str();
+                auto include = toLocation(srcMgr.getIncludeLoc(id));
+                files[index].include = include;
+            }
+        }
+
+        return location;
+    }
+
+    static memory::SymbolID generateSymbolID(const clang::Decl* decl) {
+        llvm::SmallString<128> USR;
+        clang::index::generateUSRForDecl(decl, USR);
+        return memory::SymbolID{llvm::hash_value(USR), USR.str().str()};
+    }
 
     /// Add a symbol to the index.
-    memory::Symbol& addSymbol(const clang::NamedDecl* decl);
+    memory::Symbol& addSymbol(const clang::NamedDecl* decl) {
+        auto& symbols = result.symbols;
+        auto canonical = decl->getCanonicalDecl();
+        auto iter = symbolCache.find(canonical);
+        if(iter != symbolCache.end()) {
+            return symbols[iter->second];
+        }
 
-    Indexer& addRelation(clang::NamedDecl* decl,
-                         clang::SourceLocation,
-                         std::initializer_list<RelationKind>) {}
+        symbolCache.try_emplace(canonical, symbols.size());
 
-    Indexer& addOccurrence(const clang::NamedDecl* decl, clang::SourceRange range);
+        memory::Symbol& symbol = symbols.emplace_back();
+        symbol.id = generateSymbolID(canonical);
+        symbol.name = decl->getNameAsString();
+        return symbol;
+    }
+
+    IndexBuilder& addRelation(clang::NamedDecl* decl,
+                              clang::SourceLocation,
+                              std::initializer_list<RelationKind>) {
+        return *this;
+    }
+
+    IndexBuilder& addOccurrence(const clang::NamedDecl* decl, clang::SourceRange range) {
+        auto location = toLocation(range);
+        if(location.isValid()) {
+            memory::Symbol& symbol = addSymbol(decl);
+            auto& occurrences = result.occurrences;
+            occurrences.emplace_back(location, symbol.id);
+        }
+        return *this;
+    }
 
     memory::Index index() &&;
 
@@ -40,17 +111,11 @@ private:
     llvm::DenseMap<const clang::Decl*, std::size_t> symbolCache;
 };
 
-memory::SymbolID generateSymbolID(const clang::Decl* decl) {
-    llvm::SmallString<128> USR;
-    clang::index::generateUSRForDecl(decl, USR);
-    return memory::SymbolID{llvm::hash_value(USR), USR.str().str()};
-}
-
-class SymbolCollector : public clang::RecursiveASTVisitor<SymbolCollector> {
-    using Base = clang::RecursiveASTVisitor<SymbolCollector>;
+class IndexCollector : public clang::RecursiveASTVisitor<IndexCollector> {
+    using Base = clang::RecursiveASTVisitor<IndexCollector>;
 
 public:
-    SymbolCollector(Indexer& indexer, clang::ASTContext& context) :
+    IndexCollector(IndexBuilder& indexer, clang::ASTContext& context) :
         indexer(indexer), context(context), srcMgr(context.getSourceManager()) {}
 
     /// we don't care about the node without location information, so skip them.
@@ -260,15 +325,13 @@ public:
     // AdjustedTypeLoc MemberPointerTypeLoc
 
 private:
-    Indexer& indexer;
+    IndexBuilder& indexer;
     clang::ASTContext& context;
     clang::SourceManager& srcMgr;
 };
 
-}  // namespace
-
-memory::Index Indexer::index() && {
-    SymbolCollector collector(*this, context);
+memory::Index IndexBuilder::index() && {
+    IndexCollector collector(*this, context);
     collector.TraverseAST(context);
 
     // FIXME: sort relations ?
@@ -284,61 +347,11 @@ memory::Index Indexer::index() && {
     return std::move(result);
 }
 
-uint32_t Indexer::addFile(clang::FileID id) {
-    auto iter = fileCache.find(id);
-    if(iter != fileCache.end()) {
-        return iter->second;
-    }
+}  // namespace
 
-    memory::File& file = result.files.emplace_back();
-    if(auto entry = srcMgr.getFileEntryRefForID(id)) {
-        // FIXME: relative path.
-        file.path = entry->getName();
-    }
-
-    if(auto include = srcMgr.getIncludeLoc(id); include.isValid()) {
-        file.include = toLocation(include);
-    }
-
-    const uint32_t index = result.files.size() - 1;
-    fileCache.try_emplace(id, index);
-    return index;
-}
-
-Location Indexer::toLocation(clang::SourceRange range) {
-    Location location = {};
-    auto begin = range.getBegin();
-    auto end = range.getEnd();
-    // FIXME: position encoding ?
-    location.begin.line = srcMgr.getPresumedLineNumber(begin);
-    location.begin.column = srcMgr.getPresumedColumnNumber(begin);
-    location.end.line = srcMgr.getPresumedLineNumber(end);
-    location.end.column = srcMgr.getPresumedColumnNumber(end);
-    location.file = addFile(srcMgr.getFileID(begin));
-    return location;
-}
-
-memory::Symbol& Indexer::addSymbol(const clang::NamedDecl* decl) {
-    auto& symbols = result.symbols;
-    auto canonical = decl->getCanonicalDecl();
-    auto iter = symbolCache.find(canonical);
-    if(iter != symbolCache.end()) {
-        return symbols[iter->second];
-    }
-
-    symbolCache.try_emplace(canonical, symbols.size());
-
-    memory::Symbol& symbol = symbols.emplace_back();
-    symbol.id = generateSymbolID(canonical);
-    symbol.name = decl->getNameAsString();
-    return symbol;
-}
-
-Indexer& Indexer::addOccurrence(const clang::NamedDecl* decl, clang::SourceRange range) {
-    memory::Symbol& symbol = addSymbol(decl);
-    auto& occurrences = result.occurrences;
-    occurrences.emplace_back(toLocation(range), symbol.id);
-    return *this;
+memory::Index index(clang::Sema& sema) {
+    IndexBuilder builder(sema);
+    return std::move(builder).index();
 }
 
 }  // namespace clice::index

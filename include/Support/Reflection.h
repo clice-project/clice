@@ -260,42 +260,45 @@ constexpr auto enum_name(T value) {
     return names[static_cast<std::size_t>(value)];
 }
 
-template <typename T, typename U, typename Callback>
-constexpr auto foreach(T&& t, U&& u, const Callback& callback) {
-    constexpr auto count1 = impl::member_count<std::decay_t<T>>();
-    constexpr auto count2 = impl::member_count<std::decay_t<U>>();
-    static_assert(count1 == count2, "Member count mismatch");
-    auto members1 = impl::collcet_members<count1>(t);
-    auto members2 = impl::collcet_members<count2>(u);
-    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-        (callback(*std::get<Is>(members1), *std::get<Is>(members2)), ...);
-    }(std::make_index_sequence<count1>{});
+/// Invoke callback for each member of lhs and rhs, return false
+/// in callback to abort the iteration. Return true if all members are visited.
+template <typename LHS, typename RHS, typename Callback>
+constexpr bool foreach(LHS&& lhs, RHS&& rhs, const Callback& callback) {
+    constexpr auto lcount = impl::member_count<std::decay_t<LHS>>();
+    constexpr auto rcount = impl::member_count<std::decay_t<RHS>>();
+    static_assert(lcount == rcount, "Member count mismatch");
+    auto lmembers = impl::collcet_members<lcount>(lhs);
+    auto rmembers = impl::collcet_members<rcount>(rhs);
+
+    auto wrapper = [&](const auto& lhs, const auto& rhs) {
+        if constexpr(std::is_same_v<decltype(callback(lhs, rhs)), void>) {
+            callback(lhs, rhs);
+            return true;
+        } else {
+            return callback(lhs, rhs);
+        }
+    };
+
+    return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+        /// use && for short-circuit evaluation.
+        return (wrapper(*std::get<Is>(lmembers), *std::get<Is>(rmembers)) && ...);
+    }(std::make_index_sequence<lcount>{});
 }
 
-template <typename T, typename U>
-constexpr auto equal(T&& t, U&& u) {
-    bool result = true;
-    refl::foreach(t, u, [&](const auto& lhs, const auto& rhs) {
+template <typename LHS, typename RHS>
+constexpr auto equal(const LHS& lhs, const RHS& rhs) {
+    return refl::foreach(lhs, rhs, [&](const auto& lhs, const auto& rhs) {
         if constexpr(requires { lhs == rhs; }) {
-            result &= (lhs == rhs);
+            return (lhs == rhs);
         } else {
-            refl::equal(lhs, rhs);
+            return refl::equal(lhs, rhs);
         }
     });
-    return result;
 }
 
 template <typename T, typename U>
-constexpr auto less(T&& t, U&& u) {
-    bool result = false;
-    refl::foreach(t, u, [&](const auto& lhs, const auto& rhs) {
-        if constexpr(requires { lhs < rhs; }) {
-            result |= (lhs < rhs);
-        } else {
-            result |= refl::less(lhs, rhs);
-        }
-    });
-    return result;
+constexpr auto less(const T& t, const U& u) {
+    return false;
 }
 
 };  // namespace clice::refl
