@@ -6,8 +6,8 @@
 #include <vector>
 #include <string>
 
-namespace clang {
-class Sema;
+namespace clice {
+class Compiler;
 }
 
 namespace clice::index {
@@ -115,6 +115,6 @@ using String = std::string;
 }  // namespace memory
 
 /// index the given translation unit.
-memory::Index index(clang::Sema& sema);
+memory::Index index(Compiler& compiler);
 
 }  // namespace clice::index

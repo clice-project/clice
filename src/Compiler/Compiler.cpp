@@ -122,8 +122,7 @@ void Compiler::ExecuteAction() {
 
     // Beacuse CompilerInstance may create new Preprocessor in `BeginSourceFile`,
     // So we must need to create TokenCollector here.
-    // clang::syntax::TokenCollector collector{preproc};
-    // CodeCompleteCollector collect2(*instance);
+    clang::syntax::TokenCollector collector{preproc};
 
     // FIXME: clang-tidy, include-fixer, etc?
 
@@ -133,8 +132,8 @@ void Compiler::ExecuteAction() {
     }
 
     // Build TokenBuffer and index expanded tokens for improving performance.
-    // buffer = std::make_unique<clang::syntax::TokenBuffer>(std::move(collector).consume());
-    // buffer->indexExpandedTokens();
+    buffer = std::make_unique<clang::syntax::TokenBuffer>(std::move(collector).consume());
+    buffer->indexExpandedTokens();
 }
 
 Compiler::~Compiler() {

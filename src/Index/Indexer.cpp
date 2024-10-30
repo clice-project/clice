@@ -1,8 +1,10 @@
-#include <clang/Index/USRGeneration.h>
-#include <Support/FileSystem.h>
-#include <Index/Indexer.h>
-#include <Support/Reflection.h>
 #include <clang/AST/DeclCXX.h>
+#include <clang/Index/USRGeneration.h>
+
+#include <Compiler/Compiler.h>
+#include <Index/Indexer.h>
+#include <Support/FileSystem.h>
+#include <Support/Reflection.h>
 
 namespace clice::index {
 
@@ -25,16 +27,15 @@ static clang::Decl* declForType(clang::QualType type) {
 /// The `Indexer` is used to collect data from the AST and generate an index.
 class IndexBuilder {
 public:
-    IndexBuilder(clang::Sema& sema) :
-        sema(sema), context(sema.getASTContext()), srcMgr(context.getSourceManager()) {}
+    IndexBuilder(clang::Sema& sema, const clang::syntax::TokenBuffer& tokBuf) :
+        sema(sema), context(sema.getASTContext()), srcMgr(context.getSourceManager()),
+        tokBuf(tokBuf) {}
 
-    Location toLocation(clang::SourceRange range) {
+    Location toLocation(clang::SourceLocation loc) {
         Location location = {};
-        auto begin = range.getBegin();
-        auto end = range.getEnd();
 
         /// FIXME: handle macro id.
-        if(range.isInvalid() || begin.isMacroID() || end.isMacroID()) {
+        if(loc.isInvalid() || loc.isMacroID()) {
             return location;
         }
 
@@ -47,13 +48,15 @@ public:
         // }
 
         // FIXME: position encoding ?
-        location.begin.line = srcMgr.getPresumedLineNumber(begin);
-        location.begin.column = srcMgr.getPresumedColumnNumber(begin);
-        location.end.line = srcMgr.getPresumedLineNumber(end);
-        location.end.column = srcMgr.getPresumedColumnNumber(end);
+        auto endLoc = clang::Lexer::getLocForEndOfToken(loc, 0, srcMgr, sema.getLangOpts());
+
+        location.begin.line = srcMgr.getPresumedLineNumber(loc);
+        location.begin.column = srcMgr.getPresumedColumnNumber(loc);
+        location.end.line = srcMgr.getPresumedLineNumber(endLoc);
+        location.end.column = srcMgr.getPresumedColumnNumber(endLoc);
 
         auto& files = result.files;
-        auto id = srcMgr.getFileID(begin);
+        auto id = srcMgr.getFileID(loc);
         auto index = files.size();
         auto [iter, success] = fileCache.try_emplace(id, index);
         location.file = iter->second;
@@ -70,9 +73,9 @@ public:
                 auto include = toLocation(srcMgr.getIncludeLoc(id));
                 files[index].include = include;
             } else {
-                range.getBegin().dump(srcMgr);
-                llvm::outs() << "is file id:" << range.getBegin().isFileID() << "\n";
-                range.getEnd().dump(srcMgr);
+                loc.dump(srcMgr);
+                llvm::outs() << "is file id:" << loc.isFileID() << "\n";
+                loc.dump(srcMgr);
                 std::terminate();
             }
         }
@@ -90,6 +93,10 @@ public:
             auto& relations = builder.result.symbols[index].relations;
             relations.emplace_back(kind, location);
             return *this;
+        }
+
+        SymbolRef addReference(const Location& location) {
+            return addRelation(RelationKind::Reference, location);
         }
 
         // A definition is also a declaration and a reference.
@@ -129,6 +136,10 @@ public:
 
     /// Add a symbol to the index.
     SymbolRef addSymbol(const clang::NamedDecl* decl) {
+        if(decl == nullptr) {
+            std::terminate();
+        }
+
         auto& symbols = result.symbols;
         auto canonical = decl->getCanonicalDecl();
 
@@ -150,6 +161,7 @@ private:
     clang::Sema& sema;
     clang::ASTContext& context;
     clang::SourceManager& srcMgr;
+    const clang::syntax::TokenBuffer& tokBuf;
     /// The result index.
     memory::Index result;
     /// A map between canonical decl and calculated data.
@@ -244,16 +256,15 @@ public:
     /// ============================================================================
 
     bool VisiDeclRefExpr(const clang::DeclRefExpr* expr) {
-        auto decl = expr->getDecl();
-
-        auto range = expr->getNameInfo().getSourceRange();
-        // TODO: add occurrence.
+        Location location = indexer.toLocation(expr->getLocation());
         return true;
     }
 
     bool VisitMemberExpr(const clang::MemberExpr* expr) {
-        auto decl = expr->getMemberDecl();
-        auto range = expr->getMemberLoc();
+        Location location = indexer.toLocation(expr->getMemberLoc());
+        auto symbol = indexer.addSymbol(expr->getMemberDecl());
+        symbol.addOccurrence(location);
+        symbol.addReference(location);
         return true;
     }
 
@@ -453,8 +464,8 @@ memory::Index IndexBuilder::index() && {
 
 }  // namespace
 
-memory::Index index(clang::Sema& sema) {
-    IndexBuilder builder(sema);
+memory::Index index(Compiler& compiler) {
+    IndexBuilder builder(compiler.sema(), compiler.tokBuf());
     return std::move(builder).index();
 }
 
