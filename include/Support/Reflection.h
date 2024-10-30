@@ -285,20 +285,39 @@ constexpr bool foreach(LHS&& lhs, RHS&& rhs, const Callback& callback) {
     }(std::make_index_sequence<lcount>{});
 }
 
-template <typename LHS, typename RHS>
-constexpr auto equal(const LHS& lhs, const RHS& rhs) {
-    return refl::foreach(lhs, rhs, [&](const auto& lhs, const auto& rhs) {
-        if constexpr(requires { lhs == rhs; }) {
-            return (lhs == rhs);
-        } else {
+constexpr auto equal(const auto& lhs, const auto& rhs) {
+    if constexpr(requires { lhs == rhs; }) {
+        return (lhs == rhs);
+    } else {
+        return refl::foreach(lhs, rhs, [](const auto& lhs, const auto& rhs) {
             return refl::equal(lhs, rhs);
-        }
-    });
+        });
+    }
 }
 
-template <typename T, typename U>
-constexpr auto less(const T& t, const U& u) {
-    return false;
+/// Compare lhs and rhs according to the dictionary order of their members.
+constexpr auto less(const auto& lhs, const auto& rhs) {
+    if constexpr(requires { lhs < rhs; }) {
+        return (lhs < rhs);
+    } else {
+        bool result = false;
+        refl::foreach(lhs, rhs, [&result](const auto& lhs, const auto& rhs) {
+            /// if lhs less than rhs, abort the iteration and return true.
+            if(refl::less(lhs, rhs)) {
+                result = true;
+                return false;
+            }
+
+            /// if lhs equal to rhs, continue to next member.
+            if(refl::equal(lhs, rhs)) {
+                return true;
+            }
+
+            /// if lhs greater than rhs, abort the iteration and return false.
+            return false;
+        });
+        return result;
+    }
 }
 
 };  // namespace clice::refl

@@ -1,5 +1,11 @@
 #pragma once
 
+#include <cstdint>
+#include <limits>
+#include <compare>
+#include <vector>
+#include <string>
+
 namespace clang {
 class Sema;
 }
@@ -7,7 +13,7 @@ class Sema;
 namespace clice::index {
 
 /// Used to discribe the kind of relation between two symbols.
-enum RelationKind : uint32_t {
+enum class RelationKind : uint32_t {
     Invalid,
     Declaration,
     Definition,
@@ -43,6 +49,24 @@ enum RelationKind : uint32_t {
     Callee,
 };
 
+inline RelationKind operator| (RelationKind lhs, RelationKind rhs) {
+    return static_cast<RelationKind>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
+}
+
+inline RelationKind operator& (RelationKind lhs, RelationKind rhs) {
+    return static_cast<RelationKind>(static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
+}
+
+inline RelationKind& operator|= (RelationKind& lhs, RelationKind rhs) {
+    lhs = lhs | rhs;
+    return lhs;
+}
+
+inline RelationKind& operator&= (RelationKind& lhs, RelationKind rhs) {
+    lhs = lhs & rhs;
+    return lhs;
+}
+
 /// Represent a position in the source code, the line and column are 1-based.
 struct Position {
     /// The line of the position.
@@ -64,6 +88,10 @@ struct Location {
 
     bool isValid() const {
         return file != std::numeric_limits<uint32_t>::max();
+    }
+
+    explicit operator bool () const {
+        return isValid();
     }
 
     friend std::strong_ordering operator<=> (const Location&, const Location&) = default;

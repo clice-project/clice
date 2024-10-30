@@ -25,16 +25,18 @@ TEST(Index, index) {
             llvm::outs() << "files count:" << index.files.size() << "\n";
             auto json = index::toJson(index);
             // llvm::outs() << json << "\n";
+
+            
             std::error_code error;
-            // llvm::raw_fd_ostream file("index.json", error);
-            // file << json;
-            auto file = index.files[0];
-            while(file.include.isValid()) {
-                auto includeLoc = file.include;
-                llvm::outs() << index.files[includeLoc.file].path << ":" << includeLoc.begin.line << ":" << includeLoc.begin.column << "\n";
-                file = index.files[file.include.file];
-            }
-            llvm::outs() << file.path << "\n";
+            llvm::raw_fd_ostream file("index.json", error);
+            file << json;
+            // auto file = index.files[0];
+            // while(file.include.isValid()) {
+            //     auto includeLoc = file.include;
+            //     llvm::outs() << index.files[includeLoc.file].path << ":" << includeLoc.begin.line
+            //     << ":" << includeLoc.begin.column << "\n"; file = index.files[file.include.file];
+            // }
+            // llvm::outs() << file.path << "\n";
         }
     });
 }
