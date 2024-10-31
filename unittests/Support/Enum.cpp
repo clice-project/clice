@@ -16,7 +16,7 @@ struct ColorKind : enum_type<ColorKinds> {
     using enum_type::enum_type;
 };
 
-TEST(Support, normal) {
+TEST(Support, normal_enum) {
     ColorKind color = ColorKind::Red;
 
     std::string string;
@@ -40,7 +40,7 @@ struct MaskKind : enum_type<MaskKinds, true> {
     using enum_type::enum_type;
 };
 
-TEST(Support, mask) {
+TEST(Support, mask_enum) {
     MaskKind mask = MaskKind::A;
     mask.set(MaskKind::B);
     EXPECT_TRUE(mask.is(MaskKind::A));

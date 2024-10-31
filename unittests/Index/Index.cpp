@@ -9,8 +9,7 @@ namespace {
 
 using namespace clice;
 
-class IndexTester {
-public:
+struct IndexTester {
     IndexTester(llvm::StringRef filepath) {
         llvm::SmallString<128> path;
         path::append(path, test_dir(), "Index", filepath);
@@ -38,7 +37,7 @@ public:
         std::terminate();
     }
 
-    void GoToDefinition(index::Position source, index::Position target) {
+    IndexTester& GoToDefinition(index::Position source, index::Position target) {
         auto occurrence = std::lower_bound(index.occurrences.begin(),
                                            index.occurrences.end(),
                                            source,
@@ -62,19 +61,18 @@ public:
 
         bool hasDefinition = false;
         for(auto& relation: symbol->relations) {
-            // if(static_cast<bool>(relation.kind & index::RelationKind::Definition)) {
-            //     auto location = relation.location;
-            //     hasDefinition = true;
-            //     llvm::outs() << "definition: " << location.begin.line << ":" <<
-            //     location.begin.column << "\n"; llvm::outs() << "target: " << target.line << ":"
-            //     << target.column << "\n"; EXPECT_EQ(location.begin, target);
-            // }
+            if(relation.kind.is(index::RelationKind::Definition)) {
+                auto location = relation.location;
+                hasDefinition = true;
+                EXPECT_EQ(location.begin, target);
+            }
         }
 
         EXPECT_TRUE(hasDefinition);
+
+        return *this;
     }
 
-private:
     uint32_t mainFileIndex;
 
     std::string filepath;
@@ -117,9 +115,10 @@ private:
 //     });
 // }
 
-TEST(Index, MemberExpr) {
-    IndexTester tester("MemberExpr.cpp");
-    tester.GoToDefinition(index::Position(9, 14), index::Position(4, 9));
+TEST(Index, Expr) {
+    IndexTester tester("Expr.cpp");
+    // tester.GoToDefinition(index::Position(9, 14), index::Position(4, 9));
+    tester.compiler->tu()->dump();
 }
 
 }  // namespace

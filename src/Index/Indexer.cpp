@@ -258,12 +258,39 @@ public:
         return true;
     }
 
+    bool VisitUsingDirectiveDecl(const clang::UsingDirectiveDecl* decl) {
+        /// `using namespace Foo`
+        ///                  ^^^~~~~~~ reference
+        if(Location location = indexer.toLocation(decl->getLocation())) {
+            auto symbol = indexer.addSymbol(decl->getNominatedNamespace());
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+        }
+        return true;
+    }
+
+    /// FIXME: how to resolve shadow decls? a name could refer to multiple decls.
+    /// Don't need to handle UsingEnumDecl, it's handled by VisitTypeLoc.
+    bool VisitUsingDecl(const clang::UsingDecl* decl) {
+        /// `using Foo::bar`
+        ///             ^^^~~~ reference
+        // if(Location location = indexer.toLocation(decl->getLocation())) {
+        //     auto symbol = indexer.addSymbol(decl);
+        //     symbol.addOccurrence(location);
+        //     symbol.addReference(location);
+        // }
+        return true;
+    }
+
     /// ============================================================================
     ///                                 Statement
     /// ============================================================================
 
-    bool VisiDeclRefExpr(const clang::DeclRefExpr* expr) {
+    bool VisitDeclRefExpr(const clang::DeclRefExpr* expr) {
         Location location = indexer.toLocation(expr->getLocation());
+        auto symbol = indexer.addSymbol(expr->getDecl());
+        symbol.addOccurrence(location);
+        symbol.addReference(location);
         return true;
     }
 
@@ -275,10 +302,12 @@ public:
         return true;
     }
 
-    bool VisitDependentCXXScopeMemberExpr(const clang::DependentScopeDeclRefExpr* expr) {
-        // TODO: use TemplateResolver here.
-        auto decl = expr->getQualifier();
-        auto range = expr->getNameInfo().getSourceRange();
+    // FIXME: modify template resolver to cache recursively resolved results.
+    bool VisitDependentScopeDeclRefExpr(const clang::DependentScopeDeclRefExpr* expr) {
+        return true;
+    }
+
+    bool VisitCXXDependentScopeMemberExpr(const clang::CXXDependentScopeMemberExpr* expr) {
         return true;
     }
 
