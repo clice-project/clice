@@ -193,6 +193,47 @@ public:
     /// ============================================================================
 
     bool VisitNamespaceDecl(const clang::NamespaceDecl* decl) {
+        /// `namespace Foo {}`
+        ///             ^~~~ definition
+        if(Location location = indexer.toLocation(decl->getLocation())) {
+            auto symbol = indexer.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDefinition(location);
+        }
+        return true;
+    }
+
+    bool VisitNamespaceAliasDecl(const clang::NamespaceAliasDecl* decl) {
+        /// `namespace Foo = Bar`
+        ///             ^     ^~~~ reference
+        ///             ^~~~ definition
+        if(Location location = indexer.toLocation(decl->getLocation())) {
+            auto symbol = indexer.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDefinition(location);
+        }
+        if(Location location = indexer.toLocation(decl->getTargetNameLoc())) {
+            auto symbol = indexer.addSymbol(decl->getNamespace());
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+        }
+        return true;
+    }
+
+    bool VisitUsingDirectiveDecl(const clang::UsingDirectiveDecl* decl) {
+        /// `using namespace Foo`
+        ///                  ^^^~~~~~~ reference
+        if(Location location = indexer.toLocation(decl->getLocation())) {
+            auto symbol = indexer.addSymbol(decl->getNominatedNamespace());
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+        }
+        return true;
+    }
+
+    bool VisitLabelDecl(const clang::LabelDecl* decl) {
+        /// `label:`
+        ///    ^~~~ definition
         if(Location location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
             symbol.addOccurrence(location);
@@ -220,6 +261,9 @@ public:
         return true;
     }
 
+    /// `TypedefDecl` and `TypedefNameDecl` are both inherited from `TypedefNameDecl`.
+    /// So we only need to handle `TypedefNameDecl`.
+    /// FIXME: `TypeAliasTemplateDecl`.
     bool VisitTypedefNameDecl(const clang::TypedefNameDecl* TND) {
         if(Location location = indexer.toLocation(TND->getLocation())) {
             auto symbol = indexer.addSymbol(TND);
@@ -236,6 +280,8 @@ public:
             symbol.addOccurrence(location);
             symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
             symbol.addTypeDefinition(decl->getType());
+
+            // FIXME: ParamVarDecl
         }
         return true;
     }
@@ -252,20 +298,13 @@ public:
                 if(auto CCD = llvm::dyn_cast<clang::CXXConstructorDecl>(CMD)) {
                     symbol.addTypeDefinition(CCD->getThisType());
                 }
+
+                // FIXME: CXXConversionDecl, CXXDestructorDecl
             }
+
+            // FIXME: CXXDeductionGuideDecl
         }
         currentFunction = decl;
-        return true;
-    }
-
-    bool VisitUsingDirectiveDecl(const clang::UsingDirectiveDecl* decl) {
-        /// `using namespace Foo`
-        ///                  ^^^~~~~~~ reference
-        if(Location location = indexer.toLocation(decl->getLocation())) {
-            auto symbol = indexer.addSymbol(decl->getNominatedNamespace());
-            symbol.addOccurrence(location);
-            symbol.addReference(location);
-        }
         return true;
     }
 
@@ -279,6 +318,27 @@ public:
         //     symbol.addOccurrence(location);
         //     symbol.addReference(location);
         // }
+        return true;
+    }
+
+    bool VisitBindingDecl(const clang::BindingDecl* decl) {
+        /// `auto [a, b] = std::make_pair(1, 2);`
+        ///        ^~~~ definition
+        if(Location location = indexer.toLocation(decl->getLocation())) {
+            auto symbol = indexer.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDefinition(location);
+            symbol.addTypeDefinition(decl->getType());
+        }
+        return true;
+    }
+
+    bool VisitConceptDecl(const clang::ConceptDecl* decl) {
+        if(Location location = indexer.toLocation(decl->getLocation())) {
+            auto symbol = indexer.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDefinition(location);
+        }
         return true;
     }
 
