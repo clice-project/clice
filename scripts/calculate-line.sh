@@ -1,0 +1,1 @@
+cloc . --exclude-dir=build,deps
