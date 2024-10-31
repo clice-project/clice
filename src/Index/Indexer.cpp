@@ -31,35 +31,11 @@ public:
         sema(sema), context(sema.getASTContext()), srcMgr(context.getSourceManager()),
         tokBuf(tokBuf) {}
 
-    Location toLocation(clang::SourceLocation loc) {
-        Location location = {};
-
-        /// FIXME: handle macro id.
-        if(loc.isInvalid() || loc.isMacroID()) {
-            return location;
-        }
-
-        // if(range.isValid() && srcMgr.getIncludeLoc(srcMgr.getFileID(begin)).isInvalid()) {
-        //     if(srcMgr.getFileID(begin) != srcMgr.getMainFileID()) {
-        //         begin.dump(srcMgr);
-        //         srcMgr.getIncludeLoc(srcMgr.getFileID(begin)).dump(srcMgr);
-        //         llvm::outs() << "Invalid range\n";
-        //     }
-        // }
-
-        // FIXME: position encoding ?
-        auto endLoc = clang::Lexer::getLocForEndOfToken(loc, 0, srcMgr, sema.getLangOpts());
-
-        location.begin.line = srcMgr.getPresumedLineNumber(loc);
-        location.begin.column = srcMgr.getPresumedColumnNumber(loc);
-        location.end.line = srcMgr.getPresumedLineNumber(endLoc);
-        location.end.column = srcMgr.getPresumedColumnNumber(endLoc);
-
+    uint32_t addFile(clang::FileID id) {
         auto& files = result.files;
-        auto id = srcMgr.getFileID(loc);
         auto index = files.size();
         auto [iter, success] = fileCache.try_emplace(id, index);
-        location.file = iter->second;
+        auto result = iter->second;
 
         if(success) {
             files.emplace_back();
@@ -73,12 +49,30 @@ public:
                 auto include = toLocation(srcMgr.getIncludeLoc(id));
                 files[index].include = include;
             } else {
-                loc.dump(srcMgr);
-                llvm::outs() << "is file id:" << loc.isFileID() << "\n";
-                loc.dump(srcMgr);
                 std::terminate();
             }
         }
+
+        return result;
+    }
+
+    Location toLocation(clang::SourceRange range) {
+        Location location = {};
+
+        if(range.isInvalid() || range.getBegin().isMacroID() || range.getEnd().isMacroID()) {
+            return location;
+        }
+
+        auto beginLoc = srcMgr.getPresumedLoc(range.getBegin());
+        auto endLoc = srcMgr.getPresumedLoc(
+            clang::Lexer::getLocForEndOfToken(range.getEnd(), 0, srcMgr, sema.getLangOpts()));
+
+        /// FIXME: position encoding?
+        location.begin.line = beginLoc.getLine();
+        location.begin.column = beginLoc.getColumn();
+        location.end.line = endLoc.getLine();
+        location.end.column = endLoc.getColumn();
+        location.file = addFile(beginLoc.getFileID());
 
         return location;
     }
@@ -89,9 +83,15 @@ public:
         IndexBuilder& builder;
         uint32_t index;
 
-        SymbolRef addRelation(RelationKind kind, const Location& location) {
+        const memory::SymbolID& id() const {
+            return builder.result.symbols[index].id;
+        }
+
+        SymbolRef addRelation(RelationKind kind,
+                              const Location& location,
+                              const memory::SymbolID& related = {}) {
             auto& relations = builder.result.symbols[index].relations;
-            relations.emplace_back(static_cast<RelationKind>(kind), location);
+            relations.emplace_back(static_cast<RelationKind>(kind), location, related);
             return *this;
         }
 
@@ -130,8 +130,15 @@ public:
         }
 
         SymbolRef addOccurrence(const Location& location) {
-            builder.result.occurrences.emplace_back(location, builder.result.symbols[index].id);
+            builder.result.occurrences.emplace_back(location, id());
             return *this;
+        }
+
+        /// Should be called by caller, add `Caller` and `Callee` relation between two symbols.
+        SymbolRef addCall(const Location& location, const clang::Decl* callee) {
+            auto symbol = builder.addSymbol(llvm::dyn_cast<clang::NamedDecl>(callee));
+            symbol.addRelation(RelationKind::Caller, location, id());
+            return addRelation(RelationKind::Callee, location, symbol.id());
         }
     };
 
@@ -261,6 +268,16 @@ public:
         return true;
     }
 
+    bool VisitEnumConstantDecl(const clang::EnumConstantDecl* decl) {
+        if(Location location = indexer.toLocation(decl->getLocation())) {
+            auto symbol = indexer.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDefinition(location);
+            symbol.addTypeDefinition(decl->getType());
+        }
+        return true;
+    }
+
     /// `TypedefDecl` and `TypedefNameDecl` are both inherited from `TypedefNameDecl`.
     /// So we only need to handle `TypedefNameDecl`.
     /// FIXME: `TypeAliasTemplateDecl`.
@@ -333,6 +350,11 @@ public:
         return true;
     }
 
+    bool VisitClassTemplateDecl(const clang::ClassTemplateDecl* decl) {
+        auto name = decl->getDeclName();
+        return true;
+    }
+
     bool VisitConceptDecl(const clang::ConceptDecl* decl) {
         if(Location location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
@@ -371,18 +393,133 @@ public:
         return true;
     }
 
+    bool VisitCallExpr(const clang::CallExpr* expr) {
+        const clang::NamedDecl* caller = currentFunction;
+        auto callee = llvm::dyn_cast<clang::NamedDecl>(expr->getCalleeDecl());
+        if(caller && callee) {
+            Location location = indexer.toLocation(expr->getSourceRange());
+            auto symbol = indexer.addSymbol(caller);
+            symbol.addCall(location, callee);
+        } else {
+            std::terminate();
+        }
+        return true;
+    }
+
     /// ============================================================================
     ///                                  TypeLoc
     /// ============================================================================
 
-    bool TraverseTypeLoc(clang::TypeLoc loc) {
-        /// clang currently doesn't record any information for `QualifiedTypeLoc`.
-        /// It has same location with its inner type. So we just ignore it.
-        if(auto QTL = loc.getAs<clang::QualifiedTypeLoc>()) {
-            return TraverseTypeLoc(QTL.getUnqualifiedLoc());
+    constexpr bool TraverseType [[gnu::const]] (clang::QualType) {
+        return true;
+    }
+
+    /// FIXME: Render keyword in source, like `struct`, `class`, `union`, `enum`, `typename`,
+    /// in `BuiltinTypeLoc`, `ElaboratedTypeLoc` and so on.
+    bool VisitTagTypeLoc(clang::TagTypeLoc loc) {
+        if(Location location = indexer.toLocation(loc.getNameLoc())) {
+            auto symbol = indexer.addSymbol(loc.getDecl());
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+        }
+        return true;
+    }
+
+    bool VisitTypedefTypeLoc(clang::TypedefTypeLoc loc) {
+        if(Location location = indexer.toLocation(loc.getNameLoc())) {
+            auto symbol = indexer.addSymbol(loc.getTypedefNameDecl());
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+        }
+        return true;
+    }
+
+    /// FIXME: see `VisitUsingDecl`.
+    bool VisitUsingTypeLoc(clang::UsingTypeLoc loc) {
+        return true;
+    }
+
+    /// Render template name in `TemplateSpecializationTypeLoc`.
+    /// `std::vector<int>`
+    ///        ^^^^~~~~ reference
+    bool VisitTemplateSpecializationTypeLoc(clang::TemplateSpecializationTypeLoc loc) {
+        Location location = indexer.toLocation(loc.getTemplateNameLoc());
+        if(!location) {
+            return true;
         }
 
-        return Base::TraverseTypeLoc(loc);
+        const clang::TemplateSpecializationType* TST = loc.getTypePtr();
+        clang::TemplateName name = TST->getTemplateName();
+        clang::TemplateDecl* decl = name.getAsTemplateDecl();
+
+        /// For a template specialization type, the template name is possibly a `ClassTemplateDecl`
+        ///  or a `TypeAliasTemplateDecl`.
+        if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(decl)) {
+            /// Beacuse type alias template is not allowed to have partial and full specialization,
+            /// we just need to add reference to the primary template.
+            auto symbol = indexer.addSymbol(TATD);
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+            return true;
+        }
+
+        /// If it's not a `TypeAliasTemplateDecl`, it must be a `ClassTemplateDecl`.
+        auto CTD = llvm::cast<clang::ClassTemplateDecl>(decl);
+
+        /// If it's a dependent type, we only consider the primary template now.
+        /// FIXME: When `TemplateSpecializationTypeLoc` occurs in `NestedNameSpecifierLoc`, use
+        /// `TemplateResolver` to resolve the template.
+        if(TST->isDependentType()) {
+            auto symbol = indexer.addSymbol(CTD);
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+            return true;
+        }
+
+        /// For non dependent types, it must has been instantiated(implicit or explicit).
+        /// Find instantiated decl for it, primary, partial or full.
+        void* pos;
+        auto spec = CTD->findSpecialization(TST->template_arguments(), pos);
+        assert(spec && "Invalid specialization");
+
+        /// Full specialization.
+        if(spec->isExplicitSpecialization()) {
+            auto symbol = indexer.addSymbol(spec);
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+            return true;
+        }
+
+        auto specialized = spec->getSpecializedTemplateOrPartial();
+        assert(!specialized.isNull() && "Invalid specialization");
+
+        /// Partial specialization.
+        if(auto PSD = specialized.get<clang::ClassTemplatePartialSpecializationDecl*>()) {
+            auto symbol = indexer.addSymbol(PSD);
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+            return true;
+        }
+
+        /// Primary template.
+        auto symbol = indexer.addSymbol(specialized.get<clang::ClassTemplateDecl*>());
+        symbol.addOccurrence(location);
+        symbol.addReference(location);
+        return true;
+    }
+
+    // TODO: TemplateTypeParmTypeLoc, AttributedTypeLoc, MacroQualifiedTypeLoc, ParenType,
+    // AdjustedTypeLoc MemberPointerTypeLoc
+
+    constexpr bool TraverseNestedNameSpecifier [[gnu::const]] (clang::NestedNameSpecifier*) {
+        return true;
+    }
+
+    bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc NNS) {
+        // FIXME: use TemplateResolver here.
+        auto range = NNS.getSourceRange();
+        auto range2 = NNS.getLocalSourceRange();
+        return Base::TraverseNestedNameSpecifierLoc(NNS);
     }
 
     bool TraverseTemplateArgumentLoc(const clang::TemplateArgumentLoc& argument) {
@@ -396,143 +533,6 @@ public:
     bool TraverseConstructorInitializer(clang::CXXCtorInitializer* init) {
         return Base::TraverseConstructorInitializer(init);
     }
-
-    constexpr bool TraverseType [[gnu::const]] (clang::QualType) {
-        return true;
-    }
-
-    constexpr bool TraverseNestedNameSpecifier [[gnu::const]] (clang::NestedNameSpecifier*) {
-        return true;
-    }
-
-    bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc NNS) {
-        // FIXME: use TemplateResolver here.
-
-        auto range = NNS.getSourceRange();
-        auto range2 = NNS.getLocalSourceRange();
-
-        return Base::TraverseNestedNameSpecifierLoc(NNS);
-    }
-
-    // TODO: ... add occurrence and relation.
-
-    // VISIT_TYOELOC(BuiltinTypeLoc) {
-    //     // FIXME: ....
-    //     // possible multiple tokens, ... map them to BuiltinKind.
-    //     auto range = loc.getSourceRange();
-    //     return true;
-    // }
-
-    bool VisitTagTypeLoc(clang ::TagTypeLoc loc) {
-        auto decl = loc.getTypePtr()->getDecl();
-        auto location = loc.getNameLoc();
-        // indexer.addOccurrence(decl, location);
-        return true;
-    }
-
-    bool VisitElaboratedTypeLoc(clang ::ElaboratedTypeLoc loc) {
-        // FIXME: check the keyword.
-        auto keywordLoc = loc.getElaboratedKeywordLoc();
-        switch(loc.getTypePtr()->getKeyword()) {
-            case clang::ElaboratedTypeKeyword::Struct:
-            case clang::ElaboratedTypeKeyword::Class:
-            case clang::ElaboratedTypeKeyword::Union:
-            case clang::ElaboratedTypeKeyword::Enum: {
-                // indexer.addOccurrence(BuiltinSymbolKind::elaborated_type_specifier, keywordLoc);
-            }
-
-            case clang::ElaboratedTypeKeyword::Typename: {
-            }
-
-            case clang::ElaboratedTypeKeyword::None:
-            case clang::ElaboratedTypeKeyword::Interface: {
-            }
-        };
-        return true;
-    }
-
-    bool VisitTypedefTypeLoc(clang::TypedefTypeLoc loc) {
-        auto decl = loc.getTypePtr()->getDecl();
-        auto location = loc.getNameLoc();
-        // indexer.addOccurrence(decl, location)
-        //     .addRelation(decl, location, {RelationKind::Reference});
-        return true;
-    }
-
-    bool VisitUsingTypeLoc(clang::UsingTypeLoc loc) {
-        auto decl = loc.getTypePtr()->getFoundDecl();
-        auto location = loc.getNameLoc();
-        // indexer.addOccurrence(decl, location)
-        //     .addRelation(decl, location, {RelationKind::Reference});
-        return true;
-    }
-
-    bool VisitClassTemplateDecl(const clang::ClassTemplateDecl* decl) {
-        auto name = decl->getDeclName();
-        return true;
-    }
-
-    // bool VisitTemplateSpecializationTypeLoc(clang::TemplateSpecializationTypeLoc loc) {
-    //     auto nameLoc = loc.getTemplateNameLoc();
-    //     const clang::TemplateSpecializationType* TST = loc.getTypePtr();
-    //     clang::TemplateName name = TST->getTemplateName();
-    //     clang::TemplateDecl* decl = name.getAsTemplateDecl();
-    //
-    //    // FIXME: record relation.
-    //
-    //    // For a template specialization type, the template name is possibly a ClassTemplateDecl
-    //    or
-    //    // a TypeAliasTemplateDecl.
-    //    if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(decl)) {
-    //        // Dependent types are all handled in `TraverseNestedNameSpecifierLoc`.
-    //        if(TST->isDependentType()) {
-    //            return true;
-    //        }
-    //
-    //        // For non dependent types, it must has been instantiated(implicit or explicit).
-    //        // Find instantiated decl for it, main, partial specialization, full specialization?.
-    //        void* pos;
-    //        if(auto spec = CTD->findSpecialization(TST->template_arguments(), pos)) {
-    //            // If it's not full(explicit) specialization, find the primary template.
-    //            if(!spec->isExplicitInstantiationOrSpecialization()) {
-    //                auto specialized = spec->getSpecializedTemplateOrPartial();
-    //                if(specialized.is<clang::ClassTemplateDecl*>()) {
-    //                    indexer.addOccurrence(CTD, nameLoc)
-    //                        .addRelation(
-    //                            CTD,
-    //                            nameLoc,
-    //                            {RelationKind::Reference, RelationKind::ImplicitInstantiation});
-    //                } else {
-    //                    auto PSD =
-    //                        specialized.get<clang::ClassTemplatePartialSpecializationDecl*>();
-    //                    indexer.addOccurrence(PSD, nameLoc)
-    //                        .addRelation(
-    //                            PSD,
-    //                            nameLoc,
-    //                            {RelationKind::Reference, RelationKind::ImplicitInstantiation})
-    //                        .addRelation(CTD, nameLoc, {RelationKind::Reference});
-    //                }
-    //            } else {
-    //                // full specialization
-    //                indexer.addOccurrence(spec, nameLoc)
-    //                    .addRelation(spec,
-    //                                 nameLoc,
-    //                                 {RelationKind::Reference, RelationKind::FullSpecialization});
-    //            }
-    //        }
-    //    } else if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(decl)) {
-    //        // Beacuse type alias template is not allowed to have partial and full specialization,
-    //        // So we do notin
-    //        indexer.addOccurrence(TATD, nameLoc)
-    //            .addRelation(TATD,
-    //                         nameLoc,
-    //                         {RelationKind::Reference, RelationKind::ImplicitInstantiation});
-    //    }
-    //    return true;
-    //}
-
-    // TODO. TemplateTypeParmTypeLoc, AttributedTypeLoc, MacroQualifiedTypeLoc, ParenType,
-    // AdjustedTypeLoc MemberPointerTypeLoc
 
 private:
     IndexBuilder& indexer;
