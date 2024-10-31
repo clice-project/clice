@@ -2,7 +2,7 @@
 
 #include <array>
 #include <llvm/Support/JSON.h>
-#include <Support/Reflection.h>
+#include <Support/Enum.h>
 
 namespace clice::json {
 
@@ -35,14 +35,17 @@ constexpr inline bool is_string_v<llvm::StringRef> = true;
 template <typename T>
 constexpr inline bool is_integral_v =
     std::is_same_v<T, int> || std::is_same_v<T, unsigned> || std::is_same_v<T, long> ||
-    std::is_same_v<T, unsigned long> || std::is_same_v<T, long long> || std::is_same_v<T, unsigned long long>;
+    std::is_same_v<T, unsigned long> || std::is_same_v<T, long long> ||
+    std::is_same_v<T, unsigned long long>;
 
 template <typename Value>
 json::Value serialize(const Value& value) {
     if constexpr(std::is_same_v<Value, bool>) {
         return value;
-    } else if constexpr(is_integral_v<Value> || std::is_enum_v<Value>) {
+    } else if constexpr(is_integral_v<Value>) {
         return static_cast<int64_t>(value);
+    } else if constexpr(is_enum_v<Value>) {
+        return static_cast<int64_t>(underlying_value(value));
     } else if constexpr(std::is_floating_point_v<Value>) {
         return static_cast<double>(value);
     } else if constexpr(is_string_v<Value>) {
@@ -66,8 +69,8 @@ template <typename Value>
 Value deserialize(const json::Value& object) {
     if constexpr(std::is_same_v<Value, bool>) {
         return Value{object.getAsBoolean().value()};
-    } else if constexpr(is_integral_v<Value> || std::is_enum_v<Value>) {
-        return object.getAsInteger().value();
+    } else if constexpr(is_integral_v<Value> || is_enum_v<Value>) {
+        return Value(object.getAsInteger().value());
     } else if constexpr(std::is_floating_point_v<Value>) {
         return object.getAsNumber().value();
     } else if constexpr(is_string_v<Value>) {

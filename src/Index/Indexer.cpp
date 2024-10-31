@@ -91,7 +91,13 @@ public:
 
         SymbolRef addRelation(RelationKind kind, const Location& location) {
             auto& relations = builder.result.symbols[index].relations;
-            relations.emplace_back(kind, location);
+            relations.emplace_back(static_cast<RelationKind>(kind), location);
+            return *this;
+        }
+
+        SymbolRef addRelation(uint32_t kind, const Location& location) {
+            auto& relations = builder.result.symbols[index].relations;
+            relations.emplace_back(static_cast<RelationKind>(kind), location);
             return *this;
         }
 
@@ -101,15 +107,16 @@ public:
 
         // A definition is also a declaration and a reference.
         SymbolRef addDefinition(const Location& location) {
-            return addRelation(RelationKind::Reference | RelationKind::Declaration |
-                                   RelationKind::Definition,
+            return addRelation(RelationKind(RelationKind::Reference,
+                                            RelationKind::Declaration,
+                                            RelationKind::Definition),
                                location);
         }
 
         SymbolRef addDeclarationOrDefinition(bool is_definition, const Location& location) {
-            RelationKind kind = RelationKind::Reference | RelationKind::Declaration;
+            RelationKind kind = RelationKind::Declaration;
             if(is_definition) {
-                kind |= RelationKind::Definition;
+                kind.set(RelationKind::Definition);
             }
             return addRelation(kind, location);
         }

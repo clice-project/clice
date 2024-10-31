@@ -5,6 +5,7 @@
 #include <compare>
 #include <vector>
 #include <string>
+#include <Support/Enum.h>
 
 namespace clice {
 class Compiler;
@@ -13,7 +14,7 @@ class Compiler;
 namespace clice::index {
 
 /// Used to discribe the kind of relation between two symbols.
-enum class RelationKind : uint32_t {
+enum class RelationKinds : uint32_t {
     Invalid,
     Declaration,
     Definition,
@@ -49,23 +50,11 @@ enum class RelationKind : uint32_t {
     Callee,
 };
 
-inline RelationKind operator| (RelationKind lhs, RelationKind rhs) {
-    return static_cast<RelationKind>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
-}
-
-inline RelationKind operator& (RelationKind lhs, RelationKind rhs) {
-    return static_cast<RelationKind>(static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
-}
-
-inline RelationKind& operator|= (RelationKind& lhs, RelationKind rhs) {
-    lhs = lhs | rhs;
-    return lhs;
-}
-
-inline RelationKind& operator&= (RelationKind& lhs, RelationKind rhs) {
-    lhs = lhs & rhs;
-    return lhs;
-}
+struct RelationKind : enum_type<RelationKinds, true> {
+    using enum RelationKinds;
+    using enum_type::enum_type;
+    using enum_type::operator=;
+};
 
 /// Represent a position in the source code, the line and column are 1-based.
 struct Position {

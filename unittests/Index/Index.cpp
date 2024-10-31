@@ -38,7 +38,7 @@ public:
         std::terminate();
     }
 
-    index::Position GoToDefinition(index::Position source) {
+    void GoToDefinition(index::Position source, index::Position target) {
         auto occurrence = std::lower_bound(index.occurrences.begin(),
                                            index.occurrences.end(),
                                            source,
@@ -60,14 +60,18 @@ public:
         EXPECT_TRUE(symbol != index.symbols.end());
         EXPECT_TRUE(refl::equal(symbol->id, id));
 
+        bool hasDefinition = false;
         for(auto& relation: symbol->relations) {
-            if(static_cast<bool>(relation.kind & index::RelationKind::Definition)) {
-                auto location = relation.location;
-                return location.begin;
-            }
+            // if(static_cast<bool>(relation.kind & index::RelationKind::Definition)) {
+            //     auto location = relation.location;
+            //     hasDefinition = true;
+            //     llvm::outs() << "definition: " << location.begin.line << ":" <<
+            //     location.begin.column << "\n"; llvm::outs() << "target: " << target.line << ":"
+            //     << target.column << "\n"; EXPECT_EQ(location.begin, target);
+            // }
         }
 
-        std::terminate();
+        EXPECT_TRUE(hasDefinition);
     }
 
 private:
@@ -115,7 +119,7 @@ private:
 
 TEST(Index, MemberExpr) {
     IndexTester tester("MemberExpr.cpp");
-    EXPECT_TRUE(tester.GoToDefinition(index::Position(9, 14)) == index::Position(4, 9));
+    tester.GoToDefinition(index::Position(9, 14), index::Position(4, 9));
 }
 
 }  // namespace
