@@ -130,7 +130,7 @@ public:
         }
 
         SymbolRef addOccurrence(const Location& location) {
-            builder.result.occurrences.emplace_back(location, id());
+            builder.result.occurrences.emplace_back(location, index);
             return *this;
         }
 

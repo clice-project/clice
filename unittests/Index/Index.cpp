@@ -37,7 +37,7 @@ struct IndexTester {
         std::terminate();
     }
 
-    IndexTester& GoToDefinition(index::Position source, index::Position target) {
+    auto& findSymbol(index::Position source) {
         auto occurrence = std::lower_bound(index.occurrences.begin(),
                                            index.occurrences.end(),
                                            source,
@@ -47,20 +47,26 @@ struct IndexTester {
 
         EXPECT_TRUE(occurrence != index.occurrences.end());
         EXPECT_TRUE(occurrence->location.begin <= source);
-        auto& id = occurrence->target;
+        auto& symbol = index.symbols[occurrence->symbol];
 
-        auto symbol = std::lower_bound(index.symbols.begin(),
-                                       index.symbols.end(),
-                                       id,
-                                       [](const auto& symbol, const auto& id) {
-                                           return refl::less(symbol.id, id);
-                                       });
+        // auto symbol = std::lower_bound(index.symbols.begin(),
+        //                                index.symbols.end(),
+        //                                id,
+        //                                [](const auto& symbol, const auto& id) {
+        //                                    return refl::less(symbol.id, id);
+        //                                });
 
-        EXPECT_TRUE(symbol != index.symbols.end());
-        EXPECT_TRUE(refl::equal(symbol->id, id));
+        // EXPECT_TRUE(symbol != index.symbols.end());
+        // EXPECT_TRUE(refl::equal(symbol->id, id));
+
+        return symbol;
+    }
+
+    IndexTester& GoToDefinition(index::Position source, index::Position target) {
+        auto& symbol = findSymbol(source);
 
         bool hasDefinition = false;
-        for(auto& relation: symbol->relations) {
+        for(auto& relation: symbol.relations) {
             if(relation.kind.is(index::RelationKind::Definition)) {
                 auto location = relation.location;
                 hasDefinition = true;
@@ -69,6 +75,30 @@ struct IndexTester {
         }
 
         EXPECT_TRUE(hasDefinition);
+
+        return *this;
+    }
+
+    IndexTester& CallRelation(index::Position source, index::Position target) {
+        auto& symbol = findSymbol(source);
+
+        bool hasCall = false;
+        for(auto& relation: symbol.relations) {
+            if(relation.kind.is(index::RelationKind::Callee)) {
+                auto location = relation.location;
+                hasCall = true;
+                // EXPECT_EQ(location.begin, target);
+                llvm::outs() << json::serialize(relation) << "\n";
+            }
+
+            if(relation.kind.is(index::RelationKind::Caller)) {
+                auto location = relation.location;
+                hasCall = true;
+                // EXPECT_EQ(location.begin, target);
+            }
+        }
+
+        EXPECT_TRUE(hasCall);
 
         return *this;
     }
@@ -119,6 +149,42 @@ TEST(Index, Expr) {
     IndexTester tester("Expr.cpp");
     // tester.GoToDefinition(index::Position(9, 14), index::Position(4, 9));
     tester.compiler->tu()->dump();
+}
+
+TEST(Index, Macro) {
+    IndexTester tester("Macro.cpp");
+    // tester.GoToDefinition(index::Position(9, 14), index::Position(4, 9));
+    tester.compiler->tu()->dump();
+    auto& srcMgr = tester.compiler->srcMgr();
+    for(auto tok: tester.compiler->tokBuf().expandedTokens()) {
+        if(tok.location().isMacroID()) {
+            llvm::outs() << tok.text(srcMgr) << " ";
+            llvm::outs() << srcMgr.getPresumedLineNumber(tok.location()) << ":"
+                         << srcMgr.getPresumedColumnNumber(tok.location()) << "\n";
+            tok.location().dump(srcMgr);
+        }
+    }
+}
+
+TEST(Index, Call) {
+    IndexTester tester("Call.cpp");
+    // tester.CallRelation(index::Position(9, 14), index::Position(4, 9));
+    tester.compiler->tu()->dump();
+
+    auto json = index::toJson(tester.index);
+
+    std::error_code error;
+    llvm::raw_fd_ostream file("index.json", error);
+    file << json;
+
+    for(auto& symbol: tester.index.symbols) {
+        llvm::outs() << symbol.name << "\n";
+        for(auto& relation: symbol.relations) {
+            llvm::outs() << "  " << relation.kind << "\n"
+                         << json::serialize(relation.location) << "\n";
+        }
+    }
+    int $x = 1;
 }
 
 }  // namespace

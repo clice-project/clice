@@ -54,7 +54,8 @@ struct Symbol {
 
 struct Occurrence {
     Value<Location> location;
-    Value<SymbolID> target;
+    /// The index of the symbol in `Index::symbols`.
+    uint32_t symbol;
 };
 
 struct Index {
