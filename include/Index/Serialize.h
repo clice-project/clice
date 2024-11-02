@@ -11,20 +11,16 @@ json::Value toJson(const memory::Index& index);
 namespace binary {
 
 template <typename T>
-struct Value {
-    uint32_t offset;
-};
-
-template <typename T>
-struct Array {
+struct array {
     uint32_t offset;
     uint32_t length;
 };
 
-using String = Array<char>;
+using string = array<char>;
 
-#define MAKE_CLANGD_HAPPY
-#include "Index.h"
+using Symbol = index::Symbol<string, array>;
+
+using Index = index::Index<string, array>;
 
 }  // namespace binary
 

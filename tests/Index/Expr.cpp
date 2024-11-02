@@ -2,6 +2,7 @@ namespace {
 
 struct Foo {
     int bar;
+    int foo;
 };
 
 Foo foo = {};
@@ -25,4 +26,9 @@ void foo2() {
     yyy = 2;
 }
 
+auto [a, b] = Foo{1, 2};
+
+void xxx() {
+    a = 3;
+}
 }  // namespace

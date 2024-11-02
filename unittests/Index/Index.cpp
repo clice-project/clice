@@ -24,7 +24,7 @@ struct IndexTester {
         compiler = std::make_unique<Compiler>(args);
         compiler->buildAST();
         index = index::index(*compiler);
-        mainFileIndex = mainFile();
+        // mainFileIndex = mainFile();
     }
 
     uint32_t mainFile() {
@@ -42,7 +42,7 @@ struct IndexTester {
             std::lower_bound(index.occurrences.begin(),
                              index.occurrences.end(),
                              source,
-                             [&](const auto& occurrence, index::Position pos) {
+                             [&](index::Occurrence occurrence, index::Position pos) {
                                  return index.locations[occurrence.location].end < pos;
                              });
 
@@ -185,7 +185,6 @@ TEST(Index, Call) {
                          << json::serialize(relation.location) << "\n";
         }
     }
-    int $x = 1;
 }
 
 }  // namespace
