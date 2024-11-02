@@ -270,7 +270,7 @@ constexpr bool foreach(LHS&& lhs, RHS&& rhs, const Callback& callback) {
     auto lmembers = impl::collcet_members<lcount>(lhs);
     auto rmembers = impl::collcet_members<rcount>(rhs);
 
-    auto wrapper = [&](const auto& lhs, const auto& rhs) {
+    auto wrapper = [&](auto& lhs, auto& rhs) {
         if constexpr(std::is_same_v<decltype(callback(lhs, rhs)), void>) {
             callback(lhs, rhs);
             return true;

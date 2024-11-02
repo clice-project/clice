@@ -56,7 +56,7 @@ struct File {
     uint32_t include;
 };
 
-template <typename String, template <typename T> typename Array>
+template <typename String, template <typename...> typename Array>
 struct Symbol {
     /// The hash of this symbol, used for quick lookup.
     uint64_t id;
@@ -77,7 +77,7 @@ struct Symbol {
     Array<Relation> relations;
 };
 
-template <typename String, template <typename T> typename Array>
+template <typename String, template <typename...> typename Array>
 struct Index {
     /// The version of the index format.
     String version;

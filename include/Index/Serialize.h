@@ -13,10 +13,14 @@ namespace binary {
 template <typename T>
 struct array {
     uint32_t offset;
-    uint32_t length;
+    uint32_t size;
+
+    using value_type = T;
 };
 
 using string = array<char>;
+
+using File = index::File<string>;
 
 using Symbol = index::Symbol<string, array>;
 

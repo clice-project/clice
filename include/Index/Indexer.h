@@ -18,9 +18,16 @@ namespace clice::index {
 /// It could be used to serialized to other formats like binary or JSON.
 namespace memory {
 
-using Symbol = index::Symbol<std::string, std::vector>;
+using string = std::string;
 
-using Index = index::Index<std::string, std::vector>;
+template <typename T, typename A = std::allocator<T>>
+using array = std::vector<T, A>;
+
+using File = index::File<string>;
+
+using Symbol = index::Symbol<string, array>;
+
+using Index = index::Index<string, array>;
 
 }  // namespace memory
 

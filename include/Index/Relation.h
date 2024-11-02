@@ -35,6 +35,7 @@ enum class RelationKinds : uint32_t {
 struct RelationKind : enum_type<RelationKinds, true> {
     using enum RelationKinds;
     using enum_type::enum_type;
+    using enum_type::operator=;
 };
 
 struct Relation {

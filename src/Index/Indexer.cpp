@@ -2,6 +2,7 @@
 #include <clang/Index/USRGeneration.h>
 
 #include <Compiler/Compiler.h>
+#include <clang/AST/DeclTemplate.h>
 #include <Index/Indexer.h>
 #include <Support/FileSystem.h>
 #include <Support/Reflection.h>
@@ -78,7 +79,7 @@ public:
             location.begin.column = beginLoc.getColumn();
             location.end.line = endLoc.getLine();
             location.end.column = endLoc.getColumn();
-            location.file = addFile(beginLoc.getFileID());
+            location.file = addFile(srcMgr.getFileID(begin));
         }
         return index;
     }
@@ -163,11 +164,11 @@ public:
             llvm::SmallString<128> USR;
             clang::index::generateUSRForDecl(decl, USR);
             symbol.id = llvm::xxHash64(USR);
-            symbol.USR = USR.str();
-            auto info = decl->getLinkageAndVisibility();
-            auto linkage = info.getLinkage();
-            /// FIXME: figure out linkage.
-            symbol.is_local = linkage == clang::Linkage::Internal;
+            /// symbol.USR = USR.str();
+            ///  FIXME: figure out linkage.
+            // auto info = decl->getLinkageAndVisibility();
+            // auto linkage = info.getLinkage();
+            // symbol.is_local = linkage == clang::Linkage::Internal;
             symbol.name = decl->getNameAsString();
         }
 
@@ -454,7 +455,15 @@ public:
         clang::TemplateDecl* decl = name.getAsTemplateDecl();
 
         /// For a template specialization type, the template name is possibly a `ClassTemplateDecl`
-        ///  or a `TypeAliasTemplateDecl`.
+        ///  `TypeAliasTemplateDecl` or `TemplateTemplateParmDecl` and `BuiltinTemplateDecl`.
+
+        if(auto TTPD = llvm::dyn_cast<clang::TemplateTemplateParmDecl>(decl)) {
+            auto symbol = indexer.addSymbol(TTPD);
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+            return true;
+        }
+
         if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(decl)) {
             /// Beacuse type alias template is not allowed to have partial and full specialization,
             /// we just need to add reference to the primary template.
@@ -464,8 +473,17 @@ public:
             return true;
         }
 
+        if(auto BTD = llvm::dyn_cast<clang::BuiltinTemplateDecl>(decl)) {
+            /// FIXME:
+            return true;
+        }
+
         /// If it's not a `TypeAliasTemplateDecl`, it must be a `ClassTemplateDecl`.
-        auto CTD = llvm::cast<clang::ClassTemplateDecl>(decl);
+        auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(decl);
+        if(!CTD) {
+            decl->dump();
+            std::terminate();
+        }
 
         /// If it's a dependent type, we only consider the primary template now.
         /// FIXME: When `TemplateSpecializationTypeLoc` occurs in `NestedNameSpecifierLoc`, use
@@ -477,36 +495,45 @@ public:
             return true;
         }
 
-        /// For non dependent types, it must has been instantiated(implicit or explicit).
-        /// Find instantiated decl for it, primary, partial or full.
-        void* pos;
-        auto spec = CTD->findSpecialization(TST->template_arguments(), pos);
-        assert(spec && "Invalid specialization");
-
-        /// Full specialization.
-        if(spec->isExplicitSpecialization()) {
-            auto symbol = indexer.addSymbol(spec);
-            symbol.addOccurrence(location);
-            symbol.addReference(location);
-            return true;
-        }
-
-        auto specialized = spec->getSpecializedTemplateOrPartial();
-        assert(!specialized.isNull() && "Invalid specialization");
-
-        /// Partial specialization.
-        if(auto PSD = specialized.get<clang::ClassTemplatePartialSpecializationDecl*>()) {
-            auto symbol = indexer.addSymbol(PSD);
-            symbol.addOccurrence(location);
-            symbol.addReference(location);
-            return true;
-        }
-
-        /// Primary template.
-        auto symbol = indexer.addSymbol(specialized.get<clang::ClassTemplateDecl*>());
+        auto symbol = indexer.addSymbol(TST->getAsCXXRecordDecl());
         symbol.addOccurrence(location);
         symbol.addReference(location);
         return true;
+
+        ///// For non dependent types, it must has been instantiated(implicit or explicit).
+        ///// Find instantiated decl for it, primary, partial or full.
+        // void* pos = nullptr;
+        // auto spec = CTD->findSpecialization(TST->template_arguments(), pos);
+        // if(!spec) {
+        //     CTD->dump();
+        //     TST->dump();
+        // }
+        // assert(spec && "Invalid specialization");
+        //
+        ///// Full specialization.
+        // if(spec->isExplicitSpecialization()) {
+        //     auto symbol = indexer.addSymbol(spec);
+        //     symbol.addOccurrence(location);
+        //     symbol.addReference(location);
+        //     return true;
+        // }
+        //
+        // auto specialized = spec->getSpecializedTemplateOrPartial();
+        // assert(!specialized.isNull() && "Invalid specialization");
+        //
+        ///// Partial specialization.
+        // if(auto PSD = specialized.dyn_cast<clang::ClassTemplatePartialSpecializationDecl*>()) {
+        //     auto symbol = indexer.addSymbol(PSD);
+        //     symbol.addOccurrence(location);
+        //     symbol.addReference(location);
+        //     return true;
+        // }
+        //
+        ///// Primary template.
+        // auto symbol = indexer.addSymbol(specialized.get<clang::ClassTemplateDecl*>());
+        // symbol.addOccurrence(location);
+        // symbol.addReference(location);
+        // return true;
     }
 
     // TODO: TemplateTypeParmTypeLoc, AttributedTypeLoc, MacroQualifiedTypeLoc, ParenType,
@@ -556,7 +583,7 @@ static void sortSymbols(std::vector<memory::Symbol>& symbols,
     });
 
     std::vector<uint32_t> map;
-    map.reserve(size);
+    map.resize(size);
     for(std::size_t index = 0; index < size; index++) {
         /// original index -> new index
         map[indices[index]] = index;
@@ -569,9 +596,9 @@ static void sortSymbols(std::vector<memory::Symbol>& symbols,
 
     for(auto& symbol: symbols) {
         for(auto& relation: symbol.relations) {
-            if(Relation::isSymbol(relation)) {
-                relation.symOrLoc = map[relation.symOrLoc];
-            }
+            // if(Relation::isSymbol(relation)) {
+            //     relation.symOrLoc = map[relation.symOrLoc];
+            // }
         }
     }
 
@@ -593,6 +620,10 @@ memory::Index IndexBuilder::index() && {
     sortSymbols(result.symbols, result.occurrences);
 
     llvm::sort(result.occurrences, [&](const Occurrence& lhs, const Occurrence& rhs) {
+        if(lhs.location == std::numeric_limits<uint32_t>::max() ||
+           rhs.location == std::numeric_limits<uint32_t>::max()) {
+            return false;
+        }
         return result.locations[lhs.location] < result.locations[rhs.location];
     });
 

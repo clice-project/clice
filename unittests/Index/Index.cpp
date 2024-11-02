@@ -167,10 +167,35 @@ TEST(Index, Macro) {
     }
 }
 
+using namespace clice::index;
+
+static_assert(
+    is_specialization_of<clice::index::binary::array<clice::index::Location>, binary::array>);
+
+template <typename In, typename Out>
+void test_equal(const In& in, const Out& out, const char* data) {
+    if constexpr(requires { in == out; }) {
+        EXPECT_TRUE(in == out);
+    } else if constexpr(std::is_same_v<Out, binary::string>) {
+        EXPECT_EQ(in, llvm::StringRef(data + out.offset, out.size).str());
+    } else if constexpr(is_specialization_of<Out, binary::array>) {
+        using value_type = typename Out::value_type;
+        auto array =
+            llvm::ArrayRef(reinterpret_cast<const value_type*>(data + out.offset), out.size);
+        for(std::size_t i = 0; i < in.size(); i++) {
+            test_equal(in[i], array[i], data);
+        }
+    } else {
+        refl::foreach(in, out, [data](const auto& lhs, const auto& rhs) {
+            test_equal(lhs, rhs, data);
+        });
+    }
+}
+
 TEST(Index, Call) {
-    IndexTester tester("Call.cpp");
+    IndexTester tester("Vector.cpp");
     // tester.CallRelation(index::Position(9, 14), index::Position(4, 9));
-    tester.compiler->tu()->dump();
+    // tester.compiler->tu()->dump();
 
     auto json = index::toJson(tester.index);
 
@@ -178,13 +203,36 @@ TEST(Index, Call) {
     llvm::raw_fd_ostream file("index.json", error);
     file << json;
 
-    for(auto& symbol: tester.index.symbols) {
-        llvm::outs() << symbol.name << "\n";
-        for(auto& relation: symbol.relations) {
-            llvm::outs() << "  " << relation.kind << "\n"
-                         << json::serialize(relation.location) << "\n";
-        }
-    }
+    llvm::outs() << "symbol count: " << tester.index.symbols.size() << "\n";
+    llvm::outs() << "location count: " << tester.index.locations.size() << "\n";
+    llvm::outs() << "occurrence count: " << tester.index.occurrences.size() << "\n";
+
+    llvm::outs() << tester.index.symbols.size() * sizeof(binary::Symbol) +
+                        tester.index.locations.size() * sizeof(Location) +
+                        tester.index.occurrences.size() * sizeof(Occurrence)
+                 << "\n";
+
+    std::vector<char> binary = index::toBinary(tester.index);
+    char* data = binary.data();
+    test_equal(tester.index, *reinterpret_cast<const binary::Index*>(data), data);
+    llvm::outs() << binary.size() << "\n";
+
+    llvm::SmallVector<uint8_t, 128> out;
+    llvm::compression::zlib::compress(
+        llvm::ArrayRef(reinterpret_cast<uint8_t*>(data), binary.size()),
+        out);
+    llvm::outs() << out.size() << "\n";
+
+    // Decompress
+    llvm::SmallVector<uint8_t> decompressedData(out.size());  // Allocate enough space
+    auto decompressStart = std::chrono::high_resolution_clock::now();
+    std::size_t size = 0;
+    llvm::compression::zlib::decompress(out, decompressedData, size);
+    auto decompressEnd = std::chrono::high_resolution_clock::now();
+
+    std::chrono::duration<double, std::milli> decompressDuration = decompressEnd - decompressStart;
+    llvm::outs() << "Decompression time: " << decompressDuration.count() << " ms\n";
+    llvm::outs() << decompressedData.size() << "\n";
 }
 
 }  // namespace
