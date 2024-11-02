@@ -29,7 +29,7 @@ struct IndexTester {
 
     uint32_t mainFile() {
         for(uint32_t i = 0; i < index.files.size(); i++) {
-            if(!index.files[i].include.isValid()) {
+            if(!index.locations[index.files[i].include].isValid()) {
                 return i;
             }
         }
@@ -38,15 +38,16 @@ struct IndexTester {
     }
 
     auto& findSymbol(index::Position source) {
-        auto occurrence = std::lower_bound(index.occurrences.begin(),
-                                           index.occurrences.end(),
-                                           source,
-                                           [](const auto& occurrence, index::Position pos) {
-                                               return occurrence.location.end < pos;
-                                           });
+        auto occurrence =
+            std::lower_bound(index.occurrences.begin(),
+                             index.occurrences.end(),
+                             source,
+                             [&](const auto& occurrence, index::Position pos) {
+                                 return index.locations[occurrence.location].end < pos;
+                             });
 
         EXPECT_TRUE(occurrence != index.occurrences.end());
-        EXPECT_TRUE(occurrence->location.begin <= source);
+        EXPECT_TRUE(index.locations[occurrence->location].begin <= source);
         auto& symbol = index.symbols[occurrence->symbol];
 
         // auto symbol = std::lower_bound(index.symbols.begin(),
@@ -70,7 +71,7 @@ struct IndexTester {
             if(relation.kind.is(index::RelationKind::Definition)) {
                 auto location = relation.location;
                 hasDefinition = true;
-                EXPECT_EQ(location.begin, target);
+                EXPECT_EQ(index.locations[location].begin, target);
             }
         }
 

@@ -56,25 +56,31 @@ public:
         return result;
     }
 
-    Location toLocation(clang::SourceRange range) {
-        Location location = {};
+    uint32_t toLocation(clang::SourceRange range) {
+        auto begin = range.getBegin();
+        auto end = range.getEnd();
+        auto [iter, success] = locationCache.try_emplace({begin, end}, result.locations.size());
+        const auto index = iter->second;
+        if(success) {
+            result.locations.emplace_back();
+            Location& location = result.locations.back();
 
-        if(range.isInvalid() || range.getBegin().isMacroID() || range.getEnd().isMacroID()) {
-            return location;
+            if(range.isInvalid() || range.getBegin().isMacroID() || range.getEnd().isMacroID()) {
+                return std::numeric_limits<uint32_t>::max();
+            }
+
+            auto beginLoc = srcMgr.getPresumedLoc(begin);
+            auto endLoc = srcMgr.getPresumedLoc(
+                clang::Lexer::getLocForEndOfToken(end, 0, srcMgr, sema.getLangOpts()));
+
+            /// FIXME: position encoding?
+            location.begin.line = beginLoc.getLine();
+            location.begin.column = beginLoc.getColumn();
+            location.end.line = endLoc.getLine();
+            location.end.column = endLoc.getColumn();
+            location.file = addFile(beginLoc.getFileID());
         }
-
-        auto beginLoc = srcMgr.getPresumedLoc(range.getBegin());
-        auto endLoc = srcMgr.getPresumedLoc(
-            clang::Lexer::getLocForEndOfToken(range.getEnd(), 0, srcMgr, sema.getLangOpts()));
-
-        /// FIXME: position encoding?
-        location.begin.line = beginLoc.getLine();
-        location.begin.column = beginLoc.getColumn();
-        location.end.line = endLoc.getLine();
-        location.end.column = endLoc.getColumn();
-        location.file = addFile(beginLoc.getFileID());
-
-        return location;
+        return index;
     }
 
     friend class SymbolRef;
@@ -88,32 +94,32 @@ public:
         }
 
         SymbolRef addRelation(RelationKind kind,
-                              const Location& location,
+                              uint32_t location,
                               const memory::SymbolID& related = {}) {
             auto& relations = builder.result.symbols[index].relations;
             relations.emplace_back(static_cast<RelationKind>(kind), location, related);
             return *this;
         }
 
-        SymbolRef addRelation(uint32_t kind, const Location& location) {
+        SymbolRef addRelation(uint32_t kind, uint32_t location) {
             auto& relations = builder.result.symbols[index].relations;
             relations.emplace_back(static_cast<RelationKind>(kind), location);
             return *this;
         }
 
-        SymbolRef addReference(const Location& location) {
+        SymbolRef addReference(uint32_t location) {
             return addRelation(RelationKind::Reference, location);
         }
 
         // A definition is also a declaration and a reference.
-        SymbolRef addDefinition(const Location& location) {
+        SymbolRef addDefinition(uint32_t location) {
             return addRelation(RelationKind(RelationKind::Reference,
                                             RelationKind::Declaration,
                                             RelationKind::Definition),
                                location);
         }
 
-        SymbolRef addDeclarationOrDefinition(bool is_definition, const Location& location) {
+        SymbolRef addDeclarationOrDefinition(bool is_definition, uint32_t location) {
             RelationKind kind = RelationKind::Declaration;
             if(is_definition) {
                 kind.set(RelationKind::Definition);
@@ -129,13 +135,13 @@ public:
             return *this;
         }
 
-        SymbolRef addOccurrence(const Location& location) {
+        SymbolRef addOccurrence(uint32_t location) {
             builder.result.occurrences.emplace_back(location, index);
             return *this;
         }
 
         /// Should be called by caller, add `Caller` and `Callee` relation between two symbols.
-        SymbolRef addCall(const Location& location, const clang::Decl* callee) {
+        SymbolRef addCall(uint32_t location, const clang::Decl* callee) {
             auto symbol = builder.addSymbol(llvm::dyn_cast<clang::NamedDecl>(callee));
             symbol.addRelation(RelationKind::Caller, location, id());
             return addRelation(RelationKind::Callee, location, symbol.id());
@@ -181,6 +187,8 @@ private:
     /// A map between canonical decl and calculated data.
     llvm::DenseMap<clang::FileID, std::size_t> fileCache;
     llvm::DenseMap<const clang::Decl*, std::size_t> symbolCache;
+    llvm::DenseMap<std::pair<clang::SourceLocation, clang::SourceLocation>, std::size_t>
+        locationCache;
 };
 
 class IndexCollector : public clang::RecursiveASTVisitor<IndexCollector> {
@@ -202,7 +210,7 @@ public:
     bool VisitNamespaceDecl(const clang::NamespaceDecl* decl) {
         /// `namespace Foo {}`
         ///             ^~~~ definition
-        if(Location location = indexer.toLocation(decl->getLocation())) {
+        if(auto location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDefinition(location);
@@ -214,12 +222,12 @@ public:
         /// `namespace Foo = Bar`
         ///             ^     ^~~~ reference
         ///             ^~~~ definition
-        if(Location location = indexer.toLocation(decl->getLocation())) {
+        if(auto location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDefinition(location);
         }
-        if(Location location = indexer.toLocation(decl->getTargetNameLoc())) {
+        if(auto location = indexer.toLocation(decl->getTargetNameLoc())) {
             auto symbol = indexer.addSymbol(decl->getNamespace());
             symbol.addOccurrence(location);
             symbol.addReference(location);
@@ -230,7 +238,7 @@ public:
     bool VisitUsingDirectiveDecl(const clang::UsingDirectiveDecl* decl) {
         /// `using namespace Foo`
         ///                  ^^^~~~~~~ reference
-        if(Location location = indexer.toLocation(decl->getLocation())) {
+        if(auto location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl->getNominatedNamespace());
             symbol.addOccurrence(location);
             symbol.addReference(location);
@@ -241,7 +249,7 @@ public:
     bool VisitLabelDecl(const clang::LabelDecl* decl) {
         /// `label:`
         ///    ^~~~ definition
-        if(Location location = indexer.toLocation(decl->getLocation())) {
+        if(auto location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDefinition(location);
@@ -250,7 +258,7 @@ public:
     }
 
     bool VisitTagDecl(const clang::TagDecl* decl) {
-        if(Location location = indexer.toLocation(decl->getLocation())) {
+        if(auto location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDefinition(location);
@@ -259,7 +267,7 @@ public:
     }
 
     bool VisitFieldDecl(const clang::FieldDecl* decl) {
-        if(Location location = indexer.toLocation(decl->getLocation())) {
+        if(auto location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDefinition(location);
@@ -269,7 +277,7 @@ public:
     }
 
     bool VisitEnumConstantDecl(const clang::EnumConstantDecl* decl) {
-        if(Location location = indexer.toLocation(decl->getLocation())) {
+        if(auto location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDefinition(location);
@@ -282,7 +290,7 @@ public:
     /// So we only need to handle `TypedefNameDecl`.
     /// FIXME: `TypeAliasTemplateDecl`.
     bool VisitTypedefNameDecl(const clang::TypedefNameDecl* TND) {
-        if(Location location = indexer.toLocation(TND->getLocation())) {
+        if(auto location = indexer.toLocation(TND->getLocation())) {
             auto symbol = indexer.addSymbol(TND);
             symbol.addOccurrence(location);
             symbol.addDefinition(location);
@@ -292,7 +300,7 @@ public:
     }
 
     bool VisitVarDecl(const clang::VarDecl* decl) {
-        if(Location location = indexer.toLocation(decl->getLocation())) {
+        if(auto location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
@@ -305,7 +313,7 @@ public:
 
     // FIXME: check templated decl.
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
-        if(Location location = indexer.toLocation(decl->getLocation())) {
+        if(auto location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
@@ -330,7 +338,7 @@ public:
     bool VisitUsingDecl(const clang::UsingDecl* decl) {
         /// `using Foo::bar`
         ///             ^^^~~~ reference
-        // if(Location location = indexer.toLocation(decl->getLocation())) {
+        // if(auto location = indexer.toLocation(decl->getLocation())) {
         //     auto symbol = indexer.addSymbol(decl);
         //     symbol.addOccurrence(location);
         //     symbol.addReference(location);
@@ -341,7 +349,7 @@ public:
     bool VisitBindingDecl(const clang::BindingDecl* decl) {
         /// `auto [a, b] = std::make_pair(1, 2);`
         ///        ^~~~ definition
-        if(Location location = indexer.toLocation(decl->getLocation())) {
+        if(auto location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDefinition(location);
@@ -356,7 +364,7 @@ public:
     }
 
     bool VisitConceptDecl(const clang::ConceptDecl* decl) {
-        if(Location location = indexer.toLocation(decl->getLocation())) {
+        if(auto location = indexer.toLocation(decl->getLocation())) {
             auto symbol = indexer.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDefinition(location);
@@ -369,7 +377,7 @@ public:
     /// ============================================================================
 
     bool VisitDeclRefExpr(const clang::DeclRefExpr* expr) {
-        Location location = indexer.toLocation(expr->getLocation());
+        auto location = indexer.toLocation(expr->getLocation());
         auto symbol = indexer.addSymbol(expr->getDecl());
         symbol.addOccurrence(location);
         symbol.addReference(location);
@@ -377,7 +385,7 @@ public:
     }
 
     bool VisitMemberExpr(const clang::MemberExpr* expr) {
-        Location location = indexer.toLocation(expr->getMemberLoc());
+        auto location = indexer.toLocation(expr->getMemberLoc());
         auto symbol = indexer.addSymbol(expr->getMemberDecl());
         symbol.addOccurrence(location);
         symbol.addReference(location);
@@ -397,7 +405,7 @@ public:
         const clang::NamedDecl* caller = currentFunction;
         auto callee = llvm::dyn_cast<clang::NamedDecl>(expr->getCalleeDecl());
         if(caller && callee) {
-            Location location = indexer.toLocation(expr->getSourceRange());
+            auto location = indexer.toLocation(expr->getSourceRange());
             auto symbol = indexer.addSymbol(caller);
             symbol.addCall(location, callee);
         } else {
@@ -417,7 +425,7 @@ public:
     /// FIXME: Render keyword in source, like `struct`, `class`, `union`, `enum`, `typename`,
     /// in `BuiltinTypeLoc`, `ElaboratedTypeLoc` and so on.
     bool VisitTagTypeLoc(clang::TagTypeLoc loc) {
-        if(Location location = indexer.toLocation(loc.getNameLoc())) {
+        if(auto location = indexer.toLocation(loc.getNameLoc())) {
             auto symbol = indexer.addSymbol(loc.getDecl());
             symbol.addOccurrence(location);
             symbol.addReference(location);
@@ -426,7 +434,7 @@ public:
     }
 
     bool VisitTypedefTypeLoc(clang::TypedefTypeLoc loc) {
-        if(Location location = indexer.toLocation(loc.getNameLoc())) {
+        if(auto location = indexer.toLocation(loc.getNameLoc())) {
             auto symbol = indexer.addSymbol(loc.getTypedefNameDecl());
             symbol.addOccurrence(location);
             symbol.addReference(location);
@@ -443,7 +451,7 @@ public:
     /// `std::vector<int>`
     ///        ^^^^~~~~ reference
     bool VisitTemplateSpecializationTypeLoc(clang::TemplateSpecializationTypeLoc loc) {
-        Location location = indexer.toLocation(loc.getTemplateNameLoc());
+        auto location = indexer.toLocation(loc.getTemplateNameLoc());
         if(!location) {
             return true;
         }

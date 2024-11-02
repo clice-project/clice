@@ -29,13 +29,17 @@ struct File {
     String path;
     // TODO: some flags.
     /// Include location of the file if any.
-    Value<Location> include;
+    uint32_t include;
 };
 
 struct Relation {
     RelationKind kind;
-    Value<Location> location;
-    SymbolID related;
+    uint32_t location;
+    /// An extra file used to provide extra information, according to the `kind`.
+    /// e.g. for Definition, this is used to store the location of whole block.
+    /// Above `location` is just the location of the name.
+    /// For `Caller` and `Callee`, this is used to store the index of target symbol.
+    uint32_t symOrLoc;
 };
 
 struct Symbol {
@@ -53,7 +57,7 @@ struct Symbol {
 };
 
 struct Occurrence {
-    Value<Location> location;
+    uint32_t location;
     /// The index of the symbol in `Index::symbols`.
     uint32_t symbol;
 };
@@ -75,5 +79,7 @@ struct Index {
     Array<Symbol> symbols;
     /// All the occurrences in the source file, sorted by `Occurrence::Location`.
     Array<Occurrence> occurrences;
+    /// Cache same locations to reduce the size of the index.
+    Array<Location> locations;
 };
 
