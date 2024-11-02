@@ -145,7 +145,7 @@ public:
     static memory::SymbolID generateSymbolID(const clang::Decl* decl) {
         llvm::SmallString<128> USR;
         clang::index::generateUSRForDecl(decl, USR);
-        return memory::SymbolID{llvm::hash_value(USR), USR.str().str()};
+        return llvm::hash_value(USR);
     }
 
     /// Add a symbol to the index.

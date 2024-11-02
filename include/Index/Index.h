@@ -23,6 +23,8 @@ using String = Array<char>;
 
 #undef MAKE_CLANGD_HAPPY
 
+using SymbolID = uint64_t;
+
 struct File {
     String path;
     // TODO: some flags.
@@ -30,19 +32,17 @@ struct File {
     Value<Location> include;
 };
 
-struct SymbolID {
-    uint64_t value;
-    String USR;
-};
-
 struct Relation {
     RelationKind kind;
     Value<Location> location;
-    Value<SymbolID> related;
+    SymbolID related;
 };
 
 struct Symbol {
-    Value<SymbolID> id;
+    /// The hash of this symbol, used for quick lookup.
+    SymbolID id;
+    /// The unique identifier of this symbol.
+    String USR;
     /// The name of this symbol.
     String name;
     /// The document of this symbol.
