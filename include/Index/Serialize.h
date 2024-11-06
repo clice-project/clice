@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Index/Indexer.h>
 #include <Support/JSON.h>
 

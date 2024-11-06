@@ -2,7 +2,7 @@
 #include <Support/FileSystem.h>
 #include <Index/Serialize.h>
 #include <Compiler/Compiler.h>
-
+#include <Index/Loader.h>
 #include "../Test.h"
 
 namespace {
@@ -27,82 +27,31 @@ struct IndexTester {
         // mainFileIndex = mainFile();
     }
 
-    uint32_t mainFile() {
-        for(uint32_t i = 0; i < index.files.size(); i++) {
-            if(!index.locations[index.files[i].include].isValid()) {
-                return i;
-            }
-        }
+    // auto& findSymbol(index::Position source) {
+    // auto occurrence =
+    //     std::lower_bound(index.occurrences.begin(),
+    //                      index.occurrences.end(),
+    //                      source,
+    //                      [&](index::Occurrence occurrence, index::Position pos) {
+    //                          return index.locations[occurrence.location].end < pos;
+    //                      });
+    //
+    // EXPECT_TRUE(occurrence != index.occurrences.end());
+    // EXPECT_TRUE(index.locations[occurrence->location].begin <= source);
+    // auto& symbol = index.symbols[occurrence->symbol];
 
-        std::terminate();
-    }
+    // auto symbol = std::lower_bound(index.symbols.begin(),
+    //                                index.symbols.end(),
+    //                                id,
+    //                                [](const auto& symbol, const auto& id) {
+    //                                    return refl::less(symbol.id, id);
+    //                                });
 
-    auto& findSymbol(index::Position source) {
-        auto occurrence =
-            std::lower_bound(index.occurrences.begin(),
-                             index.occurrences.end(),
-                             source,
-                             [&](index::Occurrence occurrence, index::Position pos) {
-                                 return index.locations[occurrence.location].end < pos;
-                             });
+    // EXPECT_TRUE(symbol != index.symbols.end());
+    // EXPECT_TRUE(refl::equal(symbol->id, id));
 
-        EXPECT_TRUE(occurrence != index.occurrences.end());
-        EXPECT_TRUE(index.locations[occurrence->location].begin <= source);
-        auto& symbol = index.symbols[occurrence->symbol];
-
-        // auto symbol = std::lower_bound(index.symbols.begin(),
-        //                                index.symbols.end(),
-        //                                id,
-        //                                [](const auto& symbol, const auto& id) {
-        //                                    return refl::less(symbol.id, id);
-        //                                });
-
-        // EXPECT_TRUE(symbol != index.symbols.end());
-        // EXPECT_TRUE(refl::equal(symbol->id, id));
-
-        return symbol;
-    }
-
-    IndexTester& GoToDefinition(index::Position source, index::Position target) {
-        auto& symbol = findSymbol(source);
-
-        bool hasDefinition = false;
-        for(auto& relation: symbol.relations) {
-            if(relation.kind.is(index::RelationKind::Definition)) {
-                auto location = relation.location;
-                hasDefinition = true;
-                EXPECT_EQ(index.locations[location].begin, target);
-            }
-        }
-
-        EXPECT_TRUE(hasDefinition);
-
-        return *this;
-    }
-
-    IndexTester& CallRelation(index::Position source, index::Position target) {
-        auto& symbol = findSymbol(source);
-
-        bool hasCall = false;
-        for(auto& relation: symbol.relations) {
-            if(relation.kind.is(index::RelationKind::Callee)) {
-                auto location = relation.location;
-                hasCall = true;
-                // EXPECT_EQ(location.begin, target);
-                llvm::outs() << json::serialize(relation) << "\n";
-            }
-
-            if(relation.kind.is(index::RelationKind::Caller)) {
-                auto location = relation.location;
-                hasCall = true;
-                // EXPECT_EQ(location.begin, target);
-            }
-        }
-
-        EXPECT_TRUE(hasCall);
-
-        return *this;
-    }
+    // return symbol;
+    //}
 
     uint32_t mainFileIndex;
 
@@ -193,7 +142,7 @@ void test_equal(const In& in, const Out& out, const char* data) {
 }
 
 TEST(Index, Call) {
-    IndexTester tester("Vector.cpp");
+    IndexTester tester("ClassTemplate.cpp");
     // tester.CallRelation(index::Position(9, 14), index::Position(4, 9));
     // tester.compiler->tu()->dump();
 
@@ -203,6 +152,7 @@ TEST(Index, Call) {
     llvm::raw_fd_ostream file("index.json", error);
     file << json;
 
+    llvm::outs() << "symbol count: " << tester.index.files.size() << "\n";
     llvm::outs() << "symbol count: " << tester.index.symbols.size() << "\n";
     llvm::outs() << "location count: " << tester.index.locations.size() << "\n";
     llvm::outs() << "occurrence count: " << tester.index.occurrences.size() << "\n";
@@ -214,25 +164,26 @@ TEST(Index, Call) {
 
     std::vector<char> binary = index::toBinary(tester.index);
     char* data = binary.data();
-    test_equal(tester.index, *reinterpret_cast<const binary::Index*>(data), data);
+    /// test_equal(tester.index, *reinterpret_cast<const binary::Index*>(data), data);
     llvm::outs() << binary.size() << "\n";
 
-    llvm::SmallVector<uint8_t, 128> out;
-    llvm::compression::zlib::compress(
-        llvm::ArrayRef(reinterpret_cast<uint8_t*>(data), binary.size()),
-        out);
-    llvm::outs() << out.size() << "\n";
+    Loader loader(std::move(binary));
 
-    // Decompress
-    llvm::SmallVector<uint8_t> decompressedData(out.size());  // Allocate enough space
-    auto decompressStart = std::chrono::high_resolution_clock::now();
-    std::size_t size = 0;
-    llvm::compression::zlib::decompress(out, decompressedData, size);
-    auto decompressEnd = std::chrono::high_resolution_clock::now();
+    for(auto occurrence: loader.occurrences()) {
+        auto loc = loader.location(occurrence.location);
+        if(loc.file.offset == 16) {
+            llvm::outs() << loc.file.offset << ":" << loc.begin.line << ", " << loc.begin.column
+                         << ": " << loc.end.line << ", " << loc.end.column << "\n";
+        }
+    }
 
-    std::chrono::duration<double, std::milli> decompressDuration = decompressEnd - decompressStart;
-    llvm::outs() << "Decompression time: " << decompressDuration.count() << " ms\n";
-    llvm::outs() << decompressedData.size() << "\n";
+    auto files = loader.locateFile("/home/ykiko/C++/clice2/tests/Index/ClassTemplate.cpp");
+    auto& main = files[0];
+    const auto index = files.begin() - loader.files().begin();
+    llvm::outs() << loader.string(main.path) << " index: " << index << "\n";
+
+    auto& sym = loader.locateSymbol(FileRef{static_cast<uint32_t>(index)}, Position{12, 8});
+    llvm::outs() << "symbol id: " << loader.string(sym.name) << "\n";
 }
 
 }  // namespace

@@ -70,18 +70,18 @@ public:
 
         /// If insertion is successful, add the location to the index.
         if(success) {
-            index->locations.emplace_back();
-            Location& location = index->locations.back();
+            auto& locations = index->locations;
+            locations.emplace_back();
 
             auto beginLoc = srcMgr.getPresumedLoc(begin);
             auto endTok = clang::Lexer::getLocForEndOfToken(end, 0, srcMgr, sema.getLangOpts());
             auto endLoc = srcMgr.getPresumedLoc(endTok);
 
-            location.begin.line = beginLoc.getLine();
-            location.begin.column = beginLoc.getColumn();
-            location.end.line = endLoc.getLine();
-            location.end.column = endLoc.getColumn();
-            location.file = addFile(srcMgr.getFileID(begin));
+            locations[offset].begin.line = beginLoc.getLine();
+            locations[offset].begin.column = beginLoc.getColumn();
+            locations[offset].end.line = endLoc.getLine();
+            locations[offset].end.column = endLoc.getColumn();
+            locations[offset].file = addFile(srcMgr.getFileID(begin));
         }
 
         return LocationRef{offset};
@@ -98,33 +98,20 @@ public:
         /// TODO: ...
 
         SymbolProxy addOccurrence(LocationRef location) {
-            llvm::outs() << location.offset << "\n";
-            if(location.isInvalid()) {
-                std::terminate();
-            }
             auto& occurrences = builder.index->occurrences;
             occurrences.emplace_back(location, SymbolRef{offset});
             return *this;
         }
 
         SymbolProxy addDeclarationOrDefinition(bool isDefinition, LocationRef location) {
-            if(location.isInvalid()) {
-                std::terminate();
-            }
             return *this;
         }
 
         SymbolProxy addDefinition(LocationRef location) {
-            if(location.isInvalid()) {
-                std::terminate();
-            }
             return *this;
         }
 
         SymbolProxy addDeclaration(LocationRef location) {
-            if(location.isInvalid()) {
-                std::terminate();
-            }
             return *this;
         }
 

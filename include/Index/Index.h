@@ -20,17 +20,18 @@ struct FileRef : Ref<FileRef> {};
 struct SymbolRef : Ref<SymbolRef> {};
 
 struct Location {
+    /// The index of the file in the `Index::files`. When the value of file is equal to MAX_UINT32
+    /// it means the location is invalid.
+    FileRef file = {};
+
     /// Begin position of the location.
     Position begin = {};
 
     /// End position of the location.
     Position end = {};
 
-    /// The index of the file in the `Index::files`. When the value of file is equal to MAX_UINT32
-    /// it means the location is invalid.
-    FileRef file;
-
-    friend constexpr auto operator<=> (const Location& lhs, const Location& rhs) = default;
+    friend constexpr std::strong_ordering operator<=> (const Location& lhs,
+                                                       const Location& rhs) = default;
 };
 
 struct Occurrence {
