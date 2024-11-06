@@ -61,11 +61,11 @@ public:
 
     friend constexpr bool operator== (enum_type lhs, enum_type rhs) = default;
 
-    friend llvm::raw_ostream& operator<< (llvm::raw_ostream& os, enum_type e) {
+    std::string dump() {
         std::string masks;
         bool is_first = true;
         for(std::size_t i = 0; i < sizeof(std::underlying_type_t<Enum>) * 8; i++) {
-            if(e.value & (1 << i)) {
+            if(value & (1 << i)) {
                 if(is_first) {
                     is_first = false;
                 } else {
@@ -74,8 +74,11 @@ public:
                 masks += refl::enum_name<Enum>(static_cast<Enum>(i));
             }
         }
+        return masks;
+    }
 
-        os << std::format("[mask enum, value: {}, masks: {}]", e.value, masks);
+    friend llvm::raw_ostream& operator<< (llvm::raw_ostream& os, enum_type e) {
+        os << std::format("[mask enum, value: {}, masks: {}]", e.value, e.dump());
         return os;
     }
 

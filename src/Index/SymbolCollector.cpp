@@ -167,11 +167,87 @@ public:
         return true;
     }
 
-    /// FIXME: handle template decls here.
+    VISIT_DECL(TemplateTypeParmDecl) {
+        /// `template <typename T> ...`
+        ///                     ^~~~ definition
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDefinition(location);
+        }
+        return true;
+    }
+
+    VISIT_DECL(TemplateTemplateParmDecl) {
+        /// `template <template <typename> class T> ...`
+        ///                                      ^~~~ definition
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDefinition(location);
+        }
+        return true;
+    }
+
+    VISIT_DECL(NonTypeTemplateParmDecl) {
+        /// `template <int N> ...`
+        ///                ^~~~ definition
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDefinition(location);
+            symbol.addTypeDefinition(decl->getType());
+        }
+        return true;
+    }
+
+    VISIT_DECL(ClassTemplateDecl) {
+        /// `template <typename T> class Foo { };`
+        ///                               ^~~~ definition
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
+        }
+        return true;
+    }
+
+    VISIT_DECL(FunctionTemplateDecl) {
+        /// `template <typename T> void foo();`
+        ///                               ^~~~ definition
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
+        }
+        return true;
+    }
+
+    VISIT_DECL(TypeAliasTemplateDecl) {
+        /// `template <typename T> using Foo = T;`
+        ///                               ^~~~ definition
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDefinition(location);
+        }
+        return true;
+    }
+
+    VISIT_DECL(VarTemplateDecl) {
+        /// `template <typename T> int foo;`
+        ///                             ^~~~ definition
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
+        }
+        return true;
+    }
 
     VISIT_DECL(ConceptDecl) {
-        /// `concept Foo = ...;`
-        ///           ^~~~ definition
+        /// `template <typename T> concept Foo = ...;`
+        ///                           ^~~~ definition
         if(auto location = builder.addLocation(decl->getLocation())) {
             auto symbol = builder.addSymbol(decl);
             symbol.addOccurrence(location);

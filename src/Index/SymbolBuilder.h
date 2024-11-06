@@ -95,34 +95,54 @@ public:
         explicit SymbolProxy(uint32_t offset, SymbolBuilder& builder) :
             offset(offset), builder(builder) {}
 
-        /// TODO: ...
-
         SymbolProxy addOccurrence(LocationRef location) {
+            assert(location.isValid() && "Invalid location");
             auto& occurrences = builder.index->occurrences;
             occurrences.emplace_back(location, SymbolRef{offset});
             return *this;
         }
 
-        SymbolProxy addDeclarationOrDefinition(bool isDefinition, LocationRef location) {
-            return *this;
-        }
-
-        SymbolProxy addDefinition(LocationRef location) {
-            return *this;
-        }
-
-        SymbolProxy addDeclaration(LocationRef location) {
+        SymbolProxy addRelation(RelationKind kind,
+                                LocationRef location,
+                                SymOrLocRef symOrLoc = {}) {
+            assert(location.isValid() && "Invalid location");
+            auto& relations = builder.index->symbols[offset].relations;
+            relations.emplace_back(kind, location, symOrLoc);
             return *this;
         }
 
         SymbolProxy addReference(LocationRef location) {
-            if(location.isInvalid()) {
-                std::terminate();
-            }
-            return *this;
+            RelationKind kind = RelationKind::Reference;
+            return addRelation(kind, location);
+        }
+
+        SymbolProxy addDeclaration(LocationRef location) {
+            RelationKind kind = RelationKind::Reference;
+            kind.set(RelationKinds::Declaration);
+            return addRelation(kind, location);
+        }
+
+        SymbolProxy addDefinition(LocationRef location) {
+            RelationKind kind = RelationKind::Reference;
+            kind.set(RelationKinds::Declaration);
+            kind.set(RelationKinds::Definition);
+            return addRelation(kind, location);
+        }
+
+        SymbolProxy addDeclarationOrDefinition(bool isDefinition, LocationRef location) {
+            return isDefinition ? addDefinition(location) : addDeclaration(location);
         }
 
         SymbolProxy addTypeDefinition(clang::QualType type) {
+            if(auto decl = declForType(type)) {
+                /// FIXME: figure out Symbol lookup.
+                if(auto location = builder.addLocation(decl->getLocation())) {
+                    auto symbol = builder.addSymbol(decl);
+                    return addRelation(RelationKind::TypeDefinition,
+                                       location,
+                                       SymOrLocRef{symbol.offset});
+                }
+            }
             return *this;
         }
 

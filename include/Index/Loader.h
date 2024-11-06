@@ -25,6 +25,10 @@ public:
         return make_range(index.symbols);
     }
 
+    llvm::ArrayRef<Relation> relations(const binary::Symbol& symbol) const {
+        return make_range(symbol.relations);
+    }
+
     llvm::ArrayRef<Occurrence> occurrences() const {
         return make_range(index.occurrences);
     }
