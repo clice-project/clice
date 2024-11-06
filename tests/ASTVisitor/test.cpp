@@ -1,11 +1,4 @@
-#include "test.h"
+template<typename T>
+struct X;
 
-int x = ADD(ADD(1, 2), 2);
-
-int y = ADD2(1, 2);
-
-
-
-void test();
-
-void test() {}
+using test = X<int>;

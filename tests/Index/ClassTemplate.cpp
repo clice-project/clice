@@ -1,17 +1,13 @@
-template <typename T, typename U>
-struct X {};
+#include <utility>  
+#include <vector>
+#include <string>
 
 template <typename T>
-struct X<T, T> {};
+struct X {
+    void foo();
+};
 
-template <>
-struct X<int, int> {};
-
-X<int, char> x;
-
-X<char, char> x2;
-
-X<int, int> x3;
-
-template <>
-struct X<double, char>;
+int main() {
+    X<int> x;
+    x.foo();
+}
