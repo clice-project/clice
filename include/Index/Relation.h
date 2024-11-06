@@ -38,18 +38,41 @@ struct RelationKind : enum_type<RelationKinds, true> {
     using enum_type::operator=;
 };
 
+template <typename T>
+struct Ref {
+    std::uint32_t offset = std::numeric_limits<std::uint32_t>::max();
+
+    bool isValid() const {
+        return offset != std::numeric_limits<std::uint32_t>::max();
+    }
+
+    bool isInvalid() const {
+        return !isValid();
+    }
+
+    explicit operator bool () const {
+        return isValid();
+    }
+
+    friend constexpr auto operator<=> (const Ref& lhs, const Ref& rhs) = default;
+};
+
+struct LocationRef : Ref<LocationRef> {};
+
+struct SymOrLocRef : Ref<SymOrLocRef> {};
+
 struct Relation {
     /// The kind of the relation.
     RelationKind kind;
 
     /// The index of location in `Index::locations`.
-    uint32_t location;
+    LocationRef location;
 
     /// Additional information based on the `Relation::kind`. For `Declaration` and `Definition`,
     /// this is the source range of the whole entity(`Relation::location` is just the range of
     /// symbol name). For kinds whose target symbol is different from the source symbol, e.g.
     /// `TypeDefinition` and `Base`, this is the index of target symbol in `Index::symbols`.
-    uint32_t symOrLoc;
+    SymOrLocRef symOrLoc;
 
     static bool isSymbol(const Relation& relation) {
         auto kind = relation.kind;

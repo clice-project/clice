@@ -15,6 +15,10 @@ struct Position {
     friend constexpr auto operator<=> (const Position& lhs, const Position& rhs) = default;
 };
 
+struct FileRef : Ref<FileRef> {};
+
+struct SymbolRef : Ref<SymbolRef> {};
+
 struct Location {
     /// Begin position of the location.
     Position begin = {};
@@ -24,25 +28,17 @@ struct Location {
 
     /// The index of the file in the `Index::files`. When the value of file is equal to MAX_UINT32
     /// it means the location is invalid.
-    uint32_t file = std::numeric_limits<uint32_t>::max();
-
-    bool isValid() const {
-        return file != std::numeric_limits<uint32_t>::max();
-    }
-
-    explicit operator bool () const {
-        return isValid();
-    }
+    FileRef file;
 
     friend constexpr auto operator<=> (const Location& lhs, const Location& rhs) = default;
 };
 
 struct Occurrence {
     /// The index of the location in `Index::locations`.
-    uint32_t location;
+    LocationRef location;
 
     /// The index of the symbol in `Index::symbols`.
-    uint32_t symbol;
+    SymbolRef symbol;
 };
 
 template <typename String>
@@ -53,7 +49,7 @@ struct File {
     /// FIXME: Add some flags.
 
     /// The index of include location of this file if any.
-    uint32_t include;
+    LocationRef include;
 };
 
 template <typename String, template <typename...> typename Array>

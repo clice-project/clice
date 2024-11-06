@@ -52,6 +52,17 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "ASTVisitor",
+            "program": "${workspaceFolder}/build/bin/clice-tests",
+            "args": [
+                "--test-dir=/home/ykiko/C++/clice2/tests",
+                "--gtest_filter=clice.ASTVisitor*"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "CodeCompletion",
             "program": "${workspaceFolder}/build/bin/clice-tests",
             "args": [
