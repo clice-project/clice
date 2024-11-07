@@ -90,7 +90,11 @@ if(CLICE_ENABLE_TEST)
         "${CMAKE_SOURCE_DIR}/deps/spdlog/include"
         "${CMAKE_SOURCE_DIR}/deps/googletest/googletest/include"
     )
-    target_link_libraries(clice-tests PRIVATE clice-core gtest_main spdlog::spdlog)
+    target_link_libraries(clice-tests PRIVATE 
+        clice-core
+        gtest_main 
+        spdlog::spdlog
+    )
 endif()
 
 

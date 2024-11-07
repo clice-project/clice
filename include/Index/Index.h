@@ -30,8 +30,7 @@ struct Location {
     /// End position of the location.
     Position end = {};
 
-    friend constexpr std::strong_ordering operator<=> (const Location& lhs,
-                                                       const Location& rhs) = default;
+    friend constexpr auto operator<=> (const Location& lhs, const Location& rhs) = default;
 };
 
 struct Occurrence {

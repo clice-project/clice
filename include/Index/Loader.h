@@ -4,6 +4,14 @@
 
 namespace clice::index {
 
+struct FullLocation {
+    Position begin;
+    Position end;
+    FileRef file;
+    LocationRef include;
+    llvm::StringRef filepath;
+};
+
 /// A helper class to load the index from a binary file and provide some utility functions.
 class Loader {
 public:
@@ -74,7 +82,7 @@ public:
     }
 
     /// Locate the symbol at the given position.
-    const binary::Symbol& locateSymbol(FileRef file, Position pos) {
+    const binary::Symbol* locateSymbol(FileRef file, Position pos) const {
         /// We use the default `<=>` operator when sorting the occurrences.
         /// And file is the first key, so locations in the same file are contiguous.
         /// Then we can use binary search to locate the file first, then search the occurrences in
@@ -87,8 +95,7 @@ public:
                                           });
 
         if(fileStart == occurrences().end() || location(fileStart->location).file != file) {
-            /// FIXME: add error handle.
-            std::terminate();
+            return nullptr;
         }
 
         auto occurrence = std::lower_bound(fileStart,
@@ -99,11 +106,39 @@ public:
                                            });
 
         if(occurrence == occurrences().end() || begin(occurrence->location) > pos) {
-            /// FIXME: add error handle.
-            std::terminate();
+            return nullptr;
         }
 
-        return symbol(occurrence->symbol);
+        return &symbol(occurrence->symbol);
+    }
+
+    FullLocation decompose(LocationRef loc) const {
+        auto location = this->location(loc);
+        auto file = this->file(location.file);
+        return {
+            location.begin,
+            location.end,
+            location.file,
+            file.include,
+            string(file.path),
+        };
+    }
+
+    template <typename Callback>
+    bool lookupRelation(const binary::Symbol* symbol,
+                        RelationKinds kind,
+                        const Callback& callback) {
+        if(symbol) {
+            for(auto& relation: relations(*symbol)) {
+                if(relation.kind.is(kind)) {
+                    FullLocation location = decompose(relation.location);
+                    callback(location);
+                }
+            }
+            return true;
+        }
+
+        return false;
     }
 
     /// Locate the symbol with the given id.

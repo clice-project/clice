@@ -32,23 +32,24 @@ public:
             files.emplace_back();
 
             /// FIXME: handle error.
-            llvm::SmallString<128> path;
             auto entry = srcMgr.getFileEntryRefForID(id);
             if(!entry) {
                 llvm::errs() << "File entry not found\n";
                 std::terminate();
             }
 
-            if(auto error = fs::real_path(entry->getName(), path)) {
-                llvm::errs() << error.message() << "\n";
-                std::terminate();
-            }
+            /// FIXME: resolve the real path(consider real path).
+            // llvm::SmallString<128> path;
+            // if(auto error = fs::real_path(entry->getName(), path)) {
+            //     llvm::errs() << error.message() << "\n";
+            //     std::terminate();
+            // }
 
             auto include = addLocation(srcMgr.getIncludeLoc(id));
 
             /// Note that addLocation may invalidate the reference to files.
             /// So we use the offset to access the file.
-            files[offset].path = path.str();
+            files[offset].path = entry->getName();
             files[offset].include = include;
         }
 
@@ -77,10 +78,11 @@ public:
             auto endTok = clang::Lexer::getLocForEndOfToken(end, 0, srcMgr, sema.getLangOpts());
             auto endLoc = srcMgr.getPresumedLoc(endTok);
 
-            locations[offset].begin.line = beginLoc.getLine();
-            locations[offset].begin.column = beginLoc.getColumn();
-            locations[offset].end.line = endLoc.getLine();
-            locations[offset].end.column = endLoc.getColumn();
+            /// FIXME: position encoding.
+            locations[offset].begin.line = beginLoc.getLine() - 1;
+            locations[offset].begin.column = beginLoc.getColumn() - 1;
+            locations[offset].end.line = endLoc.getLine() - 1;
+            locations[offset].end.column = endLoc.getColumn() - 1;
             locations[offset].file = addFile(srcMgr.getFileID(begin));
         }
 
