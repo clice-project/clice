@@ -9,7 +9,7 @@ TEST(Index, Annotation) {
 int @name = 1;
 
 int main() {
-    $(d1)name = 2;
+    na$(d1)me = 2;
 }
 )cpp";
 

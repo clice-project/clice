@@ -67,6 +67,15 @@ public:
     }
 
     VISIT_DECL(TagDecl) {
+        /// `Base::TraverseClassTemplate...Decl` will also traverse it's templated class.
+        /// We already handled the template class in `VisitClassTemplate...Decl`. So we skip
+        /// them here.
+        if(decl->getDescribedTemplate() ||
+           llvm::isa<clang::ClassTemplateSpecializationDecl,
+                     clang::ClassTemplatePartialSpecializationDecl>(decl)) {
+            return true;
+        }
+
         /// `struct/class/union/enum Foo { };`
         ///                           ^~~~ definition
         if(auto location = builder.addLocation(decl->getLocation())) {
@@ -208,6 +217,32 @@ public:
             auto symbol = builder.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
+        }
+        return true;
+    }
+
+    VISIT_DECL(ClassTemplateSpecializationDecl) {
+        /// It's possible that a class template specialization is a full specialization or a
+        /// explicit instantiation. And `ClassTemplatePartialSpecializationDecl` is the subclass of
+        /// `ClassTemplateSpecializationDecl`, it is also handled here.
+        ///
+        /// For full specialization:
+        /// `template <> class Foo<int> { };`
+        ///                     ^~~~ definition
+        ///
+        /// For explicit instantiation:
+        /// `template class Foo<int>;`
+        ///                  ^~~~ reference
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            assert(decl->getSpecializationKind() != clang::TSK_ImplicitInstantiation &&
+                   "Implicit instantiation should not be handled here");
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            if(decl->isExplicitSpecialization()) {
+                symbol.addDefinition(location);
+            } else {
+                symbol.addReference(location);
+            }
         }
         return true;
     }
@@ -377,9 +412,8 @@ void sortSymbols(std::vector<memory::Symbol>& symbols, std::vector<Occurrence>& 
         indices.emplace_back(index);
     }
 
-    llvm::sort(indices, [&](uint32_t lhs, uint32_t rhs) {
-        return symbols[lhs].id < symbols[rhs].id;
-    });
+    llvm::sort(indices,
+               [&](uint32_t lhs, uint32_t rhs) { return symbols[lhs].id < symbols[rhs].id; });
 
     std::vector<uint32_t> map;
     map.resize(size);
@@ -415,9 +449,8 @@ void sortFiles(std::vector<memory::File>& files, std::vector<Location>& location
         indices.emplace_back(index);
     }
 
-    llvm::sort(indices, [&](uint32_t lhs, uint32_t rhs) {
-        return files[lhs].path < files[rhs].path;
-    });
+    llvm::sort(indices,
+               [&](uint32_t lhs, uint32_t rhs) { return files[lhs].path < files[rhs].path; });
 
     std::vector<uint32_t> map;
     map.resize(size);

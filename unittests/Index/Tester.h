@@ -56,7 +56,7 @@ struct IndexerTester {
         if(json) {
             std::error_code error;
             llvm::raw_fd_ostream file("index.json", error);
-            file << json;
+            file << index::toJson(index);
         }
 
         loader = std::make_unique<Loader>(index::toBinary(index));

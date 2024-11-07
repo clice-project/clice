@@ -185,6 +185,13 @@ public:
 
     void indexTU(memory::Index& result, Compiler& compiler);
 
+    ~SymbolBuilder() {
+        // for(auto [decl, _]: symbolCache) {
+        //     decl->dump();
+        //     llvm::outs() << "-----------------------------------------------------------\n";
+        // }
+    }
+
 private:
     clang::Sema& sema;
     clang::ASTContext& context;

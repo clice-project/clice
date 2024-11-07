@@ -47,9 +47,6 @@ const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
         }
 
         auto CRD = CTSD->getTemplateInstantiationPattern();
-        if(CRD == nullptr) {
-            CTSD->dump();
-        }
         assert(CRD && "Unexpected template instantiation pattern");
 
         /// Primary template.
@@ -78,8 +75,12 @@ const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
 
         return VD->getTemplateInstantiationPattern();
     }
-
+    
     if(auto CRD = llvm::dyn_cast<clang::CXXRecordDecl>(decl)) {
+        if(auto CTD = CRD->getDescribedClassTemplate()) {
+            return CTD;
+        }
+
         return CRD->getInstantiatedFromMemberClass();
     }
 
