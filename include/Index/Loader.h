@@ -175,6 +175,10 @@ public:
         return {range.first, range.second};
     }
 
+    const binary::Index& getIndex() const {
+        return index;
+    }
+
 private:
     std::vector<char> binary;
     const binary::Index& index;

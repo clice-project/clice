@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Index/Index.h>
 #include <llvm/ADT/StringMap.h>
 
