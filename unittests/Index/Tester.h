@@ -69,12 +69,31 @@ struct IndexerTester {
         mainFile = {static_cast<uint32_t>(files.begin() - loader->files().begin())};
     }
 
-    IndexerTester& GotoDefinition(llvm::StringRef position, llvm::StringRef target) {
+    void GotoDefinition(llvm::StringRef position) {
         auto loc = annotation.position(position);
         auto sym = loader->locateSymbol(mainFile, loc);
-        loader->lookupRelation(sym, RelationKind::Definition, [&](const FullLocation& location) {
-            EXPECT_EQ(location.begin, annotation.position(target));
-        });
+        bool success = loader->lookupRelation(sym,
+                                              RelationKind::Definition,
+                                              [&](const FullLocation& location) {
+                                                  llvm::outs() << json::serialize(location) << "\n";
+                                              });
+        EXPECT_TRUE(success);
+    }
+
+    IndexerTester& GotoDefinition(llvm::StringRef position,
+                                  llvm::StringRef target,
+                                  std::source_location info = std::source_location::current()) {
+        auto loc = annotation.position(position);
+        auto sym = loader->locateSymbol(mainFile, loc);
+        bool success =
+            loader->lookupRelation(sym,
+                                   RelationKind::Definition,
+                                   [&](const FullLocation& location) {
+                                       EXPECT_EQ(location.begin, annotation.position(target));
+                                       /// llvm::outs() << info.line() << ":" << info.column() <<
+                                       /// "\n";
+                                   });
+        EXPECT_TRUE(success);
         return *this;
     }
 };

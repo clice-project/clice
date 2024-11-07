@@ -175,12 +175,16 @@ public:
         if(success) {
             memory::Symbol& symbol = symbols.emplace_back();
             llvm::SmallString<128> USR;
-            clang::index::generateUSRForDecl(decl, USR);
+            clang::index::generateUSRForDecl(canonical, USR);
             symbol.id = llvm::xxHash64(USR);
             symbol.name = decl->getNameAsString();
         }
 
         return SymbolProxy(offset, *this);
+    }
+
+    bool alreadyVisited(const clang::Decl* decl) {
+        return symbolCache.contains(decl);
     }
 
     void indexTU(memory::Index& result, Compiler& compiler);

@@ -135,6 +135,13 @@ public:
     }
 
     VISIT_DECL(FunctionDecl) {
+        /// Because `TraverseFunctionTemplateDecl` will also traverse it's templated function. We
+        /// already handled the template function in `VisitFunctionTemplateDecl`. So we skip them
+        /// here.
+        if(decl->getDescribedFunctionTemplate()) {
+            return true;
+        }
+
         /// `void foo();`
         ///         ^~~~ declaration/definition
         if(auto location = builder.addLocation(decl->getLocation())) {
@@ -212,7 +219,7 @@ public:
 
     VISIT_DECL(ClassTemplateDecl) {
         /// `template <typename T> class Foo { };`
-        ///                               ^~~~ definition
+        ///                               ^~~~ declaration/definition
         if(auto location = builder.addLocation(decl->getLocation())) {
             auto symbol = builder.addSymbol(decl);
             symbol.addOccurrence(location);
@@ -228,7 +235,7 @@ public:
         ///
         /// For full specialization:
         /// `template <> class Foo<int> { };`
-        ///                     ^~~~ definition
+        ///                     ^~~~ declaration/definition
         ///
         /// For explicit instantiation:
         /// `template class Foo<int>;`
@@ -239,7 +246,7 @@ public:
             auto symbol = builder.addSymbol(decl);
             symbol.addOccurrence(location);
             if(decl->isExplicitSpecialization()) {
-                symbol.addDefinition(location);
+                symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
             } else {
                 symbol.addReference(location);
             }
@@ -255,6 +262,36 @@ public:
             symbol.addOccurrence(location);
             symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
         }
+
+        /// Clang doesn't add explicit instantiation of function template to its lexical context.
+        /// So we need to handle it here. Note that full specialization will be added and handle by
+        /// `VisitFunctionDecl`.
+        ///
+        /// We may visit a function template decl multiple times, because it has multiple
+        /// declarations or definition. But we only need to visit explicit instantiation once.
+        if(builder.alreadyVisited(decl)) {
+            return true;
+        }
+
+        for(auto spec: decl->specializations()) {
+            /// `template void foo<int>();`
+            ///                  ^~~~ reference
+            auto kind = spec->getTemplateSpecializationKind();
+            if(kind == clang::TSK_ExplicitInstantiationDeclaration ||
+               kind == clang::TSK_ExplicitInstantiationDefinition) {
+                /// WORKAROUND: Clang currently doesn't record the location of explicit
+                /// instantiation. Use the location of the point of instantiation instead.
+                if(auto location = builder.addLocation(spec->getPointOfInstantiation())) {
+                    auto symbol = builder.addSymbol(decl);
+                    symbol.addOccurrence(location);
+                    symbol.addReference(location);
+                }
+
+                /// FIXME: currently we only consider render name here. Render template arguments
+                /// and nested name specifier in explicit instantiation.
+            }
+        }
+
         return true;
     }
 
