@@ -239,12 +239,10 @@ public:
             symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
         }
 
-        /// Clang doesn't add explicit instantiation of function template to its lexical context.
-        /// So we need to handle it here. Note that full specialization will be added and handle by
-        /// `VisitFunctionDecl`.
-        ///
-        /// We may visit a function template decl multiple times, because it has multiple
-        /// declarations or definition. But we only need to visit explicit instantiation once.
+        /// FIXME: Clang currently doesn't record the information of explicit instantiation
+        /// correctly. See https://github.com/llvm/llvm-project/issues/115418. And it is not added
+        /// to its lexical context. So here we use a workaround to handle explicit instantiation of
+        /// function template.
         if(builder.alreadyVisited(decl)) {
             return true;
         }
@@ -262,11 +260,6 @@ public:
                     symbol.addOccurrence(location);
                     symbol.addReference(location);
                 }
-
-                /// FIXME: Currently we only consider render name here. Render template arguments
-                /// and nested name specifier in explicit instantiation. Clang haven't provided
-                /// enough information for us to do this.
-                /// See https://github.com/llvm/llvm-project/issues/115418.
             }
         }
 
@@ -274,6 +267,11 @@ public:
     }
 
     VISIT_DECL(TypedefNameDecl) {
+        /// Skip the typedef name declaration that is a type alias template.
+        if(decl->getDescribedTemplate()) {
+            return true;
+        }
+
         /// `typedef int Foo;`
         ///               ^~~~ definition
         if(auto location = builder.addLocation(decl->getLocation())) {
@@ -286,9 +284,13 @@ public:
     }
 
     VISIT_DECL(TypeAliasTemplateDecl) {
+        /// FIXME: the location of type alias template is not recorded correctly, actually
+        /// it is the location of using keyword. But location its templated type is correct.
+        /// Temporarily use the location of the templated type.
+
         /// `template <typename T> using Foo = T;`
         ///                               ^~~~ definition
-        if(auto location = builder.addLocation(decl->getLocation())) {
+        if(auto location = builder.addLocation(decl->getTemplatedDecl()->getLocation())) {
             auto symbol = builder.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDefinition(location);
@@ -330,9 +332,13 @@ public:
 
     VISIT_DECL(VarTemplateSpecializationDecl) {
         /// FIXME: it's strange that `VarTemplateSpecializationDecl` occurs in the lexical context.
-        /// This should be a bug of clang. Skip it here.
-        /// FIXME: explicit instantiation is not handled correctly.
-        if(decl->getSpecializationKind() == clang::TSK_ImplicitInstantiation) {
+        /// This should be a bug of clang. Skip it here. And clang also doesn't record the
+        /// information about explicit instantiation of var template correctly. Skip them
+        /// temporarily.
+        auto kind = decl->getSpecializationKind();
+        if(kind == clang::TSK_ImplicitInstantiation ||
+           kind == clang::TSK_ExplicitInstantiationDeclaration ||
+           kind == clang::TSK_ExplicitInstantiationDefinition) {
             return true;
         }
 
@@ -342,11 +348,11 @@ public:
         ///
         /// For full specialization:
         /// `template <> int foo<int>;`
-        ///                     ^~~~ declaration/definition
+        ///                    ^~~~ declaration/definition
         ///
         /// For explicit instantiation:
         /// `template int foo<int>;`
-        ///                  ^~~~ reference
+        ///                ^~~~ reference
         if(auto location = builder.addLocation(decl->getLocation())) {
             auto symbol = builder.addSymbol(decl);
             symbol.addOccurrence(location);

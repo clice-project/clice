@@ -82,6 +82,18 @@ TEST(Index, FunctionTemplate) {
     tester.GotoDefinition("implicit_spec", "spec");
 }
 
+TEST(Index, AliasTemplate) {
+    const char* code = R"cpp(
+    template <typename T>
+    using $(primary)foo = T;
+
+    $(implicit_primary)foo<int> a;   
+)cpp";
+
+    IndexerTester tester(code, true);
+    tester.GotoDefinition("implicit_primary", "primary");
+}
+
 TEST(Index, VarTemplate) {
     const char* code = R"cpp(
     template <typename T, typename U>
@@ -112,7 +124,7 @@ TEST(Index, VarTemplate) {
     }
 )cpp";
 
-    IndexerTester tester(code, true);
+    IndexerTester tester(code);
     tester.GotoDefinition("primary_decl", "primary");
     // tester.GotoDefinition("explicit_primary", "primary");
     tester.GotoDefinition("implicit_primary_1", "primary");
