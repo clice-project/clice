@@ -367,13 +367,25 @@ public:
 
     VISIT_DECL(ConceptDecl) {
         /// `template <typename T> concept Foo = ...;`
-        ///                           ^~~~ definition
+        ///                                 ^~~~ definition
         if(auto location = builder.addLocation(decl->getLocation())) {
             auto symbol = builder.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDefinition(location);
         }
         return true;
+    }
+
+    bool TraverseConceptReference(clang::ConceptReference* reference) {
+        /// `requires Foo<T>;`
+        ///            ^~~~ reference
+        if(auto location = builder.addLocation(reference->getConceptNameLoc())) {
+            auto symbol = builder.addSymbol(reference->getNamedConcept());
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+        }
+
+        return Base::TraverseConceptReference(reference);
     }
 
     /// ============================================================================

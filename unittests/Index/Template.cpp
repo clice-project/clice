@@ -137,5 +137,21 @@ TEST(Index, VarTemplate) {
     tester.GotoDefinition("implicit_full", "full_spec");
 }
 
+TEST(Index, Concept) {
+    const char* code = R"cpp(
+    template <typename T>
+    concept $(primary)foo = true;
+
+    static_assert($(implicit)foo<int>);
+
+    $(implicit2)foo auto bar = 1;
+)cpp";
+
+    IndexerTester tester(code, true);
+    tester.GotoDefinition("primary", "primary");
+    tester.GotoDefinition("implicit", "primary");
+    tester.GotoDefinition("implicit2", "primary");
+}
+
 }  // namespace
 
