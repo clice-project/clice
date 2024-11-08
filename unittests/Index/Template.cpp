@@ -82,5 +82,48 @@ TEST(Index, FunctionTemplate) {
     tester.GotoDefinition("implicit_spec", "spec");
 }
 
+TEST(Index, VarTemplate) {
+    const char* code = R"cpp(
+    template <typename T, typename U>
+    extern int $(primary_decl)foo;
+
+    template <typename T, typename U>
+    int $(primary)foo = 1;
+
+    template <typename T>
+    extern int $(partial_spec_decl)foo<T, T>;
+
+    template <typename T>
+    int $(partial_spec)foo<T, T> = 2;
+
+    template <>
+    float $(full_spec)foo<int, int> = 1.0f;
+
+    template int $(explicit_primary)foo<char, int>;
+
+    template int $(explicit_partial)foo<char, char>;
+
+    int main() {
+        $(implicit_primary_1)foo<int, char> = 1;
+        $(implicit_primary_2)foo<char, int> = 2;
+        $(implicit_partial)foo<char, char> = 3;
+        $(implicit_full)foo<int, int> = 4;
+        return 0;
+    }
+)cpp";
+
+    IndexerTester tester(code, true);
+    tester.GotoDefinition("primary_decl", "primary");
+    // tester.GotoDefinition("explicit_primary", "primary");
+    tester.GotoDefinition("implicit_primary_1", "primary");
+    tester.GotoDefinition("implicit_primary_2", "primary");
+
+    tester.GotoDefinition("partial_spec_decl", "partial_spec");
+    // tester.GotoDefinition("explicit_partial", "partial_spec");
+    tester.GotoDefinition("implicit_partial", "partial_spec");
+
+    tester.GotoDefinition("implicit_full", "full_spec");
+}
+
 }  // namespace
 

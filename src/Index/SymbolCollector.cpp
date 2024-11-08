@@ -66,26 +66,6 @@ public:
         return true;
     }
 
-    VISIT_DECL(TagDecl) {
-        /// `Base::TraverseClassTemplate...Decl` will also traverse it's templated class.
-        /// We already handled the template class in `VisitClassTemplate...Decl`. So we skip
-        /// them here.
-        if(decl->getDescribedTemplate() ||
-           llvm::isa<clang::ClassTemplateSpecializationDecl,
-                     clang::ClassTemplatePartialSpecializationDecl>(decl)) {
-            return true;
-        }
-
-        /// `struct/class/union/enum Foo { };`
-        ///                           ^~~~ definition
-        if(auto location = builder.addLocation(decl->getLocation())) {
-            auto symbol = builder.addSymbol(decl);
-            symbol.addOccurrence(location);
-            symbol.addDefinition(location);
-        }
-        return true;
-    }
-
     VISIT_DECL(FieldDecl) {
         /// `struct Foo { int bar; };`
         ///                    ^~~~ definition
@@ -107,61 +87,6 @@ public:
             symbol.addDefinition(location);
             symbol.addTypeDefinition(decl->getType());
         }
-        return true;
-    }
-
-    VISIT_DECL(TypedefNameDecl) {
-        /// `typedef int Foo;`
-        ///               ^~~~ definition
-        if(auto location = builder.addLocation(decl->getLocation())) {
-            auto symbol = builder.addSymbol(decl);
-            symbol.addOccurrence(location);
-            symbol.addDefinition(location);
-            symbol.addTypeDefinition(decl->getUnderlyingType());
-        }
-        return true;
-    }
-
-    VISIT_DECL(VarDecl) {
-        /// `int foo;`
-        ///       ^~~~ declaration/definition
-        if(auto location = builder.addLocation(decl->getLocation())) {
-            auto symbol = builder.addSymbol(decl);
-            symbol.addOccurrence(location);
-            symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
-            symbol.addTypeDefinition(decl->getType());
-        }
-        return true;
-    }
-
-    VISIT_DECL(FunctionDecl) {
-        /// Because `TraverseFunctionTemplateDecl` will also traverse it's templated function. We
-        /// already handled the template function in `VisitFunctionTemplateDecl`. So we skip them
-        /// here.
-        if(decl->getDescribedFunctionTemplate()) {
-            return true;
-        }
-
-        /// `void foo();`
-        ///         ^~~~ declaration/definition
-        if(auto location = builder.addLocation(decl->getLocation())) {
-            auto symbol = builder.addSymbol(decl);
-            symbol.addOccurrence(location);
-            symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
-
-            if(auto CMD = llvm::dyn_cast<clang::CXXMethodDecl>(decl)) {
-                // FIXME: virtual override const ...
-
-                if(auto CCD = llvm::dyn_cast<clang::CXXConstructorDecl>(CMD)) {
-                    symbol.addTypeDefinition(CCD->getThisType());
-                }
-
-                // FIXME: CXXConversionDecl, CXXDestructorDecl
-            }
-
-            // FIXME: CXXDeductionGuideDecl
-        }
-        currentFunction = decl;
         return true;
     }
 
@@ -217,6 +142,26 @@ public:
         return true;
     }
 
+    VISIT_DECL(TagDecl) {
+        /// `Base::TraverseClassTemplate...Decl` will also traverse it's templated class.
+        /// We already handled the template class in `VisitClassTemplate...Decl`. So we skip
+        /// them here.
+        if(decl->getDescribedTemplate() ||
+           llvm::isa<clang::ClassTemplateSpecializationDecl,
+                     clang::ClassTemplatePartialSpecializationDecl>(decl)) {
+            return true;
+        }
+
+        /// `struct/class/union/enum Foo { };`
+        ///                           ^~~~ declaration/definition
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
+        }
+        return true;
+    }
+
     VISIT_DECL(ClassTemplateDecl) {
         /// `template <typename T> class Foo { };`
         ///                               ^~~~ declaration/definition
@@ -254,6 +199,37 @@ public:
         return true;
     }
 
+    VISIT_DECL(FunctionDecl) {
+        /// Because `TraverseFunctionTemplateDecl` will also traverse it's templated function. We
+        /// already handled the template function in `VisitFunctionTemplateDecl`. So we skip them
+        /// here.
+        if(decl->getDescribedFunctionTemplate()) {
+            return true;
+        }
+
+        /// `void foo();`
+        ///         ^~~~ declaration/definition
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
+
+            if(auto CMD = llvm::dyn_cast<clang::CXXMethodDecl>(decl)) {
+                // FIXME: virtual override const ...
+
+                if(auto CCD = llvm::dyn_cast<clang::CXXConstructorDecl>(CMD)) {
+                    symbol.addTypeDefinition(CCD->getThisType());
+                }
+
+                // FIXME: CXXConversionDecl, CXXDestructorDecl
+            }
+
+            // FIXME: CXXDeductionGuideDecl
+        }
+        currentFunction = decl;
+        return true;
+    }
+
     VISIT_DECL(FunctionTemplateDecl) {
         /// `template <typename T> void foo();`
         ///                               ^~~~ definition
@@ -287,11 +263,25 @@ public:
                     symbol.addReference(location);
                 }
 
-                /// FIXME: currently we only consider render name here. Render template arguments
-                /// and nested name specifier in explicit instantiation.
+                /// FIXME: Currently we only consider render name here. Render template arguments
+                /// and nested name specifier in explicit instantiation. Clang haven't provided
+                /// enough information for us to do this.
+                /// See https://github.com/llvm/llvm-project/issues/115418.
             }
         }
 
+        return true;
+    }
+
+    VISIT_DECL(TypedefNameDecl) {
+        /// `typedef int Foo;`
+        ///               ^~~~ definition
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDefinition(location);
+            symbol.addTypeDefinition(decl->getUnderlyingType());
+        }
         return true;
     }
 
@@ -306,6 +296,27 @@ public:
         return true;
     }
 
+    VISIT_DECL(VarDecl) {
+        /// Because `TraverseVarTemplateSpecializationDecl` will also traverse it's templated
+        /// variable. We already handled the template variable in `VisitVar...`.
+        /// So we skip them here.
+        if(decl->getDescribedVarTemplate() ||
+           llvm::isa<clang::VarTemplateSpecializationDecl,
+                     clang::VarTemplatePartialSpecializationDecl>(decl)) {
+            return true;
+        }
+
+        /// `int foo;`
+        ///       ^~~~ declaration/definition
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
+            symbol.addTypeDefinition(decl->getType());
+        }
+        return true;
+    }
+
     VISIT_DECL(VarTemplateDecl) {
         /// `template <typename T> int foo;`
         ///                             ^~~~ definition
@@ -313,6 +324,37 @@ public:
             auto symbol = builder.addSymbol(decl);
             symbol.addOccurrence(location);
             symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
+        }
+        return true;
+    }
+
+    VISIT_DECL(VarTemplateSpecializationDecl) {
+        /// FIXME: it's strange that `VarTemplateSpecializationDecl` occurs in the lexical context.
+        /// This should be a bug of clang. Skip it here.
+        /// FIXME: explicit instantiation is not handled correctly.
+        if(decl->getSpecializationKind() == clang::TSK_ImplicitInstantiation) {
+            return true;
+        }
+
+        /// It's possible that a var template specialization is a full specialization or a explicit
+        /// instantiation. And `VarTemplatePartialSpecializationDecl` is the subclass of
+        /// `VarTemplateSpecializationDecl`, it is also handled here.
+        ///
+        /// For full specialization:
+        /// `template <> int foo<int>;`
+        ///                     ^~~~ declaration/definition
+        ///
+        /// For explicit instantiation:
+        /// `template int foo<int>;`
+        ///                  ^~~~ reference
+        if(auto location = builder.addLocation(decl->getLocation())) {
+            auto symbol = builder.addSymbol(decl);
+            symbol.addOccurrence(location);
+            if(decl->isExplicitSpecialization()) {
+                symbol.addDeclarationOrDefinition(decl->isThisDeclarationADefinition(), location);
+            } else {
+                symbol.addReference(location);
+            }
         }
         return true;
     }
