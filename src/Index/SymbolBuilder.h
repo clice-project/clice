@@ -3,7 +3,7 @@
 #include <clang/AST/DeclCXX.h>
 #include <clang/Index/USRGeneration.h>
 
-#include <AST/Utility.h>
+#include <Compiler/Utility.h>
 #include <Compiler/Compiler.h>
 #include <Index/Indexer.h>
 #include <Support/FileSystem.h>

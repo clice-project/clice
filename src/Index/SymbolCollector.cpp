@@ -232,7 +232,7 @@ public:
 
     VISIT_DECL(FunctionTemplateDecl) {
         /// `template <typename T> void foo();`
-        ///                               ^~~~ definition
+        ///                               ^~~~ declaration/definition
         if(auto location = builder.addLocation(decl->getLocation())) {
             auto symbol = builder.addSymbol(decl);
             symbol.addOccurrence(location);
@@ -419,6 +419,17 @@ public:
         return true;
     }
 
+    VISIT_TYPELOC(TemplateTypeParmTypeLoc) {
+        /// `template <typename T> void foo(T t)`
+        ///                                 ^~~~ reference
+        if(auto location = builder.addLocation(loc.getNameLoc())) {
+            auto symbol = builder.addSymbol(loc.getDecl());
+            symbol.addOccurrence(location);
+            symbol.addReference(location);
+        }
+        return true;
+    }
+
     VISIT_TYPELOC(TemplateSpecializationTypeLoc) {
         /// `std::vector<int> foo`
         ///        ^~~~ reference
@@ -428,6 +439,61 @@ public:
             symbol.addReference(location);
         }
         return true;
+    }
+
+    VISIT_TYPELOC(DependentNameTypeLoc) {
+        loc.getNameLoc().dump(srcMgr);
+        return true;
+    }
+
+    VISIT_TYPELOC(DependentTemplateSpecializationTypeLoc) {
+        return true;
+    }
+
+    /// ============================================================================
+    ///                                Specifier
+    /// ============================================================================
+
+    bool TraverseCXXBaseSpecifier(const clang::CXXBaseSpecifier& base) {
+        return Base::TraverseCXXBaseSpecifier(base);
+    }
+
+    /// We don't care about name specifier without location information.
+    constexpr bool TraverseNestedNameSpecifier [[gnu::const]] (clang::NestedNameSpecifier*) {
+        return true;
+    }
+
+    bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc loc) {
+        if(auto location = builder.addLocation(loc.getLocalSourceRange())) {
+            auto NNS = loc.getNestedNameSpecifier();
+            switch(NNS->getKind()) {
+                case clang::NestedNameSpecifier::Namespace: {
+                    auto symbol = builder.addSymbol(NNS->getAsNamespace());
+                    symbol.addOccurrence(location);
+                    symbol.addReference(location);
+                    break;
+                }
+                case clang::NestedNameSpecifier::NamespaceAlias: {
+                    auto symbol = builder.addSymbol(NNS->getAsNamespaceAlias());
+                    symbol.addOccurrence(location);
+                    symbol.addReference(location);
+                    break;
+                }
+                case clang::NestedNameSpecifier::Identifier: {
+                    assert(NNS->isDependent() && "Identifier NNS should be dependent");
+                    // FIXME: use TemplateResolver here.
+                    break;
+                }
+                case clang::NestedNameSpecifier::TypeSpec:
+                case clang::NestedNameSpecifier::TypeSpecWithTemplate:
+                case clang::NestedNameSpecifier::Global:
+                case clang::NestedNameSpecifier::Super: {
+                    break;
+                };
+            }
+        }
+
+        return Base::TraverseNestedNameSpecifierLoc(loc);
     }
 
     /// ============================================================================
@@ -466,27 +532,8 @@ public:
     }
 
     VISIT_EXPR(CallExpr) {
+        // TODO: consider lambda expression.
         return true;
-    }
-
-    /// FIXME:
-    constexpr bool TraverseNestedNameSpecifier [[gnu::const]] (clang::NestedNameSpecifier*) {
-        return true;
-    }
-
-    bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc NNS) {
-        // FIXME: use TemplateResolver here.
-        auto range = NNS.getSourceRange();
-        auto range2 = NNS.getLocalSourceRange();
-        return Base::TraverseNestedNameSpecifierLoc(NNS);
-    }
-
-    bool TraverseTemplateArgumentLoc(const clang::TemplateArgumentLoc& argument) {
-        return Base::TraverseTemplateArgumentLoc(argument);
-    }
-
-    bool TraverseCXXBaseSpecifier(const clang::CXXBaseSpecifier& base) {
-        return Base::TraverseCXXBaseSpecifier(base);
     }
 
     bool TraverseConstructorInitializer(clang::CXXCtorInitializer* init) {

@@ -1,6 +1,6 @@
 #include "../Test.h"
-#include <AST/Resolver.h>
 #include <Compiler/Compiler.h>
+#include <Compiler/Resolver.h>
 
 namespace {
 

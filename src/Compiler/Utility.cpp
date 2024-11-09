@@ -1,4 +1,4 @@
-#include <AST/Utility.h>
+#include <Compiler/Utility.h>
 
 namespace clice {
 
@@ -75,7 +75,7 @@ const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
 
         return VD->getTemplateInstantiationPattern();
     }
-    
+
     if(auto CRD = llvm::dyn_cast<clang::CXXRecordDecl>(decl)) {
         if(auto CTD = CRD->getDescribedClassTemplate()) {
             return CTD;

@@ -25,7 +25,6 @@ endif()
 
 # build clice core part as library
 file(GLOB_RECURSE CLICE_CORE_SOURCES
-    "${CMAKE_SOURCE_DIR}/src/AST/*.cpp" 
     "${CMAKE_SOURCE_DIR}/src/Compiler/*.cpp" 
     "${CMAKE_SOURCE_DIR}/src/Index/*.cpp" 
     "${CMAKE_SOURCE_DIR}/src/Feature/*.cpp" 

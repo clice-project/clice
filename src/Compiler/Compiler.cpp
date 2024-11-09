@@ -1,7 +1,6 @@
 #include <Compiler/Compiler.h>
 #include <clang/Lex/PreprocessorOptions.h>
 #include <clang/Frontend/TextDiagnosticPrinter.h>
-#include <Compiler/CodeComplete.h>
 
 namespace clice {
 

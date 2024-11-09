@@ -90,8 +90,6 @@ struct IndexerTester {
                                    RelationKind::Definition,
                                    [&](const FullLocation& location) {
                                        EXPECT_EQ(location.begin, annotation.position(target));
-                                       /// llvm::outs() << info.line() << ":" << info.column() <<
-                                       /// "\n";
                                    });
         EXPECT_TRUE(success);
         return *this;
