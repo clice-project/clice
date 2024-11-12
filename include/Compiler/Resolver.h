@@ -14,11 +14,6 @@ class TemplateResolver {
 public:
     TemplateResolver(clang::Sema& sema) : sema(sema) {}
 
-    // TODO:
-    // use a relative clear way to resolve `UnresolvedLookupExpr`.
-
-    // TODO: desugar UsingType.
-
     clang::QualType resolve(clang::QualType type);
 
     clang::QualType resolve(const clang::DependentNameType* type) {
@@ -37,7 +32,7 @@ public:
         return resolve(clang::QualType(type, 0));
     }
 
-    clang::ExprResult resolve(clang::DependentScopeDeclRefExpr* expr);
+    clang::lookup_result resolve(const clang::DependentScopeDeclRefExpr* expr);
 
     clang::ExprResult resolve(clang::CXXDependentScopeMemberExpr* expr);
 
@@ -45,6 +40,7 @@ public:
 
     clang::ExprResult resolve(clang::UnresolvedLookupExpr* expr);
 
+    // TODO: use a relative clear way to resolve `UnresolvedLookupExpr`.
     void resolve(clang::UnresolvedUsingValueDecl* decl);
 
     void resolve(clang::UnresolvedUsingTypenameDecl* decl);

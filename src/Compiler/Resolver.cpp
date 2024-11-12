@@ -27,6 +27,8 @@ class DealiasOnly : public clang::TreeTransform<DealiasOnly> {
 public:
     DealiasOnly(clang::Sema& sema) : TreeTransform(sema), context(sema.getASTContext()) {}
 
+    // FIXME: desugar more types, e.g `UsingType`.
+
     clang::QualType TransformTypedefType(clang::TypeLocBuilder& TLB, clang::TypedefTypeLoc TL) {
         if(clang::TypedefNameDecl* TND = TL.getTypedefNameDecl()) {
             auto type = TransformType(TND->getUnderlyingType());
@@ -85,8 +87,6 @@ public:
 
     using TemplateArguments = llvm::ArrayRef<clang::TemplateArgument>;
 
-    using lookup_result = clang::DeclContext::lookup_result;
-
     PseudoInstantiator(clang::Sema& sema, llvm::DenseMap<const void*, clang::QualType>& resolved) :
         Base(sema), sema(sema), resolved(resolved) {}
 
@@ -94,13 +94,13 @@ public:
     /// If this class and its base class have members with the same name, `DeclContext::lookup`
     /// will return multiple declarations in order from the base class to the derived class, so we
     /// use the last declaration.
-    clang::Decl* preferred(lookup_result members) {
+    clang::Decl* preferred(clang::lookup_result members) {
         clang::Decl* decl = nullptr;
         std::ranges::for_each(members, [&](auto member) { decl = member; });
         return decl;
     }
 
-    lookup_result lookup(clang::QualType type, const clang::IdentifierInfo* name) {
+    clang::lookup_result lookup(clang::QualType type, clang::DeclarationName name) {
         clang::Decl* TD = nullptr;
         llvm::ArrayRef<clang::TemplateArgument> args;
         type = TransformType(type);
@@ -116,7 +116,7 @@ public:
         }
 
         if(!TD) {
-            return lookup_result();
+            return clang::lookup_result();
         }
 
         if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(TD)) {
@@ -126,11 +126,12 @@ public:
             return lookup(instantiate(TATD->getTemplatedDecl()->getUnderlyingType()), name);
         }
 
-        return lookup_result();
+        return clang::lookup_result();
     }
 
     /// Look up the name in the given nested name specifier.
-    lookup_result lookup(const clang::NestedNameSpecifier* NNS, const clang::IdentifierInfo* name) {
+    clang::lookup_result lookup(const clang::NestedNameSpecifier* NNS,
+                                clang::DeclarationName name) {
         /// Search the resolved entities first.
         if(auto iter = resolved.find(NNS); iter != resolved.end()) {
             return lookup(iter->second, name);
@@ -170,9 +171,9 @@ public:
     /// primary template, if failed, try dependent base classes, if still failed, try
     /// partial specializations. **Note that this function will be responsible for pushing
     /// the class template and its template arguments to the instantiation stack**.
-    lookup_result lookup(clang::ClassTemplateDecl* CTD,
-                         const clang::IdentifierInfo* name,
-                         TemplateArguments arguments) {
+    clang::lookup_result lookup(clang::ClassTemplateDecl* CTD,
+                                clang::DeclarationName name,
+                                TemplateArguments arguments) {
         /// First, try to find the name in the primary template.
         if(auto members = CTD->getTemplatedDecl()->lookup(name); !members.empty()) {
             stack.push(CTD, arguments);
@@ -214,7 +215,7 @@ public:
 
         /// FIXME: try full specializations?.
 
-        return lookup_result();
+        return clang::lookup_result();
     }
 
     /// Instantiate the given type and clear the instantiation stack.
@@ -356,6 +357,9 @@ clang::QualType TemplateResolver::resolve(clang::QualType type) {
     return instantiator.TransformType(type);
 }
 
-clang::QualType TemplateResolver(const clang::DependentTemplateSpecializationType* type) {}
+clang::lookup_result TemplateResolver::resolve(const clang::DependentScopeDeclRefExpr* expr) {
+    PseudoInstantiator instantiator(sema, resolved);
+    return instantiator.lookup(expr->getQualifier(), expr->getDeclName());
+}
 
 }  // namespace clice

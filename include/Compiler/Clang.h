@@ -42,4 +42,6 @@ clang::SourceLocation get(clang::SourceRange range) {
 #define VISIT_TYPE(type) bool Visit##type(const clang::type* type)
 #define VISIT_TYPELOC(type) bool Visit##type(clang::type loc)
 
+using lookup_result = clang::DeclContext::lookup_result;
+
 }  // namespace clang
