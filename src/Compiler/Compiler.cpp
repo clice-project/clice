@@ -61,6 +61,7 @@ bool Compiler::applyPCM(llvm::StringRef filepath, llvm::StringRef name) {
 void Compiler::buildAST() {
     action = std::make_unique<clang::SyntaxOnlyAction>();
     ExecuteAction();
+    m_Resolver = std::make_unique<TemplateResolver>(instance->getSema());
 }
 
 void Compiler::generatePCH(llvm::StringRef outpath, std::uint32_t bound, bool endAtStart) {

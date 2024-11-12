@@ -14,15 +14,46 @@ class TemplateResolver {
 public:
     TemplateResolver(clang::Sema& sema) : sema(sema) {}
 
-    clang::QualType resolve(clang::QualType type);
-
     // TODO:
     // use a relative clear way to resolve `UnresolvedLookupExpr`.
 
-
     // TODO: desugar UsingType.
+
+    clang::QualType resolve(clang::QualType type);
+
+    clang::QualType resolve(const clang::DependentNameType* type) {
+        if(auto iter = resolved.find(type); iter != resolved.end()) {
+            return iter->second;
+        }
+
+        return resolve(clang::QualType(type, 0));
+    }
+
+    clang::QualType resolve(const clang::DependentTemplateSpecializationType* type) {
+        if(auto iter = resolved.find(type); iter != resolved.end()) {
+            return iter->second;
+        }
+
+        return resolve(clang::QualType(type, 0));
+    }
+
+    clang::ExprResult resolve(clang::DependentScopeDeclRefExpr* expr);
+
+    clang::ExprResult resolve(clang::CXXDependentScopeMemberExpr* expr);
+
+    clang::ExprResult resolve(clang::CXXUnresolvedConstructExpr* expr);
+
+    clang::ExprResult resolve(clang::UnresolvedLookupExpr* expr);
+
+    void resolve(clang::UnresolvedUsingValueDecl* decl);
+
+    void resolve(clang::UnresolvedUsingTypenameDecl* decl);
+
+    void resolve(clang::UnresolvedUsingType* type);
+
 private:
     clang::Sema& sema;
+    llvm::DenseMap<const void*, clang::QualType> resolved;
 };
 
 }  // namespace clice

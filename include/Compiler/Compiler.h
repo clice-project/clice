@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Compiler/Clang.h>
+#include <Compiler/Resolver.h>
 
 namespace clice {
 
@@ -70,6 +71,10 @@ public:
         return *buffer;
     }
 
+    TemplateResolver& resolver() {
+        return *m_Resolver;
+    }
+
 private:
     void ExecuteAction();
 
@@ -79,6 +84,7 @@ private:
     std::unique_ptr<clang::FrontendAction> action;
     std::unique_ptr<clang::CompilerInstance> instance;
     std::unique_ptr<clang::syntax::TokenBuffer> buffer;
+    std::unique_ptr<TemplateResolver> m_Resolver;
 };
 
 }  // namespace clice

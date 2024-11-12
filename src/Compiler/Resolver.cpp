@@ -2,12 +2,15 @@
 #include <clang/Sema/Template.h>
 #include <clang/Sema/TreeTransform.h>
 #include <clang/Sema/TemplateDeduction.h>
+#include <ranges>
 
 namespace clice {
 
 namespace {
 
-/// `Sema::SubstType` will not substitute in aliased types, e.g.
+/// `Sema::SubstType` will not substitute template arguments in aliased types.
+/// For example:
+///
 /// ```cpp
 /// template <typename T>
 /// struct A {
@@ -15,8 +18,11 @@ namespace {
 ///     using type = typename base::reference;
 /// };
 /// ```
-/// In this case, if you call `SubstType` on `type`, base will keep the same.
-/// So we need to dealias the type first before calling `SubstType`.
+///
+/// In this case, if you call `SubstType` on `type`, the alias `base` will remain with
+/// the original type parameter `T`, without substituting it. Therefore, we need to
+/// manually resolve the alias before calling `SubstType`, which is what `DealiasOnly`
+/// aims to achieve.
 class DealiasOnly : public clang::TreeTransform<DealiasOnly> {
 public:
     DealiasOnly(clang::Sema& sema) : TreeTransform(sema), context(sema.getASTContext()) {}
@@ -34,45 +40,235 @@ public:
         return clang::QualType();
     }
 
-private:
-    clang::ASTContext& context;
-};
-
-class TemplateResolverImpl : public clang::TreeTransform<TemplateResolverImpl> {
-private:
-    struct Frame {
-        clang::NamedDecl* decl;
-        llvm::ArrayRef<clang::TemplateArgument> arguments;
-    };
-
-    using Names = llvm::SmallVector<clang::NamedDecl*, 4>;
-    using Base = clang::TreeTransform<TemplateResolverImpl>;
-
-public:
-    TemplateResolverImpl(clang::Sema& sema) : TreeTransform(sema), sema(sema), context(sema.getASTContext()) {}
-
-    clang::QualType TransformElaboratedType(clang::TypeLocBuilder& TLB, clang::ElaboratedTypeLoc TL) {
+    clang::QualType TransformElaboratedType(clang::TypeLocBuilder& TLB,
+                                            clang::ElaboratedTypeLoc TL) {
         clang::QualType type = TransformType(TL.getNamedTypeLoc().getType());
         TLB.pushTrivial(context, type, {});
         return type;
     }
 
-    clang::QualType TransformTypedefType(clang::TypeLocBuilder& TLB, clang::TypedefTypeLoc TL) {
-        if(clang::TypedefNameDecl* TND = TL.getTypedefNameDecl()) {
-            auto type = TransformType(TND->getUnderlyingType());
-            if(auto ET = llvm::dyn_cast<clang::ElaboratedType>(type)) {
-                type = ET->getNamedType();
+private:
+    clang::ASTContext& context;
+};
+
+/// A helper class to record the instantiation stack.
+struct InstantiationStack {
+    using TemplateArguments = llvm::ArrayRef<clang::TemplateArgument>;
+
+    llvm::SmallVector<std::pair<clang::Decl*, TemplateArguments>> data;
+
+    void clear() {
+        data.clear();
+    }
+
+    auto state() const {
+        return data;
+    }
+
+    void rewind(auto& point) {
+        data = std::move(point);
+    }
+
+    void push(clang::Decl* decl, TemplateArguments arguments) {
+        data.emplace_back(decl, arguments);
+    }
+
+    auto& frames() {
+        return data;
+    }
+};
+
+/// The core class that performs pseudo template instantiation.
+class PseudoInstantiator : public clang::TreeTransform<PseudoInstantiator> {
+public:
+    using Base = clang::TreeTransform<PseudoInstantiator>;
+
+    using TemplateArguments = llvm::ArrayRef<clang::TemplateArgument>;
+
+    using lookup_result = clang::DeclContext::lookup_result;
+
+    PseudoInstantiator(clang::Sema& sema, llvm::DenseMap<const void*, clang::QualType>& resolved) :
+        Base(sema), sema(sema), resolved(resolved) {}
+
+public:
+    /// If this class and its base class have members with the same name, `DeclContext::lookup`
+    /// will return multiple declarations in order from the base class to the derived class, so we
+    /// use the last declaration.
+    clang::Decl* preferred(lookup_result members) {
+        clang::Decl* decl = nullptr;
+        std::ranges::for_each(members, [&](auto member) { decl = member; });
+        return decl;
+    }
+
+    lookup_result lookup(clang::QualType type, const clang::IdentifierInfo* name) {
+        clang::Decl* TD = nullptr;
+        llvm::ArrayRef<clang::TemplateArgument> args;
+        type = TransformType(type);
+
+        if(auto TST = type->getAs<clang::TemplateSpecializationType>()) {
+            TD = TST->getTemplateName().getAsTemplateDecl();
+            args = TST->template_arguments();
+        } else if(auto DTST = type->getAs<clang::DependentTemplateSpecializationType>()) {
+            if(auto decl = preferred(lookup(DTST->getQualifier(), DTST->getIdentifier()))) {
+                TD = decl;
+                args = DTST->template_arguments();
             }
-            TLB.pushTrivial(context, type, {});
+        }
+
+        if(!TD) {
+            return lookup_result();
+        }
+
+        if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(TD)) {
+            return lookup(CTD, name, args);
+        } else if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(TD)) {
+            stack.push(TATD, args);
+            return lookup(instantiate(TATD->getTemplatedDecl()->getUnderlyingType()), name);
+        }
+
+        return lookup_result();
+    }
+
+    /// Look up the name in the given nested name specifier.
+    lookup_result lookup(const clang::NestedNameSpecifier* NNS, const clang::IdentifierInfo* name) {
+        /// Search the resolved entities first.
+        if(auto iter = resolved.find(NNS); iter != resolved.end()) {
+            return lookup(iter->second, name);
+        }
+
+        switch(NNS->getKind()) {
+            case clang::NestedNameSpecifier::Identifier: {
+                /// If the prefix is `Identifier`, it must be a dependent name.
+                /// For example: `std::vector<T>::value_type::type`
+                ///               ^~~~~~~~~~~~~~~~~~~~~~~~~^
+                ///                        identifier
+                ///
+                /// So resolve it recursively.
+                auto type =
+                    instantiate(preferred(lookup(NNS->getPrefix(), NNS->getAsIdentifier())));
+                resolved.try_emplace(NNS, type);
+                return lookup(type, name);
+            }
+
+            case clang::NestedNameSpecifier::TypeSpec:
+            case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
+                /// If the prefix is `TypeSpec` or `TypeSpecWithTemplate`, it must be a type.
+                return lookup(clang::QualType(NNS->getAsType(), 0), name);
+            }
+
+            case clang::NestedNameSpecifier::Global:
+            case clang::NestedNameSpecifier::Namespace:
+            case clang::NestedNameSpecifier::NamespaceAlias:
+            case clang::NestedNameSpecifier::Super: {
+                llvm::errs() << "Unexpected name specifier\n";
+                std::terminate();
+            }
+        }
+    }
+
+    /// Look up the name in the given class template. We first search the name in the
+    /// primary template, if failed, try dependent base classes, if still failed, try
+    /// partial specializations. **Note that this function will be responsible for pushing
+    /// the class template and its template arguments to the instantiation stack**.
+    lookup_result lookup(clang::ClassTemplateDecl* CTD,
+                         const clang::IdentifierInfo* name,
+                         TemplateArguments arguments) {
+        /// First, try to find the name in the primary template.
+        if(auto members = CTD->getTemplatedDecl()->lookup(name); !members.empty()) {
+            stack.push(CTD, arguments);
+            return members;
+        }
+
+        /// Try to find the member in the base class.
+        for(auto base: CTD->getTemplatedDecl()->bases()) {
+            if(auto type = base.getType(); type->isDependentType()) {
+                /// Because we instantiate the base class, this will clear the instantiation stack.
+                /// If the lookup fails, we need to rewind the stack to try the next base class.
+                auto state = stack.state();
+                stack.push(CTD, arguments);
+
+                if(auto members = lookup(instantiate(type), name); !members.empty()) {
+                    return members;
+                }
+
+                stack.rewind(state);
+            }
+        }
+
+        /// Try to find the name in the partial specializations.
+        llvm::SmallVector<clang::ClassTemplatePartialSpecializationDecl*> partials;
+        CTD->getPartialSpecializations(partials);
+
+        for(auto partial: partials) {
+            auto info = clang::sema::TemplateDeductionInfo(clang::SourceLocation());
+            auto result = sema.DeduceTemplateArguments(partial, arguments, info);
+            if(result == clang::TemplateDeductionResult::Success) {
+                if(auto members = partial->lookup(name); !members.empty()) {
+                    auto list = info.takeSugared();
+                    stack.push(partial, list->asArray());
+                    // FIXME: should we delete the list?
+                    return members;
+                }
+            }
+        }
+
+        /// FIXME: try full specializations?.
+
+        return lookup_result();
+    }
+
+    /// Instantiate the given type and clear the instantiation stack.
+    clang::QualType instantiate(clang::QualType type) {
+        if(!type->isDependentType()) {
             return type;
         }
+
+        auto& contexts = sema.CodeSynthesisContexts;
+        assert(contexts.empty() && "CodeSynthesisContexts should be empty");
+
+        std::ranges::for_each(stack.frames(), [&](auto& frame) {
+            clang::Sema::CodeSynthesisContext context;
+            context.Entity = frame.first;
+            context.TemplateArgs = frame.second.data();
+            context.Kind = clang::Sema::CodeSynthesisContext::TemplateInstantiation;
+            contexts.push_back(context);
+        });
+
+        clang::MultiLevelTemplateArgumentList list;
+        std::ranges::for_each(stack.frames() | std::ranges::views::reverse, [&](auto& frame) {
+            list.addOuterTemplateArguments(frame.first, frame.second, true);
+        });
+
+        type = DealiasOnly(sema).TransformType(type);
+        auto result = sema.SubstType(type, list, {}, {});
+
+        stack.clear();
+        contexts.clear();
+
+        return result;
+    }
+
+    clang::QualType instantiate(clang::Decl* decl) {
+        if(!decl) {
+            return clang::QualType();
+        }
+
+        if(auto TND = llvm::dyn_cast<clang::TypedefNameDecl>(decl)) {
+            return instantiate(TND->getUnderlyingType());
+        } else if(auto RD = llvm::dyn_cast<clang::RecordDecl>(decl)) {
+            return clang::QualType(RD->getTypeForDecl(), 0);
+        }
+
+        // FIXME: more possibilities?
 
         return clang::QualType();
     }
 
+public:
     /// Sometimes the outer argument is just a simple type `T` and actually cannot make
-    /// instantiation continue. In this case, we try to use its default to replace it, which
-    /// may make the instantiation continue.
+    /// instantiation continue. In this case, we try to use its default argument to replace it,
+    /// which may make the instantiation continue.
+    /// For example: `template <typename T = std::vector<T>> using type = T::value_type`.
     clang::QualType TransformTemplateTypeParmType(clang::TypeLocBuilder& TLB,
                                                   clang::TemplateTypeParmTypeLoc TL,
                                                   bool SuppressObjCLifetime = false) {
@@ -80,7 +276,7 @@ public:
             if(TTPD->hasDefaultArgument()) {
                 const clang::TemplateArgument& argument = TTPD->getDefaultArgument().getArgument();
                 clang::QualType type = TransformType(argument.getAsType());
-                TLB.pushTrivial(context, type, {});
+                TLB.pushTrivial(sema.getASTContext(), type, clang::SourceLocation());
                 return type;
             }
         }
@@ -89,205 +285,77 @@ public:
         return TL.getType();
     }
 
-    /// `TransformDependentNameType` is the most important function in `TemplateResolver`.
-    /// Everytime we meet a `DependentNameType`, we try to resolve it to a simpler type.
     clang::QualType TransformDependentNameType(clang::TypeLocBuilder& TLB,
                                                clang::DependentNameTypeLoc TL,
                                                bool DeducedTSTContext = false) {
-        auto NNS = TransformNestedNameSpecifierLoc(TL.getQualifierLoc()).getNestedNameSpecifier();
-        auto II = TL.getTypePtr()->getIdentifier();
+        auto DNT = TL.getTypePtr();
 
-        Names names;
-        if(lookup(names, NNS, II) && names.size() == 1) {
-            clang::QualType type = TransformType(substitute(names.front()));
-            TLB.pushTrivial(context, type, {});
-            return type;
+        /// Search the resolved entities first.
+        if(auto iter = resolved.find(DNT); iter != resolved.end()) {
+            TLB.pushTrivial(sema.getASTContext(), iter->second, {});
+            return iter->second;
         }
-        return clang::QualType();
+
+        auto NNS = TransformNestedNameSpecifierLoc(TL.getQualifierLoc()).getNestedNameSpecifier();
+        auto type = TransformType(instantiate(preferred(lookup(NNS, DNT->getIdentifier()))));
+        resolved.try_emplace(DNT, type);
+        TLB.pushTrivial(sema.getASTContext(), type, {});
+        return type;
     }
 
     using Base::TransformDependentTemplateSpecializationType;
 
-    clang::QualType TransformDependentTemplateSpecializationType(clang::TypeLocBuilder& TLB,
-                                                                 clang::DependentTemplateSpecializationTypeLoc TL) {
-        auto NNS = TransformNestedNameSpecifierLoc(TL.getQualifierLoc()).getNestedNameSpecifier();
-        auto II = TL.getTypePtr()->getIdentifier();
+    /// For a `DependentTemplateSpecializationType`, the template name can be either an alias
+    /// template or a class template. If it is an alias template, we can simplify it directly
+    /// by transforming the alias template's underlying type. However, if it is a class
+    /// template, we need additional context (e.g., suffix name) to simplify it correctly. In
+    /// this case, we defer further transformation to `TransformDependentNameType`, which can
+    /// handle this scenario. Thus, if the template is not an alias template, we keep it
+    /// unchanged here.
+    clang::QualType TransformDependentTemplateSpecializationType(
+        clang::TypeLocBuilder& TLB,
+        clang::DependentTemplateSpecializationTypeLoc TL) {
+        auto DTST = TL.getTypePtr();
 
-        Names names;
-        auto copy = frames;
-        if(lookup(names, NNS, II) && names.size() == 1) {
-            if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(names.front())) {
-                // FIXME: Transform template arguments
-                frames.emplace_back(TATD, TL.getTypePtr()->template_arguments());
-                clang::QualType type = TransformType(substitute(TATD->getTemplatedDecl()->getUnderlyingType()));
-                TLB.pushTrivial(context, type, {});
+        /// Search the resolved entities first.
+        if(auto iter = resolved.find(DTST); iter != resolved.end()) {
+            TLB.pushTrivial(sema.getASTContext(), iter->second, {});
+            return iter->second;
+        }
+
+        auto NNS = TransformNestedNameSpecifierLoc(TL.getQualifierLoc()).getNestedNameSpecifier();
+        // FIXME: Transform template arguments.
+
+        /// The `lookup` may change the instantiation stack, save the current state.
+        auto state = stack.state();
+        if(auto decl = preferred(lookup(NNS, DTST->getIdentifier()))) {
+            if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(decl)) {
+                stack.push(TATD, DTST->template_arguments());
+                clang::QualType type = TATD->getTemplatedDecl()->getUnderlyingType();
+                type = TransformType(instantiate(type));
+                resolved.try_emplace(DTST, type);
+                TLB.pushTrivial(sema.getASTContext(), type, {});
                 return type;
             }
+            stack.rewind(state);
         }
 
-        frames = std::move(copy);
-        TLB.push<clang::DependentTemplateSpecializationTypeLoc>(TL.getType());
-        return TL.getType();
-    }
-
-    /// look up the name in the given type.
-    bool lookup(Names& names, clang::QualType type, const clang::IdentifierInfo* II) {
-        type = TransformType(type);
-
-        llvm::outs() << "lookup { " + II->getName() + " } in { " + type.getAsString() + " }\n";
-
-        clang::TemplateDecl* TD;
-        llvm::ArrayRef<clang::TemplateArgument> args;
-
-        if(auto TST = type->getAs<clang::TemplateSpecializationType>()) {
-            TD = TST->getTemplateName().getAsTemplateDecl();
-            args = TST->template_arguments();
-        } else if(auto DTST = type->getAs<clang::DependentTemplateSpecializationType>()) {
-            Names members;
-            if(lookup(members, DTST->getQualifier(), DTST->getIdentifier()) && members.size() == 1) {
-                TD = llvm::dyn_cast<clang::TemplateDecl>(members.front());
-                args = DTST->template_arguments();
-            } else {
-                return false;
-            }
-        }
-
-        if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(TD)) {
-            return lookup(names, CTD, II, args);
-        } else if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(TD)) {
-            frames.emplace_back(TATD, args);
-            return lookup(names, substitute(TATD->getTemplatedDecl()->getUnderlyingType()), II);
-        }
-
-        return true;
-    }
-
-    /// look up the name in the given nested name specifier.
-    bool lookup(Names& names, const clang::NestedNameSpecifier* NNS, const clang::IdentifierInfo* II) {
-        switch(NNS->getKind()) {
-            case clang::NestedNameSpecifier::Identifier: {
-                Names members;
-                if(lookup(members, NNS->getPrefix(), NNS->getAsIdentifier()) && members.size() == 1) {
-                    return lookup(names, substitute(members.front()), II);
-                }
-            }
-
-            case clang::NestedNameSpecifier::TypeSpec:
-            case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
-                return lookup(names, clang::QualType(NNS->getAsType(), 0), II);
-            }
-
-            default: {
-                break;
-            }
-        }
-        return false;
-    }
-
-    /// look up the name in the given class template. We first try to find the name in the main
-    /// template, if failed, we try to find the name in the base classes, if still failed, we try to find
-    /// the name in the partial specializations.
-    bool lookup(Names& names,
-                clang::ClassTemplateDecl* CTD,
-                const clang::IdentifierInfo* II,
-                llvm::ArrayRef<clang::TemplateArgument> arguments) {
-        // main template first
-        auto decls = CTD->getTemplatedDecl()->lookup(II);
-        if(!decls.empty()) {
-            std::size_t count = 0;
-            for(auto decl: decls) {
-                names.push_back(decl);
-            }
-
-            frames.emplace_back(CTD, arguments);
-            return true;
-        }
-
-        for(auto base: CTD->getTemplatedDecl()->bases()) {
-            // store the current state
-            auto copy = frames;
-
-            // try to find the member in the base class
-            frames.emplace_back(CTD, arguments);
-            if(lookup(names, substitute(base.getType()), II)) {
-                return true;
-            }
-
-            // if failed, restore the state
-            frames = std::move(copy);
-        }
-
-        // if failed, try partial specializations
-        llvm::SmallVector<clang::ClassTemplatePartialSpecializationDecl*> partials;
-        CTD->getPartialSpecializations(partials);
-
-        for(auto partial: partials) {
-            clang::sema::TemplateDeductionInfo info(partial->getLocation());
-            if(sema.DeduceTemplateArguments(partial, arguments, info) != clang::TemplateDeductionResult::Success) {
-                break;
-            }
-
-            auto decls = partial->lookup(II);
-            if(decls.empty()) {
-                break;
-            }
-
-            for(auto decl: decls) {
-                names.push_back(decl);
-            }
-
-            // NOTE: takeSugared will take the ownership of the list
-            auto list = info.takeSugared();
-            frames.emplace_back(partial, list->asArray());
-            // FIXME: should we delete the list?
-            // delete list;
-            return true;
-        }
-
-        return false;
-    }
-
-    clang::QualType substitute(clang::QualType type) {
-        type = DealiasOnly(sema).TransformType(type);
-
-        clang::MultiLevelTemplateArgumentList list;
-        for(auto begin = frames.rbegin(), end = frames.rend(); begin != end; ++begin) {
-            list.addOuterTemplateArguments(begin->decl, begin->arguments, true);
-        }
-
-        for(auto frame: frames) {
-            clang::Sema::CodeSynthesisContext context;
-            context.Entity = frame.decl;
-            context.TemplateArgs = frame.arguments.data();
-            context.Kind = clang::Sema::CodeSynthesisContext::TemplateInstantiation;
-            sema.pushCodeSynthesisContext(context);
-        }
-
-        auto result = sema.SubstType(type, list, {}, {});
-        llvm::outs() << "substitute { " + type.getAsString() + " } to { " + result.getAsString() + " }\n";
-        frames.clear();
-        return result;
-    }
-
-    clang::QualType substitute(clang::NamedDecl* decl) {
-        if(auto TND = llvm::dyn_cast<clang::TypedefNameDecl>(decl)) {
-            return substitute(TND->getUnderlyingType());
-        }
-
-        return clang::QualType();
+        return Base::TransformDependentTemplateSpecializationType(TLB, TL);
     }
 
 private:
     clang::Sema& sema;
-    clang::ASTContext& context;
-    std::vector<Frame> frames;
+    InstantiationStack stack;
+    llvm::DenseMap<const void*, clang::QualType>& resolved;
 };
 
 }  // namespace
 
 clang::QualType TemplateResolver::resolve(clang::QualType type) {
-    TemplateResolverImpl resolver(sema);
-    return resolver.TransformType(type);
+    PseudoInstantiator instantiator(sema, resolved);
+    return instantiator.TransformType(type);
 }
+
+clang::QualType TemplateResolver(const clang::DependentTemplateSpecializationType* type) {}
 
 }  // namespace clice

@@ -8,8 +8,6 @@
 
 namespace clice {
 
-namespace {
-
 using namespace index;
 
 /// Recursively test the binary index has the totally same content
@@ -95,7 +93,5 @@ struct IndexerTester {
         return *this;
     }
 };
-
-}  // namespace
 
 }  // namespace clice
