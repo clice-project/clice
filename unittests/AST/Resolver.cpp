@@ -6,6 +6,18 @@ namespace {
 
 using namespace clice;
 
+namespace testing {
+
+std::string PrintToString(const clang::QualType& type) {
+    std::string str;
+    llvm::raw_string_ostream ss(str);
+    type.print(ss, clang::PrintingPolicy({}));
+    ss.flush();
+    return str;
+}
+
+}  // namespace testing
+
 struct TemplateResolverTester : public clang::RecursiveASTVisitor<TemplateResolverTester> {
     TemplateResolverTester(llvm::StringRef code) {
         compileArgs = {
@@ -40,7 +52,10 @@ struct TemplateResolverTester : public clang::RecursiveASTVisitor<TemplateResolv
         auto& resolver = compiler->resolver();
         clang::QualType result = resolver.resolve(input);
         EXPECT_EQ(result.getCanonicalType(), expect.getCanonicalType());
-
+        if(result.getCanonicalType() != expect.getCanonicalType()) {
+            result.dump();
+            expect.dump();
+        }
         /// Test whether cache works.
         clang::QualType result2 = resolver.resolve(input);
         EXPECT_EQ(result, result2);
@@ -332,6 +347,47 @@ template <typename X>
 struct test {
     using input = typename B<A<X>>::type;
     using expect = type_list<X>;
+};
+)cpp");
+}
+
+TEST(TemplateResolver, DefaultArgument) {
+    TemplateResolverTester tester(R"cpp(
+template <typename... Ts>
+struct type_list {};
+
+template <typename T1>
+struct A {
+    using type = type_list<T1>;
+};
+
+template <typename U1, typename U2 = A<U1>>
+struct B {
+    using type = typename U2::type;
+};
+
+template <typename X>
+struct test {
+    using input = typename B<X>::type;
+    using expect = type_list<X>;
+};
+)cpp");
+}
+
+TEST(TemplateResolver, PackExpansion) {
+    TemplateResolverTester tester(R"cpp(
+template <typename... Ts>
+struct type_list {};
+
+template <typename U, typename... Us>
+struct X {
+    using type = type_list<Us...>;
+};
+
+template <typename... Ts>
+struct Y {
+    using input = typename X<int, Ts...>::type;
+    using expect = type_list<Ts...>;
 };
 )cpp");
 }

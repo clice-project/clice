@@ -55,9 +55,10 @@ private:
 
 /// A helper class to record the instantiation stack.
 struct InstantiationStack {
+    using Arguments = llvm::SmallVector<clang::TemplateArgument, 4>;
     using TemplateArguments = llvm::ArrayRef<clang::TemplateArgument>;
 
-    llvm::SmallVector<std::pair<clang::Decl*, TemplateArguments>> data;
+    llvm::SmallVector<std::pair<clang::Decl*, Arguments>> data;
 
     void clear() {
         data.clear();
@@ -87,8 +88,10 @@ public:
 
     using TemplateArguments = llvm::ArrayRef<clang::TemplateArgument>;
 
+    using TemplateDeductionInfo = clang::sema::TemplateDeductionInfo;
+
     PseudoInstantiator(clang::Sema& sema, llvm::DenseMap<const void*, clang::QualType>& resolved) :
-        Base(sema), sema(sema), resolved(resolved) {}
+        Base(sema), sema(sema), context(sema.getASTContext()), resolved(resolved) {}
 
 public:
     /// If this class and its base class have members with the same name, `DeclContext::lookup`
@@ -176,8 +179,17 @@ public:
                                 TemplateArguments arguments) {
         /// First, try to find the name in the primary template.
         if(auto members = CTD->getTemplatedDecl()->lookup(name); !members.empty()) {
-            stack.push(CTD, arguments);
-            return members;
+            clang::TemplateParameterList* list = CTD->getTemplateParameters();
+            TemplateArguments params = list->getInjectedTemplateArgs(context);
+            TemplateDeductionInfo info = {clang::SourceLocation(), list->getDepth()};
+            llvm::SmallVector<clang::DeducedTemplateArgument, 4> deduced(arguments.size());
+            auto result =
+                sema.DeduceTemplateArguments(list, params, arguments, info, deduced, false);
+            if(result == clang::TemplateDeductionResult::Success) {
+                llvm::SmallVector<clang::TemplateArgument, 4> list(deduced.begin(), deduced.end());
+                stack.push(CTD, list);
+                return members;
+            }
         }
 
         /// Try to find the member in the base class.
@@ -201,7 +213,8 @@ public:
         CTD->getPartialSpecializations(partials);
 
         for(auto partial: partials) {
-            auto info = clang::sema::TemplateDeductionInfo(clang::SourceLocation());
+            TemplateDeductionInfo info{clang::SourceLocation(),
+                                       partial->getTemplateParameters()->getDepth()};
             auto result = sema.DeduceTemplateArguments(partial, arguments, info);
             if(result == clang::TemplateDeductionResult::Success) {
                 if(auto members = partial->lookup(name); !members.empty()) {
@@ -277,7 +290,7 @@ public:
             if(TTPD->hasDefaultArgument()) {
                 const clang::TemplateArgument& argument = TTPD->getDefaultArgument().getArgument();
                 clang::QualType type = TransformType(argument.getAsType());
-                TLB.pushTrivial(sema.getASTContext(), type, clang::SourceLocation());
+                TLB.pushTrivial(context, type, clang::SourceLocation());
                 return type;
             }
         }
@@ -293,14 +306,14 @@ public:
 
         /// Search the resolved entities first.
         if(auto iter = resolved.find(DNT); iter != resolved.end()) {
-            TLB.pushTrivial(sema.getASTContext(), iter->second, {});
+            TLB.pushTrivial(context, iter->second, {});
             return iter->second;
         }
 
         auto NNS = TransformNestedNameSpecifierLoc(TL.getQualifierLoc()).getNestedNameSpecifier();
         auto type = TransformType(instantiate(preferred(lookup(NNS, DNT->getIdentifier()))));
         resolved.try_emplace(DNT, type);
-        TLB.pushTrivial(sema.getASTContext(), type, {});
+        TLB.pushTrivial(context, type, {});
         return type;
     }
 
@@ -320,7 +333,7 @@ public:
 
         /// Search the resolved entities first.
         if(auto iter = resolved.find(DTST); iter != resolved.end()) {
-            TLB.pushTrivial(sema.getASTContext(), iter->second, {});
+            TLB.pushTrivial(context, iter->second, {});
             return iter->second;
         }
 
@@ -328,6 +341,7 @@ public:
         // FIXME: Transform template arguments.
 
         /// The `lookup` may change the instantiation stack, save the current state.
+        /// FIXME:
         auto state = stack.state();
         if(auto decl = preferred(lookup(NNS, DTST->getIdentifier()))) {
             if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(decl)) {
@@ -335,17 +349,19 @@ public:
                 clang::QualType type = TATD->getTemplatedDecl()->getUnderlyingType();
                 type = TransformType(instantiate(type));
                 resolved.try_emplace(DTST, type);
-                TLB.pushTrivial(sema.getASTContext(), type, {});
+                TLB.pushTrivial(context, type, {});
                 return type;
             }
             stack.rewind(state);
         }
 
-        return Base::TransformDependentTemplateSpecializationType(TLB, TL);
+        TLB.push<clang::DependentTemplateSpecializationTypeLoc>(TL.getType());
+        return TL.getType();
     }
 
 private:
     clang::Sema& sema;
+    clang::ASTContext& context;
     InstantiationStack stack;
     llvm::DenseMap<const void*, clang::QualType>& resolved;
 };
