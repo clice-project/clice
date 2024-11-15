@@ -6,17 +6,7 @@ namespace {
 
 using namespace clice;
 
-namespace testing {
-
-std::string PrintToString(const clang::QualType& type) {
-    std::string str;
-    llvm::raw_string_ostream ss(str);
-    type.print(ss, clang::PrintingPolicy({}));
-    ss.flush();
-    return str;
-}
-
-}  // namespace testing
+namespace testing {}  // namespace testing
 
 struct TemplateResolverTester : public clang::RecursiveASTVisitor<TemplateResolverTester> {
     TemplateResolverTester(llvm::StringRef code) {
@@ -340,6 +330,27 @@ struct test {
     };
 
     using input = typename B<1, T>::type;
+    using expect = type_list<T, T>;
+};
+)cpp");
+}
+
+TEST(TemplateResolver, InnerDependentPartialMemberClass) {
+    TemplateResolverTester tester(R"cpp(
+template <typename... Ts>
+struct type_list {};
+
+template <typename T, typename U>
+struct test {};
+
+template <typename T>
+struct test<T, T> {
+    template <int N, typename U>
+    struct A {
+        using type = type_list<U, T>;
+    };
+
+    using input = typename A<1, T>::type;
     using expect = type_list<T, T>;
 };
 )cpp");
