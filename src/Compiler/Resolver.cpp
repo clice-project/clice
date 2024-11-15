@@ -177,34 +177,37 @@ public:
     clang::lookup_result lookup(clang::ClassTemplateDecl* CTD,
                                 clang::DeclarationName name,
                                 TemplateArguments arguments) {
-        /// First, try to find the name in the primary template.
-        if(auto members = CTD->getTemplatedDecl()->lookup(name); !members.empty()) {
-            clang::TemplateParameterList* list = CTD->getTemplateParameters();
-            TemplateArguments params = list->getInjectedTemplateArgs(context);
-            TemplateDeductionInfo info = {clang::SourceLocation(), list->getDepth()};
-            llvm::SmallVector<clang::DeducedTemplateArgument, 4> deduced(arguments.size());
-            auto result =
-                sema.DeduceTemplateArguments(list, params, arguments, info, deduced, false);
-            if(result == clang::TemplateDeductionResult::Success) {
-                llvm::SmallVector<clang::TemplateArgument, 4> list(deduced.begin(), deduced.end());
+        clang::TemplateParameterList* list = CTD->getTemplateParameters();
+        TemplateDeductionInfo info{clang::SourceLocation(), list->getDepth()};
+        TemplateArguments params = list->getInjectedTemplateArgs(context);
+        llvm::SmallVector<clang::DeducedTemplateArgument, 4> deduced(arguments.size());
+
+        if(auto result =
+               sema.DeduceTemplateArguments(list, params, arguments, info, deduced, false);
+           result == clang::TemplateDeductionResult::Success) {
+            llvm::SmallVector<clang::TemplateArgument, 4> list(deduced.begin(), deduced.end());
+            /// First, try to find the name in the primary template.
+            if(auto members = CTD->getTemplatedDecl()->lookup(name); !members.empty()) {
+                /// FIXME: reduce copy here.
                 stack.push(CTD, list);
                 return members;
             }
-        }
 
-        /// Try to find the member in the base class.
-        for(auto base: CTD->getTemplatedDecl()->bases()) {
-            if(auto type = base.getType(); type->isDependentType()) {
-                /// Because we instantiate the base class, this will clear the instantiation stack.
-                /// If the lookup fails, we need to rewind the stack to try the next base class.
-                auto state = stack.state();
-                stack.push(CTD, arguments);
+            /// Try to find the member in the base class.
+            for(auto base: CTD->getTemplatedDecl()->bases()) {
+                if(auto type = base.getType(); type->isDependentType()) {
+                    /// Because we instantiate the base class, this will clear the instantiation
+                    /// stack. If the lookup fails, we need to rewind the stack to try the next base
+                    /// class.
+                    auto state = stack.state();
+                    stack.push(CTD, list);
 
-                if(auto members = lookup(instantiate(type), name); !members.empty()) {
-                    return members;
+                    if(auto members = lookup(instantiate(type), name); !members.empty()) {
+                        return members;
+                    }
+
+                    stack.rewind(state);
                 }
-
-                stack.rewind(state);
             }
         }
 

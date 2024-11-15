@@ -385,8 +385,29 @@ struct X {
 };
 
 template <typename... Ts>
-struct Y {
+struct test {
     using input = typename X<int, Ts...>::type;
+    using expect = type_list<Ts...>;
+};
+)cpp");
+}
+
+TEST(TemplateResolver, BasePackExpansion) {
+    TemplateResolverTester tester(R"cpp(
+template <typename... Ts>
+struct type_list {};
+
+template <typename U, typename... Us>
+struct X {
+    using type = type_list<Us...>;
+};
+
+template <typename... Us>
+struct Y : X<int, Us...> {};
+
+template <typename... Ts>
+struct test {
+    using input = typename Y<Ts...>::type;
     using expect = type_list<Ts...>;
 };
 )cpp");
