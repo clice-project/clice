@@ -303,7 +303,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, DependentMemberClass) {
+TEST(TemplateResolver, OuterDependentMemberClass) {
     TemplateResolverTester tester(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -323,6 +323,24 @@ template <typename X, typename Y, typename Z>
 struct test {
     using input = typename A<X>::template B<Y>::template C<Z>::type;
     using expect = type_list<X, Y, Z>;
+};
+)cpp");
+}
+
+TEST(TemplateResolver, InnerDependentMemberClass) {
+    TemplateResolverTester tester(R"cpp(
+template <typename... Ts>
+struct type_list {};
+
+template <typename T>
+struct test {
+    template <int N, typename U>
+    struct B {
+        using type = type_list<U, T>;
+    };
+
+    using input = typename B<1, T>::type;
+    using expect = type_list<T, T>;
 };
 )cpp");
 }
@@ -347,6 +365,24 @@ template <typename X>
 struct test {
     using input = typename B<A<X>>::type;
     using expect = type_list<X>;
+};
+)cpp");
+}
+
+TEST(TemplateResolver, PartialDefaultArgument) {
+    TemplateResolverTester tester(R"cpp(
+template <typename T, typename U = T>
+struct X {};
+
+template <typename T>
+struct X<T, T> {
+    using type = T;
+};
+
+template <typename T>
+struct test {
+    using input = typename X<T>::type;
+    using expect = T;
 };
 )cpp");
 }

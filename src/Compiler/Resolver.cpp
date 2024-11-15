@@ -72,6 +72,10 @@ struct InstantiationStack {
         data = std::move(point);
     }
 
+    void push_front(clang::Decl* decl, TemplateArguments arguments) {
+        data.insert(data.begin(), {decl, Arguments(arguments.begin(), arguments.end())});
+    }
+
     void push(clang::Decl* decl, TemplateArguments arguments) {
         data.emplace_back(decl, arguments);
     }
@@ -108,6 +112,10 @@ public:
         llvm::ArrayRef<clang::TemplateArgument> args;
         type = TransformType(type);
 
+        if(type.isNull()) {
+            return clang::lookup_result();
+        }
+
         if(auto TST = type->getAs<clang::TemplateSpecializationType>()) {
             TD = TST->getTemplateName().getAsTemplateDecl();
             args = TST->template_arguments();
@@ -125,8 +133,16 @@ public:
         if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(TD)) {
             return lookup(CTD, name, args);
         } else if(auto TATD = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(TD)) {
-            stack.push(TATD, args);
-            return lookup(instantiate(TATD->getTemplatedDecl()->getUnderlyingType()), name);
+            clang::TemplateParameterList* list = TATD->getTemplateParameters();
+            TemplateDeductionInfo info{clang::SourceLocation(), list->getDepth()};
+            TemplateArguments params = list->getInjectedTemplateArgs(context);
+            llvm::SmallVector<clang::DeducedTemplateArgument, 4> deduced(args.size());
+            auto result = sema.DeduceTemplateArguments(list, params, args, info, deduced, false);
+            if(result == clang::TemplateDeductionResult::Success) {
+                llvm::SmallVector<clang::TemplateArgument, 4> list(deduced.begin(), deduced.end());
+                stack.push(TATD, list);
+                return lookup(instantiate(TATD->getTemplatedDecl()->getUnderlyingType()), name);
+            }
         }
 
         return clang::lookup_result();
@@ -135,6 +151,10 @@ public:
     /// Look up the name in the given nested name specifier.
     clang::lookup_result lookup(const clang::NestedNameSpecifier* NNS,
                                 clang::DeclarationName name) {
+        if(!NNS) {
+            return clang::lookup_result();
+        }
+
         /// Search the resolved entities first.
         if(auto iter = resolved.find(NNS); iter != resolved.end()) {
             return lookup(iter->second, name);
@@ -186,6 +206,8 @@ public:
                sema.DeduceTemplateArguments(list, params, arguments, info, deduced, false);
            result == clang::TemplateDeductionResult::Success) {
             llvm::SmallVector<clang::TemplateArgument, 4> list(deduced.begin(), deduced.end());
+
+            auto RD = CTD->getTemplatedDecl();
             /// First, try to find the name in the primary template.
             if(auto members = CTD->getTemplatedDecl()->lookup(name); !members.empty()) {
                 /// FIXME: reduce copy here.
@@ -193,20 +215,22 @@ public:
                 return members;
             }
 
-            /// Try to find the member in the base class.
-            for(auto base: CTD->getTemplatedDecl()->bases()) {
-                if(auto type = base.getType(); type->isDependentType()) {
-                    /// Because we instantiate the base class, this will clear the instantiation
-                    /// stack. If the lookup fails, we need to rewind the stack to try the next base
-                    /// class.
-                    auto state = stack.state();
-                    stack.push(CTD, list);
+            if(RD->hasDefinition()) {
+                /// Try to find the member in the base class.
+                for(auto base: CTD->getTemplatedDecl()->bases()) {
+                    if(auto type = base.getType(); type->isDependentType()) {
+                        /// Because we instantiate the base class, this will clear the instantiation
+                        /// stack. If the lookup fails, we need to rewind the stack to try the next
+                        /// base class.
+                        auto state = stack.state();
+                        stack.push(CTD, list);
 
-                    if(auto members = lookup(instantiate(type), name); !members.empty()) {
-                        return members;
+                        if(auto members = lookup(instantiate(type), name); !members.empty()) {
+                            return members;
+                        }
+
+                        stack.rewind(state);
                     }
-
-                    stack.rewind(state);
                 }
             }
         }
@@ -216,13 +240,18 @@ public:
         CTD->getPartialSpecializations(partials);
 
         for(auto partial: partials) {
-            TemplateDeductionInfo info{clang::SourceLocation(),
-                                       partial->getTemplateParameters()->getDepth()};
-            auto result = sema.DeduceTemplateArguments(partial, arguments, info);
+            clang::TemplateParameterList* list = partial->getTemplateParameters();
+            TemplateDeductionInfo info{clang::SourceLocation(), list->getDepth()};
+            TemplateArguments params = partial->getTemplateArgs().asArray();
+            llvm::SmallVector<clang::DeducedTemplateArgument, 4> deduced(list->size());
+
+            auto result =
+                sema.DeduceTemplateArguments(list, params, arguments, info, deduced, false);
             if(result == clang::TemplateDeductionResult::Success) {
                 if(auto members = partial->lookup(name); !members.empty()) {
-                    auto list = info.takeSugared();
-                    stack.push(partial, list->asArray());
+                    llvm::SmallVector<clang::TemplateArgument, 4> list(deduced.begin(),
+                                                                       deduced.end());
+                    stack.push(partial, list);
                     // FIXME: should we delete the list?
                     return members;
                 }
@@ -243,6 +272,23 @@ public:
         auto& contexts = sema.CodeSynthesisContexts;
         assert(contexts.empty() && "CodeSynthesisContexts should be empty");
 
+        assert(!stack.frames().empty() && "Instantiation stack should not be empty");
+
+        /// made up class template context.
+        while(true) {
+            auto top = stack.frames().front().first;
+            auto CRD = llvm::dyn_cast<clang::CXXRecordDecl>(top->getDeclContext());
+            /// FIXME: other template context.
+            if(CRD && CRD->getDescribedTemplate()) {
+                auto TD = CRD->getDescribedTemplate();
+                TemplateArguments arguments =
+                    TD->getTemplateParameters()->getInjectedTemplateArgs(context);
+                stack.push_front(TD, arguments);
+            } else {
+                break;
+            }
+        }
+
         std::ranges::for_each(stack.frames(), [&](auto& frame) {
             clang::Sema::CodeSynthesisContext context;
             context.Entity = frame.first;
@@ -257,8 +303,11 @@ public:
         });
 
         type = DealiasOnly(sema).TransformType(type);
+        llvm::outs() << "--------------------------------------\n";
+        list.dump();
+        type.dump();
         auto result = sema.SubstType(type, list, {}, {});
-
+        result.dump();
         stack.clear();
         contexts.clear();
 
