@@ -108,9 +108,6 @@ public:
                                       lists.push_back(params);
                                   });
         std::ranges::reverse(lists);
-        for(auto list: lists) {
-            list->print(llvm::outs(), context);
-        }
     }
 
     clang::QualType TransformTemplateTypeParmType(clang::TypeLocBuilder& TLB,
@@ -219,7 +216,7 @@ public:
 
         /// made up class template context.
         if(stack.empty()) {
-            visitTemplateDeclContexts(decl,
+            visitTemplateDeclContexts(llvm::dyn_cast<clang::Decl>(decl->getDeclContext()),
                                       [&](clang::Decl* decl, clang::TemplateParameterList* params) {
                                           stack.push(decl,
                                                      params->getInjectedTemplateArgs(context));
@@ -264,6 +261,13 @@ public:
         if(!TD) {
             return clang::lookup_result();
         }
+
+#ifndef NDEBUG
+        if(TemplateResolver::debug) {
+            llvm::outs() << "--------------------------------------------------------------\n";
+            llvm::outs() << "lookup: { " << name << " } in { " << type.getAsString() << " }\n";
+        }
+#endif
 
         if(auto CTD = llvm::dyn_cast<clang::ClassTemplateDecl>(TD)) {
             return lookup(CTD, name, args);
@@ -406,6 +410,13 @@ public:
             list.addOuterTemplateArguments(frame.first, frame.second, true);
         });
 
+#ifndef NDEBUG
+        if(TemplateResolver::debug) {
+            llvm::outs() << "--------------------------------------------------------------\n";
+            llvm::outs() << "instantiate: { " << type.getAsString() << " }\n";
+            list.dump();
+        }
+#endif
         type = DesugarOnly(sema).TransformType(type);
 
         auto result = sema.SubstType(type, list, {}, {});
