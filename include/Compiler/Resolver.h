@@ -47,6 +47,12 @@ public:
 
     void resolve(clang::UnresolvedUsingType* type);
 
+    clang::QualType resugar(clang::QualType type, clang::Decl* decl);
+
+#ifndef NDEBUG
+    static inline bool debug = false;
+#endif
+
 private:
     clang::Sema& sema;
     llvm::DenseMap<const void*, clang::QualType> resolved;
