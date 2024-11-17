@@ -81,6 +81,14 @@ public:
         return type;
     }
 
+    clang::QualType TransformInjectedClassNameType(clang::TypeLocBuilder& TLB,
+                                                   clang::InjectedClassNameTypeLoc TL) {
+        auto ICT = TL.getTypePtr();
+        clang::QualType type = TransformType(ICT->getInjectedSpecializationType());
+        TLB.pushTrivial(context, type, {});
+        return type;
+    }
+
     using Base::TransformTemplateSpecializationType;
 
     clang::QualType TransformTemplateSpecializationType(clang::TypeLocBuilder& TLB,
@@ -97,10 +105,24 @@ private:
     clang::ASTContext& context;
 };
 
+/// When deduce `TemplateSpecializationType` for partial specialization, `TemplateTypeParmType`
+/// will be deduced as canonical type.
+///
+/// For example:
+/// ```cpp
+/// template <typename T>
+/// struct A {};
+///
+/// template <typename T>
+/// struct A<T*> {};
+/// ```
+/// If you use deduce `A` with `A<U*>`, you will get `T = type-parameter-0-0` instead of `U`.
+///
+/// For code completion, we don't care about the whether it's a canonical type or not. But
+/// sometimes, the type may be needed to display to the user, e.g. inlay hints. In this case,
+/// we need to resugar the type to make it more readable.
 class ResugarOnly : public clang::TreeTransform<ResugarOnly> {
 public:
-    using Base = clang::TreeTransform<ResugarOnly>;
-
     ResugarOnly(clang::Sema& sema, clang::Decl* decl) :
         TreeTransform(sema), context(sema.getASTContext()) {
         visitTemplateDeclContexts(decl,
@@ -115,7 +137,7 @@ public:
                                                   bool = false) {
         clang::QualType type = TL.getType();
         auto TTPT = TL.getTypePtr();
-        if(TTPT) {
+        if(!TTPT->getDecl()) {
             auto depth = TTPT->getDepth();
             auto index = TTPT->getIndex();
             auto isPack = TTPT->isParameterPack();
@@ -125,6 +147,7 @@ public:
         return TLB.push<clang::TemplateTypeParmTypeLoc>(type).getType();
     }
 
+private:
     clang::ASTContext& context;
     llvm::SmallVector<clang::TemplateParameterList*> lists;
 };
@@ -178,6 +201,48 @@ public:
         Base(sema), sema(sema), context(sema.getASTContext()), resolved(resolved) {}
 
 public:
+    /// Check whether the given template arguments match the template parameters and
+    /// complete the default template arguments if necessary.
+    bool checkTemplateArguments(clang::TemplateDecl* TD,
+                                TemplateArguments& arguments,
+                                llvm::SmallVectorImpl<clang::TemplateArgument>& out) {
+        auto list = TD->getTemplateParameters();
+        out.reserve(list->size());
+        for(auto arg: arguments) {
+            out.emplace_back(arg);
+        }
+
+        if(out.size() != list->size()) {
+            for(auto i = out.size(); i < list->size(); ++i) {
+                auto param = list->getParam(i);
+                auto TTPD = llvm::dyn_cast<clang::TemplateTypeParmDecl>(param);
+                if(TTPD && TTPD->hasDefaultArgument()) {
+                    auto type = TTPD->getDefaultArgument().getArgument().getAsType();
+
+                    auto state = stack.state();
+
+                    stack.push(TD, out);
+
+                    auto result = TransformType(instantiate(type));
+
+                    if(result.isNull()) {
+                        stack.rewind(state);
+                        return false;
+                    }
+
+                    out.emplace_back(result);
+                    stack.rewind(state);
+                }
+            }
+        }
+
+        if(out.size() != list->size()) {
+            return false;
+        }
+
+        return true;
+    }
+
     /// Deduce the template arguments for the given declaration. If deduction succeeds, push the
     /// declaration and its deduced template arguments to the instantiation stack.
     template <typename Decl>
@@ -347,7 +412,12 @@ public:
     /// the class template and its template arguments to the instantiation stack**.
     clang::lookup_result lookup(clang::ClassTemplateDecl* CTD,
                                 clang::DeclarationName name,
-                                TemplateArguments arguments) {
+                                TemplateArguments visibleArguments) {
+        llvm::SmallVector<clang::TemplateArgument, 4> arguments;
+        if(!checkTemplateArguments(CTD, visibleArguments, arguments)) {
+            return clang::lookup_result();
+        }
+
         /// Try to find the name in the partial specializations.
         llvm::SmallVector<clang::ClassTemplatePartialSpecializationDecl*> partials;
         CTD->getPartialSpecializations(partials);
@@ -410,16 +480,17 @@ public:
             list.addOuterTemplateArguments(frame.first, frame.second, true);
         });
 
+        type = DesugarOnly(sema).TransformType(type);
+        auto result = sema.SubstType(type, list, {}, {});
+
 #ifndef NDEBUG
         if(TemplateResolver::debug) {
             llvm::outs() << "--------------------------------------------------------------\n";
             llvm::outs() << "instantiate: { " << type.getAsString() << " }\n";
             list.dump();
+            llvm::outs() << "result: { " << result.getAsString() << " }\n";
         }
 #endif
-        type = DesugarOnly(sema).TransformType(type);
-
-        auto result = sema.SubstType(type, list, {}, {});
 
         stack.clear();
         contexts.clear();
