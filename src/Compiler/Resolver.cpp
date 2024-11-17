@@ -54,10 +54,10 @@ void visitTemplateDeclContexts(clang::Decl* decl, const Callback& callback) {
 /// manually resolve the alias before calling `SubstType`, which is what `DesugarOnly`
 /// aims to achieve.
 class DesugarOnly : public clang::TreeTransform<DesugarOnly> {
-public:
-    DesugarOnly(clang::Sema& sema) : TreeTransform(sema), context(sema.getASTContext()) {}
-
     using Base = clang::TreeTransform<DesugarOnly>;
+
+public:
+    DesugarOnly(clang::Sema& sema) : Base(sema), context(sema.getASTContext()) {}
 
     // FIXME: desugar more types, e.g `UsingType`.
 
@@ -271,7 +271,7 @@ public:
         TemplateDeductionInfo info = {clang::SourceLocation(), list->getDepth()};
         llvm::SmallVector<clang::DeducedTemplateArgument, 4> deduced(list->size());
 
-        auto result = sema.DeduceTemplateArguments(list, params, arguments, info, deduced, false);
+        auto result = sema.DeduceTemplateArguments(list, params, arguments, info, deduced, true);
         bool success =
             result == clang::TemplateDeductionResult::Success && !info.hasSFINAEDiagnostic();
 
@@ -577,6 +577,20 @@ public:
     }
 
 public:
+    using Base::TransformType;
+
+    clang::QualType TransformType(clang::QualType type) {
+        if(type.isNull()) {
+            return clang::QualType();
+        }
+
+        if(!type->isDependentType()) {
+            return type;
+        }
+
+        return Base::TransformType(DesugarOnly(sema).TransformType(type));
+    }
+
     /// Sometimes the outer argument is just a simple type `T` and actually cannot make
     /// instantiation continue. In this case, we try to use its default argument to replace it,
     /// which may make the instantiation continue.
@@ -681,6 +695,20 @@ public:
         return TLB.push<clang::DependentTemplateSpecializationTypeLoc>(result).getType();
     }
 
+    /// FIXME: handle more cases.
+    clang::QualType TransformDecltypeType(clang::TypeLocBuilder& TLB, clang::DecltypeTypeLoc TL) {
+        auto expr = TL.getTypePtr()->getUnderlyingExpr();
+        if(auto DRE = llvm::dyn_cast<clang::DeclRefExpr>(expr)) {
+            if(auto decl = DRE->getDecl(); llvm::isa<clang::VarDecl>(decl)) {
+                auto type = TransformType(decl->getType());
+                TLB.pushTrivial(context, type, {});
+                return type;
+            }
+        }
+
+        return Base::TransformDecltypeType(TLB, TL);
+    }
+
 private:
     clang::Sema& sema;
     clang::ASTContext& context;
@@ -695,15 +723,15 @@ clang::QualType TemplateResolver::resolve(clang::QualType type) {
     return instantiator.TransformType(type);
 }
 
-clang::lookup_result TemplateResolver::resolve(const clang::DependentScopeDeclRefExpr* expr) {
-    PseudoInstantiator instantiator(sema, resolved);
-    return instantiator.lookup(expr->getQualifier(), expr->getDeclName());
-}
-
 clang::QualType TemplateResolver::resugar(clang::QualType type, clang::Decl* decl) {
-
     ResugarOnly resugar(sema, decl);
     return resugar.TransformType(type);
+}
+
+clang::lookup_result TemplateResolver::lookup(const clang::NestedNameSpecifier* NNS,
+                                              clang::DeclarationName name) {
+    PseudoInstantiator instantiator(sema, resolved);
+    return instantiator.lookup(NNS, name);
 }
 
 }  // namespace clice

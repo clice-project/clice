@@ -16,38 +16,43 @@ public:
 
     clang::QualType resolve(clang::QualType type);
 
-    clang::QualType resolve(const clang::DependentNameType* type) {
-        if(auto iter = resolved.find(type); iter != resolved.end()) {
-            return iter->second;
-        }
-
-        return resolve(clang::QualType(type, 0));
-    }
-
-    clang::QualType resolve(const clang::DependentTemplateSpecializationType* type) {
-        if(auto iter = resolved.find(type); iter != resolved.end()) {
-            return iter->second;
-        }
-
-        return resolve(clang::QualType(type, 0));
-    }
-
-    clang::lookup_result resolve(const clang::DependentScopeDeclRefExpr* expr);
-
-    clang::ExprResult resolve(clang::CXXDependentScopeMemberExpr* expr);
-
     clang::ExprResult resolve(clang::CXXUnresolvedConstructExpr* expr);
 
     clang::ExprResult resolve(clang::UnresolvedLookupExpr* expr);
 
     // TODO: use a relative clear way to resolve `UnresolvedLookupExpr`.
-    void resolve(clang::UnresolvedUsingValueDecl* decl);
-
-    void resolve(clang::UnresolvedUsingTypenameDecl* decl);
 
     void resolve(clang::UnresolvedUsingType* type);
 
+    /// Resugar the canonical `TemplateTypeParmType` with given template context.
+    /// `decl` should be the declaration that the type is in.
     clang::QualType resugar(clang::QualType type, clang::Decl* decl);
+
+    /// Look up the name in the given nested name specifier.
+    clang::lookup_result lookup(const clang::NestedNameSpecifier* NNS, clang::DeclarationName name);
+
+    clang::lookup_result lookup(const clang::DependentNameType* type) {
+        return lookup(type->getQualifier(), type->getIdentifier());
+    }
+
+    clang::lookup_result lookup(const clang::DependentTemplateSpecializationType* type) {
+        return lookup(type->getQualifier(), type->getIdentifier());
+    }
+
+    clang::lookup_result lookup(const clang::DependentScopeDeclRefExpr* expr) {
+        return lookup(expr->getQualifier(), expr->getNameInfo().getName());
+    }
+
+    /// TODO:
+    clang::lookup_result lookup(clang::CXXDependentScopeMemberExpr* expr);
+
+    clang::lookup_result lookup(clang::UnresolvedUsingValueDecl* decl) {
+        return lookup(decl->getQualifier(), decl->getDeclName());
+    }
+
+    clang::lookup_result resolve(clang::UnresolvedUsingTypenameDecl* decl) {
+        return lookup(decl->getQualifier(), decl->getDeclName());
+    }
 
 #ifndef NDEBUG
     static inline bool debug = false;
