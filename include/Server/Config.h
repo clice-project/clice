@@ -13,7 +13,7 @@ int parse(int argc, const char** argv);
 void init(std::string_view workplace);
 
 struct ServerOption {
-    std::string mode;
+    std::string mode = "pipe";
     unsigned int port;
     std::string address;
 };

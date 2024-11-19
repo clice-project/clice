@@ -1,226 +1,120 @@
-#include <uv.h>
-#include <Support/JSON.h>
-#include <Server/Server.h>
-#include <Server/Logger.h>
-#include <Server/Config.h>
-#include <Support/URI.h>
+#include "uv.h"
+#include "Server/Config.h"
+#include "Server/Server.h"
+#include "Basic/Location.h"
+#include "llvm/Support/raw_ostream.h"
 
 namespace clice {
 
-Server Server::instance;
+static uv_loop_t* loop;
+static uv_idle_t idle;
+static uv_stream_t* writer;
 
-namespace {
+void schedule() {}
 
-class MessageBuffer {
-    std::vector<char> buffer;
-    std::size_t max = 0;
-
-public:
-    void write(std::string_view message) {
-        buffer.insert(buffer.end(), message.begin(), message.end());
-    }
-
-    std::string_view read() {
-        std::string_view view = std::string_view(buffer.data(), buffer.size());
-        auto start = view.find("Content-Length: ") + 16;
-        auto end = view.find("\r\n\r\n");
-
-        if(start != std::string_view::npos && end != std::string_view::npos) {
-            std::size_t length = std::stoul(std::string(view.substr(start, end - start)));
-            if(view.size() >= length + end + 4) {
-                this->max = length + end + 4;
-                return view.substr(end + 4, length);
-            }
-        }
-
-        return {};
-    }
-
-    void clear() {
-        if(max != 0) {
-            buffer.erase(buffer.begin(), buffer.begin() + max);
-            max = 0;
-        }
-    }
-};
-
-uv_loop_t* unique_loop;
-uv_idle_t idle;
-
-static llvm::SmallVector<char, 4096> buffer;
-
-void alloc(uv_handle_t* handle, size_t size, uv_buf_t* buf) {
-    buffer.resize(size);
+void on_alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
+    static llvm::SmallString<4096> buffer;
+    buffer.resize_for_overwrite(suggested_size);
     buf->base = buffer.data();
-    buf->len = buffer.size();
+    buf->len = suggested_size;
 }
 
-MessageBuffer messageBuffer;
-
-void onRead(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     if(nread > 0) {
-        messageBuffer.write(std::string_view(buf->base, nread));
+        llvm::outs() << "Received from stdin: " << llvm::StringRef(buf->base, nread);
     } else if(nread < 0) {
-        logger::error("Read error: {}", uv_strerror(nread));
-    }
-}
-
-struct Pipe {
-    inline static uv_pipe_t stdin;
-    inline static uv_pipe_t stdout;
-
-    static void initialize() {
-        uv_pipe_init(unique_loop, &stdin, 0);
-        uv_pipe_open(&stdin, 0);
-
-        uv_pipe_init(unique_loop, &stdout, 0);
-        uv_pipe_open(&stdout, 1);
-
-        uv_read_start(reinterpret_cast<uv_stream_t*>(&stdin), alloc, onRead);
-    }
-
-    inline static uv_buf_t buf;
-    inline static uv_write_t req;
-
-    static void write(std::string_view message) {
-        buf.base = const_cast<char*>(message.data());
-        buf.len = message.size();
-        int state = uv_write(&req, reinterpret_cast<uv_stream_t*>(&stdout), &buf, 1, nullptr);
-        if(state < 0) {
-            logger::error("Error writing to client: {}", uv_strerror(state));
+        if(nread != UV_EOF) {
+            fprintf(stderr, "Error reading from stdin: %s\n", uv_strerror(nread));
         }
-    }
-};
-
-struct Socket {
-    inline static uv_tcp_t server;
-    inline static uv_tcp_t client;
-
-    static void initialize(const char* ip, int port) {
-        uv_tcp_init(unique_loop, &server);
-
-        sockaddr_in addr;
-        uv_ip4_addr(ip, port, &addr);
-
-        uv_tcp_bind(&server, reinterpret_cast<const struct sockaddr*>(&addr), 0);
-        uv_listen(reinterpret_cast<uv_stream_t*>(&server), 1, [](uv_stream_t* server, int status) {
-            if(status < 0) {
-                logger::error("Listen error: {}", uv_strerror(status));
-                return;
-            }
-
-            uv_tcp_init(unique_loop, &client);
-            uv_accept(server, reinterpret_cast<uv_stream_t*>(&client));
-            uv_read_start(reinterpret_cast<uv_stream_t*>(&client), alloc, onRead);
-        });
-    }
-
-    inline static uv_buf_t buf;
-    inline static uv_write_t req;
-
-    static void write(std::string_view message) {
-        buf.base = const_cast<char*>(message.data());
-        buf.len = message.size();
-        int state = uv_write(&req, reinterpret_cast<uv_stream_t*>(&client), &buf, 1, nullptr);
-        if(state < 0) {
-            logger::error("Error writing to client: {}", uv_strerror(state));
-        }
-    }
-};
-
-}  // namespace
-
-Server::Server() {
-
-    handlers.try_emplace("initialize", [](json::Value id, json::Value value) {
-        auto result = instance.initialize(json::deserialize<proto::InitializeParams>(value));
-        instance.response(std::move(id), json::serialize(result));
-    });
-}
-
-void eventloop(uv_idle_t* handle) {
-    if(auto message = messageBuffer.read(); !message.empty()) {
-        Server::instance.handleMessage(message);
-        messageBuffer.clear();
+        uv_close((uv_handle_t*)stream, NULL);
     }
 }
 
-auto Server::initialize(proto::InitializeParams params) -> proto::InitializeResult {
-    config::init(URI::resolve(params.workspaceFolders[0].uri));
-
-    // TODO: sacn module:
-
-    // TODO: load index result
-
-    // TODO: initialize dependencies
-
-    return proto::InitializeResult();
-}
-
-int Server::run(int argc, const char** argv) {
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-
-    logger::init("console", argv[0]);
-
-    if(auto err = config::parse(argc, argv); err < 0) {
-        return err;
-    };
-
-    unique_loop = uv_default_loop();
-    Socket::initialize("127.0.0.1", 50505);
-
-    uv_idle_init(unique_loop, &idle);
-    uv_idle_start(&idle, eventloop);
-
-    uv_run(unique_loop, UV_RUN_DEFAULT);
-
-    uv_loop_close(unique_loop);
-
-    return 0;
-}
-
-void Server::handleMessage(std::string_view message) {
-    auto result = json::parse(message);
-    if(!result) {
-        logger::error("Error parsing JSON: {}", llvm::toString(result.takeError()));
-    }
-
-    logger::info("Received message: {}", message);
-    auto input = result->getAsObject();
-    auto id = input->get("id");
-    std::string_view method = input->get("method")->getAsString().value();
-    auto params = input->get("params");
-
-    if(auto handler = handlers.find(method); handler != handlers.end()) {
-        handler->second(*id, *params);
+void on_write(uv_write_t* req, int status) {
+    if(status < 0) {
+        fprintf(stderr, "Write error: %s\n", uv_strerror(status));
     } else {
-        // FIXME: notify do not have a ID.
-        if(id) {
-            scheduler.dispatch(std::move(*id), method, *params);
-        } else {
-            scheduler.dispatch(nullptr, method, *params);
-        }
+        printf("Write completed successfully.\n");
     }
+    free(req);
 }
 
-void Server::response(json::Value id, json::Value result) {
-    json::Object response;
-    response.try_emplace("jsonrpc", "2.0");
-    response.try_emplace("id", std::move(id));
-    response.try_emplace("result", result);
+void write(llvm::StringRef message) {
+    /// FIXME:
+    static uv_write_t write_req;
+    uv_buf_t buf = uv_buf_init((char*)message.data(), message.size());
+    uv_write(&write_req, writer, &buf, 1, on_write);
+}
 
-    json::Value responseValue = std::move(response);
+uv_stream_t* init_socket(const char* address, unsigned int port) {
+    static uv_tcp_t server;
+    static uv_tcp_t client;
 
-    std::string s;
-    llvm::raw_string_ostream stream(s);
-    stream << responseValue;
-    stream.flush();
+    uv_tcp_init(loop, &server);
+    uv_tcp_init(loop, &client);
 
-    s = "Content-Length: " + std::to_string(s.size()) + "\r\n\r\n" + s;
+    struct sockaddr_in addr;
+    uv_ip4_addr(address, port, &addr);
 
-    // FIXME: use more flexible way to do this.
-    Socket::write(s);
-    logger::info("Response: {}", s);
+    uv_tcp_bind(&server, (const struct sockaddr*)&addr, 0);
+
+    int r = uv_listen((uv_stream_t*)&server, 128, [](uv_stream_t* server, int status) {
+        if(status < 0) {
+            fprintf(stderr, "New connection error\n");
+            return;
+        }
+
+        if(uv_accept(server, (uv_stream_t*)&client) == 0) {
+            printf("Client connected.\n");
+            uv_read_start((uv_stream_t*)&client, on_alloc_buffer, on_read);
+        } else {
+            uv_close((uv_handle_t*)&client, NULL);
+        }
+    });
+
+    if(r) {
+        fprintf(stderr, "Listen error: %s\n", uv_strerror(r));
+    }
+
+    return (uv_stream_t*)&client;
+}
+
+uv_stream_t* init_pipe() {
+    static uv_pipe_t stdin_pipe;
+    static uv_pipe_t stdout_pipe;
+
+    uv_pipe_init(loop, &stdin_pipe, 0);
+    uv_pipe_init(loop, &stdout_pipe, 0);
+
+    uv_pipe_open(&stdin_pipe, 0);
+    uv_pipe_open(&stdout_pipe, 1);
+
+    uv_read_start((uv_stream_t*)&stdin_pipe, on_alloc_buffer, on_read);
+
+    return (uv_stream_t*)&stdout_pipe;
+}
+
+int run(int argc, const char** argv) {
+    loop = uv_default_loop();
+
+    uv_idle_init(loop, &idle);
+    uv_idle_start(&idle, [](uv_idle_t* handle) { schedule(); });
+
+    /// read config file.
+    config::parse(argc, argv);
+
+    /// init writer.
+    const auto& option = config::server();
+    if(option.mode == "socket") {
+        writer = init_socket(option.address.c_str(), option.port);
+    } else if(option.mode == "pipe") {
+        writer = init_pipe();
+    } else {
+        llvm::errs() << "Unknown mode: " << option.mode << "\n";
+        return 1;
+    }
+
+    return uv_run(loop, UV_RUN_DEFAULT);
 }
 
 }  // namespace clice
