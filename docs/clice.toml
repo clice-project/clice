@@ -1,6 +1,6 @@
 [server]
 # "pipe" or "socket"
-mode = "pipe"
+mode = "socket"
 port = 50051
 address = "127.0.0.1"
 

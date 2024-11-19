@@ -1,11 +1,14 @@
-#define Name name
-#define SELF(x) x
-#define SELF3(x) X
+#define TEST(name)                                                                                 \
+    struct name {};                                                                                \
+    struct name2 {};                                                                               \
+    struct name##3 {};                                                                             \
+    struct name name;
 
-void Name() {}
+TEST(name);
 
-int SELF(x) = 1;
+int main() {
+    struct name x;
+    struct name2 y;
+    struct name3 z;
+}
 
-void SELF3(x)() {}
-
-int z = SELF(x) + SELF(x);

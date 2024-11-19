@@ -1,3 +1,4 @@
+
 #include <toml++/toml.hpp>
 
 #include <Server/Config.h>
@@ -5,6 +6,9 @@
 #include <Support/Reflection.h>
 #include <Support/FileSystem.h>
 #include <llvm/ADT/StringMap.h>
+
+#include "Support/Format.h"
+#include "Support/JSON.h"
 
 namespace clice::config {
 
@@ -61,23 +65,31 @@ std::string replace(std::string_view text) {
 
 }  // namespace
 
-int parse(int argc, const char** argv) {
-    predefined["binary"] = path::parent_path(argv[0]);
+int parse(llvm::StringRef execute, llvm::StringRef filepath) {
+    auto toml = toml::parse_file(filepath);
+    if(toml.failed()) {
+        llvm::errs() << std::format("Failed to parse config file: {}, Beacuse {}\n",
+                                    filepath,
+                                    toml.error().description());
+        return -1;
+    }
 
-    // FIXME:
-    // if(version) {
-    //     llvm::outs() << "clice version: " << predefined.version << '\n';
-    //     return 0;
-    // }
-    //
-    // if(config_filepath.empty()) {
-    //    llvm::errs() << "config file path is empty.\n";
-    //    return -1;
-    //} else {
-    //    auto toml = toml::parse_file(config_filepath);
-    //    auto frontend = toml["frontend"];
-    //    return 0;
-    //}
+    auto table = toml["server"];
+    if(table) {
+        if(auto mode = table["mode"]) {
+            config.server.mode = mode.as_string()->get();
+        }
+
+        if(auto port = table["port"]) {
+            config.server.port = port.as_integer()->get();
+        }
+
+        if(auto address = table["address"]) {
+            config.server.address = address.as_string()->get();
+        }
+
+        llvm::outs() << "Server:" << json::serialize(config.server) << "\n";
+    }
     return 0;
 }
 

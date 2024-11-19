@@ -3,17 +3,19 @@
 #include <string>
 #include <vector>
 
+#include "llvm/ADT/StringRef.h"
+
 namespace clice::config {
 
 /// read the config file, call when the program starts.
-int parse(int argc, const char** argv);
+int parse(llvm::StringRef execute, llvm::StringRef filepath);
 
 /// initialize the config, replace all predefined variables in the config file.
 /// called in `Server::initialize`.
 void init(std::string_view workplace);
 
 struct ServerOption {
-    std::string mode = "pipe";
+    std::string mode = "socket";
     unsigned int port;
     std::string address;
 };

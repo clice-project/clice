@@ -1,6 +1,9 @@
 #pragma once
 
+#include "Server/Config.h"
 #include "Basic/Basic.h"
+#include "Support/JSON.h"
+#include "llvm/ADT/FunctionExtras.h"
 
 namespace clice::proto {
 
@@ -70,6 +73,38 @@ struct InitializedParams {};
 
 namespace clice {
 
-int run(int argc, const char** argv);
+class Server {
+public:
+    Server(const config::ServerOption& option);
 
-}
+    void run(llvm::unique_function<void()> callback);
+
+    void write(llvm::StringRef message);
+
+    void request();
+
+    void response(json::Value id, json::Value result);
+
+    void notify();
+
+    void error();
+
+    bool hasMessage() {
+        return !messages.empty();
+    }
+
+    json::Value& peek() {
+        return messages.front();
+    }
+
+    void consume() {
+        messages.erase(messages.begin());
+    }
+
+public:
+    void* writer;
+    llvm::SmallVector<json::Value> messages;
+    llvm::unique_function<void()> callback;
+};
+
+}  // namespace clice

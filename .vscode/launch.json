@@ -8,7 +8,8 @@
             "type": "lldb",
             "request": "launch",
             "name": "clice_socket",
-            "program": "${workspaceFolder}/build/bin/clice"
+            "program": "${workspaceFolder}/build/bin/clice",
+            "args": ["--config=/home/ykiko/C++/clice2/docs/clice.toml"]
         },
         {
             "type": "lldb",
@@ -34,7 +35,7 @@
             "program": "${workspaceFolder}/build/bin/clice-tests",
             "args": [
                 "--test-dir=/home/ykiko/C++/clice2/tests",
-                "--gtest_filter=clice.TemplateResolver"
+                "--gtest_filter=TemplateResolver.DefaultArgument"
             ],
             "cwd": "${workspaceFolder}"
         },
