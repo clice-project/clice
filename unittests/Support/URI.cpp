@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <Support/URI.h>
+#include <Basic/URI.h>
 
 namespace {
 

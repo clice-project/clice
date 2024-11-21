@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Server/Config.h"
-#include "Basic/Basic.h"
+#include "Basic/Document.h"
 #include "Support/JSON.h"
 #include "llvm/ADT/FunctionExtras.h"
 
@@ -69,6 +69,9 @@ struct InitializeResult {
 };
 
 struct InitializedParams {};
+
+
+
 }  // namespace clice::proto
 
 namespace clice {
@@ -94,10 +97,12 @@ public:
     }
 
     json::Value& peek() {
+        assert(!messages.empty());
         return messages.front();
     }
 
     void consume() {
+        assert(!messages.empty());
         messages.erase(messages.begin());
     }
 

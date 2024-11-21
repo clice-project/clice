@@ -59,15 +59,20 @@ Server::Server(const config::ServerOption& option) {
     });
 
     static auto on_alloc = +[](uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
-        static llvm::SmallString<4096> buffer;
+        /// This function is called synchronously before `on_read`. See the implementation of
+        /// `uv__read` in libuv/src/unix/stream.c. So it is safe to use a static buffer here.
+        static llvm::SmallString<65536> buffer;
         buffer.resize_for_overwrite(suggested_size);
         buf->base = buffer.data();
         buf->len = suggested_size;
     };
 
     static auto on_read = [](uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+        /// We have at most one connection and use default event loop. So there is no data race
+        /// risk. It is safe to use a static buffer here.
+        /// FIXME: use a more efficient data structure.
+        static MessageBuffer messageBuffer;
         if(nread > 0) {
-            static MessageBuffer messageBuffer;
             messageBuffer.append({buf->base, static_cast<std::size_t>(nread)});
             if(auto message = messageBuffer.peek(); !message.empty()) {
                 auto& server = *static_cast<Server*>(stream->data);

@@ -9,68 +9,27 @@
             "request": "launch",
             "name": "clice_socket",
             "program": "${workspaceFolder}/build/bin/clice",
-            "args": ["--config=/home/ykiko/C++/clice2/docs/clice.toml"]
-        },
-        {
-            "type": "lldb",
-            "request": "attach",
-            "name": "clice_attach",
-            "program": "clice"
+            "args": [
+                "--config={workspaceFolder}/docs/clice.toml"
+            ]
         },
         {
             "type": "lldb",
             "request": "launch",
-            "name": "PCM",
+            "name": "clice_test",
             "program": "${workspaceFolder}/build/bin/clice-tests",
             "args": [
-                "--test-dir=/home/ykiko/C++/clice2/tests",
-                "--gtest_filter=clice.PCM"
+                "--test-dir={workspaceFolder}/tests",
+                "${input:filter}"
             ],
-            "cwd": "${workspaceFolder}"
-        },
+        }
+    ],
+    "inputs": [
         {
-            "type": "lldb",
-            "request": "launch",
-            "name": "TemplateResolver",
-            "program": "${workspaceFolder}/build/bin/clice-tests",
-            "args": [
-                "--test-dir=/home/ykiko/C++/clice2/tests",
-                "--gtest_filter=TemplateResolver.DefaultArgument"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Index",
-            "program": "${workspaceFolder}/build/bin/clice-tests",
-            "args": [
-                "--test-dir=/home/ykiko/C++/clice2/tests",
-                "--gtest_filter=Index.VarTemplate*"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "ASTVisitor",
-            "program": "${workspaceFolder}/build/bin/clice-tests",
-            "args": [
-                "--test-dir=/home/ykiko/C++/clice2/tests",
-                "--gtest_filter=clice.ASTVisitor*"
-            ],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "CodeCompletion",
-            "program": "${workspaceFolder}/build/bin/clice-tests",
-            "args": [
-                "--test-dir=/home/ykiko/C++/clice2/tests",
-                "--gtest_filter=CodeCompletion.*"
-            ],
-            "cwd": "${workspaceFolder}"
+            "id": "filter",
+            "type": "promptString",
+            "description": "Filter for test names",
+            "default": ""
         }
     ]
 }
