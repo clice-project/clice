@@ -18,6 +18,13 @@
 #include <coroutine>
 #include <type_traits>
 
+namespace clice {
+
+template <typename T>
+struct promise;
+
+}
+
 namespace clice::async {
 
 template <typename Value>
@@ -64,8 +71,7 @@ T& uv_cast(U* u) {
 inline uv_loop_t* loop = uv_default_loop();
 
 /// Schedule a coroutine to run in the event loop.
-template <typename Promise>
-inline void schedule(std::coroutine_handle<Promise> handle) {
+inline void schedule(std::coroutine_handle<> handle) {
     assert(handle && "schedule: invalid coroutine handle");
     uv_async_t* async = new uv_async_t();
     async->data = handle.address();
@@ -77,9 +83,14 @@ inline void schedule(std::coroutine_handle<Promise> handle) {
     uv_async_send(async);
 }
 
+template <typename T>
+void schedule(promise<T> promise) {
+    schedule(promise.handle());
+}
+
 /// Schedule a task to run in the thread pool.
 template <std::invocable Task>
-auto schedule(Task&& task) {
+auto schedule_task(Task&& task) {
     using Func = std::remove_cvref_t<Task>;
     using Ret = std::invoke_result_t<Func>;
 
@@ -165,14 +176,18 @@ struct FinalAwaiter {
     void await_resume() noexcept {}
 };
 
+}  // namespace clice::async
+
+namespace clice {
+
 template <typename T>
-class Promise {
+class promise {
 public:
-    struct promise_type : Result<T> {
+    struct promise_type : async::Result<T> {
         std::coroutine_handle<> caller;
 
         auto get_return_object() {
-            return Promise{std::coroutine_handle<promise_type>::from_promise(*this)};
+            return promise{std::coroutine_handle<promise_type>::from_promise(*this)};
         }
 
         void unhandled_exception() {
@@ -184,13 +199,13 @@ public:
         }
 
         auto final_suspend() noexcept {
-            return FinalAwaiter{.caller = caller};
+            return async::FinalAwaiter{.caller = caller};
         }
     };
 
     using coroutine_handle = std::coroutine_handle<promise_type>;
 
-    Promise(coroutine_handle handle) : h(handle) {}
+    promise(coroutine_handle handle) : h(handle) {}
 
     bool await_ready() noexcept {
         return false;
@@ -198,12 +213,18 @@ public:
 
     void await_suspend(std::coroutine_handle<> handle) noexcept {
         this->h.promise().caller = handle;
-        schedule(*this);
+        async::schedule(*this);
     }
 
-    decltype(auto) await_resume() noexcept {
+    decltype(auto) await_resume() noexcept
+        requires (!std::is_void_v<T>)
+    {
         return std::move(h.promise().value);
     }
+
+    void await_resume() noexcept
+        requires (std::is_void_v<T>)
+    {}
 
     coroutine_handle handle() const noexcept {
         return h;
@@ -249,7 +270,7 @@ private:
 
 template <typename... Ps>
 int run(Ps&&... ps) {
-    (schedule(std::forward<Ps>(ps).handle()), ...);
+    (schedule(std::forward<Ps>(ps)), ...);
     return uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 }
 
@@ -262,14 +283,14 @@ public:
 
 struct Server {
 public:
-    using Callback = llvm::unique_function<Promise<void>(json::Value, Writer&)>;
+    using Callback = llvm::unique_function<promise<void>(json::Value, Writer&)>;
 
     Server(Callback callback);
 
     Server(Callback callback, const char* ip, unsigned int port);
 
     void run() {
-        uv_run(loop, UV_RUN_DEFAULT);
+        uv_run(async::loop, UV_RUN_DEFAULT);
     }
 
 public:
@@ -277,4 +298,4 @@ public:
     Callback callback;
 };
 
-}  // namespace clice::async
+}  // namespace clice

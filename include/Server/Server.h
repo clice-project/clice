@@ -4,6 +4,8 @@
 #include "Basic/Document.h"
 #include "Support/JSON.h"
 #include "llvm/ADT/FunctionExtras.h"
+#include "Async.h"
+#include "Compiler/Compiler.h"
 
 namespace clice::proto {
 
@@ -70,46 +72,84 @@ struct InitializeResult {
 
 struct InitializedParams {};
 
-
+struct DidOpenTextDocumentParams {
+    /// The document that was opened.
+    TextDocumentItem document;
+};
 
 }  // namespace clice::proto
 
 namespace clice {
 
-class Server {
+class CacheManager {
 public:
-    Server(const config::ServerOption& option);
+    promise<void> buildPCH(std::string file, std::string content);
 
-    void run(llvm::unique_function<void()> callback);
+private:
+    std::string outDir;
+};
 
-    void write(llvm::StringRef message);
+class LSPServer {
+public:
+    promise<void> onInitialize(json::Value id, const proto::InitializeParams& params);
 
-    void request();
+    promise<void> onInitialized(const proto::InitializedParams& params);
 
-    void response(json::Value id, json::Value result);
+    promise<void> onShutdown(json::Value id);
 
-    void notify();
-
-    void error();
-
-    bool hasMessage() {
-        return !messages.empty();
-    }
-
-    json::Value& peek() {
-        assert(!messages.empty());
-        return messages.front();
-    }
-
-    void consume() {
-        assert(!messages.empty());
-        messages.erase(messages.begin());
-    }
+    promise<void> onExit();
 
 public:
-    void* writer;
-    llvm::SmallVector<json::Value> messages;
-    llvm::unique_function<void()> callback;
+    promise<void> onDidOpen(const proto::DidOpenTextDocumentParams& document);
+
+public:
+    LSPServer() {
+        addRequest("initialize", &LSPServer::onInitialize);
+        addNotification("initialized", &LSPServer::onInitialized);
+        addRequest("shutdown", &LSPServer::onShutdown);
+        addNotification("exit", &LSPServer::onExit);
+        addNotification("textDocument/didOpen", &LSPServer::onDidOpen);
+    }
+
+    template <typename Param>
+    void addRequest(llvm::StringRef name,
+                    promise<void> (LSPServer::*method)(json::Value, const Param&)) {
+        requests.try_emplace(name,
+                             [this, method](json::Value id, json::Value value) -> promise<void> {
+                                 co_await (this->*method)(std::move(id),
+                                                          json::deserialize<Param>(value));
+                             });
+    }
+
+    void addRequest(llvm::StringRef name, promise<void> (LSPServer::*method)(json::Value)) {
+        requests.try_emplace(name,
+                             [this, method](json::Value id, json::Value value) -> promise<void> {
+                                 co_await (this->*method)(std::move(id));
+                             });
+    }
+
+    template <typename Param>
+    void addNotification(llvm::StringRef name, promise<void> (LSPServer::*method)(const Param&)) {
+        notifications.try_emplace(name, [this, method](json::Value value) -> promise<void> {
+            co_await (this->*method)(json::deserialize<Param>(value));
+        });
+    }
+
+    void addNotification(llvm::StringRef name, promise<void> (LSPServer::*method)()) {
+        notifications.try_emplace(name, [this, method](json::Value value) -> promise<void> {
+            co_await (this->*method)();
+        });
+    }
+
+    promise<void> dispatch(json::Value value, Writer& writer);
+
+private:
+    using onRequest = llvm::unique_function<promise<void>(json::Value, json::Value)>;
+    using onNotification = llvm::unique_function<promise<void>(json::Value)>;
+
+    Writer* writer;
+    llvm::StringMap<onRequest> requests;
+    llvm::StringMap<onNotification> notifications;
 };
 
 }  // namespace clice

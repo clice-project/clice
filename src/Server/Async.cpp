@@ -2,7 +2,7 @@
 
 #include "llvm/ADT/SmallString.h"
 
-namespace clice::async {
+namespace clice {
 
 namespace {
 
@@ -50,14 +50,14 @@ void onRead(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     /// risk. It is safe to use a static buffer here.
 
     /// FIXME: use a more efficient data structure.
-    static MessageBuffer messageBuffer;
+    static MessageBuffer buffer;
     if(nread > 0) {
-        messageBuffer.append({buf->base, static_cast<std::size_t>(nread)});
-        if(auto message = messageBuffer.peek(); !message.empty()) {
+        buffer.append({buf->base, static_cast<std::size_t>(nread)});
+        if(auto message = buffer.peek(); !message.empty()) {
             auto& server = *static_cast<Server*>(stream->data);
             if(auto json = json::parse(message)) {
-                schedule(server.callback(std::move(*json), server.writer).handle());
-                messageBuffer.consume();
+                async::schedule(server.callback(std::move(*json), server.writer));
+                buffer.consume();
             } else {
                 llvm::errs() << "JSON PARSE ERROR " << json.takeError() << "\n";
             }
@@ -78,8 +78,8 @@ Server::Server(Callback callback) : callback(std::move(callback)) {
 
     writer.handle = &out;
 
-    uv_pipe_init(loop, &in, 0);
-    uv_pipe_init(loop, &out, 0);
+    uv_pipe_init(async::loop, &in, 0);
+    uv_pipe_init(async::loop, &out, 0);
 
     in.data = this;
     out.data = this;
@@ -94,8 +94,8 @@ Server::Server(Callback callback, const char* ip, unsigned int port) :
 
     writer.handle = &client;
 
-    uv_tcp_init(loop, &server);
-    uv_tcp_init(loop, &client);
+    uv_tcp_init(async::loop, &server);
+    uv_tcp_init(async::loop, &client);
 
     server.data = this;
     client.data = this;
@@ -163,4 +163,4 @@ void Writer::write(json::Value id, json::Value result) {
     }
 }
 
-}  // namespace clice::async
+}  // namespace clice
