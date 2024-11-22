@@ -39,4 +39,10 @@ struct TextEdit {
     string newText;
 };
 
+struct Location {
+    DocumentUri uri;
+    
+    Range range;
+};
+
 }  // namespace clice::proto

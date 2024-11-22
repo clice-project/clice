@@ -1,9 +1,7 @@
-#pragma once
-
 #include "Basic/Document.h"
 
 namespace clice::proto {
 
-struct InlayHintParams {};
+struct CodeLensParams {};
 
 }  // namespace clice::proto

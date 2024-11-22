@@ -29,4 +29,6 @@ enum class SymbolKind {
     TypeParameter = 26,
 };
 
-}
+struct DocumentSymbolParams {};
+
+}  // namespace clice::proto

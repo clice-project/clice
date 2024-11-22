@@ -4,6 +4,6 @@
 
 namespace clice::proto {
 
-struct InlayHintParams {};
+using DocumentHighlightParams = TextDocumentPositionParams;
 
-}  // namespace clice::proto
+}

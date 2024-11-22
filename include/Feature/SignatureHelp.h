@@ -18,6 +18,8 @@ struct SignatureHelp {
     std::vector<SignatureInformation> signatures;
 };
 
+struct SignatureHelpParams {};
+
 }  // namespace clice::proto
 
 namespace clice {

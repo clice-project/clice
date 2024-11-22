@@ -60,6 +60,8 @@ struct CompletionItem {
     // ...
 };
 
+struct CompletionParams {};
+
 }  // namespace clice::proto
 
 namespace clice {
