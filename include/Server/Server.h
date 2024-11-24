@@ -2,6 +2,7 @@
 
 #include "Async.h"
 #include "Config.h"
+#include "Logger.h"
 #include "Basic/Document.h"
 #include "Compiler/Compiler.h"
 #include "Support/JSON.h"
@@ -125,154 +126,123 @@ namespace clice {
 
 class Server {
 public:
-    Server() {
-        addMethod("initialize", &Server::onInitialize);
-        addMethod("initialized", &Server::onInitialized);
-        addMethod("shutdown", &Server::onShutdown);
-        addMethod("exit", &Server::onExit);
+    Server();
 
-        addMethod("textDocument/didOpen", &Server::onDidOpen);
-        addMethod("textDocument/didChange", &Server::onDidChange);
-        addMethod("textDocument/didSave", &Server::onDidSave);
-        addMethod("textDocument/didClose", &Server::onDidClose);
-
-        addMethod("textDocument/declaration", &Server::onGotoDeclaration);
-        addMethod("textDocument/definition", &Server::onGotoDefinition);
-        addMethod("textDocument/typeDefinition", &Server::onGotoTypeDefinition);
-        addMethod("textDocument/implementation", &Server::onGotoImplementation);
-        addMethod("textDocument/references", &Server::onFindReferences);
-        addMethod("textDocument/callHierarchy/prepare", &Server::onPrepareCallHierarchy);
-        addMethod("textDocument/callHierarchy/incomingCalls", &Server::onIncomingCall);
-        addMethod("textDocument/callHierarchy/outgoingCalls", &Server::onOutgoingCall);
-        addMethod("textDocument/typeHierarchy/prepare", &Server::onPrepareTypeHierarchy);
-        addMethod("textDocument/typeHierarchy/supertypes", &Server::onSupertypes);
-        addMethod("textDocument/typeHierarchy/subtypes", &Server::onSubtypes);
-        addMethod("textDocument/documentHighlight", &Server::onDocumentHighlight);
-        addMethod("textDocument/documentLink", &Server::onDocumentLink);
-        addMethod("textDocument/hover", &Server::onHover);
-        addMethod("textDocument/codeLens", &Server::onCodeLens);
-        addMethod("textDocument/foldingRange", &Server::onFoldingRange);
-        addMethod("textDocument/documentSymbol", &Server::onDocumentSymbol);
-        addMethod("textDocument/semanticTokens", &Server::onSemanticTokens);
-        addMethod("textDocument/inlayHint", &Server::onInlayHint);
-        addMethod("textDocument/completion", &Server::onCodeCompletion);
-        addMethod("textDocument/signatureHelp", &Server::onSignatureHelp);
-        addMethod("textDocument/codeAction", &Server::onCodeAction);
-        addMethod("textDocument/formatting", &Server::onFormatting);
-        addMethod("textDocument/rangeFormatting", &Server::onRangeFormatting);
-    }
-
-    promise<void> dispatch(json::Value value);
-
-    void run(int argc, const char** argv) {
-        auto loop = [this](json::Value value) -> promise<void> {
-            co_await dispatch(std::move(value));
-        };
-        async::start_server(loop, "127.0.0.1", 50051);
-    }
+    void run(int argc, const char** argv);
 
 private:
-    using onRequest = llvm::unique_function<promise<void>(json::Value, json::Value)>;
-    using onNotification = llvm::unique_function<promise<void>(json::Value)>;
+    using onRequest = llvm::unique_function<async::promise<void>(json::Value, json::Value)>;
+    using onNotification = llvm::unique_function<async::promise<void>(json::Value)>;
 
     template <typename Param>
     void addMethod(llvm::StringRef name,
-                   promise<void> (Server::*method)(json::Value, const Param&)) {
-        requests.try_emplace(name,
-                             [this, method](json::Value id, json::Value value) -> promise<void> {
-                                 co_await (this->*method)(std::move(id),
-                                                          json::deserialize<Param>(value));
-                             });
+                   async::promise<void> (Server::*method)(json::Value, const Param&)) {
+        requests.try_emplace(
+            name,
+            [this, method](json::Value id, json::Value value) -> async::promise<void> {
+                co_await (this->*method)(std::move(id), json::deserialize<Param>(value));
+            });
     }
 
     template <typename Param>
-    void addMethod(llvm::StringRef name, promise<void> (Server::*method)(const Param&)) {
-        notifications.try_emplace(name, [this, method](json::Value value) -> promise<void> {
+    void addMethod(llvm::StringRef name, async::promise<void> (Server::*method)(const Param&)) {
+        notifications.try_emplace(name, [this, method](json::Value value) -> async::promise<void> {
             co_await (this->*method)(json::deserialize<Param>(value));
         });
     }
+
+    llvm::StringMap<onRequest> requests;
+    llvm::StringMap<onNotification> notifications;
 
 private:
     /// ============================================================================
     ///                            Lifestyle Message
     /// ============================================================================
 
-    promise<void> onInitialize(json::Value id, const proto::InitializeParams& params);
+    async::promise<void> onInitialize(json::Value id, const proto::InitializeParams& params);
 
-    promise<void> onInitialized(const proto::InitializedParams& params);
+    async::promise<void> onInitialized(const proto::InitializedParams& params);
 
-    promise<void> onShutdown(json::Value id, const proto::None&);
+    async::promise<void> onShutdown(json::Value id, const proto::None&);
 
-    promise<void> onExit(const proto::None&);
+    async::promise<void> onExit(const proto::None&);
 
     /// ============================================================================
     ///                         Document Synchronization
     /// ============================================================================
 
-    promise<void> onDidOpen(const proto::DidOpenTextDocumentParams& document);
+    async::promise<void> onDidOpen(const proto::DidOpenTextDocumentParams& document);
 
-    promise<void> onDidChange(const proto::DidChangeTextDocumentParams& document);
+    async::promise<void> onDidChange(const proto::DidChangeTextDocumentParams& document);
 
-    promise<void> onDidSave(const proto::DidSaveTextDocumentParams& document);
+    async::promise<void> onDidSave(const proto::DidSaveTextDocumentParams& document);
 
-    promise<void> onDidClose(const proto::DidCloseTextDocumentParams& document);
+    async::promise<void> onDidClose(const proto::DidCloseTextDocumentParams& document);
 
     /// ============================================================================
     ///                             Language Features
     /// ============================================================================
 
-    promise<void> onGotoDeclaration(json::Value id, const proto::DeclarationParams& params);
+    async::promise<void> onGotoDeclaration(json::Value id, const proto::DeclarationParams& params);
 
-    promise<void> onGotoDefinition(json::Value id, const proto::DefinitionParams& params);
+    async::promise<void> onGotoDefinition(json::Value id, const proto::DefinitionParams& params);
 
-    promise<void> onGotoTypeDefinition(json::Value id, const proto::TypeDefinitionParams& params);
+    async::promise<void> onGotoTypeDefinition(json::Value id,
+                                              const proto::TypeDefinitionParams& params);
 
-    promise<void> onGotoImplementation(json::Value id, const proto::ImplementationParams& params);
+    async::promise<void> onGotoImplementation(json::Value id,
+                                              const proto::ImplementationParams& params);
 
-    promise<void> onFindReferences(json::Value id, const proto::ReferenceParams& params);
+    async::promise<void> onFindReferences(json::Value id, const proto::ReferenceParams& params);
 
-    promise<void> onPrepareCallHierarchy(json::Value id,
-                                         const proto::CallHierarchyPrepareParams& params);
+    async::promise<void> onPrepareCallHierarchy(json::Value id,
+                                                const proto::CallHierarchyPrepareParams& params);
 
-    promise<void> onIncomingCall(json::Value id,
-                                 const proto::CallHierarchyIncomingCallsParams& params);
+    async::promise<void> onIncomingCall(json::Value id,
+                                        const proto::CallHierarchyIncomingCallsParams& params);
 
-    promise<void> onOutgoingCall(json::Value id,
-                                 const proto::CallHierarchyOutgoingCallsParams& params);
+    async::promise<void> onOutgoingCall(json::Value id,
+                                        const proto::CallHierarchyOutgoingCallsParams& params);
 
-    promise<void> onPrepareTypeHierarchy(json::Value id,
-                                         const proto::TypeHierarchyPrepareParams& params);
+    async::promise<void> onPrepareTypeHierarchy(json::Value id,
+                                                const proto::TypeHierarchyPrepareParams& params);
 
-    promise<void> onSupertypes(json::Value id, const proto::TypeHierarchySupertypesParams& params);
+    async::promise<void> onSupertypes(json::Value id,
+                                      const proto::TypeHierarchySupertypesParams& params);
 
-    promise<void> onSubtypes(json::Value id, const proto::TypeHierarchySubtypesParams& params);
+    async::promise<void> onSubtypes(json::Value id,
+                                    const proto::TypeHierarchySubtypesParams& params);
 
-    promise<void> onDocumentHighlight(json::Value id, const proto::DocumentHighlightParams& params);
+    async::promise<void> onDocumentHighlight(json::Value id,
+                                             const proto::DocumentHighlightParams& params);
 
-    promise<void> onDocumentLink(json::Value id, const proto::DocumentLinkParams& params);
+    async::promise<void> onDocumentLink(json::Value id, const proto::DocumentLinkParams& params);
 
-    promise<void> onHover(json::Value id, const proto::HoverParams& params);
+    async::promise<void> onHover(json::Value id, const proto::HoverParams& params);
 
-    promise<void> onCodeLens(json::Value id, const proto::CodeLensParams& params);
+    async::promise<void> onCodeLens(json::Value id, const proto::CodeLensParams& params);
 
-    promise<void> onFoldingRange(json::Value id, const proto::FoldingRangeParams& params);
+    async::promise<void> onFoldingRange(json::Value id, const proto::FoldingRangeParams& params);
 
-    promise<void> onDocumentSymbol(json::Value id, const proto::DocumentSymbolParams& params);
+    async::promise<void> onDocumentSymbol(json::Value id,
+                                          const proto::DocumentSymbolParams& params);
 
-    promise<void> onSemanticTokens(json::Value id, const proto::SemanticTokensParams& params);
+    async::promise<void> onSemanticTokens(json::Value id,
+                                          const proto::SemanticTokensParams& params);
 
-    promise<void> onInlayHint(json::Value id, const proto::InlayHintParams& params);
+    async::promise<void> onInlayHint(json::Value id, const proto::InlayHintParams& params);
 
-    promise<void> onCodeCompletion(json::Value id, const proto::CompletionParams& params);
+    async::promise<void> onCodeCompletion(json::Value id, const proto::CompletionParams& params);
 
-    promise<void> onSignatureHelp(json::Value id, const proto::SignatureHelpParams& params);
+    async::promise<void> onSignatureHelp(json::Value id, const proto::SignatureHelpParams& params);
 
-    promise<void> onCodeAction(json::Value id, const proto::CodeActionParams& params);
+    async::promise<void> onCodeAction(json::Value id, const proto::CodeActionParams& params);
 
-    promise<void> onFormatting(json::Value id, const proto::DocumentFormattingParams& params);
+    async::promise<void> onFormatting(json::Value id,
+                                      const proto::DocumentFormattingParams& params);
 
-    promise<void> onRangeFormatting(json::Value id,
-                                    const proto::DocumentRangeFormattingParams& params);
+    async::promise<void> onRangeFormatting(json::Value id,
+                                           const proto::DocumentRangeFormattingParams& params);
 
 private:
     /// Information of building precompiled header.
@@ -310,40 +280,51 @@ private:
     /// Information of building precompiled module.
     struct PCM {};
 
-    promise<void> updatePCH() {
+    async::promise<void> updatePCH(llvm::StringRef filepath,
+                                   llvm::StringRef content,
+                                   llvm::ArrayRef<const char*> args);
+
+    async::promise<void> updatePCM() {
         co_return;
     }
 
-    promise<void> updatePCM() {
-        co_return;
-    }
+    async::promise<void> buildAST(llvm::StringRef filepath, llvm::StringRef content);
 
-    promise<void> buildAST(llvm::StringRef filepath, llvm::StringRef content) {
-        llvm::SmallString<128> path = filepath;
-
-        /// FIXME: lookup from CDB file and adjust and remove unnecessary arguments.
-        llvm::SmallVector<const char*> args = {
-            "clang++",
-            "-std=c++20",
-            path.c_str(),
-            "-resource-dir",
-            "/home/ykiko/C++/clice2/build/lib/clang/20",
+    struct TranslationUnit {
+        enum class State {
+            Building,
+            Ready,
         };
 
-        /// through arguments to judge is it a module.
-        bool isModule = false;
-        co_await (isModule ? updatePCM() : updatePCH());
+        enum class TaskKind {
+            Build,
+            Consume,
+        };
 
-        auto compiler = co_await async::schedule_task([=]() {
-            std::unique_ptr<Compiler> compiler = std::make_unique<Compiler>(path, content, args);
-            compiler->buildAST();
-            return compiler;
-        });
+        struct Task {
+            TaskKind kind;
+            async::promise<void> request;
+        };
+
+        State state;
+        std::unique_ptr<Compiler> compiler;
+        std::vector<Task> tasks;
+    };
+
+    async::promise<void> schedule(llvm::StringRef path, async::promise<void> request) {
+        auto& unit = units[path];
+        if(unit.state == TranslationUnit::State::Building) {
+            // unit.requests.push_back(std::move(request));
+        } else {
+            co_await request;
+        }
+
+        co_return;
     }
 
 private:
-    llvm::StringMap<onRequest> requests;
-    llvm::StringMap<onNotification> notifications;
+    llvm::StringMap<PCH> pchs;
+    llvm::StringMap<TranslationUnit> units;
 };
 
 }  // namespace clice

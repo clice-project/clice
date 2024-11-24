@@ -4,6 +4,7 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
+#include <Support/Format.h>
 #include <Support/FileSystem.h>
 #include <llvm/ADT/SmallString.h>
 

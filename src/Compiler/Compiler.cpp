@@ -46,7 +46,7 @@ bool Compiler::applyPCH(llvm::StringRef filepath, std::uint32_t bound, bool endA
     auto& preproc = instance->getPreprocessorOpts();
     preproc.UsePredefines = false;
     preproc.ImplicitPCHInclude = filepath;
-    preproc.PrecompiledPreambleBytes.first = bound;
+    preproc.PrecompiledPreambleBytes.first = {};
     preproc.PrecompiledPreambleBytes.second = endAtStart;
     preproc.DisablePCHOrModuleValidation = clang::DisableValidationForModuleKind::PCH;
     return true;
