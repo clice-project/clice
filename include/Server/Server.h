@@ -5,6 +5,7 @@
 #include "Basic/Document.h"
 #include "Compiler/Compiler.h"
 #include "Support/JSON.h"
+#include "Support/FileSystem.h"
 
 #include "Feature/Lookup.h"
 #include "Feature/DocumentHighlight.h"
@@ -122,54 +123,53 @@ struct DidCloseTextDocumentParams {
 
 namespace clice {
 
-class CacheManager {
+class Server {
 public:
-    promise<void> buildPCH(std::string file, std::string content);
+    Server() {
+        addMethod("initialize", &Server::onInitialize);
+        addMethod("initialized", &Server::onInitialized);
+        addMethod("shutdown", &Server::onShutdown);
+        addMethod("exit", &Server::onExit);
 
-private:
-    std::string outDir;
-};
+        addMethod("textDocument/didOpen", &Server::onDidOpen);
+        addMethod("textDocument/didChange", &Server::onDidChange);
+        addMethod("textDocument/didSave", &Server::onDidSave);
+        addMethod("textDocument/didClose", &Server::onDidClose);
 
-class LSPServer {
-public:
-    LSPServer() {
-        addMethod("initialize", &LSPServer::onInitialize);
-        addMethod("initialized", &LSPServer::onInitialized);
-        addMethod("shutdown", &LSPServer::onShutdown);
-        addMethod("exit", &LSPServer::onExit);
-
-        addMethod("textDocument/didOpen", &LSPServer::onDidOpen);
-        addMethod("textDocument/didChange", &LSPServer::onDidChange);
-        addMethod("textDocument/didSave", &LSPServer::onDidSave);
-        addMethod("textDocument/didClose", &LSPServer::onDidClose);
-
-        addMethod("textDocument/declaration", &LSPServer::onGotoDeclaration);
-        addMethod("textDocument/definition", &LSPServer::onGotoDefinition);
-        addMethod("textDocument/typeDefinition", &LSPServer::onGotoTypeDefinition);
-        addMethod("textDocument/implementation", &LSPServer::onGotoImplementation);
-        addMethod("textDocument/references", &LSPServer::onFindReferences);
-        addMethod("textDocument/callHierarchy/prepare", &LSPServer::onPrepareCallHierarchy);
-        addMethod("textDocument/callHierarchy/incomingCalls", &LSPServer::onIncomingCall);
-        addMethod("textDocument/callHierarchy/outgoingCalls", &LSPServer::onOutgoingCall);
-        addMethod("textDocument/typeHierarchy/prepare", &LSPServer::onPrepareTypeHierarchy);
-        addMethod("textDocument/typeHierarchy/supertypes", &LSPServer::onSupertypes);
-        addMethod("textDocument/typeHierarchy/subtypes", &LSPServer::onSubtypes);
-        addMethod("textDocument/documentHighlight", &LSPServer::onDocumentHighlight);
-        addMethod("textDocument/documentLink", &LSPServer::onDocumentLink);
-        addMethod("textDocument/hover", &LSPServer::onHover);
-        addMethod("textDocument/codeLens", &LSPServer::onCodeLens);
-        addMethod("textDocument/foldingRange", &LSPServer::onFoldingRange);
-        addMethod("textDocument/documentSymbol", &LSPServer::onDocumentSymbol);
-        addMethod("textDocument/semanticTokens", &LSPServer::onSemanticTokens);
-        addMethod("textDocument/inlayHint", &LSPServer::onInlayHint);
-        addMethod("textDocument/completion", &LSPServer::onCodeCompletion);
-        addMethod("textDocument/signatureHelp", &LSPServer::onSignatureHelp);
-        addMethod("textDocument/codeAction", &LSPServer::onCodeAction);
-        addMethod("textDocument/formatting", &LSPServer::onFormatting);
-        addMethod("textDocument/rangeFormatting", &LSPServer::onRangeFormatting);
+        addMethod("textDocument/declaration", &Server::onGotoDeclaration);
+        addMethod("textDocument/definition", &Server::onGotoDefinition);
+        addMethod("textDocument/typeDefinition", &Server::onGotoTypeDefinition);
+        addMethod("textDocument/implementation", &Server::onGotoImplementation);
+        addMethod("textDocument/references", &Server::onFindReferences);
+        addMethod("textDocument/callHierarchy/prepare", &Server::onPrepareCallHierarchy);
+        addMethod("textDocument/callHierarchy/incomingCalls", &Server::onIncomingCall);
+        addMethod("textDocument/callHierarchy/outgoingCalls", &Server::onOutgoingCall);
+        addMethod("textDocument/typeHierarchy/prepare", &Server::onPrepareTypeHierarchy);
+        addMethod("textDocument/typeHierarchy/supertypes", &Server::onSupertypes);
+        addMethod("textDocument/typeHierarchy/subtypes", &Server::onSubtypes);
+        addMethod("textDocument/documentHighlight", &Server::onDocumentHighlight);
+        addMethod("textDocument/documentLink", &Server::onDocumentLink);
+        addMethod("textDocument/hover", &Server::onHover);
+        addMethod("textDocument/codeLens", &Server::onCodeLens);
+        addMethod("textDocument/foldingRange", &Server::onFoldingRange);
+        addMethod("textDocument/documentSymbol", &Server::onDocumentSymbol);
+        addMethod("textDocument/semanticTokens", &Server::onSemanticTokens);
+        addMethod("textDocument/inlayHint", &Server::onInlayHint);
+        addMethod("textDocument/completion", &Server::onCodeCompletion);
+        addMethod("textDocument/signatureHelp", &Server::onSignatureHelp);
+        addMethod("textDocument/codeAction", &Server::onCodeAction);
+        addMethod("textDocument/formatting", &Server::onFormatting);
+        addMethod("textDocument/rangeFormatting", &Server::onRangeFormatting);
     }
 
-    promise<void> dispatch(json::Value value, Writer& writer);
+    promise<void> dispatch(json::Value value);
+
+    void run(int argc, const char** argv) {
+        auto loop = [this](json::Value value) -> promise<void> {
+            co_await dispatch(std::move(value));
+        };
+        async::start_server(loop, "127.0.0.1", 50051);
+    }
 
 private:
     using onRequest = llvm::unique_function<promise<void>(json::Value, json::Value)>;
@@ -177,7 +177,7 @@ private:
 
     template <typename Param>
     void addMethod(llvm::StringRef name,
-                   promise<void> (LSPServer::*method)(json::Value, const Param&)) {
+                   promise<void> (Server::*method)(json::Value, const Param&)) {
         requests.try_emplace(name,
                              [this, method](json::Value id, json::Value value) -> promise<void> {
                                  co_await (this->*method)(std::move(id),
@@ -186,7 +186,7 @@ private:
     }
 
     template <typename Param>
-    void addMethod(llvm::StringRef name, promise<void> (LSPServer::*method)(const Param&)) {
+    void addMethod(llvm::StringRef name, promise<void> (Server::*method)(const Param&)) {
         notifications.try_emplace(name, [this, method](json::Value value) -> promise<void> {
             co_await (this->*method)(json::deserialize<Param>(value));
         });
@@ -275,7 +275,73 @@ private:
                                     const proto::DocumentRangeFormattingParams& params);
 
 private:
-    Writer* writer;
+    /// Information of building precompiled header.
+    struct PCH {
+        /// The path of this PCH.
+        std::string path;
+        /// The source file path.
+        std::string sourcePath;
+        /// The header part of source file used to build this PCH.
+        std::string preamble;
+        /// The arguments used to build this PCH.
+        std::string arguments;
+        /// All files involved in building this PCH(excluding the source file).
+        std::vector<std::string> deps;
+
+        /// FIXME: use asyncronous file system API.
+        bool needUpdate(llvm::StringRef sourceContent) {
+            /// Check whether the header part changed.
+            if(sourceContent.substr(0, preamble.size()) != preamble) {
+                return true;
+            }
+
+            /// Check timestamp of all files involved in building this PCH.
+            fs::file_status build;
+            if(auto error = fs::status(path, build)) {
+                llvm::errs() << "Error: " << error.message() << "\n";
+                std::terminate();
+            }
+
+            /// TODO: check whether deps changed through comparing timestamps.
+            return false;
+        }
+    };
+
+    /// Information of building precompiled module.
+    struct PCM {};
+
+    promise<void> updatePCH() {
+        co_return;
+    }
+
+    promise<void> updatePCM() {
+        co_return;
+    }
+
+    promise<void> buildAST(llvm::StringRef filepath, llvm::StringRef content) {
+        llvm::SmallString<128> path = filepath;
+
+        /// FIXME: lookup from CDB file and adjust and remove unnecessary arguments.
+        llvm::SmallVector<const char*> args = {
+            "clang++",
+            "-std=c++20",
+            path.c_str(),
+            "-resource-dir",
+            "/home/ykiko/C++/clice2/build/lib/clang/20",
+        };
+
+        /// through arguments to judge is it a module.
+        bool isModule = false;
+        co_await (isModule ? updatePCM() : updatePCH());
+
+        auto compiler = co_await async::schedule_task([=]() {
+            std::unique_ptr<Compiler> compiler = std::make_unique<Compiler>(path, content, args);
+            compiler->buildAST();
+            return compiler;
+        });
+    }
+
+private:
     llvm::StringMap<onRequest> requests;
     llvm::StringMap<onNotification> notifications;
 };

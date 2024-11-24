@@ -27,22 +27,38 @@ struct promise;
 
 namespace clice::async {
 
+extern uv_loop_t* loop;
+
+template <typename T, typename U>
+T& uv_cast(U* u) {
+    assert(u->data && "uv_cast: invalid uv handle");
+    return *static_cast<T*>(u->data);
+}
+
+using Callback = llvm::unique_function<promise<void>(json::Value)>;
+
+void start_server(Callback callback);
+
+void start_server(Callback callback, const char* ip, unsigned int port);
+
+void write(json::Value id, json::Value result);
+
 template <typename Value>
-struct Result {
+struct result {
     union {
         Value value;
     };
 
-    Result() {}
+    result() {}
 
-    ~Result() {}
+    ~result() {}
 
     bool await_ready() noexcept {
         return false;
     }
 
     decltype(auto) await_resume() noexcept {
-        return value;
+        return std::move(value);
     }
 
     template <typename T>
@@ -52,7 +68,7 @@ struct Result {
 };
 
 template <>
-struct Result<void> {
+struct result<void> {
     bool await_ready() noexcept {
         return false;
     }
@@ -61,14 +77,6 @@ struct Result<void> {
 
     void return_void() noexcept {}
 };
-
-template <typename T, typename U>
-T& uv_cast(U* u) {
-    assert(u->data && "uv_cast: invalid uv handle");
-    return *static_cast<T*>(u->data);
-}
-
-inline uv_loop_t* loop = uv_default_loop();
 
 /// Schedule a coroutine to run in the event loop.
 inline void schedule(std::coroutine_handle<> handle) {
@@ -96,7 +104,7 @@ auto schedule_task(Task&& task) {
 
     static_assert(!std::is_reference_v<Ret>, "return type must not be a reference");
 
-    struct Awaiter : Result<Ret> {
+    struct Awaiter : result<Ret> {
         Func func;
         std::coroutine_handle<> caller;
 
@@ -115,7 +123,7 @@ auto schedule_task(Task&& task) {
                     }
                 },
                 [](uv_work_t* work, int status) {
-                    auto awaiter = uv_cast<Awaiter>(work);
+                    auto& awaiter = uv_cast<Awaiter>(work);
                     awaiter.caller.resume();
                     delete work;
                 });
@@ -155,26 +163,11 @@ inline auto sleep(std::chrono::milliseconds ms) {
     return Awaiter{ms};
 }
 
-struct FinalAwaiter {
-    std::coroutine_handle<> caller;
-
-    bool await_ready() noexcept {
-        return false;
-    }
-
-    void await_suspend(std::coroutine_handle<> self) noexcept {
-        self.destroy();
-        /// If this coroutine is a top-level coroutine, its caller is empty.
-        if(!caller) {
-            return;
-        }
-
-        /// Schedule the caller to run in the event loop.
-        schedule(caller);
-    }
-
-    void await_resume() noexcept {}
-};
+template <typename... Ps>
+int run(Ps&&... ps) {
+    (schedule(std::forward<Ps>(ps)), ...);
+    return uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+}
 
 }  // namespace clice::async
 
@@ -183,7 +176,7 @@ namespace clice {
 template <typename T>
 class promise {
 public:
-    struct promise_type : async::Result<T> {
+    struct promise_type : async::result<T> {
         std::coroutine_handle<> caller;
 
         auto get_return_object() {
@@ -199,7 +192,28 @@ public:
         }
 
         auto final_suspend() noexcept {
-            return async::FinalAwaiter{.caller = caller};
+            struct FinalAwaiter {
+                std::coroutine_handle<> caller;
+
+                bool await_ready() noexcept {
+                    return false;
+                }
+
+                void await_suspend(std::coroutine_handle<> self) noexcept {
+                    self.destroy();
+                    /// If this coroutine is a top-level coroutine, its caller is empty.
+                    if(!caller) {
+                        return;
+                    }
+
+                    /// Schedule the caller to run in the event loop.
+                    async::schedule(caller);
+                }
+
+                void await_resume() noexcept {}
+            };
+
+            return FinalAwaiter{.caller = caller};
         }
     };
 
@@ -234,68 +248,5 @@ private:
     coroutine_handle h;
 };
 
-template <typename T = bool>
-class Future {
-public:
-    bool await_ready() {
-        return false;
-    }
-
-    void setReady() {
-        isReady = true;
-        if(isReady) {
-            for(auto handle: handles) {
-                handle.resume();
-            }
-            handles.clear();
-        }
-    }
-
-    void await_suspend(std::coroutine_handle<> handle) {
-        handles.emplace_back(handle);
-        if(isReady) {
-            for(auto handle: handles) {
-                handle.resume();
-            }
-            handles.clear();
-        }
-    }
-
-    void await_resume() {}
-
-private:
-    bool isReady = false;
-    llvm::SmallVector<std::coroutine_handle<>, 6> handles;
-};
-
-template <typename... Ps>
-int run(Ps&&... ps) {
-    (schedule(std::forward<Ps>(ps)), ...);
-    return uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-}
-
-struct Writer {
-    void write(json::Value id, json::Value result);
-
-public:
-    void* handle;
-};
-
-struct Server {
-public:
-    using Callback = llvm::unique_function<promise<void>(json::Value, Writer&)>;
-
-    Server(Callback callback);
-
-    Server(Callback callback, const char* ip, unsigned int port);
-
-    void run() {
-        uv_run(async::loop, UV_RUN_DEFAULT);
-    }
-
-public:
-    Writer writer;
-    Callback callback;
-};
-
 }  // namespace clice
+

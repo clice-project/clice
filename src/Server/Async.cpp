@@ -2,11 +2,17 @@
 
 #include "llvm/ADT/SmallString.h"
 
-namespace clice {
+namespace clice::async {
+
+using Callback = llvm::unique_function<promise<void>(json::Value)>;
+uv_loop_t* loop = uv_default_loop();
 
 namespace {
 
-static void onAlloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
+Callback callback = {};
+uv_stream_t* writer = {};
+
+void on_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
     /// This function is called synchronously before `on_read`. See the implementation of
     /// `uv__read` in libuv/src/unix/stream.c. So it is safe to use a static buffer here.
     static llvm::SmallString<65536> buffer;
@@ -45,7 +51,7 @@ private:
     llvm::SmallString<4096> buffer;
 };
 
-void onRead(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     /// We have at most one connection and use default event loop. So there is no data race
     /// risk. It is safe to use a static buffer here.
 
@@ -54,9 +60,8 @@ void onRead(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     if(nread > 0) {
         buffer.append({buf->base, static_cast<std::size_t>(nread)});
         if(auto message = buffer.peek(); !message.empty()) {
-            auto& server = *static_cast<Server*>(stream->data);
             if(auto json = json::parse(message)) {
-                async::schedule(server.callback(std::move(*json), server.writer));
+                async::schedule(callback(std::move(*json)));
                 buffer.consume();
             } else {
                 llvm::errs() << "JSON PARSE ERROR " << json.takeError() << "\n";
@@ -72,33 +77,27 @@ void onRead(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 
 }  // namespace
 
-Server::Server(Callback callback) : callback(std::move(callback)) {
+void start_server(Callback callback) {
     static uv_pipe_t in;
     static uv_pipe_t out;
 
-    writer.handle = &out;
+    async::callback = std::move(callback);
+    writer = reinterpret_cast<uv_stream_t*>(&out);
 
-    uv_pipe_init(async::loop, &in, 0);
-    uv_pipe_init(async::loop, &out, 0);
+    int r = uv_read_start((uv_stream_t*)&in, async::on_alloc, async::on_read);
 
-    in.data = this;
-    out.data = this;
-
-    int r = uv_read_start((uv_stream_t*)&in, onAlloc, onRead);
+    uv_run(async::loop, UV_RUN_DEFAULT);
 }
 
-Server::Server(Callback callback, const char* ip, unsigned int port) :
-    callback(std::move(callback)) {
+void start_server(Callback callback, const char* ip, unsigned int port) {
     static uv_tcp_t server;
     static uv_tcp_t client;
 
-    writer.handle = &client;
+    async::callback = std::move(callback);
+    writer = reinterpret_cast<uv_stream_t*>(&client);
 
     uv_tcp_init(async::loop, &server);
     uv_tcp_init(async::loop, &client);
-
-    server.data = this;
-    client.data = this;
 
     struct sockaddr_in addr;
     uv_ip4_addr(ip, port, &addr);
@@ -112,14 +111,16 @@ Server::Server(Callback callback, const char* ip, unsigned int port) :
 
         if(uv_accept(server, (uv_stream_t*)&client) == 0) {
             llvm::errs() << "Client connected.\n";
-            uv_read_start((uv_stream_t*)&client, onAlloc, onRead);
+            uv_read_start((uv_stream_t*)&client, async::on_alloc, async::on_read);
         } else {
             uv_close((uv_handle_t*)&client, NULL);
         }
     });
+
+    uv_run(async::loop, UV_RUN_DEFAULT);
 }
 
-void Writer::write(json::Value id, json::Value result) {
+void write(json::Value id, json::Value result) {
     json::Value response = json::Object{
         {"jsonrpc", "2.0" },
         {"id",      id    },
@@ -156,11 +157,11 @@ void Writer::write(json::Value id, json::Value result) {
         delete req;
     };
 
-    int r = uv_write(req, static_cast<uv_stream_t*>(handle), bufs, 2, on_write);
+    int r = uv_write(req, writer, bufs, 2, on_write);
 
     if(r) {
         llvm::errs() << "Write error: " << uv_strerror(r) << "\n";
     }
 }
 
-}  // namespace clice
+}  // namespace clice::async
