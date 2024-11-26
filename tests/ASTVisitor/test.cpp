@@ -1,16 +1,7 @@
-#include <type_traits>
+void foo [[gnu::format(printf, 1, 3)]] (const char* s, char* buf, ...);
 
-template <typename T>
-std::enable_if_t<!std::is_same_v<T, int>, int> foo() {}
+void __attribute__((__format__(printf, 1, 3))) bar(const char* s, char* buf, ...);
 
-template <typename T>
-std::enable_if_t<!std::is_same_v<T, double>, int> foo() {}
-
-int foo();
-
-int main() {
-    foo();
-    foo<int>();
-    foo<double>();
-    return 0;
+void foo2(int x) {
+    if(x < 3) [[unlikely]] {}
 }

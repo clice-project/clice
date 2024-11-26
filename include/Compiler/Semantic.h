@@ -53,12 +53,61 @@ enum class OccurrenceKind {
     Instantiation,
 };
 
-class SemanticVisitor : public clang::RecursiveASTVisitor<SemanticVisitor> {
+template <typename Derived>
+class SemanticVisitor : public clang::RecursiveASTVisitor<SemanticVisitor<Derived>> {
 public:
     using Base = clang::RecursiveASTVisitor<SemanticVisitor>;
 
-    SemanticVisitor(Compiler& compiler) :
-        sema(compiler.sema()), resolver(compiler.resolver()), srcMgr(compiler.srcMgr()) {}
+    SemanticVisitor(Compiler& compiler, bool mainFileOnly = false) :
+        sema(compiler.sema()), resolver(compiler.resolver()), srcMgr(compiler.srcMgr()),
+        tokBuf(compiler.tokBuf()), mainFileOnly(mainFileOnly) {}
+
+public:
+
+public:
+    consteval bool VisitImplicitInstantiation() {
+        return true;
+    }
+
+    Derived& getDerived() {
+        return static_cast<Derived&>(*this);
+    }
+
+    bool needFilter(clang::SourceLocation location) {
+        return location.isInvalid() || (mainFileOnly && !srcMgr.isInMainFile(location));
+    }
+
+    void dump(clang::SourceLocation loc) {
+        auto location = srcMgr.getPresumedLoc(loc);
+        llvm::SmallString<128> path;
+        auto err = fs::real_path(location.getFilename(), path);
+        llvm::outs() << path << ":" << location.getLine() << ":" << location.getColumn() << "\n";
+    }
+
+    /// An occurrence directly corresponding to a symbol in source code.
+    /// In most cases, a location just correspondings to unique decl.
+    /// So a location will be just visited once. But in some other cases,
+    /// a location may correspond to multiple decls. Note that we already
+    /// filter some nodes with invalid location.
+    ///
+    /// Always uses spelling location if the original location is a macro location.
+    void handleOccurrence(const clang::Decl* decl,
+                          clang::SourceLocation location,
+                          OccurrenceKind kind = OccurrenceKind::Source) {}
+
+    /// Builtin type doesn't have corresponding decl. So we handle it separately.
+    /// And it is possible that a builtin type is composed of multiple tokens.
+    /// e.g. `unsigned long long`.
+    void handleOccurrence(const clang::BuiltinType* type,
+                          clang::SourceRange range,
+                          OccurrenceKind kind = OccurrenceKind::Source) {}
+
+    void handleOccurrence(clang::Attr* attr, clang::SourceRange range) {}
+
+    /// Always uses expansion location if the original location is a macro location.
+    void handleRelation(const clang::Decl* decl, RelationKind kind, clang::SourceRange range) {
+        ///
+    }
 
 public:
     /// ============================================================================
@@ -66,6 +115,10 @@ public:
     /// ============================================================================
 
     TRAVERSE_DECL(Decl) {
+        if(!llvm::isa<clang::TranslationUnitDecl>(decl) && needFilter(decl->getLocation())) {
+            return true;
+        }
+
         decls.push_back(decl);
         auto result = Base::TraverseDecl(decl);
         decls.pop_back();
@@ -75,7 +128,7 @@ public:
     VISIT_DECL(NamespaceDecl) {
         /// `namespace Foo { }`
         ///             ^~~~ definition
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
@@ -83,43 +136,43 @@ public:
         /// `namespace Foo = Bar`
         ///             ^     ^~~~ reference
         ///             ^~~~ definition
-        handleOccurrence(decl, decl->getLocation());
-        handleOccurrence(decl->getNamespace(), decl->getTargetNameLoc());
+        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl->getNamespace(), decl->getTargetNameLoc());
         return true;
     }
 
     VISIT_DECL(UsingDirectiveDecl) {
         /// `using namespace Foo`
         ///                   ^~~~~~~ reference
-        handleOccurrence(decl->getNominatedNamespace(), decl->getLocation());
+        getDerived().handleOccurrence(decl->getNominatedNamespace(), decl->getLocation());
         return true;
     }
 
     VISIT_DECL(LabelDecl) {
         /// `label:`
         ///    ^~~~ definition
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     VISIT_DECL(FieldDecl) {
         /// `int foo;`
         ///       ^~~~ definition
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     VISIT_DECL(EnumConstantDecl) {
         /// `enum Foo { bar };`
         ///              ^~~~ definition
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     VISIT_DECL(UsingDecl) {
         /// `using Foo::bar;`
         ///              ^~~~ reference
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         /// FIXME:
         return true;
     }
@@ -127,55 +180,33 @@ public:
     VISIT_DECL(BindingDecl) {
         /// `auto [a, b] = std::make_tuple(1, 2);`
         ///        ^~~~ definition
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     VISIT_DECL(TemplateTypeParmDecl) {
         /// `template <typename T>`
         ///                     ^~~~ definition
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     VISIT_DECL(TemplateTemplateParmDecl) {
         /// `template <template <typename> class T>`
         ///                                      ^~~~ definition
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     VISIT_DECL(NonTypeTemplateParmDecl) {
         /// `template <int N>`
         ///                ^~~~ definition
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     VISIT_DECL(TagDecl) {
-        /// `Base::TraverseClassTemplate...Decl` will also traverse it's templated class.
-        /// We already handled the template class in `VisitClassTemplate...Decl`. So we skip
-        /// them here.
-        if(decl->getDescribedTemplate() ||
-           llvm::isa<clang::ClassTemplateSpecializationDecl,
-                     clang::ClassTemplatePartialSpecializationDecl>(decl)) {
-            return true;
-        }
-
-        /// `struct/class/union/enum Foo { };`
-        ///                           ^~~~ declaration/definition
-        handleOccurrence(decl, decl->getLocation());
-        return true;
-    }
-
-    VISIT_DECL(ClassTemplateDecl) {
-        /// `template <typename T> class Foo { };`
-        ///                               ^~~~ declaration/definition
-        handleOccurrence(decl, decl->getLocation());
-        return true;
-    }
-
-    VISIT_DECL(ClassTemplatePartialSpecializationDecl) {
+        /// FIXME:
         /// It's possible that a class template specialization is a full specialization or a
         /// explicit instantiation. And `ClassTemplatePartialSpecializationDecl` is the subclass of
         /// `ClassTemplateSpecializationDecl`, it is also handled here.
@@ -187,29 +218,34 @@ public:
         /// For explicit instantiation:
         /// `template class Foo<int>;`
         ///                  ^~~~ reference
-        handleOccurrence(decl, decl->getLocation());
+        // if(decl->getDescribedTemplate() ||
+        //    llvm::isa<clang::ClassTemplateSpecializationDecl,
+        //              clang::ClassTemplatePartialSpecializationDecl>(decl)) {
+        //     return true;
+        // }
+
+        /// `struct/class/union/enum Foo { };`
+        ///                           ^~~~ declaration/definition
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     VISIT_DECL(FunctionDecl) {
+        /// FIXME:
         /// Because `TraverseFunctionTemplateDecl` will also traverse it's templated function. We
         /// already handled the template function in `VisitFunctionTemplateDecl`. So we skip them
         /// here.
-        if(decl->getDescribedFunctionTemplate()) {
-            return true;
-        }
+        // if(decl->getDescribedFunctionTemplate()) {
+        //     return true;
+        // }
 
         /// `void foo();`
         ///         ^~~~ declaration/definition
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     VISIT_DECL(FunctionTemplateDecl) {
-        /// `template <typename T> void foo();`
-        ///                               ^~~~ declaration/definition
-        handleOccurrence(decl, decl->getLocation());
-
         /// `template void foo<int>();`
         ///                  ^~~~ reference
 
@@ -236,48 +272,30 @@ public:
     }
 
     VISIT_DECL(TypedefNameDecl) {
-        /// Skip the typedef name declaration that is a type alias template.
-        if(decl->getDescribedTemplate()) {
-            return true;
-        }
-
-        /// `using Foo = int;`
-        ///             ^~~~ declaration/definition
-        handleOccurrence(decl, decl->getLocation());
-        return true;
-    }
-
-    VISIT_DECL(TypeAliasTemplateDecl) {
         /// FIXME: the location of type alias template is not recorded correctly, actually
         /// it is the location of using keyword. But location its templated type is correct.
         /// Temporarily use the location of the templated type.
 
-        /// `template <typename T> using Foo = T;`
-        ///                               ^~~~ definition
-        handleOccurrence(decl, decl->getLocation());
+        /// `using Foo = int;`
+        ///             ^~~~ declaration/definition
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     VISIT_DECL(VarDecl) {
+        /// FIXME:
         /// Because `TraverseVarTemplateSpecializationDecl` will also traverse it's templated
         /// variable. We already handled the template variable in `VisitVar...`.
         /// So we skip them here.
-        if(decl->getDescribedVarTemplate() ||
-           llvm::isa<clang::VarTemplateSpecializationDecl,
-                     clang::VarTemplatePartialSpecializationDecl>(decl)) {
-            return true;
-        }
+        // if(decl->getDescribedVarTemplate() ||
+        //    llvm::isa<clang::VarTemplateSpecializationDecl,
+        //              clang::VarTemplatePartialSpecializationDecl>(decl)) {
+        //     return true;
+        // }
 
         /// `int foo;`
         ///       ^~~~ declaration/definition
-        handleOccurrence(decl, decl->getLocation());
-        return true;
-    }
-
-    VISIT_DECL(VarTemplateDecl) {
-        /// `template <typename T> int foo;`
-        ///                             ^~~~ declaration/definition
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
@@ -293,6 +311,7 @@ public:
             return true;
         }
 
+        /// FIXME:
         /// It's possible that a var template specialization is a full specialization or a explicit
         /// instantiation. And `VarTemplatePartialSpecializationDecl` is the subclass of
         /// `VarTemplateSpecializationDecl`, it is also handled here.
@@ -304,21 +323,21 @@ public:
         /// For explicit instantiation:
         /// `template int foo<int>;`
         ///                ^~~~ reference
-        handleOccurrence(decl, decl->getLocation());
+        /// getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     VISIT_DECL(ConceptDecl) {
         /// `template <typename T> concept Foo = ...;`
         ///                                 ^~~~ definition
-        handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation());
         return true;
     }
 
     bool TraverseConceptReference(clang::ConceptReference* reference) {
         /// `requires Foo<T>;`
         ///            ^~~~ reference
-        handleOccurrence(reference->getNamedConcept(), reference->getConceptNameLoc());
+        getDerived().handleOccurrence(reference->getNamedConcept(), reference->getConceptNameLoc());
 
         return Base::TraverseConceptReference(reference);
     }
@@ -332,31 +351,51 @@ public:
         return true;
     }
 
+    bool TraverseTypeLoc(clang::TypeLoc loc) {
+        /// FIXME: Workaround for `QualifiedTypeLoc`.
+        if(auto QL = loc.getAs<clang::QualifiedTypeLoc>()) {
+            return Base::TraverseTypeLoc(QL.getUnqualifiedLoc());
+        }
+
+        if(needFilter(loc.getLocalSourceRange().getBegin())) {
+            return true;
+        }
+
+        return Base::TraverseTypeLoc(loc);
+    }
+
+    VISIT_TYPELOC(BuiltinTypeLoc) {
+        /// `int foo`
+        ///    ^~~~ reference
+        getDerived().handleOccurrence(loc.getTypePtr(), loc.getLocalSourceRange());
+        return true;
+    }
+
     VISIT_TYPELOC(TagTypeLoc) {
         /// `struct Foo { }; Foo foo`
         ///                   ^~~~ reference
-        handleOccurrence(loc.getDecl(), loc.getNameLoc());
+        getDerived().handleOccurrence(loc.getDecl(), loc.getNameLoc());
         return true;
     }
 
     VISIT_TYPELOC(TypedefTypeLoc) {
         /// `using Foo = int; Foo foo`
         ///                    ^~~~ reference
-        handleOccurrence(loc.getTypedefNameDecl(), loc.getNameLoc());
+        getDerived().handleOccurrence(loc.getTypedefNameDecl(), loc.getNameLoc());
         return true;
     }
 
     VISIT_TYPELOC(TemplateTypeParmTypeLoc) {
         /// `template <typename T> void foo(T t)`
         ///                                 ^~~~ reference
-        handleOccurrence(loc.getDecl(), loc.getNameLoc());
+        getDerived().handleOccurrence(loc.getDecl(), loc.getNameLoc());
         return true;
     }
 
     VISIT_TYPELOC(TemplateSpecializationTypeLoc) {
         /// `std::vector<int>`
         ///        ^~~~ reference
-        handleOccurrence(declForType(loc.getType()), loc.getTemplateNameLoc());
+        getDerived().handleOccurrence(declForType(loc.getType()), loc.getTemplateNameLoc());
         return true;
     }
 
@@ -364,7 +403,7 @@ public:
         /// `std::vector<T>::value_type`
         ///                      ^~~~ reference
         for(auto decl: resolver.lookup(loc.getTypePtr())) {
-            handleOccurrence(decl, loc.getNameLoc());
+            getDerived().handleOccurrence(decl, loc.getNameLoc());
         }
         return true;
     }
@@ -373,7 +412,7 @@ public:
         /// `std::allocator<T>::rebind<U>`
         ///                       ^~~~ reference
         for(auto decl: resolver.lookup(loc.getTypePtr())) {
-            handleOccurrence(decl, loc.getTemplateNameLoc());
+            getDerived().handleOccurrence(decl, loc.getTemplateNameLoc());
         }
         return true;
     }
@@ -381,6 +420,30 @@ public:
     /// ============================================================================
     ///                                Specifier
     /// ============================================================================
+
+    bool TraverseAttr(clang::Attr* attr) {
+        if(needFilter(attr->getLocation())) {
+            return true;
+        }
+
+        getDerived().handleOccurrence(attr, attr->getLocation());
+
+        return Base::TraverseAttr(attr);
+    }
+
+    /// FIXME: clang currently doesn't traverse attributes in `AttrbutedStmt` correctly.
+    /// See https://github.com/llvm/llvm-project/issues/117687.
+    bool TraverseAttributedStmt(clang::AttributedStmt* stmt) {
+        if(needFilter(stmt->getBeginLoc())) {
+            return true;
+        }
+
+        for(auto attr: stmt->getAttrs()) {
+            getDerived().handleOccurrence(attr, attr->getRange());
+        }
+
+        return Base::TraverseAttributedStmt(stmt);
+    }
 
     bool TraverseCXXBaseSpecifier(const clang::CXXBaseSpecifier& base) {
         return Base::TraverseCXXBaseSpecifier(base);
@@ -392,18 +455,18 @@ public:
     }
 
     bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc loc) {
-        if(!loc) {
+        if(!loc || needFilter(loc.getLocalBeginLoc())) {
             return true;
         }
 
         auto NNS = loc.getNestedNameSpecifier();
         switch(NNS->getKind()) {
             case clang::NestedNameSpecifier::Namespace: {
-                handleOccurrence(NNS->getAsNamespace(), loc.getLocalBeginLoc());
+                getDerived().handleOccurrence(NNS->getAsNamespace(), loc.getLocalBeginLoc());
                 break;
             }
             case clang::NestedNameSpecifier::NamespaceAlias: {
-                handleOccurrence(NNS->getAsNamespaceAlias(), loc.getLocalBeginLoc());
+                getDerived().handleOccurrence(NNS->getAsNamespaceAlias(), loc.getLocalBeginLoc());
                 break;
             }
             case clang::NestedNameSpecifier::Identifier: {
@@ -430,17 +493,41 @@ public:
     ///                                 Statement
     /// ============================================================================
 
+    bool TraverseStmt(clang::Stmt* stmt) {
+        if(stmt && needFilter(stmt->getBeginLoc())) {
+            return true;
+        }
+
+        return Base::TraverseStmt(stmt);
+    }
+
+    VISIT_EXPR(CallExpr) {
+        // TODO: consider lambda expression.
+        return true;
+    }
+
     VISIT_EXPR(DeclRefExpr) {
         /// `foo = 1`
         ///   ^~~~ reference
-        handleOccurrence(expr->getDecl(), expr->getLocation());
+        getDerived().handleOccurrence(expr->getDecl(), expr->getLocation());
         return true;
     }
 
     VISIT_EXPR(MemberExpr) {
         /// `foo.bar`
         ///       ^~~~ reference
-        handleOccurrence(expr->getMemberDecl(), expr->getMemberLoc());
+        getDerived().handleOccurrence(expr->getMemberDecl(), expr->getMemberLoc());
+        return true;
+    }
+
+    VISIT_EXPR(UnresolvedLookupExpr) {
+        /// `std::is_same<T, U>::value`
+        ///           ^~~~ reference
+        for(auto decl: resolver.lookup(expr)) {
+            getDerived().handleOccurrence(decl,
+                                          expr->getNameLoc(),
+                                          OccurrenceKind::PseudoInstantiation);
+        }
         return true;
     }
 
@@ -448,7 +535,7 @@ public:
         /// `std::is_same<T, U>::value`
         ///                        ^~~~ reference
         for(auto decl: resolver.lookup(expr)) {
-            handleOccurrence(decl, expr->getNameInfo().getLoc());
+            getDerived().handleOccurrence(decl, expr->getNameInfo().getLoc());
         }
         return true;
     }
@@ -460,53 +547,12 @@ public:
         return true;
     }
 
-    VISIT_EXPR(CallExpr) {
-        // TODO: consider lambda expression.
-        return true;
-    }
-
-public:
-    consteval bool VisitImplicitInstantiation() {
-        return true;
-    }
-
-    /// An occurrence directly corresponding to a symbol in source code.
-    /// In most cases, a location just correspondings to unique decl.
-    /// So a location will be just visited once. But in some other cases,
-    /// a location may correspond to multiple decls. Note that we already
-    /// filter some nodes with invalid location.
-    ///
-    /// Always uses spelling location if the original location is a macro location.
-    void handleOccurrence(const clang::Decl* decl,
-                          clang::SourceLocation location,
-                          OccurrenceKind kind = OccurrenceKind::Source) {
-        if(location.isMacroID()) {
-            if(srcMgr.isMacroArgExpansion(location)) {
-                auto spelling = srcMgr.getSpellingLoc(location);
-                dump(spelling);
-                auto expansion = srcMgr.getExpansionLoc(location);
-                dump(expansion);
-                llvm::outs() << "-----------------------------------------------------\n";
-            }
-        }
-    }
-
-    void dump(clang::SourceLocation loc) {
-        auto location = srcMgr.getPresumedLoc(loc);
-        llvm::SmallString<128> path;
-        auto err = fs::real_path(location.getFilename(), path);
-        llvm::outs() << path << ":" << location.getLine() << ":" << location.getColumn() << "\n";
-    }
-
-    /// Always uses expansion location if the original location is a macro location.
-    void handleRelation(const clang::Decl* decl, RelationKind kind, clang::SourceRange range) {
-        ///
-    }
-
-private:
+protected:
     clang::Sema& sema;
     TemplateResolver& resolver;
     clang::SourceManager& srcMgr;
+    clang::syntax::TokenBuffer& tokBuf;
+    bool mainFileOnly;
     llvm::SmallVector<clang::Decl*> decls;
 };
 

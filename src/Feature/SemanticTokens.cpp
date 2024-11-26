@@ -1,23 +1,14 @@
 // #include "Compiler/ParsedAST.h"
 #include "Feature/SemanticTokens.h"
+#include "Compiler/Semantic.h"
 
 namespace clice::feature {
 
 namespace {
 
-struct SemanticToken {
-    clang::SourceLocation begin;
-    std::size_t length;
-    proto::SemanticTokenType type;
-    std::uint32_t modifiers = 0;
-
-    SemanticToken& addModifier(proto::SemanticTokenModifier modifier) {
-        modifiers |= 1 << static_cast<std::uint32_t>(modifier);
-        return *this;
-    }
-};
-
-static bool isKeyword(clang::tok::TokenKind kind, llvm::StringRef text, const clang::LangOptions& option) {
+static bool isKeyword(clang::tok::TokenKind kind,
+                      llvm::StringRef text,
+                      const clang::LangOptions& option) {
     switch(kind) {
         case clang::tok::kw_void:
         case clang::tok::kw_int:
@@ -168,9 +159,11 @@ static bool isKeyword(clang::tok::TokenKind kind, llvm::StringRef text, const cl
 
 // class HighlightBuilder {//
 // public://
-//     HighlightBuilder(con//st ParsedAST& parsedAST, llvm::StringRef filename) : AST(parsedAST), filename(filename) {}
+//     HighlightBuilder(con//st ParsedAST& parsedAST, llvm::StringRef filename) : AST(parsedAST),
+//     filename(filename) {}
 //
-//     SemanticToken& addToken(proto::SemanticTokenType type, clang::SourceLocation begin, std::size_t length) {
+//     SemanticToken& addToken(proto::SemanticTokenType type, clang::SourceLocation begin,
+//     std::size_t length) {
 //         result.emplace_back(begin, length, type, 0);
 //         return result.back();
 //     }
@@ -187,7 +180,8 @@ static bool isKeyword(clang::tok::TokenKind kind, llvm::StringRef text, const cl
 //     //    SemanticToken token;
 //     //    token.begin = range.getBegin();
 //     //    token.length =
-//     //        AST.sourceManager.getFileOffset(range.getEnd()) - AST.sourceManager.getFileOffset(range.getBegin());
+//     //        AST.sourceManager.getFileOffset(range.getEnd()) -
+//     AST.sourceManager.getFileOffset(range.getBegin());
 //     //    token.type = type;
 //     //    result.emplace_back(std::move(token));
 //     //    return result.back();
@@ -212,10 +206,12 @@ static bool isKeyword(clang::tok::TokenKind kind, llvm::StringRef text, const cl
 //         auto loc = AST.sourceManager.getFileLoc(right);
 //         if(auto token = AST.tokenBuffer.spelledTokenContaining(loc)) {
 //             if(token->kind() == clang::tok::greater) {
-//                 addToken(proto::SemanticTokenType::Angle, loc, 1).addModifier(proto::SemanticTokenModifier::Right);
+//                 addToken(proto::SemanticTokenType::Angle, loc,
+//                 1).addModifier(proto::SemanticTokenModifier::Right);
 //             } else if(token->kind() == clang::tok::greatergreater) {
 //                 // TODO: split `>>` into two tokens
-//                 addToken(proto::SemanticTokenType::Angle, loc, 2).addModifier(proto::SemanticTokenModifier::Right);
+//                 addToken(proto::SemanticTokenType::Angle, loc,
+//                 2).addModifier(proto::SemanticTokenModifier::Right);
 //             }
 //         }
 //     }
@@ -231,7 +227,8 @@ static bool isKeyword(clang::tok::TokenKind kind, llvm::StringRef text, const cl
 ///// Collect highlight information from AST.
 // class HighlightCollector : public clang::RecursiveASTVisitor<HighlightCollector> {
 // public:
-//     HighlightCollector(const ParsedAST& AST, HighlightBuilder& builder) : AST(AST), builder(builder) {}
+//     HighlightCollector(const ParsedAST& AST, HighlightBuilder& builder) : AST(AST),
+//     builder(builder) {}
 //
 //     // Traverse(TranslationUnitDecl) {
 //     //     for(auto decl: node->decls()) {
@@ -447,7 +444,8 @@ static bool isKeyword(clang::tok::TokenKind kind, llvm::StringRef text, const cl
 //                 break;
 //             }
 //             default: {
-//                 if(isKeyword(token.kind(), token.text(AST.sourceManager), AST.context.getLangOpts())) {
+//                 if(isKeyword(token.kind(), token.text(AST.sourceManager),
+//                 AST.context.getLangOpts())) {
 //                     type = proto::SemanticTokenType::Keyword;
 //                     break;
 //                 }
@@ -499,6 +497,155 @@ static bool isKeyword(clang::tok::TokenKind kind, llvm::StringRef text, const cl
 //     return result;
 // };
 //
+
+struct SemanticToken {
+    std::uint32_t line;
+    std::uint32_t column;
+    std::uint32_t length;
+    proto::SemanticTokenType type;
+    std::uint32_t modifiers = 0;
+
+    SemanticToken& addModifier(proto::SemanticTokenModifier modifier) {
+        modifiers |= 1 << static_cast<std::uint32_t>(modifier);
+        return *this;
+    }
+};
+
+class HighlightBuilder : public SemanticVisitor<HighlightBuilder> {
+public:
+    HighlightBuilder(Compiler& compiler) : SemanticVisitor<HighlightBuilder>(compiler, true) {}
+
+    void handleOccurrence(const clang::Decl* decl,
+                          clang::SourceLocation location,
+                          OccurrenceKind kind = OccurrenceKind::Source) {
+        proto::SemanticTokenType type = proto::SemanticTokenType::Invalid;
+        if(llvm::isa<clang::NamespaceDecl, clang::NamespaceAliasDecl>(decl)) {
+            type = proto::SemanticTokenType::Namespace;
+        } else if(llvm::isa<clang::TypedefNameDecl,
+                            clang::TemplateTypeParmDecl,
+                            clang::TemplateTemplateParmDecl>(decl)) {
+            type = proto::SemanticTokenType::Type;
+        } else if(llvm::isa<clang::EnumDecl>(decl)) {
+            type = proto::SemanticTokenType::Enum;
+        } else if(llvm::isa<clang::EnumConstantDecl>(decl)) {
+            type = proto::SemanticTokenType::EnumMember;
+        } else if(auto TD = llvm::dyn_cast<clang::TagDecl>(decl)) {
+            type = TD->isStruct()  ? proto::SemanticTokenType::Struct
+                   : TD->isUnion() ? proto::SemanticTokenType::Union
+                                   : proto::SemanticTokenType::Class;
+        } else if(llvm::isa<clang::FieldDecl>(decl)) {
+            type = proto::SemanticTokenType::Field;
+        } else if(llvm::isa<clang::ParmVarDecl>(decl)) {
+            type = proto::SemanticTokenType::Parameter;
+        } else if(llvm::isa<clang::VarDecl, clang::BindingDecl, clang::NonTypeTemplateParmDecl>(
+                      decl)) {
+            type = proto::SemanticTokenType::Variable;
+        } else if(llvm::isa<clang::CXXMethodDecl>(decl)) {
+            type = proto::SemanticTokenType::Method;
+        } else if(llvm::isa<clang::FunctionDecl>(decl)) {
+            type = proto::SemanticTokenType::Function;
+        } else if(llvm::isa<clang::LabelDecl>(decl)) {
+            type = proto::SemanticTokenType::Label;
+        } else if(llvm::isa<clang::ConceptDecl>(decl)) {
+            type = proto::SemanticTokenType::Concept;
+        }
+
+        if(type != proto::SemanticTokenType::Invalid) {
+            addToken(location, type);
+        }
+    }
+
+    void handleOccurrence(const clang::BuiltinType* type,
+                          clang::SourceRange range,
+                          OccurrenceKind kind = OccurrenceKind::Source) {
+        // llvm::outs() << type->getName(clang::PrintingPolicy({})) << "\n";
+        // dump(range.getBegin());
+        // dump(range.getEnd());
+    }
+
+    void handleOccurrence(const clang::Attr* attr,
+                          clang::SourceRange range,
+                          OccurrenceKind kind = OccurrenceKind::Source) {
+        dump(range.getBegin());
+        auto tokens = tokBuf.expandedTokens(range);
+        if(auto first = tokens.begin()) {
+            auto second = first + 1;
+            switch(first->kind()) {
+                case clang::tok::identifier: {
+                    bool isFirstTokenNamespace = second && second->kind() == clang::tok::coloncolon;
+                    if(isFirstTokenNamespace) {
+                        addToken(first->location(), proto::SemanticTokenType::Namespace);
+                        first += 2;
+                    }
+
+                    assert(first && first->kind() == clang::tok::identifier &&
+                           "Expecting an identifier token");
+                    addToken(first->location(), proto::SemanticTokenType::Attribute);
+                    break;
+                }
+                /// [[using CC: opt(1), debug]]
+                case clang::tok::kw_using: {
+                    assert(second && second->kind() == clang::tok::identifier);
+                    addToken(second->location(), proto::SemanticTokenType::Namespace);
+                    break;
+                }
+                default: {
+                    std::terminate();
+                }
+            }
+        }
+    }
+
+    void run() {
+        TraverseAST(sema.getASTContext());
+    }
+
+    HighlightBuilder& addToken(clang::SourceLocation location, proto::SemanticTokenType type) {
+        auto loc = srcMgr.getPresumedLoc(location);
+        tokens.emplace_back(SemanticToken{
+            .line = loc.getLine() - 1,
+            .column = loc.getColumn() - 1,
+            .length = clang::Lexer::MeasureTokenLength(location, srcMgr, sema.getLangOpts()),
+            .type = type,
+            .modifiers = 0,
+        });
+        return *this;
+    }
+
+    proto::SemanticTokens build() {
+        TraverseAST(sema.getASTContext());
+
+        proto::SemanticTokens result;
+        std::ranges::sort(tokens, [](const SemanticToken& lhs, const SemanticToken& rhs) {
+            return lhs.line < rhs.line || (lhs.line == rhs.line && lhs.column < rhs.column);
+        });
+
+        std::size_t lastLine = 0;
+        std::size_t lastColumn = 0;
+
+        for(auto& token: tokens) {
+            result.data.push_back(token.line - lastLine);
+            result.data.push_back(token.line == lastLine ? token.column - lastColumn
+                                                         : token.column);
+            result.data.push_back(token.length);
+            result.data.push_back(llvm::to_underlying(token.type));
+            result.data.push_back(token.modifiers);
+
+            lastLine = token.line;
+            lastColumn = token.column;
+        }
+
+        return result;
+    }
+
+    std::vector<SemanticToken> tokens;
+};
+
 }  // namespace
+
+proto::SemanticTokens semanticTokens(Compiler& compiler, llvm::StringRef filename) {
+    HighlightBuilder builder(compiler);
+    return builder.build();
+}
 
 }  // namespace clice::feature

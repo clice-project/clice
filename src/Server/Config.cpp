@@ -88,6 +88,7 @@ int parse(llvm::StringRef execute, llvm::StringRef filepath) {
             config.server.address = address.as_string()->get();
         }
 
+
         llvm::outs() << "Server:" << json::serialize(config.server) << "\n";
     }
     return 0;

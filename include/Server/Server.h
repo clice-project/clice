@@ -77,7 +77,7 @@ struct InitializeParams {
 struct ServerCapabilities {
     std::string_view positionEncoding = "utf-16";
     TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::Full;
-    // SemanticTokensOptions semanticTokensProvider;
+    SemanticTokensOptions semanticTokensProvider;
 };
 
 struct InitializeResult {
@@ -303,7 +303,7 @@ private:
 
         struct Task {
             TaskKind kind;
-            async::promise<void> request;
+            llvm::unique_function<async::promise<void>(Compiler&)> request;
         };
 
         State state;
@@ -311,16 +311,11 @@ private:
         std::vector<Task> tasks;
     };
 
-    async::promise<void> schedule(llvm::StringRef path, async::promise<void> request) {
-        auto& unit = units[path];
-        if(unit.state == TranslationUnit::State::Building) {
-            // unit.requests.push_back(std::move(request));
-        } else {
-            co_await request;
-        }
-
-        co_return;
-    }
+    /// Schedule a task for a file. If the file is building, the task will be
+    /// appended to the task list of the file and wait for the building to finish.
+    /// Otherwise, the task will be executed immediately.
+    async::promise<void> schedule(llvm::StringRef path,
+                                  llvm::unique_function<async::promise<void>(Compiler&)> callback);
 
 private:
     llvm::StringMap<PCH> pchs;

@@ -28,9 +28,10 @@ Compiler::Compiler(llvm::StringRef filepath,
 
     // FIXME: customize DiagnosticConsumer
     if(consumer) {
-        instance->createDiagnostics(consumer, true);
+        instance->createDiagnostics(*llvm::vfs::getRealFileSystem(), consumer, true);
     } else {
         instance->createDiagnostics(
+            *llvm::vfs::getRealFileSystem(),
             new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()),
             true);
     }
@@ -86,10 +87,8 @@ void Compiler::codeCompletion(llvm::StringRef filepath,
     location.Line = line;
     location.Column = column;
 
-    if(content != "") {
-        auto buffer = llvm::MemoryBuffer::getMemBufferCopy(content);
-        instance->getPreprocessorOpts().addRemappedFile(filepath, buffer.release());
-    }
+    auto buffer = llvm::MemoryBuffer::getMemBufferCopy(content);
+    instance->getPreprocessorOpts().addRemappedFile(filepath, buffer.release());
 
     instance->setCodeCompletionConsumer(consumer);
 

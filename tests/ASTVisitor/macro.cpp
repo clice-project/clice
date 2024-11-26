@@ -12,3 +12,6 @@ int main() {
     struct name3 z;
 }
 
+#define Name(x) x
+
+int Name(x) = 1;

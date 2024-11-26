@@ -43,14 +43,31 @@ public:
         return lookup(expr->getQualifier(), expr->getNameInfo().getName());
     }
 
-    /// TODO:
-    clang::lookup_result lookup(clang::CXXDependentScopeMemberExpr* expr);
+    clang::lookup_result lookup(const clang::UnresolvedLookupExpr* expr) {
+        /// FIXME: 
+        for(auto decl: expr->decls()) {
+            if(auto TD = llvm::dyn_cast<clang::TemplateDecl>(decl)) {
+                return clang::lookup_result(TD);
+            }
+        }
 
-    clang::lookup_result lookup(clang::UnresolvedUsingValueDecl* decl) {
+        return {};
+    }
+
+    clang::lookup_result lookup(const clang::UnresolvedMemberExpr* expr) {
+        return {};
+    }
+
+    /// TODO:
+    clang::lookup_result lookup(clang::CXXDependentScopeMemberExpr* expr) {
+        return {};
+    }
+
+    clang::lookup_result lookup(const clang::UnresolvedUsingValueDecl* decl) {
         return lookup(decl->getQualifier(), decl->getDeclName());
     }
 
-    clang::lookup_result resolve(clang::UnresolvedUsingTypenameDecl* decl) {
+    clang::lookup_result resolve(const clang::UnresolvedUsingTypenameDecl* decl) {
         return lookup(decl->getQualifier(), decl->getDeclName());
     }
 

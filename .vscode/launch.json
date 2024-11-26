@@ -10,7 +10,7 @@
             "name": "clice_socket",
             "program": "${workspaceFolder}/build/bin/clice",
             "args": [
-                "--config={workspaceFolder}/docs/clice.toml"
+                "--config=${workspaceFolder}/docs/clice.toml"
             ]
         },
         {
@@ -19,7 +19,7 @@
             "name": "clice_test",
             "program": "${workspaceFolder}/build/bin/clice-tests",
             "args": [
-                "--test-dir={workspaceFolder}/tests",
+                "--test-dir=${workspaceFolder}/tests",
                 "${input:filter}"
             ],
         }

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Basic/Basic.h>
+#include <Basic/Document.h>
 
 namespace clice::proto {
 
@@ -9,6 +9,7 @@ enum class SemanticTokenType : uint8_t {
     #define SEMANTIC_TOKEN_TYPE(name, ...) name,
     #include "SemanticTokens.def"
     #undef SEMANTIC_TOKEN_TYPE
+    Invalid,
     LAST_TYPE
 };
 
@@ -34,18 +35,18 @@ struct SemanticTokensLegend {
 /// Server Capability.
 struct SemanticTokensOptions {
     /// The legend used by the server.
-    SemanticTokensLegend legend;
+    SemanticTokensLegend legend = {};
 
-    /// Server supports providing semantic tokens for a specific range of a document.
+    /// The grammar of C++ is highly context-sensitive, so we only provide semantic tokens for
+    /// the whole document.
     bool range = false;
 
-    /// Server supports providing semantic tokens for a full document.
     bool full = true;
 };
 
 struct SemanticTokensParams {
     /// The text document.
-    /// TextDocumentIdentifier textDocument;
+    TextDocumentIdentifier textDocument;
 };
 
 struct SemanticTokens {
@@ -56,6 +57,9 @@ struct SemanticTokens {
 }  // namespace clice::proto
 
 namespace clice::feature {
-// proto::SemanticTokens semanticTokens(const ParsedAST& AST, llvm::StringRef filename);
+
+/// FIXME:
+proto::SemanticTokens semanticTokens(Compiler& compiler, llvm::StringRef filename);
+
 }  // namespace clice::feature
 

@@ -3,6 +3,12 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringExtras.h>
 
+namespace clice {
+
+class Compiler;
+
+}
+
 namespace clice::proto {
 
 /// range in [-2^31, 2^31- 1]

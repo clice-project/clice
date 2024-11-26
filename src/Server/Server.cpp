@@ -31,7 +31,7 @@ Server::Server() {
     addMethod("textDocument/codeLens", &Server::onCodeLens);
     addMethod("textDocument/foldingRange", &Server::onFoldingRange);
     addMethod("textDocument/documentSymbol", &Server::onDocumentSymbol);
-    addMethod("textDocument/semanticTokens", &Server::onSemanticTokens);
+    addMethod("textDocument/semanticTokens/full", &Server::onSemanticTokens);
     addMethod("textDocument/inlayHint", &Server::onInlayHint);
     addMethod("textDocument/completion", &Server::onCodeCompletion);
     addMethod("textDocument/signatureHelp", &Server::onSignatureHelp);
@@ -75,6 +75,7 @@ void Server::run(int argc, const char** argv) {
 }
 
 async::promise<void> Server::onInitialize(json::Value id, const proto::InitializeParams& params) {
+
     async::write(std::move(id), json::serialize(proto::InitializeResult()));
     co_return;
 }
@@ -203,7 +204,13 @@ async::promise<void> Server::onDocumentSymbol(json::Value id,
 
 async::promise<void> Server::onSemanticTokens(json::Value id,
                                               const proto::SemanticTokensParams& params) {
-
+    auto path = URI::resolve(params.textDocument.uri);
+    auto task = [this, id = std::move(id)](Compiler& compiler) -> async::promise<void> {
+        auto tokens = feature::semanticTokens(compiler, "");
+        async::write(std::move(id), json::serialize(tokens));
+        co_return;
+    };
+    co_await schedule(path, std::move(task));
     co_return;
 }
 
@@ -244,7 +251,9 @@ async::promise<void> Server::updatePCH(llvm::StringRef filepath,
     co_await async::schedule_task([&] {
         Compiler compiler(filepath, content, args);
         bounds = clang::Lexer::ComputePreamble(content, {}, false);
-        compiler.generatePCH(outpath, bounds.Size, bounds.PreambleEndsAtStartOfLine);
+        if(bounds.Size != 0) {
+            compiler.generatePCH(outpath, bounds.Size, bounds.PreambleEndsAtStartOfLine);
+        }
     });
     logger::info("Build PCH success");
 
@@ -260,7 +269,7 @@ async::promise<void> Server::updatePCH(llvm::StringRef filepath,
 async::promise<void> Server::buildAST(llvm::StringRef filepath, llvm::StringRef content) {
     llvm::SmallString<128> path = filepath;
 
-    /// FIXME: lookup from CDB file and adjust and remove unnecessary arguments.
+    /// FIXME: lookup from CDB file and adjust and remove unnecessary arguments.1
     llvm::SmallVector<const char*> args = {
         "clang++",
         "-std=c++20",
@@ -283,9 +292,10 @@ async::promise<void> Server::buildAST(llvm::StringRef filepath, llvm::StringRef 
             boundSize -= 1;
             endAtStart = true;
         }
-
         std::unique_ptr<Compiler> compiler = std::make_unique<Compiler>(path, content, args);
-        compiler->applyPCH(pch.path, boundSize, endAtStart);
+        if(boundSize != 0) {
+            compiler->applyPCH(pch.path, boundSize, endAtStart);
+        }
         compiler->buildAST();
         return compiler;
     });
@@ -296,10 +306,23 @@ async::promise<void> Server::buildAST(llvm::StringRef filepath, llvm::StringRef 
     unit.compiler = std::move(compiler);
 
     for(auto& task: unit.tasks) {
-        co_await task.request;
+        co_await task.request(*unit.compiler);
         if(task.kind == TranslationUnit::TaskKind::Build) {
             break;
         }
     }
+}
+
+async::promise<void>
+    Server::schedule(llvm::StringRef path,
+                     llvm::unique_function<async::promise<void>(Compiler&)> request) {
+    auto& unit = units[path];
+    if(unit.state == TranslationUnit::State::Building) {
+        unit.tasks.emplace_back(TranslationUnit::TaskKind::Consume, std::move(request));
+    } else {
+        co_await request(*units[path].compiler);
+    }
+
+    co_return;
 }
 }  // namespace clice

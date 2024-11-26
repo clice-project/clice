@@ -42,6 +42,12 @@ SEMANTIC_TOKEN_TYPE(Namespace, "namespace")
 /// C/C++ type name (e.g. `std::string`).
 SEMANTIC_TOKEN_TYPE(Type, "type")
 
+/// C/C++ enum name.
+SEMANTIC_TOKEN_TYPE(Enum, "enum")
+
+/// C/C++ enum member name.
+SEMANTIC_TOKEN_TYPE(EnumMember, "enumMember")
+
 /// C/C++ struct name.
 SEMANTIC_TOKEN_TYPE(Struct, "struct")
 
@@ -54,14 +60,11 @@ SEMANTIC_TOKEN_TYPE(Class, "class")
 /// C/C++ field name.
 SEMANTIC_TOKEN_TYPE(Field, "field")
 
-/// C/C++ enum name.
-SEMANTIC_TOKEN_TYPE(Enum, "enum")
-
-/// C/C++ enum member name.
-SEMANTIC_TOKEN_TYPE(EnumMember, "enumMember")
-
 /// C/C++ variable name.
 SEMANTIC_TOKEN_TYPE(Variable, "variable")
+
+/// C/C++ function/method parameter name.
+SEMANTIC_TOKEN_TYPE(Parameter, "parameter")
 
 /// C/C++ function name.
 SEMANTIC_TOKEN_TYPE(Function, "function")
@@ -69,8 +72,8 @@ SEMANTIC_TOKEN_TYPE(Function, "function")
 /// C/C++ method name.
 SEMANTIC_TOKEN_TYPE(Method, "method")
 
-/// C/C++ function/method parameter name.
-SEMANTIC_TOKEN_TYPE(Parameter, "parameter")
+/// C/C++ label name.
+SEMANTIC_TOKEN_TYPE(Label, "label")
 
 /// C++ attribute name(e.g., `nodiscard`, `likely`, `fallthrough`).
 SEMANTIC_TOKEN_TYPE(Attribute, "attribute")
