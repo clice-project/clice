@@ -613,6 +613,73 @@ public:
     }
 
     proto::SemanticTokens build() {
+        /// Collect semantic from spelled tokens.
+        auto mainFileID = srcMgr.getMainFileID();
+        auto spelledTokens = tokBuf.spelledTokens(mainFileID);
+        for(auto& token: spelledTokens) {
+            proto::SemanticTokenType type = proto::SemanticTokenType::Invalid;
+            llvm::outs() << clang::tok::getTokenName(token.kind()) << " "
+                         << pp.getIdentifierInfo(token.text(srcMgr))->isKeyword(pp.getLangOpts())
+                         << "\n";
+
+            auto kind = token.kind();
+            switch(kind) {
+                case clang::tok::numeric_constant: {
+                    type = proto::SemanticTokenType::Number;
+                    break;
+                }
+
+                case clang::tok::char_constant:
+                case clang::tok::wide_char_constant:
+                case clang::tok::utf8_char_constant:
+                case clang::tok::utf16_char_constant:
+                case clang::tok::utf32_char_constant: {
+                    type = proto::SemanticTokenType::Character;
+                    break;
+                }
+
+                case clang::tok::string_literal:
+                case clang::tok::wide_string_literal:
+                case clang::tok::utf8_string_literal:
+                case clang::tok::utf16_string_literal:
+                case clang::tok::utf32_string_literal: {
+                    type = proto::SemanticTokenType::String;
+                    break;
+                }
+
+                case clang::tok::ampamp:        /// and
+                case clang::tok::ampequal:      /// and_eq
+                case clang::tok::amp:           /// bitand
+                case clang::tok::pipe:          /// bitor
+                case clang::tok::tilde:         /// compl
+                case clang::tok::exclaim:       /// not
+                case clang::tok::exclaimequal:  /// not_eq
+                case clang::tok::pipepipe:      /// or
+                case clang::tok::pipeequal:     /// or_eq
+                case clang::tok::caret:         /// xor
+                case clang::tok::caretequal: {  /// xor_eq
+                    /// Clang will lex above keywords as corresponding operators. But we want to
+                    /// highlight them as keywords. So check whether their text is same as the
+                    /// operator spelling. If not, it indicates that they are keywords.
+                    if(token.text(srcMgr) != clang::tok::getPunctuatorSpelling(kind)) {
+                        type = proto::SemanticTokenType::Operator;
+                    }
+                }
+
+                default: {
+                    if(pp.getIdentifierInfo(token.text(srcMgr))->isKeyword(pp.getLangOpts())) {
+                        type = proto::SemanticTokenType::Keyword;
+                        break;
+                    }
+                }
+            }
+
+            if(type != proto::SemanticTokenType::Invalid) {
+                addToken(token.location(), type);
+            }
+        }
+
+        /// Collect semantic tokens from AST.
         TraverseAST(sema.getASTContext());
 
         proto::SemanticTokens result;

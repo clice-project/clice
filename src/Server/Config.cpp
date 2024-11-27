@@ -68,10 +68,9 @@ std::string replace(std::string_view text) {
 int parse(llvm::StringRef execute, llvm::StringRef filepath) {
     auto toml = toml::parse_file(filepath);
     if(toml.failed()) {
-        llvm::errs() << std::format("Failed to parse config file: {}, Beacuse {}\n",
-                                    filepath,
-                                    toml.error().description());
-        return -1;
+        log::fatal("Failed to parse config file: {0}, Beacuse {1}",
+                   filepath,
+                   toml.error().description());
     }
 
     auto table = toml["server"];
@@ -87,7 +86,6 @@ int parse(llvm::StringRef execute, llvm::StringRef filepath) {
         if(auto address = table["address"]) {
             config.server.address = address.as_string()->get();
         }
-
 
         llvm::outs() << "Server:" << json::serialize(config.server) << "\n";
     }

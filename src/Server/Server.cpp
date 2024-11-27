@@ -54,14 +54,14 @@ void Server::run(int argc, const char** argv) {
                     co_await iter->second(std::move(*id),
                                           params ? std::move(*params) : json::Value(nullptr));
                 } else {
-                    log::error("Unknown request: {0}", name.str());
+                    log::warn("Unknown request: {0}", name.str());
                 }
             } else {
                 if(auto iter = notifications.find(name); iter != notifications.end()) {
                     log::info("Notification: {0}", name.str());
                     co_await iter->second(params ? std::move(*params) : json::Value(nullptr));
                 } else {
-                    log::error("Unknown notification: {0}", name.str());
+                    log::warn("Unknown notification: {0}", name.str());
                 }
             }
         }

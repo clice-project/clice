@@ -59,8 +59,8 @@ public:
     using Base = clang::RecursiveASTVisitor<SemanticVisitor>;
 
     SemanticVisitor(Compiler& compiler, bool mainFileOnly = false) :
-        sema(compiler.sema()), resolver(compiler.resolver()), srcMgr(compiler.srcMgr()),
-        tokBuf(compiler.tokBuf()), mainFileOnly(mainFileOnly) {}
+        sema(compiler.sema()), pp(compiler.pp()), resolver(compiler.resolver()),
+        srcMgr(compiler.srcMgr()), tokBuf(compiler.tokBuf()), mainFileOnly(mainFileOnly) {}
 
 public:
 
@@ -548,11 +548,12 @@ public:
     }
 
 protected:
+    bool mainFileOnly;
     clang::Sema& sema;
+    clang::Preprocessor& pp;
     TemplateResolver& resolver;
     clang::SourceManager& srcMgr;
     clang::syntax::TokenBuffer& tokBuf;
-    bool mainFileOnly;
     llvm::SmallVector<clang::Decl*> decls;
 };
 

@@ -64,12 +64,12 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
                 async::schedule(callback(std::move(*json)));
                 buffer.consume();
             } else {
-                llvm::errs() << "JSON PARSE ERROR " << json.takeError() << "\n";
+                log::fatal("An error occurred while parsing JSON: {0}", json.takeError());
             }
         }
     } else if(nread < 0) {
         if(nread != UV_EOF) {
-            fprintf(stderr, "Error reading from stdin: %s\n", uv_strerror(nread));
+            log::fatal("An error occurred while reading: {0}", uv_strerror(nread));
         }
         uv_close((uv_handle_t*)stream, NULL);
     }
@@ -84,9 +84,16 @@ void start_server(Callback callback) {
     async::callback = std::move(callback);
     writer = reinterpret_cast<uv_stream_t*>(&out);
 
-    int r = uv_read_start((uv_stream_t*)&in, async::on_alloc, async::on_read);
+    uv_check_call(uv_pipe_init, async::loop, &in, 0);
+    uv_check_call(uv_pipe_init, async::loop, &out, 0);
 
-    uv_run(async::loop, UV_RUN_DEFAULT);
+    uv_check_call(uv_pipe_open, &in, 0);
+    uv_check_call(uv_pipe_open, &out, 1);
+
+    uv_check_call(uv_read_start, (uv_stream_t*)&in, async::on_alloc, async::on_read);
+
+    log::info("Server started in pipe mode");
+    uv_check_call(uv_run, async::loop, UV_RUN_DEFAULT);
 }
 
 void start_server(Callback callback, const char* ip, unsigned int port) {
@@ -96,28 +103,27 @@ void start_server(Callback callback, const char* ip, unsigned int port) {
     async::callback = std::move(callback);
     writer = reinterpret_cast<uv_stream_t*>(&client);
 
-    uv_tcp_init(async::loop, &server);
-    uv_tcp_init(async::loop, &client);
+    uv_check_call(uv_tcp_init, async::loop, &server);
+    uv_check_call(uv_tcp_init, async::loop, &client);
 
-    struct sockaddr_in addr;
-    uv_ip4_addr(ip, port, &addr);
+    struct ::sockaddr_in addr;
+    uv_check_call(uv_ip4_addr, ip, port, &addr);
+    uv_check_call(uv_tcp_bind, &server, (const struct sockaddr*)&addr, 0);
 
-    uv_tcp_bind(&server, (const struct sockaddr*)&addr, 0);
-    int r = uv_listen((uv_stream_t*)&server, 128, [](uv_stream_t* server, int status) {
+    auto on_connection = [](uv_stream_t* server, int status) {
         if(status < 0) {
-            llvm::errs() << "New connection error\n";
-            return;
+            log::fatal("An error occurred while listening: {0}", uv_strerror(status));
         }
 
-        if(uv_accept(server, (uv_stream_t*)&client) == 0) {
-            llvm::errs() << "Client connected.\n";
-            uv_read_start((uv_stream_t*)&client, async::on_alloc, async::on_read);
-        } else {
-            uv_close((uv_handle_t*)&client, NULL);
-        }
-    });
+        uv_check_call(uv_accept, server, (uv_stream_t*)&client);
+        log::info("New connection accepted");
+        uv_check_call(uv_read_start, (uv_stream_t*)&client, async::on_alloc, async::on_read);
+    };
 
-    uv_run(async::loop, UV_RUN_DEFAULT);
+    uv_check_call(uv_listen, (uv_stream_t*)&server, 128, on_connection);
+
+    log::info("Server started in socket mode at {0}:{1}", ip, port);
+    uv_check_call(uv_run, async::loop, UV_RUN_DEFAULT);
 }
 
 void write(json::Value id, json::Value result) {
@@ -128,11 +134,13 @@ void write(json::Value id, json::Value result) {
     };
 
     struct Buffer {
+        uv_write_t req;
         llvm::SmallString<128> header;
         llvm::SmallString<4096> message;
     };
 
     Buffer* buffer = new Buffer();
+    buffer->req.data = buffer;
 
     llvm::raw_svector_ostream os(buffer->message);
     os << response;
@@ -145,23 +153,15 @@ void write(json::Value id, json::Value result) {
         uv_buf_init(buffer->message.data(), buffer->message.size()),
     };
 
-    uv_write_t* req = new uv_write_t();
-    req->data = buffer;
-
     auto on_write = [](uv_write_t* req, int status) {
         if(status < 0) {
-            llvm::errs() << "Write error: " << uv_strerror(status) << "\n";
+            log::fatal("An error occurred while writing: {0}", uv_strerror(status));
         }
 
         delete static_cast<Buffer*>(req->data);
-        delete req;
     };
 
-    int r = uv_write(req, writer, bufs, 2, on_write);
-
-    if(r) {
-        llvm::errs() << "Write error: " << uv_strerror(r) << "\n";
-    }
+    uv_check_call(uv_write, &buffer->req, writer, bufs, 2, on_write);
 }
 
 }  // namespace clice::async

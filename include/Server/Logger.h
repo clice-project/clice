@@ -2,16 +2,16 @@
 
 #include <Support/Format.h>
 #include <Support/FileSystem.h>
-#include <llvm/ADT/SmallString.h>
+#include <source_location>
 
 namespace clice::log {
 
 enum class Level {
     INFO,
-    ERROR,
     WARN,
     DEBUG,
     TRACE,
+    FATAL,
 };
 
 template <typename... Args>
@@ -21,11 +21,11 @@ void log(Level level, std::string_view fmt, Args&&... args) {
     auto time = chrono::zoned_time(chrono::current_zone(), now);
     auto tag = [&] {
         switch(level) {
-            case Level::INFO: return "\033[32mINFO\033[0m";    // Green
-            case Level::ERROR: return "\033[31mERROR\033[0m";  // Red
-            case Level::WARN: return "\033[33mWARN\033[0m";    // Yellow
-            case Level::DEBUG: return "\033[36mDEBUG\033[0m";  // Cyan
-            case Level::TRACE: return "\033[35mTRACE\033[0m";  // Magenta
+            case Level::INFO: return "\033[32mINFO\033[0m";          // Green
+            case Level::WARN: return "\033[33mWARN\033[0m";          // Yellow
+            case Level::DEBUG: return "\033[36mDEBUG\033[0m";        // Cyan
+            case Level::TRACE: return "\033[35mTRACE\033[0m";        // Magenta
+            case Level::FATAL: return "\033[31mFATAL ERROR\033[0m";  // Red
         }
     }();
     llvm::errs() << std::format("[{0:%Y-%m-%d %H:%M:%S}] [{1}] ", time, tag)
@@ -38,13 +38,24 @@ void info(std::format_string<Args...> fmt, Args&&... args) {
 }
 
 template <typename... Args>
-void error(std::format_string<Args...> fmt, Args&&... args) {
-    log::log(Level::ERROR, fmt.get(), std::forward<Args>(args)...);
+void warn(std::format_string<Args...> fmt, Args&&... args) {
+    log::log(Level::WARN, fmt.get(), std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void warn(std::format_string<Args...> fmt, Args&&... args) {
-    log::log(Level::WARN, fmt.get(), std::forward<Args>(args)...);
+void debug(std::format_string<Args...> fmt, Args&&... args) {
+    log::log(Level::DEBUG, fmt.get(), std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+void trace(std::format_string<Args...> fmt, Args&&... args) {
+    log::log(Level::TRACE, fmt.get(), std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+void fatal [[noreturn]] (std::format_string<Args...> fmt, Args&&... args) {
+    log::log(Level::FATAL, fmt.get(), std::forward<Args>(args)...);
+    std::terminate();
 }
 
 }  // namespace clice::log

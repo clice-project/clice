@@ -6,6 +6,8 @@
 #include "llvm/ADT/FunctionExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "Server/Logger.h"
+
 #include "Support/JSON.h"
 
 #include <new>
@@ -24,6 +26,11 @@ template <typename T>
 struct promise;
 
 extern uv_loop_t* loop;
+
+#define uv_check_call(func, ...)                                                                   \
+    if(int error = func(__VA_ARGS__); error < 0) {                                                 \
+        log::fatal("An error occurred in " #func ": {0}", uv_strerror(error));                     \
+    }
 
 template <typename T, typename U>
 T& uv_cast(U* u) {
@@ -79,12 +86,15 @@ inline void schedule(std::coroutine_handle<> handle) {
     assert(handle && "schedule: invalid coroutine handle");
     uv_async_t* async = new uv_async_t();
     async->data = handle.address();
-    uv_async_init(loop, async, [](uv_async_t* async) {
+
+    auto callback = [](uv_async_t* async) {
         auto handle = std::coroutine_handle<>::from_address(async->data);
         handle.resume();
         uv_close((uv_handle_t*)async, [](uv_handle_t* handle) { delete handle; });
-    });
-    uv_async_send(async);
+    };
+
+    uv_check_call(uv_async_init, loop, async, callback);
+    uv_check_call(uv_async_send, async);
 }
 
 template <typename T>
@@ -101,22 +111,23 @@ struct task_awaiter : result<Ret> {
         static_assert(!std::is_reference_v<Ret>, "return type must not be a reference");
         this->caller = caller;
         uv_work_t* work = new uv_work_t{.data = this};
-        uv_queue_work(
-            loop,
-            work,
-            [](uv_work_t* work) {
-                auto& awaiter = uv_cast<task_awaiter>(work);
-                if constexpr(!std::is_void_v<Ret>) {
-                    new (&awaiter.value) Ret(awaiter.task());
-                } else {
-                    awaiter.task();
-                }
-            },
-            [](uv_work_t* work, int status) {
-                auto& awaiter = uv_cast<task_awaiter>(work);
-                awaiter.caller.resume();
-                delete work;
-            });
+
+        auto work_cb = [](uv_work_t* work) {
+            auto& awaiter = uv_cast<task_awaiter>(work);
+            if constexpr(!std::is_void_v<Ret>) {
+                new (&awaiter.value) Ret(awaiter.task());
+            } else {
+                awaiter.task();
+            }
+        };
+
+        auto after_work_cb = [](uv_work_t* work, int status) {
+            auto& awaiter = uv_cast<task_awaiter>(work);
+            awaiter.caller.resume();
+            delete work;
+        };
+
+        uv_check_call(uv_queue_work, loop, work, work_cb, after_work_cb);
     }
 };
 
@@ -137,16 +148,15 @@ struct sleep_awaiter {
     void await_suspend(std::coroutine_handle<> caller) noexcept {
         this->caller = caller;
         uv_timer_t* timer = new uv_timer_t{.data = this};
-        uv_timer_init(loop, timer);
-        uv_timer_start(
-            timer,
-            [](uv_timer_t* timer) {
-                auto& awaiter = uv_cast<sleep_awaiter>(timer);
-                awaiter.caller.resume();
-                uv_close((uv_handle_t*)timer, [](uv_handle_t* handle) { delete handle; });
-            },
-            ms.count(),
-            0);
+        uv_check_call(uv_timer_init, loop, timer);
+
+        auto callback = [](uv_timer_t* timer) {
+            auto& awaiter = uv_cast<sleep_awaiter>(timer);
+            awaiter.caller.resume();
+            uv_close((uv_handle_t*)timer, [](uv_handle_t* handle) { delete handle; });
+        };
+
+        uv_check_call(uv_timer_start, timer, callback, ms.count(), 0);
     }
 
     void await_resume() noexcept {}
@@ -168,25 +178,25 @@ struct fs_awaiter {
     void await_suspend(std::coroutine_handle<> caller) noexcept {
         this->caller = caller;
         uv_fs_t* req = new uv_fs_t{.data = this};
-        uv_fs_open(loop, req, path.c_str(), UV_FS_O_RDONLY, 0, [](uv_fs_t* req) {
+
+        auto callback = [](uv_fs_t* req) {
             auto& awaiter = uv_cast<fs_awaiter>(req);
             if(req->result < 0) {
-                llvm::errs() << "Error: " << uv_strerror(req->result) << "\n";
+                log::fatal("An error occurred while opening file: {0}", uv_strerror(req->result));
                 awaiter.caller.resume();
                 delete req;
                 return;
             }
 
-            uv_fs_close(loop, req, req->result, [](uv_fs_t* req) {
-                auto& awaiter = uv_cast<fs_awaiter>(req);
-                uv_timespec_t& mtime = req->statbuf.st_mtim;
-                using namespace std::chrono;
-                awaiter.modified =
-                    system_clock::time_point(seconds(mtime.tv_sec) + nanoseconds(mtime.tv_nsec));
-                awaiter.caller.resume();
-                delete req;
-            });
-        });
+            uv_timespec_t& mtime = req->statbuf.st_mtim;
+            using namespace std::chrono;
+            awaiter.modified =
+                system_clock::time_point(seconds(mtime.tv_sec) + nanoseconds(mtime.tv_nsec));
+            awaiter.caller.resume();
+            delete req;
+        };
+
+        uv_check_call(uv_fs_open, loop, req, path.c_str(), UV_FS_O_RDONLY, 0, callback);
     }
 
     decltype(auto) await_resume() noexcept {
