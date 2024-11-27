@@ -35,7 +35,7 @@ public:
         if(str.consume_front("Content-Length: ") && !str.consumeInteger(10, length) &&
            str.consume_front("\r\n\r\n") && str.size() >= length) {
             auto result = str.substr(0, length);
-            pos = str.end() - buffer.begin();
+            pos = result.end() - buffer.begin();
             return result;
         }
         return {};

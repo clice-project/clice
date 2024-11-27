@@ -41,8 +41,6 @@ Server::Server() {
 }
 
 void Server::run(int argc, const char** argv) {
-    logger::init("console", argv[0]);
-
     auto dispatch = [this](json::Value value) -> async::promise<void> {
         assert(value.kind() == json::Value::Object);
         auto object = value.getAsObject();
@@ -52,18 +50,18 @@ void Server::run(int argc, const char** argv) {
             auto params = object->get("params");
             if(auto id = object->get("id")) {
                 if(auto iter = requests.find(name); iter != requests.end()) {
-                    logger::info("Request: {0}", name.str());
+                    log::info("Request: {0}", name.str());
                     co_await iter->second(std::move(*id),
                                           params ? std::move(*params) : json::Value(nullptr));
                 } else {
-                    logger::error("Unknown request: {0}", name.str());
+                    log::error("Unknown request: {0}", name.str());
                 }
             } else {
                 if(auto iter = notifications.find(name); iter != notifications.end()) {
-                    logger::info("Notification: {0}", name.str());
+                    log::info("Notification: {0}", name.str());
                     co_await iter->second(params ? std::move(*params) : json::Value(nullptr));
                 } else {
-                    logger::error("Unknown notification: {0}", name.str());
+                    log::error("Unknown notification: {0}", name.str());
                 }
             }
         }
@@ -245,7 +243,7 @@ async::promise<void> Server::onRangeFormatting(json::Value id,
 async::promise<void> Server::updatePCH(llvm::StringRef filepath,
                                        llvm::StringRef content,
                                        llvm::ArrayRef<const char*> args) {
-    logger::info("Start building PCH for {0}", filepath.str());
+    log::info("Start building PCH for {0}", filepath.str());
     clang::PreambleBounds bounds = {0, 0};
     std::string outpath = "/home/ykiko/C++/clice2/build/cache/xxx.pch";
     co_await async::schedule_task([&] {
@@ -255,7 +253,7 @@ async::promise<void> Server::updatePCH(llvm::StringRef filepath,
             compiler.generatePCH(outpath, bounds.Size, bounds.PreambleEndsAtStartOfLine);
         }
     });
-    logger::info("Build PCH success");
+    log::info("Build PCH success");
 
     auto preamble2 = content.substr(0, bounds.Size).str();
     if(bounds.PreambleEndsAtStartOfLine) {
@@ -284,7 +282,7 @@ async::promise<void> Server::buildAST(llvm::StringRef filepath, llvm::StringRef 
 
     auto& pch = pchs.at(filepath);
 
-    logger::info("Start building AST for {0}", filepath.str());
+    log::info("Start building AST for {0}", filepath.str());
     auto compiler = co_await async::schedule_task([&] {
         std::uint32_t boundSize = pch.preamble.size();
         bool endAtStart = false;
@@ -299,7 +297,7 @@ async::promise<void> Server::buildAST(llvm::StringRef filepath, llvm::StringRef 
         compiler->buildAST();
         return compiler;
     });
-    logger::info("Build AST success");
+    log::info("Build AST success");
 
     auto& unit = units[filepath];
     unit.state = TranslationUnit::State::Ready;

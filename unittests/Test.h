@@ -3,7 +3,6 @@
 #include <gtest/gtest.h>
 
 #include <Support/FileSystem.h>
-#include <spdlog/fmt/bundled/color.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <source_location>
 

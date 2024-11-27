@@ -63,7 +63,6 @@ target_link_libraries(clice-core PUBLIC
 
 # clice executable
 add_subdirectory(${CMAKE_SOURCE_DIR}/deps/libuv)
-add_subdirectory(${CMAKE_SOURCE_DIR}/deps/spdlog)
 
 set(CLICE_SERVER_SOURCES ${CMAKE_SOURCE_DIR}/src/main.cpp)
 file(GLOB_RECURSE SRC_FILES "${CMAKE_SOURCE_DIR}/src/Server/*.cpp")
@@ -73,9 +72,8 @@ add_executable(clice ${CLICE_SERVER_SOURCES})
 target_include_directories(clice PRIVATE
     "${CMAKE_SOURCE_DIR}/deps/toml/include"
     "${CMAKE_SOURCE_DIR}/deps/libuv/include"
-    "${CMAKE_SOURCE_DIR}/deps/spdlog/include"
 )
-target_link_libraries(clice PRIVATE clice-core uv spdlog::spdlog)
+target_link_libraries(clice PRIVATE clice-core uv)
 
 
 # clice tests
@@ -87,13 +85,11 @@ if(CLICE_ENABLE_TEST)
 
     add_executable(clice-tests ${CLICE_TEST_SOURCES})
     target_include_directories(clice-tests PRIVATE
-        "${CMAKE_SOURCE_DIR}/deps/spdlog/include"
         "${CMAKE_SOURCE_DIR}/deps/googletest/googletest/include"
     )
     target_link_libraries(clice-tests PRIVATE 
         clice-core
-        gtest_main 
-        spdlog::spdlog
+        gtest_main
     )
 endif()
 
