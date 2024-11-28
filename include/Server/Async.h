@@ -282,7 +282,7 @@ struct promise_type : result<T> {
     }
 };
 
-template <typename T>
+template <typename T = void>
 class promise {
 public:
     using promise_type = async::promise_type<T>;
@@ -308,6 +308,28 @@ public:
 private:
     coroutine_handle h;
 };
+
+/// Suspend current coroutine and invoke the callback with its handle.
+/// Note the callback invoked before the coroutine is suspended. So it is 
+///
+template <typename Callback>
+auto suspend(Callback&& callback) {
+    struct suspend_awaiter {
+        Callback callback;
+
+        bool await_ready() noexcept {
+            return false;
+        }
+
+        void await_suspend(std::coroutine_handle<> handle) noexcept {
+            callback(handle);
+        }
+
+        void await_resume() noexcept {}
+    };
+
+    return suspend_awaiter{std::forward<Callback>(callback)};
+}
 
 }  // namespace clice::async
 

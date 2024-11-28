@@ -618,9 +618,9 @@ public:
         auto spelledTokens = tokBuf.spelledTokens(mainFileID);
         for(auto& token: spelledTokens) {
             proto::SemanticTokenType type = proto::SemanticTokenType::Invalid;
-            llvm::outs() << clang::tok::getTokenName(token.kind()) << " "
-                         << pp.getIdentifierInfo(token.text(srcMgr))->isKeyword(pp.getLangOpts())
-                         << "\n";
+            // llvm::outs() << clang::tok::getTokenName(token.kind()) << " "
+            //              << pp.getIdentifierInfo(token.text(srcMgr))->isKeyword(pp.getLangOpts())
+            //              << "\n";
 
             auto kind = token.kind();
             switch(kind) {

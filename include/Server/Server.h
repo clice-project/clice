@@ -3,6 +3,8 @@
 #include "Async.h"
 #include "Config.h"
 #include "Logger.h"
+#include "Scheduler.h"
+#include "Basic/URI.h"
 #include "Basic/Document.h"
 #include "Compiler/Compiler.h"
 #include "Support/JSON.h"
@@ -151,9 +153,6 @@ private:
         });
     }
 
-    llvm::StringMap<onRequest> requests;
-    llvm::StringMap<onNotification> notifications;
-
 private:
     /// ============================================================================
     ///                            Lifestyle Message
@@ -245,81 +244,9 @@ private:
                                            const proto::DocumentRangeFormattingParams& params);
 
 private:
-    /// Information of building precompiled header.
-    struct PCH {
-        /// The path of this PCH.
-        std::string path;
-        /// The source file path.
-        std::string sourcePath;
-        /// The header part of source file used to build this PCH.
-        std::string preamble;
-        /// The arguments used to build this PCH.
-        std::string arguments;
-        /// All files involved in building this PCH(excluding the source file).
-        std::vector<std::string> deps;
-
-        /// FIXME: use asyncronous file system API.
-        bool needUpdate(llvm::StringRef sourceContent) {
-            /// Check whether the header part changed.
-            if(sourceContent.substr(0, preamble.size()) != preamble) {
-                return true;
-            }
-
-            /// Check timestamp of all files involved in building this PCH.
-            fs::file_status build;
-            if(auto error = fs::status(path, build)) {
-                llvm::errs() << "Error: " << error.message() << "\n";
-                std::terminate();
-            }
-
-            /// TODO: check whether deps changed through comparing timestamps.
-            return false;
-        }
-    };
-
-    /// Information of building precompiled module.
-    struct PCM {};
-
-    async::promise<void> updatePCH(llvm::StringRef filepath,
-                                   llvm::StringRef content,
-                                   llvm::ArrayRef<const char*> args);
-
-    async::promise<void> updatePCM() {
-        co_return;
-    }
-
-    async::promise<void> buildAST(llvm::StringRef filepath, llvm::StringRef content);
-
-    struct TranslationUnit {
-        enum class State {
-            Building,
-            Ready,
-        };
-
-        enum class TaskKind {
-            Build,
-            Consume,
-        };
-
-        struct Task {
-            TaskKind kind;
-            llvm::unique_function<async::promise<void>(Compiler&)> request;
-        };
-
-        State state;
-        std::unique_ptr<Compiler> compiler;
-        std::vector<Task> tasks;
-    };
-
-    /// Schedule a task for a file. If the file is building, the task will be
-    /// appended to the task list of the file and wait for the building to finish.
-    /// Otherwise, the task will be executed immediately.
-    async::promise<void> schedule(llvm::StringRef path,
-                                  llvm::unique_function<async::promise<void>(Compiler&)> callback);
-
-private:
-    llvm::StringMap<PCH> pchs;
-    llvm::StringMap<TranslationUnit> units;
+    Scheduler scheduler;
+    llvm::StringMap<onRequest> requests;
+    llvm::StringMap<onNotification> notifications;
 };
 
 }  // namespace clice

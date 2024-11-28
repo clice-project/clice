@@ -1,5 +1,4 @@
 #include "Server/Server.h"
-#include "Basic/URI.h"
 
 namespace clice {
 
@@ -94,24 +93,24 @@ async::promise<void> Server::onDidOpen(const proto::DidOpenTextDocumentParams& p
     auto path = URI::resolve(params.textDocument.uri);
     llvm::StringRef content = params.textDocument.text;
 
-    co_await buildAST(path, content);
-
-    co_return;
+    co_await scheduler.add(path, content);
 }
 
 async::promise<void> Server::onDidChange(const proto::DidChangeTextDocumentParams& document) {
     auto path = URI::resolve(document.textDocument.uri);
     llvm::StringRef content = document.contentChanges[0].text;
-
-    co_await buildAST(path, content);
-    co_return;
+    co_await scheduler.update(path, content);
 }
 
 async::promise<void> Server::onDidSave(const proto::DidSaveTextDocumentParams& document) {
+    auto path = URI::resolve(document.textDocument.uri);
+    co_await scheduler.save(path);
     co_return;
 }
 
 async::promise<void> Server::onDidClose(const proto::DidCloseTextDocumentParams& document) {
+    auto path = URI::resolve(document.textDocument.uri);
+    co_await scheduler.close(path);
     co_return;
 }
 
@@ -203,12 +202,10 @@ async::promise<void> Server::onDocumentSymbol(json::Value id,
 async::promise<void> Server::onSemanticTokens(json::Value id,
                                               const proto::SemanticTokensParams& params) {
     auto path = URI::resolve(params.textDocument.uri);
-    auto task = [this, id = std::move(id)](Compiler& compiler) -> async::promise<void> {
-        auto tokens = feature::semanticTokens(compiler, "");
-        async::write(std::move(id), json::serialize(tokens));
-        co_return;
-    };
-    co_await schedule(path, std::move(task));
+    auto tokens = co_await scheduler.schedule(path, [&](Compiler& compiler) {
+        return feature::semanticTokens(compiler, "");
+    });
+    async::write(std::move(id), json::serialize(tokens));
     co_return;
 }
 
@@ -240,87 +237,4 @@ async::promise<void> Server::onRangeFormatting(json::Value id,
     co_return;
 }
 
-async::promise<void> Server::updatePCH(llvm::StringRef filepath,
-                                       llvm::StringRef content,
-                                       llvm::ArrayRef<const char*> args) {
-    log::info("Start building PCH for {0}", filepath.str());
-    clang::PreambleBounds bounds = {0, 0};
-    std::string outpath = "/home/ykiko/C++/clice2/build/cache/xxx.pch";
-    co_await async::schedule_task([&] {
-        Compiler compiler(filepath, content, args);
-        bounds = clang::Lexer::ComputePreamble(content, {}, false);
-        if(bounds.Size != 0) {
-            compiler.generatePCH(outpath, bounds.Size, bounds.PreambleEndsAtStartOfLine);
-        }
-    });
-    log::info("Build PCH success");
-
-    auto preamble2 = content.substr(0, bounds.Size).str();
-    if(bounds.PreambleEndsAtStartOfLine) {
-        preamble2.append("@");
-    }
-
-    pchs.try_emplace(filepath, PCH{.path = outpath, .preamble = std::move(preamble2)});
-    co_return;
-}
-
-async::promise<void> Server::buildAST(llvm::StringRef filepath, llvm::StringRef content) {
-    llvm::SmallString<128> path = filepath;
-
-    /// FIXME: lookup from CDB file and adjust and remove unnecessary arguments.1
-    llvm::SmallVector<const char*> args = {
-        "clang++",
-        "-std=c++20",
-        path.c_str(),
-        "-resource-dir",
-        "/home/ykiko/C++/clice2/build/lib/clang/20",
-    };
-
-    /// through arguments to judge is it a module.
-    bool isModule = false;
-    co_await (isModule ? updatePCM() : updatePCH(filepath, content, args));
-
-    auto& pch = pchs.at(filepath);
-
-    log::info("Start building AST for {0}", filepath.str());
-    auto compiler = co_await async::schedule_task([&] {
-        std::uint32_t boundSize = pch.preamble.size();
-        bool endAtStart = false;
-        if(pch.preamble.back() == '@') {
-            boundSize -= 1;
-            endAtStart = true;
-        }
-        std::unique_ptr<Compiler> compiler = std::make_unique<Compiler>(path, content, args);
-        if(boundSize != 0) {
-            compiler->applyPCH(pch.path, boundSize, endAtStart);
-        }
-        compiler->buildAST();
-        return compiler;
-    });
-    log::info("Build AST success");
-
-    auto& unit = units[filepath];
-    unit.state = TranslationUnit::State::Ready;
-    unit.compiler = std::move(compiler);
-
-    for(auto& task: unit.tasks) {
-        co_await task.request(*unit.compiler);
-        if(task.kind == TranslationUnit::TaskKind::Build) {
-            break;
-        }
-    }
-}
-
-async::promise<void>
-    Server::schedule(llvm::StringRef path,
-                     llvm::unique_function<async::promise<void>(Compiler&)> request) {
-    auto& unit = units[path];
-    if(unit.state == TranslationUnit::State::Building) {
-        unit.tasks.emplace_back(TranslationUnit::TaskKind::Consume, std::move(request));
-    } else {
-        co_await request(*units[path].compiler);
-    }
-
-    co_return;
-}
 }  // namespace clice
