@@ -4,6 +4,7 @@
 
 #include "llvm/ADT/StringRef.h"
 #include "Error.h"
+#include "JSON.h"
 
 template <>
 struct std::formatter<llvm::StringRef> : std::formatter<std::string_view> {
@@ -34,6 +35,24 @@ struct std::formatter<llvm::Error> : std::formatter<llvm::StringRef> {
         llvm::SmallString<128> buffer;
         llvm::raw_svector_ostream os(buffer);
         os << e;
+        return Base::format(buffer, ctx);
+    }
+};
+
+template <>
+struct std::formatter<clice::json::Value> : std::formatter<llvm::StringRef> {
+    using Base = std::formatter<llvm::StringRef>;
+
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext& ctx) {
+        return Base::parse(ctx);
+    }
+
+    template <typename FormatContext>
+    auto format(const clice::json::Value& value, FormatContext& ctx) const {
+        llvm::SmallString<128> buffer;
+        llvm::raw_svector_ostream os(buffer);
+        os << value;
         return Base::format(buffer, ctx);
     }
 };
