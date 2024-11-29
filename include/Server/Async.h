@@ -48,9 +48,7 @@ void write(json::Value id, json::Value result);
 
 template <typename Value>
 struct result {
-    union {
-        Value value;
-    };
+    std::optional<Value> value;
 
     result() {}
 
@@ -61,12 +59,14 @@ struct result {
     }
 
     decltype(auto) await_resume() noexcept {
-        return std::move(value);
+        assert(value.has_value() && "await_resume: no value");
+        return std::move(*value);
     }
 
     template <typename T>
     void return_value(T&& val) noexcept {
-        new (&value) Value(std::forward<T>(val));
+        assert(!value.has_value() && "return_value: value already set");
+        value.emplace(std::forward<T>(val));
     }
 };
 
@@ -90,7 +90,8 @@ inline void schedule(std::coroutine_handle<> handle) {
     auto callback = [](uv_async_t* async) {
         auto handle = std::coroutine_handle<>::from_address(async->data);
         handle.resume();
-        uv_close((uv_handle_t*)async, [](uv_handle_t* handle) { delete handle; });
+        uv_close(reinterpret_cast<uv_handle_t*>(async), nullptr);
+        delete async;
     };
 
     uv_check_call(uv_async_init, loop, async, callback);
@@ -98,24 +99,25 @@ inline void schedule(std::coroutine_handle<> handle) {
 }
 
 template <typename T>
-void schedule(promise<T> promise) {
+void schedule(const promise<T>& promise) {
     schedule(promise.handle());
 }
 
 template <typename Task, typename Ret = std::invoke_result_t<Task>>
 struct task_awaiter : result<Ret> {
     std::remove_cvref_t<Task> task;
+    uv_work_t work;
     std::coroutine_handle<> caller;
 
     void await_suspend(std::coroutine_handle<> caller) noexcept {
         static_assert(!std::is_reference_v<Ret>, "return type must not be a reference");
         this->caller = caller;
-        uv_work_t* work = new uv_work_t{.data = this};
+        work.data = this;
 
         auto work_cb = [](uv_work_t* work) {
             auto& awaiter = uv_cast<task_awaiter>(work);
             if constexpr(!std::is_void_v<Ret>) {
-                new (&awaiter.value) Ret(awaiter.task());
+                awaiter.value.emplace(awaiter.task());
             } else {
                 awaiter.task();
             }
@@ -124,10 +126,9 @@ struct task_awaiter : result<Ret> {
         auto after_work_cb = [](uv_work_t* work, int status) {
             auto& awaiter = uv_cast<task_awaiter>(work);
             awaiter.caller.resume();
-            delete work;
         };
 
-        uv_check_call(uv_queue_work, loop, work, work_cb, after_work_cb);
+        uv_check_call(uv_queue_work, loop, &work, work_cb, after_work_cb);
     }
 };
 
@@ -229,15 +230,37 @@ struct awaiter {
         async::schedule(h);
     }
 
-    decltype(auto) await_resume() noexcept
-        requires (!std::is_void_v<T>)
-    {
-        return std::move(h.promise().value);
+    decltype(auto) await_resume() noexcept {
+        if constexpr(!std::is_void_v<T>) {
+            auto value = std::move(*h.promise().value);
+            h.destroy();
+            return value;
+        } else {
+            h.destroy();
+        }
+    }
+};
+
+template <typename T>
+struct final_awaiter {
+    std::coroutine_handle<> caller;
+
+    bool await_ready() noexcept {
+        return false;
     }
 
-    void await_resume() noexcept
-        requires (std::is_void_v<T>)
-    {}
+    template <typename Promise>
+    void await_suspend(std::coroutine_handle<Promise> self) noexcept {
+        /// If this coroutine is a top-level coroutine, its caller is empty.
+        if(!caller) {
+            return;
+        }
+
+        /// Schedule the caller to run in the event loop.
+        async::schedule(caller);
+    }
+
+    void await_resume() noexcept {}
 };
 
 template <typename T>
@@ -257,28 +280,7 @@ struct promise_type : result<T> {
     }
 
     auto final_suspend() noexcept {
-        struct FinalAwaiter {
-            std::coroutine_handle<> caller;
-
-            bool await_ready() noexcept {
-                return false;
-            }
-
-            void await_suspend(std::coroutine_handle<> self) noexcept {
-                self.destroy();
-                /// If this coroutine is a top-level coroutine, its caller is empty.
-                if(!caller) {
-                    return;
-                }
-
-                /// Schedule the caller to run in the event loop.
-                async::schedule(caller);
-            }
-
-            void await_resume() noexcept {}
-        };
-
-        return FinalAwaiter{.caller = caller};
+        return final_awaiter<T>{caller};
     }
 };
 
@@ -305,12 +307,21 @@ public:
         return h;
     }
 
+    bool done() const noexcept {
+        return h.done();
+    }
+
+    void destroy() noexcept {
+        assert(h && h.done() && "destroy: invalid coroutine handle");
+        h.destroy();
+    }
+
 private:
     coroutine_handle h;
 };
 
 /// Suspend current coroutine and invoke the callback with its handle.
-/// Note the callback invoked before the coroutine is suspended. So it is 
+/// Note the callback invoked before the coroutine is suspended. So it is
 ///
 template <typename Callback>
 auto suspend(Callback&& callback) {

@@ -5,26 +5,24 @@ import subprocess
 os.chdir('deps/llvm')
 
 args = [
-    '-B=build',
+    '-B=./build-release',
     '-S=./llvm',
     '-G=Ninja',
     '-DLLVM_USE_LINKER=lld',
     '-DCMAKE_C_COMPILER=clang',
     '-DCMAKE_CXX_COMPILER=clang++',
-    '-DBUILD_SHARED_LIBS=ON',
-    '-DCMAKE_BUILD_TYPE=Debug',
+    '-DCMAKE_BUILD_TYPE=Release',
     '-DLLVM_TARGETS_TO_BUILD=X86',
     '-DLLVM_ENABLE_PROJECTS=clang',
-    '-DCMAKE_INSTALL_PREFIX=./build-install',
-    '-DLLVM_USE_SANITIZER=Address',
+    '-DCMAKE_INSTALL_PREFIX=./build-release-install',
 ]
 
 subprocess.run(['cmake'] + args)
-subprocess.run(['cmake', '--build', 'build', '--target', 'clang'])
-subprocess.run(['cmake', '--build', 'build', '--target', 'install'])
+subprocess.run(['cmake', '--build', 'build-release', '--target', 'clang'])
+subprocess.run(['cmake', '--build', 'build-release', '--target', 'install'])
 
 src = "./clang/lib/Sema/"
-dst = "./build-install/include/clang/Sema/"
+dst = "./build-release-install/include/clang/Sema/"
 
 for file in ["CoroutineStmtBuilder.h", "TypeLocBuilder.h", "TreeTransform.h"]:
     shutil.copyfile(src + file, dst + file)

@@ -22,19 +22,23 @@ struct PCH {
     /// All files involved in building this PCH(excluding the source file).
     std::vector<std::string> deps;
 
+    uint32_t size() const {
+        return preamble.size() - preamble.ends_with('@');
+    }
+
     /// FIXME: use asyncronous file system API.
     bool needUpdate(llvm::StringRef sourceContent) {
         /// Check whether the header part changed.
-        if(sourceContent.substr(0, preamble.size()) != preamble) {
+        if(sourceContent.substr(0, size()) != preamble.substr(0, size())) {
             return true;
         }
 
         /// Check timestamp of all files involved in building this PCH.
-        fs::file_status build;
-        if(auto error = fs::status(path, build)) {
-            llvm::errs() << "Error: " << error.message() << "\n";
-            std::terminate();
-        }
+        // fs::file_status build;
+        // if(auto error = fs::status(path, build)) {
+        //     llvm::errs() << "Error: " << error.message() << "\n";
+        //     std::terminate();
+        // }
 
         /// TODO: check whether deps changed through comparing timestamps.
         return false;

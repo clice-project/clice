@@ -7,7 +7,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "clice_socket",
+            "name": "Debug",
             "program": "${workspaceFolder}/build/bin/clice",
             "args": [
                 "--config=${workspaceFolder}/docs/clice.toml"
@@ -16,7 +16,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "clice_test",
+            "name": "Release",
+            "program": "${workspaceFolder}/build-release/bin/clice",
+            "args": [
+                "--config=${workspaceFolder}/docs/clice.toml"
+            ]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Test",
             "program": "${workspaceFolder}/build/bin/clice-tests",
             "args": [
                 "--test-dir=${workspaceFolder}/tests",

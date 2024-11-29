@@ -4,7 +4,10 @@
 
 namespace clice {
 
-static void setInvocation(clang::CompilerInvocation& invocation) {
+static void adjustInvocation(clang::CompilerInvocation& invocation) {
+    auto& frontOpts = invocation.getFrontendOpts();
+    frontOpts.DisableFree = false;
+
     clang::LangOptions& langOpts = invocation.getLangOpts();
     langOpts.CommentOpts.ParseAllComments = true;
     langOpts.RetainCommentsFromSystemHeaders = true;
@@ -22,23 +25,21 @@ Compiler::Compiler(llvm::StringRef filepath,
     clang::CreateInvocationOptions options;
     auto invocation = clang::createInvocation(args, options);
 
-    instance = std::make_unique<clang::CompilerInstance>();
+    /// FIXME: use a thread safe for every thread.
+    instance = std::make_unique<clang::CompilerInstance>(
+        std::make_shared<clang::PCHContainerOperations>());
+    adjustInvocation(*invocation);
 
     instance->setInvocation(std::move(invocation));
 
     // FIXME: customize DiagnosticConsumer
     if(consumer) {
-        instance->createDiagnostics(*llvm::vfs::getRealFileSystem(), consumer, true);
+        instance->createDiagnostics(*vfs, consumer, true);
     } else {
         instance->createDiagnostics(
-            *llvm::vfs::getRealFileSystem(),
+            *vfs,
             new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()),
             true);
-    }
-
-    if(!instance->createTarget()) {
-        llvm::errs() << "Failed to create target\n";
-        std::terminate();
     }
 }
 
@@ -47,7 +48,7 @@ bool Compiler::applyPCH(llvm::StringRef filepath, std::uint32_t bound, bool endA
     auto& preproc = instance->getPreprocessorOpts();
     preproc.UsePredefines = false;
     preproc.ImplicitPCHInclude = filepath;
-    preproc.PrecompiledPreambleBytes.first = {};
+    preproc.PrecompiledPreambleBytes.first = bound;
     preproc.PrecompiledPreambleBytes.second = endAtStart;
     preproc.DisablePCHOrModuleValidation = clang::DisableValidationForModuleKind::PCH;
     return true;
@@ -61,6 +62,7 @@ bool Compiler::applyPCM(llvm::StringRef filepath, llvm::StringRef name) {
 
 void Compiler::buildAST() {
     action = std::make_unique<clang::SyntaxOnlyAction>();
+    instance->getFrontendOpts().DisableFree = false;
     ExecuteAction();
     m_Resolver = std::make_unique<TemplateResolver>(instance->getSema());
 }
@@ -68,6 +70,10 @@ void Compiler::buildAST() {
 void Compiler::generatePCH(llvm::StringRef outpath, std::uint32_t bound, bool endAtStart) {
     content = content.substr(0, bound);
     instance->getFrontendOpts().OutputFile = outpath;
+    instance->getFrontendOpts().ProgramAction = clang::frontend::GeneratePCH;
+    instance->getPreprocessorOpts().PrecompiledPreambleBytes = {0, false};
+    instance->getPreprocessorOpts().GeneratePreamble = true;
+    instance->getLangOpts().CompilingPCH = true;
     action = std::make_unique<clang::GeneratePCHAction>();
     ExecuteAction();
 }
@@ -99,6 +105,8 @@ void Compiler::codeCompletion(llvm::StringRef filepath,
         std::terminate();
     }
 
+    /// instance->getASTContext().setExternalSource(nullptr);
+
     if(auto error = action->Execute()) {
         llvm::errs() << "Failed to execute action: " << error << "\n";
         std::terminate();
@@ -106,15 +114,33 @@ void Compiler::codeCompletion(llvm::StringRef filepath,
 }
 
 void Compiler::ExecuteAction() {
-    if(content != "") {
+    {
         auto buffer = llvm::MemoryBuffer::getMemBufferCopy(content);
         instance->getPreprocessorOpts().addRemappedFile(filepath, buffer.release());
     }
+
+    if(auto VFSWithRemapping = createVFSFromCompilerInvocation(instance->getInvocation(),
+                                                               instance->getDiagnostics(),
+                                                               llvm::vfs::getRealFileSystem())) {
+        instance->createFileManager(VFSWithRemapping);
+    }
+
+    if(!instance->createTarget()) {
+        llvm::errs() << "Failed to create target\n";
+        std::terminate();
+    }
+
+    llvm::outs() << instance->getLangOpts().Modules << "\n";
+    llvm::outs() << instance->getLangOpts().CPlusPlusModules << "\n";
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         llvm::errs() << "Failed to begin source file\n";
         std::terminate();
     }
+
+    /// llvm::outs() << instance->getPreprocessorOpts().ImplicitPCHInclude << "\n";
+
+    /// instance->getASTContext().setExternalSource(nullptr);
 
     auto& preproc = instance->getPreprocessor();
     // FIXME: add PPCallbacks to collect information.

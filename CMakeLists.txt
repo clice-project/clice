@@ -1,12 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
 project(CLICE_PROJECT)
 
-set(CLICE_LIB_TYPE SHARED)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-set(LLVM_INSTALL_PATH "${CMAKE_SOURCE_DIR}/deps/llvm/build-install")
 
 set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
 find_package(LLVM REQUIRED CONFIG)
@@ -69,10 +66,11 @@ file(GLOB_RECURSE SRC_FILES "${CMAKE_SOURCE_DIR}/src/Server/*.cpp")
 list(APPEND CLICE_SERVER_SOURCES ${SRC_FILES})
 add_executable(clice ${CLICE_SERVER_SOURCES})
 
-target_include_directories(clice PRIVATE
+include_directories(
     "${CMAKE_SOURCE_DIR}/deps/toml/include"
     "${CMAKE_SOURCE_DIR}/deps/libuv/include"
 )
+
 target_link_libraries(clice PRIVATE clice-core uv)
 
 
@@ -83,13 +81,14 @@ if(CLICE_ENABLE_TEST)
     file(GLOB_RECURSE TEST_SRC_FILES "${CMAKE_SOURCE_DIR}/unittests/*/*.cpp")
     list(APPEND CLICE_TEST_SOURCES ${TEST_SRC_FILES})
 
-    add_executable(clice-tests ${CLICE_TEST_SOURCES})
+    add_executable(clice-tests ${CLICE_TEST_SOURCES} ${SRC_FILES})
     target_include_directories(clice-tests PRIVATE
         "${CMAKE_SOURCE_DIR}/deps/googletest/googletest/include"
     )
     target_link_libraries(clice-tests PRIVATE 
         clice-core
         gtest_main
+        uv
     )
 endif()
 
