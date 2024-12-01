@@ -34,7 +34,7 @@ void testEqual(const Loader& loader, const In& in, const Out& out) {
 struct IndexerTester {
     Annotation annotation;
     std::unique_ptr<Loader> loader;
-    std::unique_ptr<Compiler> compiler;
+    std::unique_ptr<ASTInfo> compiler;
     FileRef mainFile;
 
     IndexerTester(llvm::StringRef source, bool json = false) : annotation(source) {
@@ -46,8 +46,9 @@ struct IndexerTester {
             "/home/ykiko/C++/clice2/build/lib/clang/20",
         };
 
-        compiler = std::make_unique<Compiler>("main.cpp", annotation.source(), args);
-        compiler->buildAST();
+        /// FIXME:
+        // compiler = std::make_unique<Compiler>("main.cpp", annotation.source(), args);
+        // compiler->buildAST();
 
         auto index = index::index(*compiler);
 

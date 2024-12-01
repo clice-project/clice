@@ -23,8 +23,10 @@ struct ServerOption {
 struct FrontendOption {
     std::vector<std::string> append;
     std::vector<std::string> remove;
-    std::string resource_dictionary = "${binary}/../lib/clang/${llvm_version}";
+    std::string index_directory = "${workplace}/.clice/index";
+    std::string cache_directory = "${workplace}/.clice/cache";
     std::string compile_commands_directory = "${workplace}/build";
+    std::string resource_dictionary = "${binary}/../lib/clang/${llvm_version}";
 };
 
 const ServerOption& server();

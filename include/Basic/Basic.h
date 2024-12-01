@@ -5,7 +5,7 @@
 
 namespace clice {
 
-class Compiler;
+class ASTInfo;
 
 }
 

@@ -4,10 +4,11 @@
 
 #include "Async.h"
 #include "llvm/ADT/StringMap.h"
+#include "Compiler/Compiler.h"
 
 namespace clice {
 
-class Compiler;
+class ASTInfo;
 
 /// Information of building precompiled header.
 struct PCH {
@@ -43,8 +44,6 @@ struct PCH {
         /// TODO: check whether deps changed through comparing timestamps.
         return false;
     }
-
-    void apply(Compiler& compiler) const;
 };
 
 /// Information of building precompiled module.
@@ -63,7 +62,7 @@ struct File {
     bool isIdle = true;
 
     /// The compiler instance of this file.
-    std::unique_ptr<Compiler> compiler;
+    ASTInfo compiler;
 
     std::deque<Task> waitings;
 };
@@ -93,7 +92,7 @@ public:
     /// Otherwise, the task will be executed immediately.
     template <typename Task>
     auto schedule(llvm::StringRef path, Task&& task)
-        -> async::promise<decltype(task(std::declval<Compiler&>()))> {
+        -> async::promise<decltype(task(std::declval<ASTInfo&>()))> {
         auto& file = files[path];
         if(!file.isIdle) {
             co_await async::suspend([&](auto handle) {
@@ -102,7 +101,7 @@ public:
         }
 
         file.isIdle = false;
-        auto& compiler = *file.compiler;
+        auto& compiler = file.compiler;
 
         auto result = co_await async::schedule_task([&task, &compiler] { return task(compiler); });
 

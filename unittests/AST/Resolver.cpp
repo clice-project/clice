@@ -17,8 +17,17 @@ struct TemplateResolverTester : public clang::RecursiveASTVisitor<TemplateResolv
             "-resource-dir",
             "/home/ykiko/C++/clice2/build/lib/clang/20",
         };
-        compiler = std::make_unique<Compiler>("main.cpp", code, compileArgs);
-        compiler->buildAST();
+        CompliationParams params;
+        params.path = "main.cpp";
+        params.content = code;
+        params.args = compileArgs;
+        auto info = buildAST(params);
+        if(!info) {
+            llvm::errs() << info.takeError() << "\n";
+            return;
+        }
+
+        compiler = std::move(*info);
         test();
     }
 
@@ -35,11 +44,11 @@ struct TemplateResolverTester : public clang::RecursiveASTVisitor<TemplateResolv
     }
 
     void test(std::source_location location = std::source_location::current()) {
-        TraverseDecl(compiler->tu());
+        TraverseDecl(compiler.tu());
         EXPECT_FALSE(input.isNull());
         EXPECT_FALSE(expect.isNull());
 
-        auto& resolver = compiler->resolver();
+        auto& resolver = compiler.resolver();
         clang::QualType result = resolver.resolve(input);
         EXPECT_EQ(result.getCanonicalType(), expect.getCanonicalType());
         if(result.getCanonicalType() != expect.getCanonicalType()) {
@@ -56,7 +65,7 @@ struct TemplateResolverTester : public clang::RecursiveASTVisitor<TemplateResolv
     clang::QualType input;
     clang::QualType expect;
     std::vector<const char*> compileArgs;
-    std::unique_ptr<clice::Compiler> compiler;
+    ASTInfo compiler;
 };
 
 TEST(TemplateResolver, TypeParameterType) {

@@ -59,7 +59,7 @@ struct SemanticTokens {
 namespace clice::feature {
 
 /// FIXME:
-proto::SemanticTokens semanticTokens(Compiler& compiler, llvm::StringRef filename);
+proto::SemanticTokens semanticTokens(ASTInfo& compiler, llvm::StringRef filename);
 
 }  // namespace clice::feature
 

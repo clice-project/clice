@@ -9,7 +9,7 @@
 #include "Index.h"
 
 namespace clice {
-class Compiler;
+class ASTInfo;
 }
 
 namespace clice::index {
@@ -32,6 +32,6 @@ using Index = index::Index<string, array>;
 }  // namespace memory
 
 /// index the given translation unit.
-memory::Index index(Compiler& compiler);
+memory::Index index(ASTInfo& compiler);
 
 }  // namespace clice::index

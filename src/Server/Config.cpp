@@ -1,4 +1,4 @@
-#define TOML_EXCEPTIONS 0 
+#define TOML_EXCEPTIONS 0
 #include <toml++/toml.hpp>
 
 #include <Server/Config.h>
@@ -66,6 +66,8 @@ std::string replace(std::string_view text) {
 }  // namespace
 
 int parse(llvm::StringRef execute, llvm::StringRef filepath) {
+    predefined["binary"] = execute;
+
     auto toml = toml::parse_file(filepath);
     if(toml.failed()) {
         log::fatal("Failed to parse config file: {0}, Beacuse {1}",
@@ -100,6 +102,8 @@ void init(std::string_view workplace) {
             field = replace(field);
         }
     });
+
+    log::info("Config initialized successfully, result: {0}", json::serialize(config));
     return;
 }
 

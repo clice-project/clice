@@ -513,7 +513,7 @@ struct SemanticToken {
 
 class HighlightBuilder : public SemanticVisitor<HighlightBuilder> {
 public:
-    HighlightBuilder(Compiler& compiler) : SemanticVisitor<HighlightBuilder>(compiler, true) {}
+    HighlightBuilder(ASTInfo& compiler) : SemanticVisitor<HighlightBuilder>(compiler, true) {}
 
     void handleOccurrence(const clang::Decl* decl,
                           clang::SourceLocation location,
@@ -710,7 +710,7 @@ public:
 
 }  // namespace
 
-proto::SemanticTokens semanticTokens(Compiler& compiler, llvm::StringRef filename) {
+proto::SemanticTokens semanticTokens(ASTInfo& compiler, llvm::StringRef filename) {
     HighlightBuilder builder(compiler);
     return builder.build();
 }

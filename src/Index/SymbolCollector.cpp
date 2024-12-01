@@ -616,7 +616,7 @@ void sortFiles(std::vector<memory::File>& files, std::vector<Location>& location
     });
 }
 
-void SymbolBuilder::indexTU(memory::Index& result, Compiler& compiler) {
+void SymbolBuilder::indexTU(memory::Index& result, ASTInfo& compiler) {
     index = &result;
     SymbolCollector collector(*this, compiler.tu()->getASTContext());
     collector.TraverseAST(compiler.context());
@@ -638,7 +638,7 @@ void SymbolBuilder::indexTU(memory::Index& result, Compiler& compiler) {
 
 }  // namespace
 
-memory::Index index(Compiler& compiler) {
+memory::Index index(ASTInfo& compiler) {
     memory::Index result;
     SymbolBuilder builder(compiler.sema(), compiler.tokBuf());
     builder.indexTU(result, compiler);

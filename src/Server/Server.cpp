@@ -72,7 +72,8 @@ void Server::run(int argc, const char** argv) {
 }
 
 async::promise<void> Server::onInitialize(json::Value id, const proto::InitializeParams& params) {
-
+    auto workplace = URI::resolve(params.workspaceFolders[0].uri);
+    config::init(workplace);
     async::write(std::move(id), json::serialize(proto::InitializeResult()));
     co_return;
 }
@@ -202,7 +203,7 @@ async::promise<void> Server::onDocumentSymbol(json::Value id,
 async::promise<void> Server::onSemanticTokens(json::Value id,
                                               const proto::SemanticTokensParams& params) {
     auto path = URI::resolve(params.textDocument.uri);
-    auto tokens = co_await scheduler.schedule(path, [&](Compiler& compiler) {
+    auto tokens = co_await scheduler.schedule(path, [&](ASTInfo& compiler) {
         return feature::semanticTokens(compiler, "");
     });
     async::write(std::move(id), json::serialize(tokens));

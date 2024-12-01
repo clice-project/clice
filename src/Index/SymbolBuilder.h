@@ -187,7 +187,7 @@ public:
         return symbolCache.contains(decl);
     }
 
-    void indexTU(memory::Index& result, Compiler& compiler);
+    void indexTU(memory::Index& result, ASTInfo& compiler);
 
     ~SymbolBuilder() {
         // for(auto [decl, _]: symbolCache) {

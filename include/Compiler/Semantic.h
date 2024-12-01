@@ -58,7 +58,7 @@ class SemanticVisitor : public clang::RecursiveASTVisitor<SemanticVisitor<Derive
 public:
     using Base = clang::RecursiveASTVisitor<SemanticVisitor>;
 
-    SemanticVisitor(Compiler& compiler, bool mainFileOnly = false) :
+    SemanticVisitor(ASTInfo& compiler, bool mainFileOnly = false) :
         sema(compiler.sema()), pp(compiler.pp()), resolver(compiler.resolver()),
         srcMgr(compiler.srcMgr()), tokBuf(compiler.tokBuf()), mainFileOnly(mainFileOnly) {}
 

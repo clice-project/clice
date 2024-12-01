@@ -24,7 +24,12 @@ int main(){
         "/home/ykiko/C++/clice2/build/lib/clang/20",
     };
 
-    auto info = buildAST("main.cpp", code, compileArgs);
+    CompliationParams params;
+    params.path = "main.cpp";
+    params.content = code;
+    params.args = compileArgs;
+
+    auto info = buildAST(params);
     ASSERT_TRUE(bool(info));
 }
 
@@ -57,14 +62,101 @@ int main(){
         return;
     }
 
-    auto pch = clice::buildPCH("main.cpp", code, outpath, compileArgs);
+    CompliationParams params;
+    params.path = "main.cpp";
+    params.content = code;
+    params.outpath = outpath;
+    params.args = compileArgs;
+
+    auto pch = clice::buildPCH(params);
     ASSERT_TRUE(bool(pch));
 
-    Preamble preamble;
-    preamble.addPCH(*pch);
+    params.addPCH(*pch);
 
-    auto ast = buildAST("main.cpp", code, compileArgs, &preamble);
+    auto ast = buildAST(params);
     ASSERT_TRUE(bool(ast));
+}
+
+TEST(Compiler, buildPCM) {
+    const char* code = R"cpp(
+export module A;
+
+export int foo() {
+    return 0;
+}
+)cpp";
+
+    llvm::SmallString<128> outpath;
+    if(auto error = llvm::sys::fs::createTemporaryFile("main", "pcm", outpath)) {
+        llvm::errs() << error.message() << "\n";
+        return;
+    }
+
+    if(auto error = fs::remove(outpath)) {
+        llvm::errs() << error.message() << "\n";
+        return;
+    }
+
+    llvm::SmallVector<const char*, 5> compileArgs = {
+        "clang++",
+        "-std=c++20",
+        "main.cppm",
+    };
+
+    CompliationParams params;
+    params.path = "main.cppm";
+    params.content = code;
+    params.outpath = outpath;
+    params.args = compileArgs;
+
+    auto pcm = clice::buildPCM(params);
+    ASSERT_TRUE(bool(pcm));
+    ASSERT_EQ(pcm->name, "A");
+
+    const char* code2 = R"cpp(
+import A;
+
+int main(){
+    foo();
+    return 0;
+}
+)cpp";
+
+    compileArgs = {
+        "clang++",
+        "-std=c++20",
+        "main.cpp",
+    };
+
+    params.path = "main.cpp";
+    params.content = code2;
+    params.args = compileArgs;
+    auto info = buildAST(params);
+    ASSERT_TRUE(bool(info));
+}
+
+TEST(Compiler, codeCompleteAt) {
+    const char* code = R"cpp(
+export module A;
+export int foo = 1;
+)cpp";
+
+    llvm::SmallVector<const char*, 5> compileArgs = {
+        "clang++",
+        "-std=c++20",
+        "main.cppm",
+    };
+
+    CompliationParams params;
+    params.path = "main.cppm";
+    params.content = code;
+    params.args = compileArgs;
+
+    auto consumer = new clang::PrintingCodeCompleteConsumer({}, llvm::outs());
+    auto info = codeCompleteAt(params, 3, 10, "main.cppm", consumer);
+    ASSERT_TRUE(bool(info));
+
+    /// TODO: add tests in the case of PCH, PCM and override file.
 }
 
 }  // namespace

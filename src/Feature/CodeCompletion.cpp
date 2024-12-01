@@ -57,15 +57,17 @@ private:
 
 }  // namespace
 
-std::vector<proto::CompletionItem> codeCompletion(Compiler& compiler,
+std::vector<proto::CompletionItem> codeCompletion(CompliationParams& params,
                                                   llvm::StringRef filepath,
                                                   proto::Position position,
                                                   const config::CodeCompletionOption& option) {
     // TODO: decode here.
-    compiler.codeCompletion(filepath,
-                            position.line,
-                            position.character,
-                            new CodeCompletionCollector({}));
+    auto result = codeCompleteAt(params,
+                                 position.line,
+                                 position.character,
+                                 filepath,
+                                 new CodeCompletionCollector({}));
+    if(result) {}
     return {};
 }
 
