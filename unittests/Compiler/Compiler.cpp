@@ -68,10 +68,10 @@ int main(){
     params.outpath = outpath;
     params.args = compileArgs;
 
-    auto pch = clice::buildPCH(params);
-    ASSERT_TRUE(bool(pch));
+    PCHInfo pch;
+    ASSERT_TRUE(bool(clice::buildPCH(params, pch)));
 
-    params.addPCH(*pch);
+    params.addPCH(pch);
 
     auto ast = buildAST(params);
     ASSERT_TRUE(bool(ast));
@@ -109,9 +109,9 @@ export int foo() {
     params.outpath = outpath;
     params.args = compileArgs;
 
-    auto pcm = clice::buildPCM(params);
-    ASSERT_TRUE(bool(pcm));
-    ASSERT_EQ(pcm->name, "A");
+    PCMInfo pcm;
+    ASSERT_TRUE(bool(clice::buildPCM(params, pcm)));
+    ASSERT_EQ(pcm.name, "A");
 
     const char* code2 = R"cpp(
 import A;
@@ -131,6 +131,8 @@ int main(){
     params.path = "main.cpp";
     params.content = code2;
     params.args = compileArgs;
+    params.addPCM(pcm);
+
     auto info = buildAST(params);
     ASSERT_TRUE(bool(info));
 }

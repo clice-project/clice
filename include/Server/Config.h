@@ -29,6 +29,8 @@ struct FrontendOption {
     std::string resource_dictionary = "${binary}/../lib/clang/${llvm_version}";
 };
 
+llvm::StringRef workplace();
+
 const ServerOption& server();
 
 const FrontendOption& frontend();

@@ -7,19 +7,15 @@
 namespace clice {
 
 /// All information about AST.
-struct ASTInfo {
-    std::unique_ptr<clang::ASTFrontendAction> action;
-    std::unique_ptr<clang::CompilerInstance> instance;
-    std::unique_ptr<clang::syntax::TokenBuffer> tokBuf_;
-    std::unique_ptr<TemplateResolver> resolver_;
-
+class ASTInfo {
+public:
     ASTInfo() = default;
 
     ASTInfo(std::unique_ptr<clang::ASTFrontendAction> action,
             std::unique_ptr<clang::CompilerInstance> instance,
             std::unique_ptr<clang::syntax::TokenBuffer> tokBuf) :
         action(std::move(action)), instance(std::move(instance)), tokBuf_(std::move(tokBuf)) {
-        resolver_ = std::make_unique<TemplateResolver>(instance->getSema());
+        resolver_ = std::make_unique<TemplateResolver>(this->instance->getSema());
     }
 
     ASTInfo(const ASTInfo&) = delete;
@@ -61,9 +57,15 @@ struct ASTInfo {
     TemplateResolver& resolver() {
         return *resolver_;
     }
+
+private:
+    std::unique_ptr<clang::ASTFrontendAction> action;
+    std::unique_ptr<clang::CompilerInstance> instance;
+    std::unique_ptr<clang::syntax::TokenBuffer> tokBuf_;
+    std::unique_ptr<TemplateResolver> resolver_;
 };
 
-struct PCHInfo : ASTInfo {
+struct PCHInfo {
     /// PCM file path.
     std::string path;
     /// Source file path.
@@ -73,58 +75,30 @@ struct PCHInfo : ASTInfo {
     /// Files involved in building this PCM.
     std::vector<std::string> deps;
 
-    PCHInfo(ASTInfo info,
-            llvm::StringRef path,
-            llvm::StringRef content,
-            llvm::StringRef mainpath,
-            clang::PreambleBounds bounds) :
-        ASTInfo(std::move(info)), path(path), mainpath(mainpath) {
-
-        preamble = content.substr(0, bounds.Size).str();
-        if(bounds.PreambleEndsAtStartOfLine) {
-            preamble.append("@");
-        }
-    }
-
     clang::PreambleBounds bounds() const {
         /// We use '@' to mark the end of the preamble.
         bool endAtStart = preamble.ends_with('@');
         unsigned int size = preamble.size() - endAtStart;
         return {size, endAtStart};
     }
+
+    bool needUpdate(llvm::StringRef content);
 };
 
-struct PCMInfo : ASTInfo {
+struct PCMInfo {
     /// PCM file path.
     std::string path;
     /// Module name.
     std::string name;
 
-    PCMInfo(ASTInfo info, llvm::StringRef path) : ASTInfo(std::move(info)), path(path) {
-        name = context().getCurrentNamedModule()->Name;
-    }
-};
-
-/// Information about reuse PCH or PCM. This should be placed in stack.
-struct Preamble {
-    /// Information about reuse PCH.
-    std::string pch;
-    clang::PreambleBounds bounds = {0, false};
-
-    /// Information about reuse PCM(name, path).
-    llvm::SmallVector<std::pair<std::string, std::string>> pcms;
-
-    void addPCH(const PCHInfo& info) {
-        pch = info.path;
-        bounds = info.bounds();
-    }
+    bool needUpdate();
 };
 
 struct CompliationParams {
-    llvm::StringRef path;
     llvm::StringRef content;
-    llvm::StringRef outpath;
-    llvm::StringRef mainpath;
+    llvm::SmallString<128> path;
+    llvm::SmallString<128> outpath;
+    llvm::SmallString<128> mainpath;
     llvm::ArrayRef<const char*> args;
 
     /// Information about reuse PCH.
@@ -138,6 +112,10 @@ struct CompliationParams {
         pch = info.path;
         bounds = info.bounds();
     }
+
+    void addPCM(const PCMInfo& info) {
+        pcms.emplace_back(info.name, info.path);
+    }
 };
 
 /// Build AST from given file path and content. If pch or pcm provided, apply them to the compiler.
@@ -145,9 +123,9 @@ struct CompliationParams {
 /// their reusability and update in time.
 llvm::Expected<ASTInfo> buildAST(CompliationParams& params);
 
-llvm::Expected<PCHInfo> buildPCH(CompliationParams& params);
+llvm::Expected<ASTInfo> buildPCH(CompliationParams& params, PCHInfo& out);
 
-llvm::Expected<PCMInfo> buildPCM(CompliationParams& params);
+llvm::Expected<ASTInfo> buildPCM(CompliationParams& params, PCMInfo& out);
 
 llvm::Expected<ASTInfo> codeCompleteAt(CompliationParams& params,
                                        uint32_t line,

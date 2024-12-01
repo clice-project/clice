@@ -4,7 +4,20 @@
 
 namespace clice {
 
-static void adjustInvocation(clang::CompilerInvocation& invocation) {
+bool PCHInfo::needUpdate(llvm::StringRef content) {
+    auto size = this->bounds().Size;
+    if(content.substr(0, size) != preamble.substr(0, size)) {
+        return true;
+    }
+
+    /// FIXME: check timestamp of all files involved in building this PCH.
+
+    return false;
+}
+
+namespace {
+
+void adjustInvocation(clang::CompilerInvocation& invocation) {
     auto& frontOpts = invocation.getFrontendOpts();
     frontOpts.DisableFree = false;
 
@@ -15,7 +28,7 @@ static void adjustInvocation(clang::CompilerInvocation& invocation) {
     // FIXME: add more.
 }
 
-static auto createInstance(llvm::ArrayRef<const char*> args) {
+auto createInstance(llvm::ArrayRef<const char*> args) {
     auto instance = std::make_unique<clang::CompilerInstance>();
 
     /// TODO: Figure out `CreateInvocationOptions`.
@@ -33,7 +46,7 @@ static auto createInstance(llvm::ArrayRef<const char*> args) {
     return instance;
 }
 
-static void applyPreamble(clang::CompilerInstance& instance, CompliationParams& params) {
+void applyPreamble(clang::CompilerInstance& instance, CompliationParams& params) {
     auto& PPOpts = instance.getPreprocessorOpts();
     auto& pch = params.pch;
     auto& bounds = params.bounds;
@@ -52,9 +65,9 @@ static void applyPreamble(clang::CompilerInstance& instance, CompliationParams& 
     }
 }
 
-static llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> instance,
-                                             clang::frontend::ActionKind kind,
-                                             bool collectPP = true) {
+llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> instance,
+                                      clang::frontend::ActionKind kind,
+                                      bool collectPP = true) {
     std::unique_ptr<clang::ASTFrontendAction> action;
     if(kind == clang::frontend::ActionKind::ParseSyntaxOnly) {
         action = std::make_unique<clang::SyntaxOnlyAction>();
@@ -100,6 +113,8 @@ static llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInst
     }
 }
 
+}  // namespace
+
 llvm::Expected<ASTInfo> buildAST(CompliationParams& params) {
     auto instance = createInstance(params.args);
 
@@ -111,11 +126,11 @@ llvm::Expected<ASTInfo> buildAST(CompliationParams& params) {
     return ExecuteAction(std::move(instance), clang::frontend::ActionKind::ParseSyntaxOnly);
 }
 
-llvm::Expected<PCHInfo> buildPCH(CompliationParams& params) {
+llvm::Expected<ASTInfo> buildPCH(CompliationParams& params, PCHInfo& out) {
     auto instance = createInstance(params.args);
 
     clang::PreambleBounds bounds = {0, false};
-    if(params.mainpath == params.path) {
+    if(params.mainpath.empty() || params.mainpath == params.path) {
         /// If mainpath is equal to path, just tokenize the content to get preamble bounds.
         bounds = clang::Lexer::ComputePreamble(params.content, {}, false);
     } else {
@@ -125,7 +140,7 @@ llvm::Expected<PCHInfo> buildPCH(CompliationParams& params) {
     }
 
     /// Set options to generate PCH.
-    instance->getFrontendOpts().OutputFile = params.outpath;
+    instance->getFrontendOpts().OutputFile = params.outpath.str();
     instance->getFrontendOpts().ProgramAction = clang::frontend::GeneratePCH;
     instance->getPreprocessorOpts().PrecompiledPreambleBytes = {0, false};
     instance->getPreprocessorOpts().GeneratePreamble = true;
@@ -135,17 +150,25 @@ llvm::Expected<PCHInfo> buildPCH(CompliationParams& params) {
     instance->getPreprocessorOpts().addRemappedFile(params.path, buffer.release());
 
     if(auto info = ExecuteAction(std::move(instance), clang::frontend::ActionKind::GeneratePCH)) {
-        return PCHInfo(std::move(*info), params.outpath, params.content, params.mainpath, bounds);
+        out.path = params.outpath.str();
+        out.mainpath = params.mainpath.str();
+        out.preamble = params.content.substr(0, bounds.Size).str();
+        out.preamble = params.content.substr(0, bounds.Size).str();
+        if(bounds.PreambleEndsAtStartOfLine) {
+            out.preamble.append("@");
+        }
+
+        return std::move(*info);
     } else {
         return info.takeError();
     }
 }
 
-llvm::Expected<PCMInfo> buildPCM(CompliationParams& params) {
+llvm::Expected<ASTInfo> buildPCM(CompliationParams& params, PCMInfo& out) {
     auto instance = createInstance(params.args);
 
     /// Set options to generate PCM.
-    instance->getFrontendOpts().OutputFile = params.outpath;
+    instance->getFrontendOpts().OutputFile = params.outpath.str();
     instance->getFrontendOpts().ProgramAction = clang::frontend::GenerateReducedModuleInterface;
 
     auto buffer = llvm::MemoryBuffer::getMemBufferCopy(params.content);
@@ -155,7 +178,9 @@ llvm::Expected<PCMInfo> buildPCM(CompliationParams& params) {
 
     if(auto info = ExecuteAction(std::move(instance),
                                  clang::frontend::ActionKind::GenerateReducedModuleInterface)) {
-        return PCMInfo(std::move(*info), params.outpath);
+        out.path = params.outpath.str();
+        out.name = info->context().getCurrentNamedModule()->Name;
+        return std::move(*info);
     } else {
         return info.takeError();
     }

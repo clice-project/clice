@@ -10,45 +10,6 @@ namespace clice {
 
 class ASTInfo;
 
-/// Information of building precompiled header.
-struct PCH {
-    /// The path of this PCH.
-    std::string path;
-    /// The source file path.
-    std::string sourcePath;
-    /// The header part of source file used to build this PCH.
-    std::string preamble;
-    /// The arguments used to build this PCH.
-    std::string arguments;
-    /// All files involved in building this PCH(excluding the source file).
-    std::vector<std::string> deps;
-
-    uint32_t size() const {
-        return preamble.size() - preamble.ends_with('@');
-    }
-
-    /// FIXME: use asyncronous file system API.
-    bool needUpdate(llvm::StringRef sourceContent) {
-        /// Check whether the header part changed.
-        if(sourceContent.substr(0, size()) != preamble.substr(0, size())) {
-            return true;
-        }
-
-        /// Check timestamp of all files involved in building this PCH.
-        // fs::file_status build;
-        // if(auto error = fs::status(path, build)) {
-        //     llvm::errs() << "Error: " << error.message() << "\n";
-        //     std::terminate();
-        // }
-
-        /// TODO: check whether deps changed through comparing timestamps.
-        return false;
-    }
-};
-
-/// Information of building precompiled module.
-struct PCM {};
-
 struct File;
 
 struct Task {
@@ -117,7 +78,7 @@ public:
     }
 
 private:
-    llvm::StringMap<PCH> pchs;
+    llvm::StringMap<PCHInfo> pchs;
     llvm::StringMap<File> files;
 };
 

@@ -107,6 +107,10 @@ void init(std::string_view workplace) {
     return;
 }
 
+llvm::StringRef workplace() {
+    return predefined["workplace"];
+}
+
 const ServerOption& server() {
     return config.server;
 }

@@ -1,3 +1,4 @@
+#include "Server/Config.h"
 #include "Server/Scheduler.h"
 #include "Server/Server.h"
 
@@ -15,47 +16,50 @@ struct Tracer {
 async::promise<void> Scheduler::updatePCH(llvm::StringRef filepath,
                                           llvm::StringRef content,
                                           llvm::ArrayRef<const char*> args) {
-
-    std::string outpath = "/home/ykiko/C++/clice2/build/cache/xxx.pch";
-
     auto [iter, success] = pchs.try_emplace(filepath);
     if(success || iter->second.needUpdate(content)) {
-        log::info("Start building PCH for {0}", filepath.str());
-
         Tracer tracer;
-        clang::PreambleBounds bounds = {0, 0};
+
         CompliationParams params;
         params.path = filepath;
         params.content = content;
         params.args = args;
+        params.outpath = filepath;
+        path::replace_path_prefix(params.outpath,
+                                  config::workplace(),
+                                  config::frontend().cache_directory);
+        path::replace_extension(params.outpath, ".pch");
+
+        log::info("Start building PCH for {0} at {1}", params.path, params.outpath);
+
+        PCHInfo pch;
 
         co_await async::schedule_task([&] {
-            bounds = clang::Lexer::ComputePreamble(content, {}, false);
-            if(bounds.Size != 0) {
-                auto pch = buildPCH(params);
-                if(!pch) {
-                    log::fatal("Failed to build PCH for {0}", filepath.str());
+            auto dir = path::parent_path(params.outpath);
+            if(!fs::exists(dir)) {
+                if(auto error = fs::create_directories(dir)) {
+                    log::fatal("Failed to create directory {0}, because {1}, build PCH stopped",
+                               dir,
+                               error.message());
                     return;
                 }
             }
+
+            if(auto info = buildPCH(params, pch); !info) {
+                log::fatal("Failed to build PCH for {0}, because {1}",
+                           filepath.str(),
+                           info.takeError());
+                return;
+            }
         });
-
-        auto preamble = content.substr(0, bounds.Size).str();
-        if(bounds.PreambleEndsAtStartOfLine) {
-            preamble.append("@");
-        }
-
-        pchs[filepath] = PCH{
-            .path = outpath,
-            .preamble = preamble,
-            .deps = {},
-        };
 
         log::info("PCH for {0} is up-to-date, elapsed {1}ms",
                   filepath.str(),
                   tracer.duration().count());
+
+        pchs[filepath] = std::move(pch);
     } else {
-        log::info("Reuse PCH from {0}", filepath.str());
+        log::info("Reuse PCH for {0} from {1}", filepath.str(), iter->second.path);
     }
     co_return;
 }
@@ -96,7 +100,7 @@ async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringR
     params.path = path;
     params.content = content;
     params.args = args;
-    // params.addPCH(pchs.at(filepath));
+    params.addPCH(pchs.at(filepath));
 
     auto task = [&] {
         /// FIXME: We cannot use reference capture the `pch` here, beacuse the reference may be
