@@ -5,6 +5,7 @@
 #include "Async.h"
 #include "llvm/ADT/StringMap.h"
 #include "Compiler/Compiler.h"
+#include "Feature/CodeCompletion.h"
 
 namespace clice {
 
@@ -21,7 +22,7 @@ struct Task {
 
 struct File {
     bool isIdle = true;
-
+    std::string content;
     /// The compiler instance of this file.
     ASTInfo compiler;
 
@@ -39,6 +40,10 @@ public:
     }
 
     async::promise<void> buildAST(llvm::StringRef path, llvm::StringRef content);
+
+    async::promise<proto::CompletionResult> codeComplete(llvm::StringRef path,
+                                                         unsigned int line,
+                                                         unsigned int column);
 
     async::promise<void> add(llvm::StringRef path, llvm::StringRef content);
 

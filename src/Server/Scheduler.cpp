@@ -94,7 +94,7 @@ async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringR
     co_await (isModule ? updatePCM() : updatePCH(filepath, content, args));
 
     Tracer tracer;
-    log::info("Start building AST for {0}", filepath.str());
+    log::info("Start building AST for {0}", filepath);
 
     CompliationParams params;
     params.path = path;
@@ -110,7 +110,7 @@ async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringR
         /// problem.
         auto info = clice::buildAST(params);
         if(!info) {
-            log::fatal("Failed to build AST for {0}", filepath.str());
+            log::fatal("Failed to build AST for {0}", filepath);
         }
         return std::move(*info);
     };
@@ -118,11 +118,10 @@ async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringR
     auto compiler = co_await async::schedule_task(std::move(task));
 
     auto& file = files[path];
+    file.content = content;
     file.compiler = std::move(compiler);
 
-    log::info("Build AST successfully for {0}, elapsed {1}ms",
-              filepath.str(),
-              tracer.duration().count());
+    log::info("Build AST successfully for {0}, elapsed {1}ms", filepath, tracer.duration());
 
     if(!file.waitings.empty()) {
         auto task = std::move(file.waitings.front());
@@ -131,6 +130,58 @@ async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringR
     }
 
     file.isIdle = true;
+}
+
+async::promise<proto::CompletionResult> Scheduler::codeComplete(llvm::StringRef filepath,
+                                                                unsigned int line,
+                                                                unsigned int column) {
+    auto iter = files.find(filepath);
+    if(iter == files.end()) {
+        log::fatal("File {0} is not building, skip code completion", filepath);
+    }
+
+    if(iter->second.isIdle) {
+        /// If the file is already existed and is building, append the task to the waiting list.
+        co_await async::suspend([&](auto handle) {
+            iter->second.waitings.emplace_back(Task{
+                .isBuild = true,
+                .waiting = handle,
+            });
+        });
+    }
+
+    llvm::SmallString<128> path = filepath;
+    /// FIXME: lookup from CDB file and adjust and remove unnecessary arguments.1
+    llvm::SmallVector<const char*> args = {
+        "clang++",
+        "-std=c++20",
+        path.c_str(),
+        "-resource-dir",
+        "/home/ykiko/C++/clice2/build/lib/clang/20",
+    };
+
+    CompliationParams params;
+    params.path = path;
+    params.args = args;
+    params.content = iter->second.content;
+
+    /// through arguments to judge is it a module.
+    bool isModule = false;
+    co_await (isModule ? updatePCM() : updatePCH(params.path, params.content, args));
+    params.addPCH(pchs.at(filepath));
+
+    Tracer tracer;
+    log::info("Run code completion at {0}:{1}:{2}", filepath, line, column);
+
+    auto task = [&] {
+        return feature::codeCompletion(params, line, column, filepath, {});
+    };
+
+    auto result = co_await async::schedule_task(std::move(task));
+
+    log::info("Code completion for {0} is done, elapsed {1}ms", filepath, tracer.duration());
+
+    co_return result;
 }
 
 async::promise<void> Scheduler::add(llvm::StringRef path, llvm::StringRef content) {

@@ -74,7 +74,11 @@ void Server::run(int argc, const char** argv) {
 async::promise<void> Server::onInitialize(json::Value id, const proto::InitializeParams& params) {
     auto workplace = URI::resolve(params.workspaceFolders[0].uri);
     config::init(workplace);
-    async::write(std::move(id), json::serialize(proto::InitializeResult()));
+    auto result = json::serialize(proto::InitializeResult());
+    auto capabilities = result.getAsObject()->get("capabilities")->getAsObject();
+    /// FIXME:
+    capabilities->try_emplace("completionProvider", feature::capability(json::Value(nullptr)));
+    async::write(std::move(id), std::move(result));
     co_return;
 }
 
@@ -216,6 +220,11 @@ async::promise<void> Server::onInlayHint(json::Value id, const proto::InlayHintP
 
 async::promise<void> Server::onCodeCompletion(json::Value id,
                                               const proto::CompletionParams& params) {
+    auto path = URI::resolve(params.textDocument.uri);
+    auto result = co_await scheduler.codeComplete(path,
+                                                  params.position.line + 1,
+                                                  params.position.character + 1);
+    async::write(std::move(id), json::serialize(result));
     co_return;
 }
 

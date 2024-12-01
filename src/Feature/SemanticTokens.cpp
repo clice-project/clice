@@ -710,8 +710,8 @@ public:
 
 }  // namespace
 
-proto::SemanticTokens semanticTokens(ASTInfo& compiler, llvm::StringRef filename) {
-    HighlightBuilder builder(compiler);
+proto::SemanticTokens semanticTokens(ASTInfo& info, llvm::StringRef filename) {
+    HighlightBuilder builder(info);
     return builder.build();
 }
 

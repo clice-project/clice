@@ -1,10 +1,19 @@
 #pragma once
 
-#include <Basic/Location.h>
+#include <Basic/Document.h>
+#include <Support/JSON.h>
+
+namespace clice {
+struct CompliationParams;
+}
 
 namespace clice::proto {
 
 struct CompletionClientCapabilities {};
+
+struct CompletionOptions {
+    std::vector<string> triggerCharacters;
+};
 
 enum class CompletionItemKind {
     Text = 1,
@@ -39,6 +48,17 @@ enum CompletionItemTag {
     Deprecated = 1,
 };
 
+struct InsertReplaceEdit {
+    /// The string to be inserted.
+    string newText;
+
+    /// The range if the insert is requested.
+    Range insert;
+
+    /// The range if the replace is requested.
+    Range replace;
+};
+
 struct CompletionItem {
     /// The label of this completion item.
     /// If label details are provided the label itself should
@@ -54,36 +74,46 @@ struct CompletionItem {
     CompletionItemKind kind;
 
     /// Tags for this completion item.
-    std::vector<CompletionItemTag> tags;
+    /// std::vector<CompletionItemTag> tags;
 
-    // FIXME:
-    // ...
+    /// A human-readable string with additional information
+    /// about this item, like type or symbol information.
+    /// string detail;
+
+    /// A human-readable string that represents a doc-comment.
+    /// string documentation;
+
+    /// A string that should be used when comparing this item
+    /// with other items. When omitted the label is used
+    /// as the sort text for this item.
+    /// string sortText;
+
+    TextEdit textEdit;
 };
 
-struct CompletionParams {};
+using CompletionParams = TextDocumentPositionParams;
+
+using CompletionResult = std::vector<CompletionItem>;
 
 }  // namespace clice::proto
 
-namespace clice {
-class Compiler;
-}
-
 namespace clice::config {
 
-struct CodeCompletionOption {
-    // TODO:
-};
+struct CodeCompletionOption {};
 
 }  // namespace clice::config
 
 namespace clice::feature {
 
+json::Value capability(json::Value clientCapabilities);
+
 /// Run code completion in given file and location. `compiler` should be
 /// set properly if any PCH or PCM is needed. Each completion requires a
 /// new compiler instance.
-std::vector<proto::CompletionItem> codeCompletion(Compiler& compiler,
-                                                  llvm::StringRef filepath,
-                                                  proto::Position position,
-                                                  const config::CodeCompletionOption& option);
+proto::CompletionResult codeCompletion(CompliationParams& compliation,
+                                       uint32_t line,
+                                       uint32_t column,
+                                       llvm::StringRef file,
+                                       const config::CodeCompletionOption& option);
 
 }  // namespace clice::feature
