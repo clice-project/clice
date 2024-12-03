@@ -7,8 +7,7 @@
 #include "Basic/URI.h"
 #include "Basic/Document.h"
 #include "Compiler/Compiler.h"
-#include "Support/JSON.h"
-#include "Support/FileSystem.h"
+#include "Support/Support.h"
 
 #include "Feature/Lookup.h"
 #include "Feature/DocumentHighlight.h"

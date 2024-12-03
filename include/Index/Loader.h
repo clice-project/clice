@@ -126,11 +126,11 @@ public:
 
     template <typename Callback>
     bool lookupRelation(const binary::Symbol* symbol,
-                        RelationKinds kind,
+                        RelationKind::Kind kind,
                         const Callback& callback) {
         if(symbol) {
             for(auto& relation: relations(*symbol)) {
-                if(relation.kind.is(kind)) {
+                if(relation.kind & kind) {
                     FullLocation location = decompose(relation.location);
                     callback(location);
                 }

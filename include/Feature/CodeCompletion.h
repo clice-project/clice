@@ -16,6 +16,7 @@ struct CompletionOptions {
 };
 
 enum class CompletionItemKind {
+    Invalid = 0,
     Text = 1,
     Method = 2,
     Function = 3,

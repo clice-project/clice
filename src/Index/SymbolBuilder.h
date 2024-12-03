@@ -120,14 +120,14 @@ public:
 
         SymbolProxy addDeclaration(LocationRef location) {
             RelationKind kind = RelationKind::Reference;
-            kind.set(RelationKinds::Declaration);
+            kind &= RelationKind::Declaration;
             return addRelation(kind, location);
         }
 
         SymbolProxy addDefinition(LocationRef location) {
             RelationKind kind = RelationKind::Reference;
-            kind.set(RelationKinds::Declaration);
-            kind.set(RelationKinds::Definition);
+            kind &= RelationKind::Declaration;
+            kind &= RelationKind::Definition;
             return addRelation(kind, location);
         }
 

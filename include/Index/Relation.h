@@ -2,40 +2,38 @@
 
 namespace clice::index {
 
-enum class RelationKinds : uint32_t {
-    Invalid,
-    Declaration,
-    Definition,
-    Reference,
-    // Write Relation.
-    Read,
-    Write,
-    Interface,
-    Implementation,
-    /// When target is a type definition of source, source is possible type or constructor.
-    TypeDefinition,
-
-    /// When target is a base class of source.
-    Base,
-    /// When target is a derived class of source.
-    Derived,
-
-    /// When target is a constructor of source.
-    Constructor,
-    /// When target is a destructor of source.
-    Destructor,
-
-    // When target is a caller of source.
-    Caller,
-    // When target is a callee of source.
-    Callee,
-};
-
 /// A bit field enum to describe the kind of relation between two symbols.
-struct RelationKind : enum_type<RelationKinds, true> {
-    using enum RelationKinds;
-    using enum_type::enum_type;
-    using enum_type::operator=;
+struct RelationKind : support::Enum<RelationKind, true, uint32_t> {
+    using Enum::Enum;
+
+    enum Kind : uint32_t {
+        Invalid,
+        Declaration,
+        Definition,
+        Reference,
+        // Write Relation.
+        Read,
+        Write,
+        Interface,
+        Implementation,
+        /// When target is a type definition of source, source is possible type or constructor.
+        TypeDefinition,
+
+        /// When target is a base class of source.
+        Base,
+        /// When target is a derived class of source.
+        Derived,
+
+        /// When target is a constructor of source.
+        Constructor,
+        /// When target is a destructor of source.
+        Destructor,
+
+        // When target is a caller of source.
+        Caller,
+        // When target is a callee of source.
+        Callee,
+    };
 };
 
 template <typename T>
@@ -76,11 +74,11 @@ struct Relation {
 
     static bool isSymbol(const Relation& relation) {
         auto kind = relation.kind;
-        return kind.is(RelationKinds::Interface) || kind.is(RelationKinds::Implementation) ||
-               kind.is(RelationKinds::TypeDefinition) || kind.is(RelationKinds::Base) ||
-               kind.is(RelationKinds::Derived) || kind.is(RelationKinds::Constructor) ||
-               kind.is(RelationKinds::Destructor) || kind.is(RelationKinds::Caller) ||
-               kind.is(RelationKinds::Callee);
+        return kind & RelationKind::Interface || kind & RelationKind::Implementation ||
+               kind & RelationKind::TypeDefinition || kind & RelationKind::Base ||
+               kind & RelationKind::Derived || kind & RelationKind::Constructor ||
+               kind & RelationKind::Destructor || kind & RelationKind::Caller ||
+               kind & RelationKind::Callee;
     }
 };
 

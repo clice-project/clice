@@ -59,4 +59,12 @@ constexpr bool is_specialization_of<HKT<Args...>, HKT> = true;
 template <typename T>
 constexpr inline bool dependent_false = false;
 
+template <typename T>
+concept integral =
+    std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, char> &&
+    !std::is_same_v<T, wchar_t> && !std::is_same_v<T, char16_t> && !std::is_same_v<T, char32_t>;
+
+template<typename T>
+concept floating_point = std::is_floating_point_v<T>;
+
 }  // namespace clice

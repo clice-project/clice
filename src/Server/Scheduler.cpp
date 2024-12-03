@@ -121,7 +121,7 @@ async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringR
     file.content = content;
     file.compiler = std::move(compiler);
 
-    log::info("Build AST successfully for {0}, elapsed {1}ms", filepath, tracer.duration());
+    log::info("Build AST successfully for {0}, elapsed {1}", filepath, tracer.duration());
 
     if(!file.waitings.empty()) {
         auto task = std::move(file.waitings.front());
@@ -179,7 +179,7 @@ async::promise<proto::CompletionResult> Scheduler::codeComplete(llvm::StringRef 
 
     auto result = co_await async::schedule_task(std::move(task));
 
-    log::info("Code completion for {0} is done, elapsed {1}ms", filepath, tracer.duration());
+    log::info("Code completion for {0} is done, elapsed {1}", filepath, tracer.duration());
 
     co_return result;
 }

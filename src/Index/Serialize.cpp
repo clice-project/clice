@@ -1,4 +1,5 @@
 #include <Index/Serialize.h>
+#include <Support/Support.h>
 
 namespace clice::index {
 
@@ -56,9 +57,7 @@ public:
         if constexpr(requires { out = in; }) {
             out = in;
         } else {
-            refl::foreach(in, out, [&]<typename U>(const auto& in, U& out) {
-                pack(in, out);
-            });
+            support::foreach(in, out, [&]<typename U>(const auto& in, U& out) { pack(in, out); });
         }
     }
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Location.h"
-#include "Support/Reflection.h"
 
 namespace clice::proto {
 
@@ -25,7 +24,9 @@ struct TextDocumentIdentifier {
     DocumentUri uri;
 };
 
-CLICE_RECORD(VersionedTextDocumentIdentifier, TextDocumentIdentifier) {
+struct VersionedTextDocumentIdentifier {
+    /// The text document's URI.
+    DocumentUri uri;
     /// The version number of this document.
     ///
     /// The version number of a document will increase after each change,

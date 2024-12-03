@@ -5,6 +5,7 @@
 
 #include "Compiler/Compiler.h"
 #include "Index/Loader.h"
+#include "Support/Support.h"
 
 namespace clice {
 
@@ -25,7 +26,7 @@ void testEqual(const Loader& loader, const In& in, const Out& out) {
             testEqual(loader, in[i], array[i]);
         }
     } else {
-        refl::foreach(in, out, [&](const auto& lhs, const auto& rhs) {
+        support::foreach(in, out, [&](const auto& lhs, const auto& rhs) {
             testEqual(loader, lhs, rhs);
         });
     }

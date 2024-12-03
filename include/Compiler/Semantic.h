@@ -7,7 +7,7 @@
 
 namespace clice {
 
-enum class RelationKinds : uint32_t {
+enum class RelationKind : uint32_t {
     Invalid,
     Declaration,
     Definition,
@@ -36,11 +36,11 @@ enum class RelationKinds : uint32_t {
     Callee,
 };
 
-struct RelationKind : enum_type<RelationKinds, true> {
-    using enum RelationKinds;
-    using enum_type::enum_type;
-    using enum_type::operator=;
-};
+// struct RelationKind : enum_type<RelationKinds, true> {
+//     using enum RelationKinds;
+//     using enum_type::enum_type;
+//     using enum_type::operator=;
+// };
 
 enum class OccurrenceKind {
     /// This occurrence directly corresponds to a unique source symbol.
@@ -51,6 +51,10 @@ enum class OccurrenceKind {
     PseudoInstantiation,
     /// This occurrence is from `ImplicitInstantiation` or `ExplicitInstantiation` of a template.
     Instantiation,
+};
+
+enum class SymbolKind {
+
 };
 
 template <typename Derived>

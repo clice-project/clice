@@ -3,12 +3,7 @@
 
 #include <Server/Config.h>
 #include <Server/Logger.h>
-#include <Support/Reflection.h>
-#include <Support/FileSystem.h>
-#include <llvm/ADT/StringMap.h>
-
-#include "Support/Format.h"
-#include "Support/JSON.h"
+#include <Support/Support.h>
 
 namespace clice::config {
 
@@ -97,11 +92,11 @@ int parse(llvm::StringRef execute, llvm::StringRef filepath) {
 void init(std::string_view workplace) {
     predefined["workplace"] = workplace;
 
-    refl::walk(config, [&]<typename Field>(std::string_view name, Field& field) {
-        if constexpr(std::is_same_v<Field, std::string>) {
-            field = replace(field);
-        }
-    });
+    // refl::walk(config, [&]<typename Field>(std::string_view name, Field& field) {
+    //     if constexpr(std::is_same_v<Field, std::string>) {
+    //         field = replace(field);
+    //     }
+    // });
 
     log::info("Config initialized successfully, result: {0}", json::serialize(config));
     return;

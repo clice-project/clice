@@ -1,5 +1,5 @@
+#include <Support/Support.h>
 #include <Compiler/Directive.h>
-#include <Support/Reflection.h>
 #include <clang/Lex/MacroInfo.h>
 #include <clang/Lex/MacroArgs.h>
 
@@ -20,7 +20,9 @@ struct CommentHandler : public clang::CommentHandler {
 };
 
 struct PragmaHandler : public clang::PragmaHandler {
-    virtual void HandlePragma(clang::Preprocessor& PP, clang::PragmaIntroducer Introducer, clang::Token& FirstToken) {
+    virtual void HandlePragma(clang::Preprocessor& PP,
+                              clang::PragmaIntroducer Introducer,
+                              clang::Token& FirstToken) {
         // TODO:
     }
 
@@ -32,7 +34,8 @@ struct PragmaHandler : public clang::PragmaHandler {
 };
 
 struct PPCallback : clang::PPCallbacks {
-    PPCallback(clang::Preprocessor& preproc) : preproc(preproc), srcMgr(preproc.getSourceManager()) {}
+    PPCallback(clang::Preprocessor& preproc) :
+        preproc(preproc), srcMgr(preproc.getSourceManager()) {}
 
     clang::Preprocessor& preproc;
     clang::SourceManager& srcMgr;
@@ -62,7 +65,8 @@ struct PPCallback : clang::PPCallbacks {
         // llvm::outs() << RealPath << "\n";
     }
 
-    void PragmaDirective(clang::SourceLocation Loc, clang::PragmaIntroducerKind Introducer) override {
+    void PragmaDirective(clang::SourceLocation Loc,
+                         clang::PragmaIntroducerKind Introducer) override {
         // llvm::outs() << "PragmaDirective\n";
     }
 
@@ -77,14 +81,17 @@ struct PPCallback : clang::PPCallbacks {
               clang::PPCallbacks::ConditionValueKind conditionValue,
               clang::SourceLocation ifLoc) override {}
 
-    void Ifdef(clang::SourceLocation loc, const clang::Token& name, const clang::MacroDefinition& definition) override {
-    }
+    void Ifdef(clang::SourceLocation loc,
+               const clang::Token& name,
+               const clang::MacroDefinition& definition) override {}
 
     void Elifdef(clang::SourceLocation loc,
                  const clang::Token& name,
                  const clang::MacroDefinition& definition) override {}
 
-    void Elifdef(clang::SourceLocation loc, clang::SourceRange conditionRange, clang::SourceLocation ifLoc) override {}
+    void Elifdef(clang::SourceLocation loc,
+                 clang::SourceRange conditionRange,
+                 clang::SourceLocation ifLoc) override {}
 
     void Ifndef(clang::SourceLocation loc,
                 const clang::Token& name,
@@ -96,7 +103,9 @@ struct PPCallback : clang::PPCallbacks {
                   const clang::MacroDefinition& definition) override {}
 
     // invoke when #elifndef is skipped
-    void Elifndef(clang::SourceLocation loc, clang::SourceRange conditionRange, clang::SourceLocation ifLoc) override {}
+    void Elifndef(clang::SourceLocation loc,
+                  clang::SourceRange conditionRange,
+                  clang::SourceLocation ifLoc) override {}
 
     void Else(clang::SourceLocation loc, clang::SourceLocation ifLoc) override {}
 
@@ -108,7 +117,8 @@ struct PPCallback : clang::PPCallbacks {
             // llvm::outs() << "is builtin: " << info->isBuiltinMacro() << "\n";
             if(!info->isBuiltinMacro()) {
                 auto location = MacroNameTok.getLocation();
-                if(!srcMgr.isWrittenInBuiltinFile(location) && !srcMgr.isWrittenInCommandLineFile(location)) {
+                if(!srcMgr.isWrittenInBuiltinFile(location) &&
+                   !srcMgr.isWrittenInCommandLineFile(location)) {
                     MacroNameTok.getLocation().dump(srcMgr);
                     // srcMgr.getIncludeLoc(srcMgr.getFileID(MacroNameTok.getLocation())).dump(srcMgr);
                     llvm::outs() << preproc.getSpelling(MacroNameTok) << "\n";
