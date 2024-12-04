@@ -8,9 +8,13 @@ namespace {
 
 using namespace clice;
 
-TEST(Feature, codeCompletion) {
+TEST(Feature, CodeCompletion) {
     const char* code = R"cpp(
 int foo = 2;
+
+int main() {
+    foo = 2;
+}
 )cpp";
 
     llvm::SmallVector<const char*, 5> compileArgs = {
@@ -26,10 +30,10 @@ int foo = 2;
     params.content = code;
     params.args = compileArgs;
 
-    auto result = feature::codeCompletion(params, 2, 2, "main.cpp", {});
+    auto result = feature::codeCompletion(params, 5, 7, "main.cpp", {});
     for(auto& item: result) {
         llvm::outs() << std::format("kind: {}, label: {}, range: {}\n",
-                                    support::enum_name(item.kind),
+                                    item.kind.name(),
                                     item.label,
                                     json::serialize(item.textEdit.range))
                      << "\n";

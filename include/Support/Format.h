@@ -6,6 +6,15 @@
 #include "Error.h"
 #include "JSON.h"
 
+namespace clice {
+
+template <typename... Args>
+void print(std::format_string<Args...> fmt, Args&&... args) {
+    llvm::outs() << std::vformat(fmt.get(), std::make_format_args(args...));
+}
+
+}  // namespace clice
+
 template <>
 struct std::formatter<llvm::StringRef> : std::formatter<std::string_view> {
     using Base = std::formatter<std::string_view>;

@@ -58,6 +58,15 @@ std::string replace(std::string_view text) {
     return result;
 }
 
+template <typename T>
+void replace_config(T& value) {
+    if constexpr(std::is_same_v<T, std::string>) {
+        value = replace(value);
+    } else if constexpr(support::reflectable<T>) {
+        support::foreach(value, [](auto, auto& member) { replace_config(member); });
+    }
+}
+
 }  // namespace
 
 int parse(llvm::StringRef execute, llvm::StringRef filepath) {
@@ -92,11 +101,7 @@ int parse(llvm::StringRef execute, llvm::StringRef filepath) {
 void init(std::string_view workplace) {
     predefined["workplace"] = workplace;
 
-    // refl::walk(config, [&]<typename Field>(std::string_view name, Field& field) {
-    //     if constexpr(std::is_same_v<Field, std::string>) {
-    //         field = replace(field);
-    //     }
-    // });
+    replace_config(config);
 
     log::info("Config initialized successfully, result: {0}", json::serialize(config));
     return;

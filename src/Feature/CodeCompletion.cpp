@@ -1,5 +1,6 @@
 #include <Basic/URI.h>
 #include <Basic/SourceCode.h>
+#include <Basic/SymbolKind.h>
 #include <Compiler/Compiler.h>
 #include <Feature/CodeCompletion.h>
 
@@ -43,8 +44,78 @@ struct CompletionPrefix {
     }
 };
 
-proto::CompletionItemKind kindForDecl(const clang::NamedDecl* decl){
-    
+proto::CompletionItemKind kindForDecl(const clang::NamedDecl* decl) {
+    auto kind = SymbolKind::from(decl);
+    switch(kind.value()) {
+        case SymbolKind::Keyword: return proto::CompletionItemKind::Keyword;
+        case SymbolKind::Namespace: return proto::CompletionItemKind::Module;
+        case SymbolKind::Class: return proto::CompletionItemKind::Class;
+        case SymbolKind::Struct: return proto::CompletionItemKind::Struct;
+        case SymbolKind::Union: return proto::CompletionItemKind::Struct;
+        case SymbolKind::Enum: return proto::CompletionItemKind::Enum;
+        case SymbolKind::Type: return proto::CompletionItemKind::TypeParameter;
+        case SymbolKind::Field: return proto::CompletionItemKind::Field;
+        case SymbolKind::EnumMember: return proto::CompletionItemKind::EnumMember;
+        case SymbolKind::Function: return proto::CompletionItemKind::Function;
+        case SymbolKind::Method: return proto::CompletionItemKind::Method;
+        case SymbolKind::Variable: return proto::CompletionItemKind::Variable;
+        case SymbolKind::Parameter: return proto::CompletionItemKind::Variable;
+        case SymbolKind::Label: return proto::CompletionItemKind::Variable;
+        case SymbolKind::Concept: return proto::CompletionItemKind::TypeParameter;
+        case SymbolKind::Operator: return proto::CompletionItemKind::Operator;
+        case SymbolKind::Comment:
+        case SymbolKind::Number:
+        case SymbolKind::Character:
+        case SymbolKind::String:
+        case SymbolKind::Directive:
+        case SymbolKind::Header:
+        case SymbolKind::Module:
+        case SymbolKind::Macro:
+        case SymbolKind::MacroParameter:
+        case SymbolKind::Attribute:
+        case SymbolKind::Paren:
+        case SymbolKind::Bracket:
+        case SymbolKind::Brace:
+        case SymbolKind::Angle:
+        case SymbolKind::Invalid: {
+            return proto::CompletionItemKind::Text;
+        };
+    }
+
+    llvm_unreachable("Unknown SymbolKind");
+}
+
+std::string getName(const clang::NamedDecl* decl) {
+    auto name = decl->getDeclName();
+    switch(name.getNameKind()) {
+        case clang::DeclarationName::Identifier: {
+            return name.getAsIdentifierInfo()->getName().str();
+        }
+        case clang::DeclarationName::CXXConstructorName:
+        case clang::DeclarationName::CXXDestructorName: {
+            return name.getCXXNameType().getAsString();
+        }
+        case clang::DeclarationName::CXXConversionFunctionName: {
+            return "operator " + name.getCXXNameType().getAsString();
+        }
+        case clang::DeclarationName::CXXOperatorName: {
+            return clang::getOperatorSpelling(name.getCXXOverloadedOperator());
+        }
+        case clang::DeclarationName::CXXDeductionGuideName: {
+            return getName(name.getCXXDeductionGuideTemplate());
+        }
+        case clang::DeclarationName::CXXLiteralOperatorName: {
+            return name.getCXXLiteralIdentifier()->getName().str();
+        }
+        case clang::DeclarationName::CXXUsingDirective: {
+            std::terminate();
+        };
+        case clang::DeclarationName::ObjCZeroArgSelector:
+        case clang::DeclarationName::ObjCOneArgSelector:
+        case clang::DeclarationName::ObjCMultiArgSelector: {
+            std::terminate();
+        }
+    }
 }
 
 class CodeCompletionCollector final : public clang::CodeCompleteConsumer {
@@ -70,7 +141,9 @@ public:
             item.kind = proto::CompletionItemKind::Text;
             switch(result.Kind) {
                 case clang::CodeCompletionResult::RK_Declaration: {
-                    item.label = result.Declaration->getName();
+                    item.label = getName(result.Declaration);
+                    item.kind = kindForDecl(result.Declaration);
+                    item.detail = result.Declaration->getNameAsString();
                     break;
                 }
                 case clang::CodeCompletionResult::RK_Keyword: {
@@ -138,6 +211,7 @@ proto::CompletionResult codeCompletion(CompliationParams& params,
 
     auto info = codeCompleteAt(params, line, column, file, consumer);
     if(info) {
+        for(auto& item: completions) {}
         return completions;
     } else {
         std::terminate();

@@ -62,9 +62,9 @@ class SemanticVisitor : public clang::RecursiveASTVisitor<SemanticVisitor<Derive
 public:
     using Base = clang::RecursiveASTVisitor<SemanticVisitor>;
 
-    SemanticVisitor(ASTInfo& compiler, bool mainFileOnly = false) :
-        sema(compiler.sema()), pp(compiler.pp()), resolver(compiler.resolver()),
-        srcMgr(compiler.srcMgr()), tokBuf(compiler.tokBuf()), mainFileOnly(mainFileOnly) {}
+    SemanticVisitor(ASTInfo& info, bool mainFileOnly = false) :
+        sema(info.sema()), pp(info.pp()), resolver(info.resolver()), srcMgr(info.srcMgr()),
+        tokBuf(info.tokBuf()), mainFileOnly(mainFileOnly) {}
 
 public:
 
@@ -119,6 +119,10 @@ public:
     /// ============================================================================
 
     TRAVERSE_DECL(Decl) {
+        if(!decl) {
+            return true;
+        }
+
         if(!llvm::isa<clang::TranslationUnitDecl>(decl) && needFilter(decl->getLocation())) {
             return true;
         }

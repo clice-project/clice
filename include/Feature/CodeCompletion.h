@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Basic/Document.h>
-#include <Support/JSON.h>
+#include <Support/Enum.h>
 
 namespace clice {
 struct CompliationParams;
@@ -15,33 +15,39 @@ struct CompletionOptions {
     std::vector<string> triggerCharacters;
 };
 
-enum class CompletionItemKind {
-    Invalid = 0,
-    Text = 1,
-    Method = 2,
-    Function = 3,
-    Constructor = 4,
-    Field = 5,
-    Variable = 6,
-    Class = 7,
-    Interface = 8,
-    Module = 9,
-    Property = 10,
-    Unit = 11,
-    Value = 12,
-    Enum = 13,
-    Keyword = 14,
-    Snippet = 15,
-    Color = 16,
-    File = 17,
-    Reference = 18,
-    Folder = 19,
-    EnumMember = 20,
-    Constant = 21,
-    Struct = 22,
-    Event = 23,
-    Operator = 24,
-    TypeParameter,
+struct CompletionItemKind : support::Enum<CompletionItemKind> {
+    enum Kind : uint8_t {
+        Invalid = 0,
+        Text,
+        Method,
+        Function,
+        Constructor,
+        Field,
+        Variable,
+        Class,
+        Interface,
+        Module,
+        Property,
+        Unit,
+        Value,
+        Enum,
+        Keyword,
+        Snippet,
+        Color,
+        File,
+        Reference,
+        Folder,
+        EnumMember,
+        Constant,
+        Struct,
+        Event,
+        Operator,
+        TypeParameter,
+    };
+
+    using Enum::Enum;
+
+    constexpr inline static auto InvalidEnum = Invalid;
 };
 
 enum CompletionItemTag {
@@ -79,7 +85,7 @@ struct CompletionItem {
 
     /// A human-readable string with additional information
     /// about this item, like type or symbol information.
-    /// string detail;
+    string detail;
 
     /// A human-readable string that represents a doc-comment.
     /// string documentation;

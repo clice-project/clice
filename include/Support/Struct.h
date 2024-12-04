@@ -287,16 +287,17 @@ struct Serde<T> {
 
     template <typename... Serdes>
     static T deserialize(const json::Value& value, Serdes&&... serdes) {
-        assert(value.kind() == json::Value::Object && "Expect an object");
-        auto object = value.getAsObject();
-        T t;
-        support::foreach(t, [&](std::string_view name, auto&& member) {
-            auto v = object->get(llvm::StringRef(name));
-            assert(v && "Member not found");
-            member = json::deserialize<std::remove_cvref_t<decltype(member)>>(
-                *v,
-                std::forward<Serdes>(serdes)...);
-        });
+        T t = {};
+        if constexpr(!std::is_empty_v<T>) {
+            assert(value.kind() == json::Value::Object && "Expect an object");
+            support::foreach(t, [&](std::string_view name, auto&& member) {
+                auto v = value.getAsObject()->get(llvm::StringRef(name));
+                assert(v && "Member not found");
+                member = json::deserialize<std::remove_cvref_t<decltype(member)>>(
+                    *v,
+                    std::forward<Serdes>(serdes)...);
+            });
+        }
         return t;
     }
 };
