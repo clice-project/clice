@@ -1,22 +1,21 @@
-#include "../Test.h"
-#include <Support/Enum.h>
+#include "Test.h"
+
+namespace clice {
 
 namespace {
 
-using namespace clice;
+TEST(Support, NormalEnum) {
+    struct Color : support::Enum<Color> {
+        using Enum::Enum;
 
-struct Color : support::Enum<Color> {
-    using Enum::Enum;
-
-    enum Kind : uint8_t {
-        Red,
-        Green,
-        Blue,
-        Yellow,
+        enum Kind : uint8_t {
+            Red,
+            Green,
+            Blue,
+            Yellow,
+        };
     };
-};
 
-TEST(Support, normal_enum) {
     constexpr Color red = Color::Red;
     constexpr Color green = Color::Green;
     constexpr Color blue = Color::Blue;
@@ -33,18 +32,18 @@ TEST(Support, normal_enum) {
     static_assert(red == red2);
 }
 
-struct Mask : support::Enum<Mask, true> {
-    using Enum::Enum;
+TEST(Support, MaskEnum) {
+    struct Mask : support::Enum<Mask, true, uint32_t> {
+        using Enum::Enum;
 
-    enum Kind {
-        A = 0,
-        B,
-        C,
-        D,
+        enum Kind {
+            A = 0,
+            B,
+            C,
+            D,
+        };
     };
-};
 
-TEST(Support, mask_enum) {
     constexpr Mask mask = Mask::A;
     constexpr Mask mask2 = Mask::B;
     constexpr Mask mask3 = Mask::C;
@@ -59,9 +58,21 @@ TEST(Support, mask_enum) {
 
     constexpr Mask mask5 = Mask(Mask::A, Mask::B, Mask::C, Mask::D);
     static_assert(mask5.name() == "A | B | C | D" && mask5.value() == 15);
+
+    Mask mask6 = Mask::A;
+    mask6 |= Mask::B;
+    EXPECT_EQ(mask6.name(), "A | B");
+    EXPECT_TRUE(bool(mask6 & Mask::A));
+    EXPECT_TRUE(bool(mask6 & Mask::B));
+
+    mask6 |= Mask::C;
+    EXPECT_EQ(mask6.name(), "A | B | C");
+    EXPECT_TRUE(bool(mask6 & Mask::A));
+    EXPECT_TRUE(bool(mask6 & Mask::B));
+    EXPECT_TRUE(bool(mask6 & Mask::C));
 }
 
-
-
 }  // namespace
+
+}  // namespace clice
 

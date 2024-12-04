@@ -33,22 +33,13 @@ struct replace_cv_ref<const T&&, Target> {
 template <typename Source, typename Target>
 using replace_cv_ref_t = typename replace_cv_ref<Source, Target>::type;
 
-template <typename Tuple, template <typename> typename Map>
-struct tuple_map;
-
-template <typename... Ts, template <typename> typename Map>
-struct tuple_map<std::tuple<Ts...>, Map> {
-    using type = std::tuple<typename Map<Ts>::type...>;
-};
-
-/// Map the types in the tuple to another type with the given template template argument.
-template <typename Tuple, template <typename> typename Map>
-using tuple_map_t = typename tuple_map<Tuple, Map>::type;
-
 template <typename T>
 struct identity {
     using type = T;
 };
+
+template <typename T>
+using identity_t = T;
 
 template <typename T, template <typename...> typename HKT>
 constexpr bool is_specialization_of = false;
@@ -64,7 +55,34 @@ concept integral =
     std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, char> &&
     !std::is_same_v<T, wchar_t> && !std::is_same_v<T, char16_t> && !std::is_same_v<T, char32_t>;
 
-template<typename T>
+template <typename T>
 concept floating_point = std::is_floating_point_v<T>;
+
+template <typename... Ts>
+struct type_list {
+    constexpr static auto apply(auto&& lambda) {
+        return lambda.template operator()<Ts...>();
+    }
+};
+
+/// Turn a tuple into a type list.
+/// @param Tuple The tuple to convert.
+/// @param Map The mapping function to apply to each type in the tuple.
+/// @param isalias If isalias is false, mapping result is `typename Map<T>::type`.
+template <typename Tuple, template <typename> typename Map = identity_t, bool isalias = true>
+struct tuple_to_list;
+
+template <typename... Ts, template <typename> typename Map>
+struct tuple_to_list<std::tuple<Ts...>, Map, true> {
+    using type = type_list<Map<Ts>...>;
+};
+
+template <typename... Ts, template <typename> typename Map>
+struct tuple_to_list<std::tuple<Ts...>, Map, false> {
+    using type = type_list<typename Map<Ts>::type...>;
+};
+
+template <typename Tuple, template <typename> typename Map = identity_t, bool isalias = true>
+using tuple_to_list_t = typename tuple_to_list<Tuple, Map, isalias>::type;
 
 }  // namespace clice

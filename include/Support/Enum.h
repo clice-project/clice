@@ -63,6 +63,9 @@ constexpr std::string_view enum_name(E value) {
 template <typename Derived, bool is_bitmask = false, typename underlying = uint8_t>
 class Enum {
 public:
+    /// Tag to indicate this is a special enum.
+    constexpr inline static bool is_special_enum_v = true;
+
     /// A integral must explicitly convert to the enum.
     explicit constexpr Enum(underlying value) : m_Value(value) {}
 
@@ -94,8 +97,6 @@ public:
     }
 
     constexpr friend bool operator== (Enum lhs, Enum rhs) = default;
-
-    constexpr inline static bool is_enum = true;
 
     constexpr static auto& all() {
         return enum_table<typename Derived::Kind, end() - begin()>::table;
@@ -133,6 +134,9 @@ private:
 template <typename Derived, typename underlying>
 class Enum<Derived, true, underlying> {
 public:
+    /// Tag to indicate this is a special enum.
+    constexpr inline static bool is_special_enum_v = true;
+
     /// FIXME:
     Enum() = default;
 
@@ -178,8 +182,6 @@ public:
         }
         return masks;
     }
-
-    constexpr inline static bool is_enum = true;
 
     constexpr static auto& all() {
         return enum_table<typename Derived::Kind, end() - begin()>::table;
@@ -239,9 +241,9 @@ private:
 };
 
 template <typename T>
-constexpr bool is_enum_v = requires {
-    T::is_enum;
-    requires T::is_enum;
+concept special_enum = requires {
+    T::is_special_enum_v;
+    requires T::is_special_enum_v;
 };
 
 }  // namespace clice::support
@@ -249,7 +251,7 @@ constexpr bool is_enum_v = requires {
 namespace clice::json {
 
 template <typename E>
-    requires support::is_enum_v<E>
+    requires support::special_enum<E>
 struct Serde<E> {
     static json::Value serialize(const E& e) {
         return json::Value(e.value());
@@ -264,7 +266,7 @@ struct Serde<E> {
 }  // namespace clice::json
 
 template <typename E>
-    requires clice::support::is_enum_v<E>
+    requires clice::support::special_enum<E>
 struct std::formatter<E> : std::formatter<std::string_view> {
     using Base = std::formatter<std::string_view>;
 

@@ -53,18 +53,22 @@ consteval auto member_name() {
 #if __GNUC__ && (!__clang__) && (!_MSC_VER)
     std::size_t start = name.rfind("::") + 2;
     std::size_t end = name.rfind(')');
-    return name.substr(start, end - start);
+    name = name.substr(start, end - start);
 #elif __clang__
     std::size_t start = name.rfind(".") + 1;
     std::size_t end = name.rfind('}');
-    return name.substr(start, end - start);
+    name = name.substr(start, end - start);
 #elif _MSC_VER
     std::size_t start = name.rfind("->") + 2;
     std::size_t end = name.rfind('}');
-    return name.substr(start, end - start);
+    name = name.substr(start, end - start);
 #else
     static_assert(false, "Not supported compiler");
 #endif
+    if(name.rfind("::") != std::string_view::npos) {
+        name = name.substr(name.rfind("::") + 2);
+    }
+    return name;
 }
 
 }  // namespace impl
@@ -190,6 +194,37 @@ struct Struct {
 template <typename T>
 concept reflectable = Struct<T>::reflectable;
 
+template <typename... Ts>
+struct Inheritance : Ts... {};
+
+/// Use to define a reflectable struct with inheritance.
+#define inherited_struct(name, ...)                                                                \
+    struct name##Body;                                                                             \
+    using name = clice::support::Inheritance<__VA_ARGS__, name##Body>;                             \
+    struct name##Body
+
+template <typename... Ts>
+struct Struct<Inheritance<Ts...>> {
+    constexpr inline static bool reflectable = (support::reflectable<Ts> && ...);
+
+    constexpr static std::size_t member_count() {
+        return (Struct<Ts>::member_count() + ...);
+    }
+
+    constexpr static auto& instance() {
+        return impl::storage<Inheritance<Ts...>>::value;
+    }
+
+    template <typename Object>
+    constexpr static auto collcet_members(Object&& object) {
+        return std::tuple_cat(Struct<Ts>::collcet_members(static_cast<Ts&>(object))...);
+    }
+};
+
+template <typename T>
+using member_types =
+    tuple_to_list_t<decltype(Struct<T>::collcet_members(std::declval<T>())), std::remove_pointer_t>;
+
 /// Turn the return value of the callable to bool.
 template <typename Callable>
 constexpr auto foldable(const Callable& callable) {
@@ -205,13 +240,13 @@ constexpr auto foldable(const Callable& callable) {
 }
 
 template <reflectable Object, typename Callback>
-constexpr bool foreach(Object&& object, const Callback& callable) {
+constexpr bool foreach(Object&& object, const Callback& callback) {
     using S = Struct<std::remove_cvref_t<Object>>;
     constexpr auto count = S::member_count();
     auto members = S::collcet_members(object);
     constexpr auto static_members = S::collcet_members(S::instance());
     return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-        return (foldable(callable)(impl::member_name<std::get<Is>(static_members)>(),
+        return (foldable(callback)(impl::member_name<std::get<Is>(static_members)>(),
                                    *std::get<Is>(members)) &&
                 ...);
     }(std::make_index_sequence<count>{});
@@ -237,10 +272,8 @@ namespace clice::json {
 
 template <support::reflectable T>
 struct Serde<T> {
-    constexpr inline static bool state =
-        !support::foreach(support::Struct<T>::instance(), [](auto, auto&& member) {
-            return !json::stateful_serde<std::remove_cvref_t<decltype(member)>>;
-        });
+    constexpr inline static bool stateful =
+        support::member_types<T>::apply([]<typename... Ts> { return (stateful_serde<Ts> || ...); });
 
     template <typename... Serdes>
     static json::Value serialize(const T& t, Serdes&&... serdes) {
@@ -270,18 +303,3 @@ struct Serde<T> {
 
 }  // namespace clice::json
 
-/// FIXME:
-// template <clice::support::reflectable T>
-// struct std::formatter<T> : std::formatter<std::string_view> {
-//     using Base = std::formatter<std::string_view>;
-//
-//     template <typename ParseContext>
-//     constexpr auto parse(ParseContext& ctx) {
-//         return Base::parse(ctx);
-//     }
-//
-//     template <typename FormatContext>
-//     auto format(const T& t, FormatContext& ctx) {
-//         return Base::format(clice::json::serialize(t), ctx);
-//     }
-// };

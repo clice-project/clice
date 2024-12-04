@@ -20,8 +20,8 @@ struct Serde;
 /// Check if the serde if given type is stateful.
 template <typename V>
 concept stateful_serde = requires {
-    Serde<V>::state;
-    requires Serde<V>::state;
+    Serde<V>::stateful;
+    requires Serde<V>::stateful;
 };
 
 /// Serialize an object to a JSON value.
@@ -40,10 +40,13 @@ json::Value serialize(const V& v, Serdes&&... serdes) {
                     } else if constexpr(sizeof...(rest) > 0) {
                         /// Try the next serde.
                         return self(self, std::forward<Rest>(rest)...);
+                    } else {
+                        static_assert(dependent_false<V>, "Unexpected control flow");
                     }
                 };
             return try_each(try_each, std::forward<Serdes>(serdes)...);
         } else {
+            /// Otherwise, pass the serdes to the next serde.
             return Serde<V>::serialize(v, std::forward<Serdes>(serdes)...);
         }
     } else {
@@ -67,6 +70,8 @@ T deserialize(const json::Value& value, Serdes&&... serdes) {
                     } else if constexpr(sizeof...(rest) > 0) {
                         /// Try the next serde.
                         return self(self, std::forward<Rest>(rest)...);
+                    } else {
+                        static_assert(dependent_false<T>, "Unexpected control flow");
                     }
                 };
             return try_each(try_each, std::forward<Serdes>(serdes)...);
@@ -74,7 +79,6 @@ T deserialize(const json::Value& value, Serdes&&... serdes) {
             /// Otherwise, pass the serdes to the next serde.
             return Serde<T>::deserialize(value, std::forward<Serdes>(serdes)...);
         }
-
     } else {
         static_assert(dependent_false<T>, "Stateful Serde requires at least one serde");
     }
@@ -199,7 +203,7 @@ template <typename T, std::size_t N>
 struct Serde<std::array<T, N>> {
     using V = std::array<T, N>;
 
-    constexpr inline static bool state = stateful_serde<T>;
+    constexpr inline static bool stateful = stateful_serde<T>;
 
     template <typename... Serdes>
     static json::Value serialize(const V& v, Serdes&&... serdes) {
@@ -226,7 +230,7 @@ template <typename T>
 struct Serde<std::vector<T>> {
     using V = std::vector<T>;
 
-    constexpr inline static bool state = stateful_serde<T>;
+    constexpr inline static bool stateful = stateful_serde<T>;
 
     template <typename... Serdes>
     static json::Value serialize(const V& v, Serdes&&... serdes) {
@@ -252,7 +256,7 @@ template <typename T>
 struct Serde<llvm::ArrayRef<T>> {
     using V = llvm::ArrayRef<T>;
 
-    constexpr inline static bool state = stateful_serde<T>;
+    constexpr inline static bool stateful = stateful_serde<T>;
 
     /// Only support serialization.
     template <typename... Serdes>
