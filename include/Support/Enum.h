@@ -66,6 +66,8 @@ public:
     /// Tag to indicate this is a special enum.
     constexpr inline static bool is_special_enum_v = true;
 
+    constexpr Enum() : m_Value(invalid()) {}
+
     /// A integral must explicitly convert to the enum.
     explicit constexpr Enum(underlying value) : m_Value(value) {}
 
@@ -92,7 +94,7 @@ public:
         return support::enum_name<E, begin(), end()>(static_cast<E>(m_Value));
     }
 
-    constexpr explicit operator bool () {
+    constexpr explicit operator bool () const {
         return m_Value != invalid();
     }
 
@@ -187,7 +189,7 @@ public:
         return enum_table<typename Derived::Kind, end() - begin()>::table;
     }
 
-    constexpr explicit operator bool () {
+    constexpr explicit operator bool () const {
         return m_Value != 0;
     }
 

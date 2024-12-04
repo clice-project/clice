@@ -4,17 +4,24 @@ namespace clice {
 
 namespace {
 
-TEST(Support, NormalEnum) {
-    struct Color : support::Enum<Color> {
-        using Enum::Enum;
-
-        enum Kind : uint8_t {
-            Red,
-            Green,
-            Blue,
-            Yellow,
-        };
+struct Color : support::Enum<Color> {
+    enum Kind : uint8_t {
+        Red,
+        Green,
+        Blue,
+        Yellow,
+        Invalid,
     };
+
+    using Enum::Enum;
+
+    constexpr inline static auto InvalidEnum = Invalid;
+};
+
+TEST(Support, NormalEnum) {
+    constexpr Color invalid = {};
+    static_assert(!invalid);
+    static_assert(invalid.value() == Color::Invalid);
 
     constexpr Color red = Color::Red;
     constexpr Color green = Color::Green;
@@ -32,17 +39,21 @@ TEST(Support, NormalEnum) {
     static_assert(red == red2);
 }
 
-TEST(Support, MaskEnum) {
-    struct Mask : support::Enum<Mask, true, uint32_t> {
-        using Enum::Enum;
-
-        enum Kind {
-            A = 0,
-            B,
-            C,
-            D,
-        };
+struct Mask : support::Enum<Mask, true, uint32_t> {
+    enum Kind {
+        A = 0,
+        B,
+        C,
+        D,
     };
+
+    using Enum::Enum;
+};
+
+TEST(Support, MaskEnum) {
+    constexpr Mask invalid = {};
+    static_assert(!invalid);
+    static_assert(invalid.value() == 0);
 
     constexpr Mask mask = Mask::A;
     constexpr Mask mask2 = Mask::B;
