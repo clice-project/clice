@@ -3,7 +3,9 @@
 #include <deque>
 
 #include "Server/Async.h"
+#include "Server/Command.h"
 #include "Server/Protocol.h"
+#include "Server/Trace.h"
 #include "Compiler/Compiler.h"
 
 namespace clice {
@@ -42,9 +44,9 @@ struct llvm::DenseMapInfo<clice::SourceContext> {
 };
 
 namespace clice {
+
 struct File2 {
     bool isIdle = true;
-    bool isHeader = false;
 
     llvm::DenseMap<SourceContext, ASTInfo> contexts;
 };
@@ -123,6 +125,7 @@ public:
 private:
     llvm::StringMap<PCHInfo> pchs;
     llvm::StringMap<File> files;
+    CommandManager cmdMgr;
 };
 
 }  // namespace clice

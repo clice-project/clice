@@ -4,15 +4,6 @@
 
 namespace clice {
 
-struct Tracer {
-    std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
-
-    auto duration() {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now() - start);
-    }
-};
-
 async::promise<void> Scheduler::updatePCH(llvm::StringRef filepath,
                                           llvm::StringRef content,
                                           llvm::ArrayRef<const char*> args) {
@@ -80,21 +71,31 @@ async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringR
 
     files[filepath].isIdle = false;
 
+    static bool initCmd = false;
+    if(!initCmd) {
+        cmdMgr.update(config::frontend().compile_commands_directorys[0]);
+        initCmd = true;
+    }
+
     /// FIXME: lookup from CDB file and adjust and remove unnecessary arguments.1
-    llvm::SmallVector<const char*> args = {
-        "clang++",
-        "-std=c++20",
-        path.c_str(),
-        "-resource-dir",
-        "/home/ykiko/C++/clice2/build/lib/clang/20",
-    };
+    auto cmd = cmdMgr.lookup(filepath);
+    llvm::SmallVector<const char*> args;
+    for(auto& arg: cmd) {
+        args.push_back(arg.c_str());
+    }
 
     /// through arguments to judge is it a module.
     bool isModule = false;
     co_await (isModule ? updatePCM() : updatePCH(filepath, content, args));
 
     Tracer tracer;
-    log::info("Start building AST for {0}", filepath);
+
+    llvm::SmallString<128> command;
+    llvm::raw_svector_ostream os(command);
+    for(auto arg: args) {
+        os << arg << " ";
+    }
+    log::info("Start building AST for {0}, command: [{1}]", filepath, command.str());
 
     CompliationParams params;
     params.path = path;

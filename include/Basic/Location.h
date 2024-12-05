@@ -41,7 +41,7 @@ struct TextEdit {
 
 struct Location {
     DocumentUri uri;
-    
+
     Range range;
 };
 

@@ -31,18 +31,21 @@ int Server::run(int argc, const char** argv) {
             auto params = object->get("params");
             if(auto id = object->get("id")) {
                 if(auto iter = requests.find(name); iter != requests.end()) {
-                    log::info("Request: {0}", name.str());
+                    auto tracer = Tracer();
+                    log::info("Receive request: {0}", name);
                     co_await iter->second(std::move(*id),
                                           params ? std::move(*params) : json::Value(nullptr));
+                    log::info("Request {0} is done, elapsed {1}", name, tracer.duration());
+
                 } else {
-                    log::warn("Unknown request: {0}", name.str());
+                    log::warn("Unknown request: {0}", name);
                 }
             } else {
                 if(auto iter = notifications.find(name); iter != notifications.end()) {
-                    log::info("Notification: {0}", name.str());
+                    log::info("Notification: {0}", name);
                     co_await iter->second(params ? std::move(*params) : json::Value(nullptr));
                 } else {
-                    log::warn("Unknown notification: {0}", name.str());
+                    log::warn("Unknown notification: {0}", name);
                 }
             }
         }
