@@ -2,9 +2,8 @@
 
 #include <format>
 
-#include "llvm/ADT/StringRef.h"
-#include "Error.h"
-#include "JSON.h"
+#include "Support/Error.h"
+#include "Support/JSON.h"
 
 namespace clice {
 

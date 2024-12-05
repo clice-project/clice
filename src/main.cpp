@@ -4,7 +4,6 @@ using namespace clice;
 
 int main(int argc, const char** argv) {
     Server server;
-    server.run(argc, argv);
-    return 0;
+    return server.run(argc, argv);
 }
 

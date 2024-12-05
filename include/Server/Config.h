@@ -1,14 +1,11 @@
 #pragma once
 
-#include <string>
-#include <vector>
-
-#include "llvm/ADT/StringRef.h"
+#include "Support/Support.h"
 
 namespace clice::config {
 
-/// read the config file, call when the program starts.
-int parse(llvm::StringRef execute, llvm::StringRef filepath);
+/// Read the config file, call when the program starts.
+void parse(llvm::StringRef execute, llvm::StringRef filepath);
 
 /// initialize the config, replace all predefined variables in the config file.
 /// called in `Server::initialize`.
@@ -25,8 +22,8 @@ struct FrontendOption {
     std::vector<std::string> remove;
     std::string index_directory = "${workplace}/.clice/index";
     std::string cache_directory = "${workplace}/.clice/cache";
-    std::string compile_commands_directory = "${workplace}/build";
-    std::string resource_dictionary = "${binary}/../lib/clang/${llvm_version}";
+    std::string resource_dictionary = "${binary}/../../lib/clang/${llvm_version}";
+    std::vector<std::string> compile_commands_directorys = {"${workplace}/build"};
 };
 
 llvm::StringRef workplace();

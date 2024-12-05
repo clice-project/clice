@@ -30,51 +30,44 @@ struct Config {
 Config config = {};
 
 /// replace all predefined variables in the text.
-std::string replace(std::string_view text) {
-    std::string result;
+void resolve(std::string& input) {
+    std::string_view text = input;
+    llvm::SmallString<128> path;
     std::size_t pos = 0;
     while((pos = text.find("${", pos)) != std::string::npos) {
-        result.append(text.substr(0, pos));
+        path.append(text.substr(0, pos));
 
         auto end = text.find('}', pos + 2);
         if(end == std::string::npos) {
-            result.append(text.substr(pos));
+            path.append(text.substr(pos));
             break;
         }
 
         auto variable = text.substr(pos + 2, end - (pos + 2));
 
         if(auto iter = predefined.find(variable); iter != predefined.end()) {
-            result.append(iter->second);
+            path.append(iter->second);
         } else {
-            result.append(text.substr(pos, end - pos + 1));
+            path.append(text.substr(pos, end - pos + 1));
         }
 
         text.remove_prefix(end + 1);
         pos = 0;
     }
 
-    result.append(text);
-    return result;
-}
-
-template <typename T>
-void replace_config(T& value) {
-    if constexpr(std::is_same_v<T, std::string>) {
-        value = replace(value);
-    } else if constexpr(support::reflectable<T>) {
-        support::foreach(value, [](auto, auto& member) { replace_config(member); });
-    }
+    path.append(text);
+    path::remove_dots(path, true);
+    input = path.str();
 }
 
 }  // namespace
 
-int parse(llvm::StringRef execute, llvm::StringRef filepath) {
+void parse(llvm::StringRef execute, llvm::StringRef filepath) {
     predefined["binary"] = execute;
 
     auto toml = toml::parse_file(filepath);
     if(toml.failed()) {
-        log::fatal("Failed to parse config file: {0}, Beacuse {1}",
+        log::fatal("Failed to parse config file: {0}. Because: {1}",
                    filepath,
                    toml.error().description());
     }
@@ -92,18 +85,20 @@ int parse(llvm::StringRef execute, llvm::StringRef filepath) {
         if(auto address = table["address"]) {
             config.server.address = address.as_string()->get();
         }
-
-        llvm::outs() << "Server:" << json::serialize(config.server) << "\n";
     }
-    return 0;
 }
 
 void init(std::string_view workplace) {
     predefined["workplace"] = workplace;
 
-    replace_config(config);
+    resolve(config.frontend.index_directory);
+    resolve(config.frontend.cache_directory);
+    resolve(config.frontend.resource_dictionary);
+    for(auto& directory: config.frontend.compile_commands_directorys) {
+        resolve(directory);
+    }
 
-    log::info("Config initialized successfully, result: {0}", json::serialize(config));
+    log::info("Config initialized successfully: {0}", json::serialize(config));
     return;
 }
 

@@ -5,8 +5,10 @@
 #include <string_view>
 #include <source_location>
 
-#include "JSON.h"
-#include "Format.h"
+#include "Support/Compare.h"
+#include "Support/Format.h"
+#include "Support/Hash.h"
+#include "Support/JSON.h"
 
 namespace clice::support {
 
@@ -304,3 +306,28 @@ struct Serde<T> {
 
 }  // namespace clice::json
 
+namespace clice::support {
+
+template <reflectable T>
+struct Hash<T> {
+    static llvm::hash_code hash(const T& value) {
+        llvm::SmallVector<llvm::hash_code, 8> hashes;
+        foreach(value,
+                [&](auto, const auto& member) { hashes.emplace_back(support::hash(member)); });
+        return llvm::hash_combine_range(hashes.begin(), hashes.end());
+    }
+};
+
+template <reflectable T>
+    requires (!requires(T lhs, T rhs) {
+        { lhs == rhs } -> std::convertible_to<bool>;
+    })
+struct Equal<T> {
+    static bool equal(const T& lhs, const T& rhs) {
+        return foreach(lhs, rhs, [](const auto& lhs, const auto& rhs) {
+            return support::equal(lhs, rhs);
+        });
+    }
+};
+
+}  // namespace clice::support

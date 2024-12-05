@@ -4,10 +4,9 @@
 #include <vector>
 #include <string_view>
 
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Support/JSON.h"
+#include "Support/ADT.h"
 #include "Support/TypeTraits.h"
+#include "llvm/Support/JSON.h"
 
 namespace clice::json {
 

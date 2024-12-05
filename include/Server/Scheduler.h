@@ -2,14 +2,52 @@
 
 #include <deque>
 
-#include "Async.h"
-#include "llvm/ADT/StringMap.h"
+#include "Server/Async.h"
+#include "Server/Protocol.h"
 #include "Compiler/Compiler.h"
-#include "Feature/CodeCompletion.h"
 
 namespace clice {
 
-class ASTInfo;
+/// A C++ source file may have different AST in different context.
+/// `SourceContext` is used to distinguish different context.
+struct SourceContext {
+    /// Compile options for this context.
+    std::string command;
+
+    /// For a header file, it may be not self contained and need a main file.
+    /// `includes` record the include chain of the header file. Each different
+    /// include chain will have a different context.
+    std::vector<proto::TextDocumentPositionParams> includes;
+};
+
+}  // namespace clice
+
+template <>
+struct llvm::DenseMapInfo<clice::SourceContext> {
+    static clice::SourceContext getEmptyKey() {
+        return clice::SourceContext{.command = "Empty", .includes = {}};
+    }
+
+    static clice::SourceContext getTombstoneKey() {
+        return clice::SourceContext{.command = "Tombstone", .includes = {}};
+    }
+
+    static unsigned getHashValue(const clice::SourceContext& context) {
+        return clice::support::hash(context);
+    }
+
+    static bool isEqual(const clice::SourceContext& lhs, const clice::SourceContext& rhs) {
+        return clice::support::equal(lhs, rhs);
+    }
+};
+
+namespace clice {
+struct File2 {
+    bool isIdle = true;
+    bool isHeader = false;
+
+    llvm::DenseMap<SourceContext, ASTInfo> contexts;
+};
 
 struct File;
 
