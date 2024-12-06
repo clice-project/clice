@@ -66,8 +66,7 @@ void applyPreamble(clang::CompilerInstance& instance, CompliationParams& params)
 }
 
 llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> instance,
-                                      clang::frontend::ActionKind kind,
-                                      bool collectPP = true) {
+                                      clang::frontend::ActionKind kind) {
     std::unique_ptr<clang::ASTFrontendAction> action;
     if(kind == clang::frontend::ActionKind::ParseSyntaxOnly) {
         action = std::make_unique<clang::SyntaxOnlyAction>();
@@ -88,29 +87,37 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
         return error("Failed to begin source file");
     }
 
+    auto& pp = instance->getPreprocessor();
     // FIXME: clang-tidy, include-fixer, etc?
 
     // `BeginSourceFile` may create new preprocessor, so all operations related to preprocessor
     // should be done after `BeginSourceFile`.
-    if(collectPP) {
-        auto& PP = instance->getPreprocessor();
-        clang::syntax::TokenCollector collector{PP};
 
-        if(auto error = action->Execute()) {
-            return clice::error("Failed to execute action, because {} ", error);
-        }
+    /// Collect directives.
+    llvm::DenseMap<clang::FileID, Directive> directives;
+    Directive::attach(pp, directives);
 
-        auto tokBuf = std::make_unique<clang::syntax::TokenBuffer>(std::move(collector).consume());
-        tokBuf->indexExpandedTokens();
+    std::optional<clang::syntax::TokenCollector> collector;
 
-        return ASTInfo(std::move(action), std::move(instance), std::move(tokBuf));
-    } else {
-        if(auto error = action->Execute()) {
-            return clice::error("Failed to execute action, because {} ", error);
-        }
-
-        return ASTInfo(std::move(action), std::move(instance), nullptr);
+    /// It is not necessary to collect tokens if we are running code completion.
+    /// And in fact will cause assertion failure.
+    if(!instance->hasCodeCompletionConsumer()) {
+        collector.emplace(pp);
     }
+
+    if(auto error = action->Execute()) {
+        return clice::error("Failed to execute action, because {} ", error);
+    }
+
+    std::unique_ptr<clang::syntax::TokenBuffer> tokBuf;
+    if(collector) {
+        tokBuf = std::make_unique<clang::syntax::TokenBuffer>(std::move(*collector).consume());
+    }
+
+    return ASTInfo(std::move(action),
+                   std::move(instance),
+                   std::move(tokBuf),
+                   std::move(directives));
 }
 
 }  // namespace
@@ -201,7 +208,7 @@ llvm::Expected<ASTInfo> compile(CompliationParams& params, clang::CodeCompleteCo
 
     applyPreamble(*instance, params);
 
-    return ExecuteAction(std::move(instance), clang::frontend::ActionKind::ParseSyntaxOnly, false);
+    return ExecuteAction(std::move(instance), clang::frontend::ActionKind::ParseSyntaxOnly);
 }
 
 }  // namespace clice

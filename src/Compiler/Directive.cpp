@@ -5,43 +5,64 @@
 
 namespace clice {
 
-struct CommentHandler : public clang::CommentHandler {
-    Directives& directive;
+namespace {
 
-    CommentHandler(Directives& directive) : directive(directive) {}
+struct PPCallback : public clang::PPCallbacks {
+    clang::Preprocessor& pp;
+    llvm::DenseMap<clang::FileID, Directive>& directives;
+    llvm::DenseMap<clang::MacroInfo*, std::size_t> macroCache;
 
-    virtual bool HandleComment(clang::Preprocessor& preproc, clang::SourceRange Comment) {
-        // directive.comments.push_back(Comment);
-        auto start = directive.sourceManager.getCharacterData(Comment.getBegin());
-        auto end = directive.sourceManager.getCharacterData(Comment.getEnd());
-        // llvm::outs() << "Comment: " << llvm::StringRef(start, end - start) << "\n";
-        return false;
-    }
-};
+    PPCallback(clang::Preprocessor& pp, llvm::DenseMap<clang::FileID, Directive>& directives) :
+        pp(pp), directives(directives) {}
 
-struct PragmaHandler : public clang::PragmaHandler {
-    virtual void HandlePragma(clang::Preprocessor& PP,
-                              clang::PragmaIntroducer Introducer,
-                              clang::Token& FirstToken) {
-        // TODO:
+    void addCondition(clang::SourceLocation loc,
+                      Condition::BranchKind kind,
+                      Condition::ConditionValue value,
+                      clang::SourceRange conditionRange) {
+        auto& directive = directives[pp.getSourceManager().getFileID(loc)];
+        directive.conditions.emplace_back(Condition{kind, value, loc, conditionRange});
     }
 
-    /// getIfNamespace - If this is a namespace, return it.  This is equivalent to
-    /// using a dynamic_cast, but doesn't require RTTI.
-    virtual clang::PragmaNamespace* getIfNamespace() {
-        return nullptr;
+    void addCondition(clang::SourceLocation loc,
+                      Condition::BranchKind kind,
+                      clang::PPCallbacks::ConditionValueKind value,
+                      clang::SourceRange conditionRange) {
+        Condition::ConditionValue condValue = Condition::None;
+        switch(value) {
+            case clang::PPCallbacks::CVK_False: {
+                condValue = Condition::False;
+                break;
+            }
+            case clang::PPCallbacks::CVK_True: {
+                condValue = Condition::True;
+                break;
+            }
+            case clang::PPCallbacks::CVK_NotEvaluated: {
+                condValue = Condition::Skipped;
+                break;
+            }
+        }
+        addCondition(loc, kind, condValue, conditionRange);
     }
-};
 
-struct PPCallback : clang::PPCallbacks {
-    PPCallback(clang::Preprocessor& preproc) :
-        preproc(preproc), srcMgr(preproc.getSourceManager()) {}
+    void addCondition(clang::SourceLocation loc,
+                      Condition::BranchKind kind,
+                      const clang::Token& name,
+                      const clang::MacroDefinition& definition) {
+        if(auto def = definition.getMacroInfo()) {
+            addMacro(def, MacroRef::Ref, name.getLocation());
+            addCondition(loc, kind, Condition::True, name.getLocation());
+        } else {
+            addCondition(loc, kind, Condition::False, name.getLocation());
+        }
+    }
 
-    clang::Preprocessor& preproc;
-    clang::SourceManager& srcMgr;
-    ;
-    clang::FileID currentID;
+    void addMacro(const clang::MacroInfo* def, MacroRef::Kind kind, clang::SourceLocation loc) {
+        auto& directive = directives[pp.getSourceManager().getFileID(loc)];
+        directive.macros.emplace_back(MacroRef{kind, loc, def});
+    }
 
+public:
     void FileChanged(clang::SourceLocation loc,
                      clang::PPCallbacks::FileChangeReason reason,
                      clang::SrcMgr::CharacteristicKind fileType,
@@ -57,122 +78,103 @@ struct PPCallback : clang::PPCallbacks {
                             llvm::StringRef RelativePath,
                             const clang::Module* SuggestedModule,
                             bool ModuleImported,
-                            clang::SrcMgr::CharacteristicKind FileType) override {
-        // TODO: record all include files
-        llvm::SmallVector<char> RealPath;
-        // fs::make_absolute(SearchPath + "/" + RelativePath, RealPath);
-        // path::remove_dots(RealPath, /*remove_dot_dot=*/true);
-        // llvm::outs() << RealPath << "\n";
-    }
+                            clang::SrcMgr::CharacteristicKind FileType) override {}
 
     void PragmaDirective(clang::SourceLocation Loc,
-                         clang::PragmaIntroducerKind Introducer) override {
-        // llvm::outs() << "PragmaDirective\n";
-    }
+                         clang::PragmaIntroducerKind Introducer) override {}
 
-    void If(clang::SourceLocation Loc,
-            clang::SourceRange ConditionRange,
-            clang::PPCallbacks::ConditionValueKind ConditionValue) override {
-        // llvm::outs() << "If\n";
+    void If(clang::SourceLocation loc,
+            clang::SourceRange conditionRange,
+            clang::PPCallbacks::ConditionValueKind value) override {
+        addCondition(loc, Condition::If, value, conditionRange);
     }
 
     void Elif(clang::SourceLocation loc,
               clang::SourceRange conditionRange,
-              clang::PPCallbacks::ConditionValueKind conditionValue,
-              clang::SourceLocation ifLoc) override {}
+              clang::PPCallbacks::ConditionValueKind value,
+              clang::SourceLocation) override {
+        addCondition(loc, Condition::Elif, value, conditionRange);
+    }
 
     void Ifdef(clang::SourceLocation loc,
                const clang::Token& name,
-               const clang::MacroDefinition& definition) override {}
+               const clang::MacroDefinition& definition) override {
+        addCondition(loc, Condition::Ifdef, name, definition);
+    }
 
+    /// Invoke when #elifdef branch is taken.
     void Elifdef(clang::SourceLocation loc,
                  const clang::Token& name,
-                 const clang::MacroDefinition& definition) override {}
+                 const clang::MacroDefinition& definition) override {
+        addCondition(loc, Condition::Elifdef, name, definition);
+    }
 
+    /// Invoke when #elif is skipped.
     void Elifdef(clang::SourceLocation loc,
                  clang::SourceRange conditionRange,
-                 clang::SourceLocation ifLoc) override {}
+                 clang::SourceLocation) override {
+        /// FIXME: should we try to evaluate the condition to compute the macro reference?
+        addCondition(loc, Condition::Elifdef, Condition::Skipped, conditionRange);
+    }
 
+    /// Invoke when #ifndef is taken.
     void Ifndef(clang::SourceLocation loc,
                 const clang::Token& name,
-                const clang::MacroDefinition& definition) override {}
+                const clang::MacroDefinition& definition) override {
+        addCondition(loc, Condition::Ifndef, name, definition);
+    }
 
-    // invoke when #elifndef is taken
+    // Invoke when #elifndef is taken.
     void Elifndef(clang::SourceLocation loc,
                   const clang::Token& name,
-                  const clang::MacroDefinition& definition) override {}
+                  const clang::MacroDefinition& definition) override {
+        addCondition(loc, Condition::Elifndef, name, definition);
+    }
 
-    // invoke when #elifndef is skipped
+    // Invoke when #elifndef is skipped.
     void Elifndef(clang::SourceLocation loc,
                   clang::SourceRange conditionRange,
-                  clang::SourceLocation ifLoc) override {}
+                  clang::SourceLocation) override {
+        addCondition(loc, Condition::Elifndef, Condition::Skipped, conditionRange);
+    }
 
-    void Else(clang::SourceLocation loc, clang::SourceLocation ifLoc) override {}
+    void Else(clang::SourceLocation loc, clang::SourceLocation ifLoc) override {
+        addCondition(loc, Condition::Else, Condition::None, clang::SourceRange());
+    }
 
-    void Endif(clang::SourceLocation loc, clang::SourceLocation ifLoc) override {}
+    void Endif(clang::SourceLocation loc, clang::SourceLocation ifLoc) override {
+        addCondition(loc, Condition::EndIf, Condition::None, clang::SourceRange());
+    }
 
-    void MacroDefined(const clang::Token& MacroNameTok, const clang::MacroDirective* MD) override {
-        if(MD) {
-            auto info = MD->getMacroInfo();
-            // llvm::outs() << "is builtin: " << info->isBuiltinMacro() << "\n";
-            if(!info->isBuiltinMacro()) {
-                auto location = MacroNameTok.getLocation();
-                if(!srcMgr.isWrittenInBuiltinFile(location) &&
-                   !srcMgr.isWrittenInCommandLineFile(location)) {
-                    MacroNameTok.getLocation().dump(srcMgr);
-                    // srcMgr.getIncludeLoc(srcMgr.getFileID(MacroNameTok.getLocation())).dump(srcMgr);
-                    llvm::outs() << preproc.getSpelling(MacroNameTok) << "\n";
-                }
-                auto def = MD->getDefinition();
-            }
-            // MD->dump();
+    void MacroDefined(const clang::Token& name, const clang::MacroDirective* MD) override {
+        if(auto def = MD->getMacroInfo()) {
+            addMacro(def, MacroRef::Def, name.getLocation());
         }
     }
 
-    void MacroExpands(const clang::Token& MacroNameTok,
-                      const clang::MacroDefinition& MD,
-                      clang::SourceRange Range,
-                      const clang::MacroArgs* Args) override {
-        auto info = MD.getMacroInfo();
-        llvm::outs() << "------------------------\n";
-        // auto info = MD.getMacroInfo();
-        if(info->isObjectLike()) {
-            Range = clang::SourceRange(MacroNameTok.getLocation(), MacroNameTok.getEndLoc());
-        } else if(info->isFunctionLike()) {
-            // MacroNameTok.getLocation().dump(srcMgr);
+    void MacroExpands(const clang::Token& name,
+                      const clang::MacroDefinition& definition,
+                      clang::SourceRange range,
+                      const clang::MacroArgs* args) override {
+        if(auto def = definition.getMacroInfo()) {
+            addMacro(def, MacroRef::Ref, name.getLocation());
         }
-        Range.dump(srcMgr);
-        auto s = srcMgr.getCharacterData(Range.getBegin());
-        auto e = srcMgr.getCharacterData(Range.getEnd());
-        llvm::outs() << llvm::StringRef(s, e - s) << "\n";
-
-        llvm::outs() << preproc.getSpelling(MacroNameTok) << " ";
-        if(Args) {
-            auto size = Args->getNumMacroArguments();
-            for(int i = 0; i < size; i++) {
-                auto arg = Args->getUnexpArgument(i);
-                auto len = Args->getArgLength(arg);
-                for(int j = 0; j < len; j++) {
-                    llvm::outs() << preproc.getSpelling(arg[j]) << " ";
-                }
-            }
-        }
-        llvm::outs() << "\n";
     }
 
-    void MacroUndefined(const clang::Token& MacroNameTok,
+    void MacroUndefined(const clang::Token& name,
                         const clang::MacroDefinition& MD,
-                        const clang::MacroDirective* Undef) override {
-        // TODO:
+                        const clang::MacroDirective* undef) override {
+        if(auto def = MD.getMacroInfo()) {
+            addMacro(def, MacroRef::Undef, name.getLocation());
+        }
     }
 };
 
-clang::CommentHandler* Directives::handler() {
-    // return new CommentHandler(*this);
-}
+}  // namespace
 
-std::unique_ptr<clang::PPCallbacks> Directives::callback() {
-    // return std::make_unique<PPCallback>(*this);
+void Directive::attach(clang::Preprocessor& pp,
+                       llvm::DenseMap<clang::FileID, Directive>& directives) {
+    pp.addPPCallbacks(std::make_unique<PPCallback>(pp, directives));
 }
 
 }  // namespace clice

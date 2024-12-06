@@ -1,7 +1,9 @@
 #pragma once
 
 #include <Compiler/Clang.h>
+#include <Compiler/Directive.h>
 #include <Compiler/Resolver.h>
+
 #include <Support/Error.h>
 
 namespace clice {
@@ -13,9 +15,11 @@ public:
 
     ASTInfo(std::unique_ptr<clang::ASTFrontendAction> action,
             std::unique_ptr<clang::CompilerInstance> instance,
-            std::unique_ptr<clang::syntax::TokenBuffer> tokBuf) :
-        action(std::move(action)), instance(std::move(instance)), tokBuf_(std::move(tokBuf)) {
-        resolver_ = std::make_unique<TemplateResolver>(this->instance->getSema());
+            std::unique_ptr<clang::syntax::TokenBuffer> tokBuf,
+            llvm::DenseMap<clang::FileID, Directive>&& directives) :
+        action(std::move(action)), instance(std::move(instance)), m_TokBuf(std::move(tokBuf)),
+        m_Directives(std::move(directives)) {
+        m_Resolver = std::make_unique<TemplateResolver>(this->instance->getSema());
     }
 
     ASTInfo(const ASTInfo&) = delete;
@@ -50,19 +54,38 @@ public:
     }
 
     clang::syntax::TokenBuffer& tokBuf() {
-        assert(tokBuf_ && "Token buffer is not available");
-        return *tokBuf_;
+        assert(m_TokBuf && "Token buffer is not available");
+        return *m_TokBuf;
     }
 
     TemplateResolver& resolver() {
-        return *resolver_;
+        return *m_Resolver;
+    }
+
+    auto& directives() {
+        return m_Directives;
+    }
+
+    Directive& directive(clang::FileID id) {
+        return m_Directives[id];
+    }
+
+    /// Get the length of the token at the given location.
+    auto getTokenLength(clang::SourceLocation loc) {
+        return clang::Lexer::MeasureTokenLength(loc, srcMgr(), instance->getLangOpts());
+    }
+
+    /// Get the spelling of the token at the given location.
+    llvm::StringRef getTokenSpelling(clang::SourceLocation loc) {
+        return llvm::StringRef(srcMgr().getCharacterData(loc), getTokenLength(loc));
     }
 
 private:
     std::unique_ptr<clang::ASTFrontendAction> action;
     std::unique_ptr<clang::CompilerInstance> instance;
-    std::unique_ptr<clang::syntax::TokenBuffer> tokBuf_;
-    std::unique_ptr<TemplateResolver> resolver_;
+    std::unique_ptr<clang::syntax::TokenBuffer> m_TokBuf;
+    std::unique_ptr<TemplateResolver> m_Resolver;
+    llvm::DenseMap<clang::FileID, Directive> m_Directives;
 };
 
 struct PCHInfo {

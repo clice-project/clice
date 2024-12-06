@@ -8,6 +8,8 @@
 #include <clang/Tooling/Syntax/Tokens.h>
 #include <clang/Sema/Sema.h>
 
+#include <Support/Support.h>
+
 namespace std {
 
 template <>
