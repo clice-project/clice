@@ -29,6 +29,12 @@ struct Range {
     Position end;
 };
 
+struct Location {
+    DocumentUri uri;
+
+    Range range;
+};
+
 struct TextEdit {
     /// The range of the text document to be manipulated. To insert
     /// text into a document create a range where start === end.
@@ -37,12 +43,6 @@ struct TextEdit {
     // The string to be inserted. For delete operations use an
     // empty string.
     string newText;
-};
-
-struct Location {
-    DocumentUri uri;
-
-    Range range;
 };
 
 }  // namespace clice::proto

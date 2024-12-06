@@ -70,7 +70,7 @@ struct File {
 };
 
 class Scheduler {
-public:
+private:
     async::promise<void> updatePCH(llvm::StringRef path,
                                    llvm::StringRef content,
                                    llvm::ArrayRef<const char*> args);
@@ -81,10 +81,7 @@ public:
 
     async::promise<void> buildAST(llvm::StringRef path, llvm::StringRef content);
 
-    async::promise<proto::CompletionResult> codeComplete(llvm::StringRef path,
-                                                         unsigned int line,
-                                                         unsigned int column);
-
+public:
     async::promise<void> add(llvm::StringRef path, llvm::StringRef content);
 
     async::promise<void> update(llvm::StringRef path, llvm::StringRef content);
@@ -92,6 +89,10 @@ public:
     async::promise<void> save(llvm::StringRef path);
 
     async::promise<void> close(llvm::StringRef path);
+
+    async::promise<proto::CompletionResult> codeComplete(llvm::StringRef path,
+                                                         unsigned int line,
+                                                         unsigned int column);
 
     /// Schedule a task for a file. If the file is building, the task will be
     /// appended to the task list of the file and wait for the building to finish.

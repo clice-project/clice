@@ -23,9 +23,7 @@ class HighlightBuilder : public SemanticVisitor<HighlightBuilder> {
 public:
     HighlightBuilder(ASTInfo& compiler) : SemanticVisitor<HighlightBuilder>(compiler, true) {}
 
-    void handleOccurrence(const clang::Decl* decl,
-                          clang::SourceLocation location,
-                          OccurrenceKind kind = OccurrenceKind::Source) {
+    void handleOccurrence(const clang::Decl* decl, clang::SourceRange range, RelationKind kind) {
         proto::SemanticTokenType type = proto::SemanticTokenType::Invalid;
         if(llvm::isa<clang::NamespaceDecl, clang::NamespaceAliasDecl>(decl)) {
             type = proto::SemanticTokenType::Namespace;
@@ -59,7 +57,7 @@ public:
         }
 
         if(type != proto::SemanticTokenType::Invalid) {
-            addToken(location, type);
+            addToken(range.getBegin(), type);
         }
     }
 

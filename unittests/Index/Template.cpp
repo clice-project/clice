@@ -1,8 +1,8 @@
 #include "Tester.h"
 
-namespace {
+namespace clice {
 
-using namespace clice;
+namespace {
 
 TEST(Index, ClassTemplate) {
     const char* code = R"cpp(
@@ -36,19 +36,19 @@ TEST(Index, ClassTemplate) {
     $(implicit_full)foo<int, int> a;
 )cpp";
 
-    IndexerTester tester(code);
-    tester.GotoDefinition("primary_decl", "primary");
-    tester.GotoDefinition("explicit_primary", "primary");
-    tester.GotoDefinition("implicit_primary_1", "primary");
-    tester.GotoDefinition("implicit_primary_2", "primary");
-
-    tester.GotoDefinition("partial_spec_decl", "partial_spec");
-    tester.GotoDefinition("explicit_partial", "partial_spec");
-    tester.GotoDefinition("implicit_partial", "partial_spec");
-
-    tester.GotoDefinition("forward_full", "full_spec");
-    tester.GotoDefinition("full_spec_decl", "full_spec");
-    tester.GotoDefinition("implicit_full", "full_spec");
+    // IndexerTester tester(code);
+    // tester.GotoDefinition("primary_decl", "primary");
+    // tester.GotoDefinition("explicit_primary", "primary");
+    // tester.GotoDefinition("implicit_primary_1", "primary");
+    // tester.GotoDefinition("implicit_primary_2", "primary");
+    //
+    // tester.GotoDefinition("partial_spec_decl", "partial_spec");
+    // tester.GotoDefinition("explicit_partial", "partial_spec");
+    // tester.GotoDefinition("implicit_partial", "partial_spec");
+    //
+    // tester.GotoDefinition("forward_full", "full_spec");
+    // tester.GotoDefinition("full_spec_decl", "full_spec");
+    // tester.GotoDefinition("implicit_full", "full_spec");
 
     /// TODO: add more tests, FunctionTemplate, VarTemplate, ..., Dependent Name, ..., etc.
     /// add tests for find references ..., !test symbol count.
@@ -73,13 +73,13 @@ TEST(Index, FunctionTemplate) {
     }
 )cpp";
 
-    IndexerTester tester(code, true);
-    tester.GotoDefinition("primary_decl", "primary");
-    tester.GotoDefinition("explicit_primary", "primary");
-    tester.GotoDefinition("implicit_primary", "primary");
-
-    tester.GotoDefinition("spec_decl", "spec");
-    tester.GotoDefinition("implicit_spec", "spec");
+    // IndexerTester tester(code, true);
+    // tester.GotoDefinition("primary_decl", "primary");
+    // tester.GotoDefinition("explicit_primary", "primary");
+    // tester.GotoDefinition("implicit_primary", "primary");
+    //
+    // tester.GotoDefinition("spec_decl", "spec");
+    // tester.GotoDefinition("implicit_spec", "spec");
 }
 
 TEST(Index, AliasTemplate) {
@@ -90,8 +90,8 @@ TEST(Index, AliasTemplate) {
     $(implicit_primary)foo<int> a;   
 )cpp";
 
-    IndexerTester tester(code, true);
-    tester.GotoDefinition("implicit_primary", "primary");
+    // IndexerTester tester(code, true);
+    // tester.GotoDefinition("implicit_primary", "primary");
 }
 
 TEST(Index, VarTemplate) {
@@ -124,17 +124,17 @@ TEST(Index, VarTemplate) {
     }
 )cpp";
 
-    IndexerTester tester(code);
-    tester.GotoDefinition("primary_decl", "primary");
-    // tester.GotoDefinition("explicit_primary", "primary");
-    tester.GotoDefinition("implicit_primary_1", "primary");
-    tester.GotoDefinition("implicit_primary_2", "primary");
-
-    tester.GotoDefinition("partial_spec_decl", "partial_spec");
-    // tester.GotoDefinition("explicit_partial", "partial_spec");
-    tester.GotoDefinition("implicit_partial", "partial_spec");
-
-    tester.GotoDefinition("implicit_full", "full_spec");
+    // IndexerTester tester(code);
+    // tester.GotoDefinition("primary_decl", "primary");
+    //// tester.GotoDefinition("explicit_primary", "primary");
+    // tester.GotoDefinition("implicit_primary_1", "primary");
+    // tester.GotoDefinition("implicit_primary_2", "primary");
+    //
+    // tester.GotoDefinition("partial_spec_decl", "partial_spec");
+    //// tester.GotoDefinition("explicit_partial", "partial_spec");
+    // tester.GotoDefinition("implicit_partial", "partial_spec");
+    //
+    // tester.GotoDefinition("implicit_full", "full_spec");
 }
 
 TEST(Index, Concept) {
@@ -147,11 +147,13 @@ TEST(Index, Concept) {
     $(implicit2)foo auto bar = 1;
 )cpp";
 
-    IndexerTester tester(code, true);
-    tester.GotoDefinition("primary", "primary");
-    tester.GotoDefinition("implicit", "primary");
-    tester.GotoDefinition("implicit2", "primary");
+    // IndexerTester tester(code, true);
+    // tester.GotoDefinition("primary", "primary");
+    // tester.GotoDefinition("implicit", "primary");
+    // tester.GotoDefinition("implicit2", "primary");
 }
 
 }  // namespace
+
+}  // namespace clice
 

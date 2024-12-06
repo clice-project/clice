@@ -1,7 +1,6 @@
 #include <Basic/URI.h>
 #include <Basic/SourceCode.h>
-#include <Basic/SymbolKind.h>
-#include <Compiler/Compiler.h>
+#include <Compiler/Semantic.h>
 #include <Feature/CodeCompletion.h>
 
 namespace clice::feature {

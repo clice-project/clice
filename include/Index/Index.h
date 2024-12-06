@@ -1,36 +1,42 @@
-#pragma once
-
-#include "Relation.h"
+#include "Basic/Location.h"
+#include "Compiler/Semantic.h"
+#include "Support/Support.h"
 
 namespace clice::index {
 
-/// Represent a position in the source code, the line and column are 1-based.
-struct Position {
-    /// The line of the position.
-    uint32_t line = 0;
+template <typename T>
+struct Ref {
+    std::uint32_t offset = std::numeric_limits<std::uint32_t>::max();
 
-    /// The column of the position.
-    uint32_t column = 0;
+    bool isValid() const {
+        return offset != std::numeric_limits<std::uint32_t>::max();
+    }
 
-    friend constexpr auto operator<=> (const Position& lhs, const Position& rhs) = default;
+    bool isInvalid() const {
+        return !isValid();
+    }
+
+    explicit operator bool () const {
+        return isValid();
+    }
 };
 
 struct FileRef : Ref<FileRef> {};
 
 struct SymbolRef : Ref<SymbolRef> {};
 
+struct LocationRef : Ref<LocationRef> {};
+
+struct SymOrLocRef : Ref<SymOrLocRef> {};
+
+/// Beacuse we decide to support header context, so just a file cannot represent a symbol location
+/// well. So we define a new struct `Location` to represent the location of a symbol.
 struct Location {
-    /// The index of the file in the `Index::files`. When the value of file is equal to MAX_UINT32
-    /// it means the location is invalid.
-    FileRef file = {};
+    /// The index of the file in the `Index::files`.
+    FileRef file;
 
-    /// Begin position of the location.
-    Position begin = {};
-
-    /// End position of the location.
-    Position end = {};
-
-    friend constexpr auto operator<=> (const Location& lhs, const Location& rhs) = default;
+    /// Source code range of the location.
+    proto::Range range;
 };
 
 struct Occurrence {
@@ -41,66 +47,18 @@ struct Occurrence {
     SymbolRef symbol;
 };
 
-template <typename String>
-struct File {
-    /// The path of the file.
-    String path;
+struct Relation {
+    /// The kind of the relation.
+    RelationKind kind;
 
-    /// FIXME: Add some flags.
+    /// The index of location in `Index::locations`.
+    LocationRef location;
 
-    /// The index of include location of this file if any.
-    LocationRef include;
+    /// Additional information based on the `Relation::kind`. For `Declaration` and `Definition`,
+    /// this is the source range of the whole entity(`Relation::location` is just the range of
+    /// symbol name). For kinds whose target symbol is different from the source symbol, e.g.
+    /// `TypeDefinition` and `Base`, this is the index of target symbol in `Index::symbols`.
+    SymOrLocRef symOrLoc;
 };
 
-template <typename String, template <typename...> typename Array>
-struct Symbol {
-    /// The hash of this symbol, used for quick lookup.
-    uint64_t id;
-
-    /// The unique identifier of this symbol.
-    String USR;
-
-    /// The name of this symbol.
-    String name;
-
-    /// The document of this symbol.
-    String document;
-
-    bool is_local;
-    // FIXME: ... more useful fields.
-
-    /// The relations of this symbol.
-    Array<Relation> relations;
-};
-
-template <typename String, template <typename...> typename Array>
-struct Index {
-    /// The version of the index format.
-    String version;
-
-    /// The language of the indexed code, currently only supports "C" and "C++".
-    String language;
-
-    /// The filepath of the source file.
-    String path;
-
-    /// The context of the source file.
-    String context;
-
-    /// The commands used to compile the source file.
-    Array<String> commands;
-
-    /// All files occurred in compilation.
-    Array<File<String>> files;
-
-    /// All the symbols in the source file, sorted by `Symbol::SymbolID`.
-    Array<Symbol<String, Array>> symbols;
-
-    /// All the occurrences in the source file, sorted by `Occurrence::Location`.
-    Array<Occurrence> occurrences;
-
-    /// Cache same locations to reduce the size of the index.
-    Array<Location> locations;
-};
-
-}  // namespace clice::index
+};  // namespace clice::index

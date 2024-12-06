@@ -5,7 +5,6 @@
 
 namespace clice {
 
-using index::Position;
 
 class Annotation {
 public:
@@ -52,13 +51,13 @@ public:
         return m_source;
     }
 
-    Position position(llvm::StringRef key) const {
+    proto::Position position(llvm::StringRef key) const {
         return locations.lookup(key);
     }
 
 private:
     std::string m_source;
-    llvm::StringMap<Position> locations;
+    llvm::StringMap<proto::Position> locations;
 };
 
 }  // namespace clice

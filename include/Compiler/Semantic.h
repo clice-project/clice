@@ -1,46 +1,96 @@
 #include "Compiler.h"
 #include "Resolver.h"
-
-#include "Support/Enum.h"
-#include "Support/FileSystem.h"
 #include "Utility.h"
+
+#include "Support/Support.h"
 
 namespace clice {
 
-enum class RelationKind : uint32_t {
-    Invalid,
-    Declaration,
-    Definition,
-    Reference,
-    // Write Relation.
-    Read,
-    Write,
-    Interface,
-    Implementation,
-    /// When target is a type definition of source, source is possible type or constructor.
-    TypeDefinition,
+/// In the LSP, there are several different kinds, such as `SemanticTokenType`,
+/// `CompletionItemKind`, and `SymbolKind`. Unfortunately, these kinds do not cover all the semantic
+/// information we need. It's also inconsistent that some kinds exist in one category but not in
+/// another, for example, `Namespace` is present in `SemanticTokenType` but not in
+/// `CompletionItemKind`. To address this, we define our own `SymbolKind`, which will be used
+/// consistently across our responses to the client and in the index. Users who prefer to stick to
+/// standard LSP kinds can map our `SymbolKind` to the corresponding LSP kinds through
+/// configuration.
+struct SymbolKind : support::Enum<SymbolKind, false, uint8_t> {
+    enum Kind : uint8_t {
+        Comment = 0,     ///< C/C++ comments.
+        Number,          ///< C/C++ number literal.
+        Character,       ///< C/C++ character literal.
+        String,          ///< C/C++ string literal.
+        Keyword,         ///< C/C++ keyword.
+        Directive,       ///< C/C++ preprocessor directive, e.g. `#include`.
+        Header,          ///< C/C++ header name, e.g. `<iostream>` and `"foo.h"`.
+        Module,          ///< C++20 module name.
+        Macro,           ///< C/C++ macro.
+        MacroParameter,  ///< C/C++ macro parameter.
+        Namespace,       ///> C++ namespace.
+        Class,           ///> C/C++ class.
+        Struct,          ///> C/C++ struct.
+        Union,           ///> C/C++ union.
+        Enum,            ///> C/C++ enum.
+        Type,            ///> C/C++ type alias and C++ template type parameter.
+        Field,           ///> C/C++ field.
+        EnumMember,      ///> C/C++ enum member.
+        Function,        ///> C/C++ function.
+        Method,          ///> C++ method.
+        Variable,        ///> C/C++ variable, includes C++17 structured bindings.
+        Parameter,       ///> C/C++ parameter.
+        Label,           ///> C/C++ label.
+        Concept,         ///> C++20 concept.
+        Attribute,       ///> GNU/MSVC/C++11/C23 attribute.
+        Operator,        ///> C/C++ operator.
+        Paren,           ///> `(` and `)`.
+        Bracket,         ///> `[` and `]`.
+        Brace,           ///> `{` and `}`.
+        Angle,           ///> `<` and `>`.
+        Invalid,
+    };
 
-    /// When target is a base class of source.
-    Base,
-    /// When target is a derived class of source.
-    Derived,
+    using Enum::Enum;
 
-    /// When target is a constructor of source.
-    Constructor,
-    /// When target is a destructor of source.
-    Destructor,
+    constexpr inline static auto InvalidEnum = Kind::Invalid;
 
-    // When target is a caller of source.
-    Caller,
-    // When target is a callee of source.
-    Callee,
+    static SymbolKind from(const clang::Decl* decl);
+
+    static SymbolKind from(const clang::tok::TokenKind kind);
 };
 
-// struct RelationKind : enum_type<RelationKinds, true> {
-//     using enum RelationKinds;
-//     using enum_type::enum_type;
-//     using enum_type::operator=;
-// };
+/// A bit field enum to describe the kind of relation between two symbols.
+struct RelationKind : support::Enum<RelationKind, true, uint32_t> {
+    enum Kind : uint32_t {
+        Invalid,
+        Declaration,
+        Definition,
+        Reference,
+        // Write Relation.
+        Read,
+        Write,
+        Interface,
+        Implementation,
+        /// When target is a type definition of source, source is possible type or constructor.
+        TypeDefinition,
+
+        /// When target is a base class of source.
+        Base,
+        /// When target is a derived class of source.
+        Derived,
+
+        /// When target is a constructor of source.
+        Constructor,
+        /// When target is a destructor of source.
+        Destructor,
+
+        // When target is a caller of source.
+        Caller,
+        // When target is a callee of source.
+        Callee,
+    };
+
+    using Enum::Enum;
+};
 
 enum class OccurrenceKind {
     /// This occurrence directly corresponds to a unique source symbol.
@@ -51,10 +101,6 @@ enum class OccurrenceKind {
     PseudoInstantiation,
     /// This occurrence is from `ImplicitInstantiation` or `ExplicitInstantiation` of a template.
     Instantiation,
-};
-
-enum class SymbolKind {
-
 };
 
 template <typename Derived>
@@ -97,7 +143,7 @@ public:
     /// Always uses spelling location if the original location is a macro location.
     void handleOccurrence(const clang::Decl* decl,
                           clang::SourceLocation location,
-                          OccurrenceKind kind = OccurrenceKind::Source) {}
+                          RelationKind kind = RelationKind::Invalid) {}
 
     /// Builtin type doesn't have corresponding decl. So we handle it separately.
     /// And it is possible that a builtin type is composed of multiple tokens.
@@ -106,12 +152,7 @@ public:
                           clang::SourceRange range,
                           OccurrenceKind kind = OccurrenceKind::Source) {}
 
-    void handleOccurrence(clang::Attr* attr, clang::SourceRange range) {}
-
-    /// Always uses expansion location if the original location is a macro location.
-    void handleRelation(const clang::Decl* decl, RelationKind kind, clang::SourceRange range) {
-        ///
-    }
+    void handleOccurrence(const clang::Attr* attr, clang::SourceRange range) {}
 
 public:
     /// ============================================================================
@@ -136,7 +177,7 @@ public:
     VISIT_DECL(NamespaceDecl) {
         /// `namespace Foo { }`
         ///             ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
         return true;
     }
 
@@ -144,72 +185,80 @@ public:
         /// `namespace Foo = Bar`
         ///             ^     ^~~~ reference
         ///             ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
-        getDerived().handleOccurrence(decl->getNamespace(), decl->getTargetNameLoc());
+        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
+        getDerived().handleOccurrence(decl->getNamespace(),
+                                      decl->getTargetNameLoc(),
+                                      RelationKind::Reference);
         return true;
     }
 
     VISIT_DECL(UsingDirectiveDecl) {
         /// `using namespace Foo`
         ///                   ^~~~~~~ reference
-        getDerived().handleOccurrence(decl->getNominatedNamespace(), decl->getLocation());
+        getDerived().handleOccurrence(decl->getNominatedNamespace(),
+                                      decl->getLocation(),
+                                      RelationKind::Reference);
         return true;
     }
 
     VISIT_DECL(LabelDecl) {
         /// `label:`
         ///    ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
         return true;
     }
 
     VISIT_DECL(FieldDecl) {
         /// `int foo;`
         ///       ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
+        /// FIXME: add Type Definition
         return true;
     }
 
     VISIT_DECL(EnumConstantDecl) {
         /// `enum Foo { bar };`
         ///              ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
+        /// FIXME: add Type Definition
         return true;
     }
 
     VISIT_DECL(UsingDecl) {
         /// `using Foo::bar;`
         ///              ^~~~ reference
-        getDerived().handleOccurrence(decl, decl->getLocation());
-        /// FIXME:
+        for(auto shadow: decl->shadows()) {
+            getDerived().handleOccurrence(shadow, decl->getLocation(), RelationKind::Reference);
+        }
         return true;
     }
 
     VISIT_DECL(BindingDecl) {
         /// `auto [a, b] = std::make_tuple(1, 2);`
         ///        ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
+        /// FIXME: add Type Definition
         return true;
     }
 
     VISIT_DECL(TemplateTypeParmDecl) {
         /// `template <typename T>`
         ///                     ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
         return true;
     }
 
     VISIT_DECL(TemplateTemplateParmDecl) {
         /// `template <template <typename> class T>`
         ///                                      ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
         return true;
     }
 
     VISIT_DECL(NonTypeTemplateParmDecl) {
         /// `template <int N>`
         ///                ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
         return true;
     }
 
@@ -234,7 +283,11 @@ public:
 
         /// `struct/class/union/enum Foo { };`
         ///                           ^~~~ declaration/definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl,
+                                      decl->getLocation(),
+                                      decl->isThisDeclarationADefinition()
+                                          ? RelationKind::Definition
+                                          : RelationKind::Declaration);
         return true;
     }
 
@@ -249,7 +302,11 @@ public:
 
         /// `void foo();`
         ///         ^~~~ declaration/definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl,
+                                      decl->getLocation(),
+                                      decl->isThisDeclarationADefinition()
+                                          ? RelationKind::Definition
+                                          : RelationKind::Declaration);
         return true;
     }
 
@@ -286,7 +343,8 @@ public:
 
         /// `using Foo = int;`
         ///             ^~~~ declaration/definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
+        /// FIXME: add type definition
         return true;
     }
 
@@ -303,7 +361,11 @@ public:
 
         /// `int foo;`
         ///       ^~~~ declaration/definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl,
+                                      decl->getLocation(),
+                                      decl->isThisDeclarationADefinition()
+                                          ? RelationKind::Definition
+                                          : RelationKind::Declaration);
         return true;
     }
 
@@ -338,14 +400,16 @@ public:
     VISIT_DECL(ConceptDecl) {
         /// `template <typename T> concept Foo = ...;`
         ///                                 ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation());
+        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
         return true;
     }
 
     bool TraverseConceptReference(clang::ConceptReference* reference) {
         /// `requires Foo<T>;`
         ///            ^~~~ reference
-        getDerived().handleOccurrence(reference->getNamedConcept(), reference->getConceptNameLoc());
+        getDerived().handleOccurrence(reference->getNamedConcept(),
+                                      reference->getConceptNameLoc(),
+                                      RelationKind::Reference);
 
         return Base::TraverseConceptReference(reference);
     }
@@ -382,28 +446,32 @@ public:
     VISIT_TYPELOC(TagTypeLoc) {
         /// `struct Foo { }; Foo foo`
         ///                   ^~~~ reference
-        getDerived().handleOccurrence(loc.getDecl(), loc.getNameLoc());
+        getDerived().handleOccurrence(loc.getDecl(), loc.getNameLoc(), RelationKind::Reference);
         return true;
     }
 
     VISIT_TYPELOC(TypedefTypeLoc) {
         /// `using Foo = int; Foo foo`
         ///                    ^~~~ reference
-        getDerived().handleOccurrence(loc.getTypedefNameDecl(), loc.getNameLoc());
+        getDerived().handleOccurrence(loc.getTypedefNameDecl(),
+                                      loc.getNameLoc(),
+                                      RelationKind::Reference);
         return true;
     }
 
     VISIT_TYPELOC(TemplateTypeParmTypeLoc) {
         /// `template <typename T> void foo(T t)`
         ///                                 ^~~~ reference
-        getDerived().handleOccurrence(loc.getDecl(), loc.getNameLoc());
+        getDerived().handleOccurrence(loc.getDecl(), loc.getNameLoc(), RelationKind::Reference);
         return true;
     }
 
     VISIT_TYPELOC(TemplateSpecializationTypeLoc) {
         /// `std::vector<int>`
         ///        ^~~~ reference
-        getDerived().handleOccurrence(declForType(loc.getType()), loc.getTemplateNameLoc());
+        getDerived().handleOccurrence(declForType(loc.getType()),
+                                      loc.getTemplateNameLoc(),
+                                      RelationKind::Reference);
         return true;
     }
 
@@ -411,7 +479,7 @@ public:
         /// `std::vector<T>::value_type`
         ///                      ^~~~ reference
         for(auto decl: resolver.lookup(loc.getTypePtr())) {
-            getDerived().handleOccurrence(decl, loc.getNameLoc());
+            getDerived().handleOccurrence(decl, loc.getNameLoc(), RelationKind::Reference);
         }
         return true;
     }
@@ -420,7 +488,7 @@ public:
         /// `std::allocator<T>::rebind<U>`
         ///                       ^~~~ reference
         for(auto decl: resolver.lookup(loc.getTypePtr())) {
-            getDerived().handleOccurrence(decl, loc.getTemplateNameLoc());
+            getDerived().handleOccurrence(decl, loc.getTemplateNameLoc(), RelationKind::Reference);
         }
         return true;
     }
@@ -470,11 +538,15 @@ public:
         auto NNS = loc.getNestedNameSpecifier();
         switch(NNS->getKind()) {
             case clang::NestedNameSpecifier::Namespace: {
-                getDerived().handleOccurrence(NNS->getAsNamespace(), loc.getLocalBeginLoc());
+                getDerived().handleOccurrence(NNS->getAsNamespace(),
+                                              loc.getLocalBeginLoc(),
+                                              RelationKind::Reference);
                 break;
             }
             case clang::NestedNameSpecifier::NamespaceAlias: {
-                getDerived().handleOccurrence(NNS->getAsNamespaceAlias(), loc.getLocalBeginLoc());
+                getDerived().handleOccurrence(NNS->getAsNamespaceAlias(),
+                                              loc.getLocalBeginLoc(),
+                                              RelationKind::Reference);
                 break;
             }
             case clang::NestedNameSpecifier::Identifier: {
@@ -511,20 +583,30 @@ public:
 
     VISIT_EXPR(CallExpr) {
         // TODO: consider lambda expression.
+        auto caller = decls.back();
+        auto callee = expr->getCalleeDecl();
+        if(callee) {
+            getDerived().handleOccurrence(caller, expr->getSourceRange(), RelationKind::Caller);
+            getDerived().handleOccurrence(callee, expr->getSourceRange(), RelationKind::Callee);
+        }
         return true;
     }
 
     VISIT_EXPR(DeclRefExpr) {
         /// `foo = 1`
         ///   ^~~~ reference
-        getDerived().handleOccurrence(expr->getDecl(), expr->getLocation());
+        getDerived().handleOccurrence(expr->getDecl(),
+                                      expr->getLocation(),
+                                      RelationKind::Reference);
         return true;
     }
 
     VISIT_EXPR(MemberExpr) {
         /// `foo.bar`
         ///       ^~~~ reference
-        getDerived().handleOccurrence(expr->getMemberDecl(), expr->getMemberLoc());
+        getDerived().handleOccurrence(expr->getMemberDecl(),
+                                      expr->getMemberLoc(),
+                                      RelationKind::Reference);
         return true;
     }
 
@@ -532,9 +614,7 @@ public:
         /// `std::is_same<T, U>::value`
         ///           ^~~~ reference
         for(auto decl: resolver.lookup(expr)) {
-            getDerived().handleOccurrence(decl,
-                                          expr->getNameLoc(),
-                                          OccurrenceKind::PseudoInstantiation);
+            getDerived().handleOccurrence(decl, expr->getNameLoc(), RelationKind::Reference);
         }
         return true;
     }
@@ -543,7 +623,9 @@ public:
         /// `std::is_same<T, U>::value`
         ///                        ^~~~ reference
         for(auto decl: resolver.lookup(expr)) {
-            getDerived().handleOccurrence(decl, expr->getNameInfo().getLoc());
+            getDerived().handleOccurrence(decl,
+                                          expr->getNameInfo().getLoc(),
+                                          RelationKind::Reference);
         }
         return true;
     }
