@@ -115,7 +115,7 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
 
 }  // namespace
 
-llvm::Expected<ASTInfo> buildAST(CompliationParams& params) {
+llvm::Expected<ASTInfo> compile(CompliationParams& params) {
     auto instance = createInstance(params.args);
 
     auto buffer = llvm::MemoryBuffer::getMemBufferCopy(params.content);
@@ -126,7 +126,7 @@ llvm::Expected<ASTInfo> buildAST(CompliationParams& params) {
     return ExecuteAction(std::move(instance), clang::frontend::ActionKind::ParseSyntaxOnly);
 }
 
-llvm::Expected<ASTInfo> buildPCH(CompliationParams& params, PCHInfo& out) {
+llvm::Expected<ASTInfo> compile(CompliationParams& params, PCHInfo& out) {
     auto instance = createInstance(params.args);
 
     clang::PreambleBounds bounds = {0, false};
@@ -164,7 +164,7 @@ llvm::Expected<ASTInfo> buildPCH(CompliationParams& params, PCHInfo& out) {
     }
 }
 
-llvm::Expected<ASTInfo> buildPCM(CompliationParams& params, PCMInfo& out) {
+llvm::Expected<ASTInfo> compile(CompliationParams& params, PCMInfo& out) {
     auto instance = createInstance(params.args);
 
     /// Set options to generate PCM.
@@ -186,17 +186,13 @@ llvm::Expected<ASTInfo> buildPCM(CompliationParams& params, PCMInfo& out) {
     }
 }
 
-llvm::Expected<ASTInfo> codeCompleteAt(CompliationParams& params,
-                                       uint32_t line,
-                                       uint32_t column,
-                                       llvm::StringRef file,
-                                       clang::CodeCompleteConsumer* consumer) {
+llvm::Expected<ASTInfo> compile(CompliationParams& params, clang::CodeCompleteConsumer* consumer) {
     auto instance = createInstance(params.args);
 
     /// Set options to run code completion.
-    instance->getFrontendOpts().CodeCompletionAt.Line = line;
-    instance->getFrontendOpts().CodeCompletionAt.Column = column;
-    instance->getFrontendOpts().CodeCompletionAt.FileName = file;
+    instance->getFrontendOpts().CodeCompletionAt.FileName = params.path.str();
+    instance->getFrontendOpts().CodeCompletionAt.Line = params.line;
+    instance->getFrontendOpts().CodeCompletionAt.Column = params.column;
     instance->setCodeCompletionConsumer(consumer);
 
     auto buffer = llvm::MemoryBuffer::getMemBufferCopy(params.content);

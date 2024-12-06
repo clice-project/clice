@@ -21,7 +21,7 @@ struct TemplateResolverTester : public clang::RecursiveASTVisitor<TemplateResolv
         params.path = "main.cpp";
         params.content = code;
         params.args = compileArgs;
-        auto info = buildAST(params);
+        auto info = compile(params);
         if(!info) {
             llvm::errs() << info.takeError() << "\n";
             return;

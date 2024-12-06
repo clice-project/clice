@@ -30,7 +30,7 @@ struct IndexerTester {
         params.content = source;
 
         auto begin1 = std::chrono::high_resolution_clock::now();
-        if(auto info = buildAST(params)) {
+        if(auto info = compile(params)) {
             this->info = std::move(*info);
         } else {
             llvm::errs() << "Failed to build AST\n";

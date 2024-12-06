@@ -36,7 +36,7 @@ async::promise<void> Scheduler::updatePCH(llvm::StringRef filepath,
                 }
             }
 
-            if(auto info = buildPCH(params, pch); !info) {
+            if(auto info = compile(params, pch); !info) {
                 log::fatal("Failed to build PCH for {0}, because {1}",
                            filepath.str(),
                            info.takeError());
@@ -109,7 +109,7 @@ async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringR
         /// the `pchs` map in this task, beacuse it is called in thread pool which will result in
         /// data race. So temporarily copy the `pch` here. There must be a better way to solve this
         /// problem.
-        auto info = clice::buildAST(params);
+        auto info = clice::compile(params);
         if(!info) {
             log::fatal("Failed to build AST for {0}", filepath);
         }

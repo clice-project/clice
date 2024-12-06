@@ -208,8 +208,11 @@ proto::CompletionResult codeCompletion(CompliationParams& params,
     proto::CompletionResult completions;
     auto consumer = new CodeCompletionCollector(completions, line, column, params.content);
 
-    auto info = codeCompleteAt(params, line, column, file, consumer);
-    if(info) {
+    params.path = file;
+    params.line = line;
+    params.column = column;
+
+    if(auto info = compile(params, consumer)) {
         for(auto& item: completions) {}
         return completions;
     } else {

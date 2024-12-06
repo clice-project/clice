@@ -29,7 +29,7 @@ int main(){
     params.content = code;
     params.args = compileArgs;
 
-    auto info = buildAST(params);
+    auto info = compile(params);
     ASSERT_TRUE(bool(info));
 }
 
@@ -69,11 +69,11 @@ int main(){
     params.args = compileArgs;
 
     PCHInfo pch;
-    ASSERT_TRUE(bool(clice::buildPCH(params, pch)));
+    ASSERT_TRUE(bool(clice::compile(params, pch)));
 
     params.addPCH(pch);
 
-    auto ast = buildAST(params);
+    auto ast = compile(params);
     ASSERT_TRUE(bool(ast));
 }
 
@@ -110,7 +110,7 @@ export int foo() {
     params.args = compileArgs;
 
     PCMInfo pcm;
-    ASSERT_TRUE(bool(clice::buildPCM(params, pcm)));
+    ASSERT_TRUE(bool(clice::compile(params, pcm)));
     ASSERT_EQ(pcm.name, "A");
 
     const char* code2 = R"cpp(
@@ -133,7 +133,7 @@ int main(){
     params.args = compileArgs;
     params.addPCM(pcm);
 
-    auto info = buildAST(params);
+    auto info = compile(params);
     ASSERT_TRUE(bool(info));
 }
 
@@ -153,9 +153,11 @@ export int foo = 1;
     params.path = "main.cppm";
     params.content = code;
     params.args = compileArgs;
+    params.line = 3;
+    params.column = 10;
 
     auto consumer = new clang::PrintingCodeCompleteConsumer({}, llvm::outs());
-    auto info = codeCompleteAt(params, 3, 10, "main.cppm", consumer);
+    auto info = compile(params, consumer);
     ASSERT_TRUE(bool(info));
 
     /// TODO: add tests in the case of PCH, PCM and override file.

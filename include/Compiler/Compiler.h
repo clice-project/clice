@@ -108,6 +108,8 @@ struct CompliationParams {
     /// Information about reuse PCM(name, path).
     llvm::SmallVector<std::pair<std::string, std::string>> pcms;
 
+    uint32_t line = 0, column = 0;
+
     void addPCH(const PCHInfo& info) {
         pch = info.path;
         bounds = info.bounds();
@@ -121,16 +123,12 @@ struct CompliationParams {
 /// Build AST from given file path and content. If pch or pcm provided, apply them to the compiler.
 /// Note this function will not check whether we need to update the PCH or PCM, caller should check
 /// their reusability and update in time.
-llvm::Expected<ASTInfo> buildAST(CompliationParams& params);
+llvm::Expected<ASTInfo> compile(CompliationParams& params);
 
-llvm::Expected<ASTInfo> buildPCH(CompliationParams& params, PCHInfo& out);
+llvm::Expected<ASTInfo> compile(CompliationParams& params, PCHInfo& out);
 
-llvm::Expected<ASTInfo> buildPCM(CompliationParams& params, PCMInfo& out);
+llvm::Expected<ASTInfo> compile(CompliationParams& params, PCMInfo& out);
 
-llvm::Expected<ASTInfo> codeCompleteAt(CompliationParams& params,
-                                       uint32_t line,
-                                       uint32_t column,
-                                       llvm::StringRef file,
-                                       clang::CodeCompleteConsumer* consumer);
+llvm::Expected<ASTInfo> compile(CompliationParams& params, clang::CodeCompleteConsumer* consumer);
 
 }  // namespace clice
