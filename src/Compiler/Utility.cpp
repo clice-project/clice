@@ -46,16 +46,7 @@ const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
             return CTSD;
         }
 
-        auto CRD = CTSD->getTemplateInstantiationPattern();
-        assert(CRD && "Unexpected template instantiation pattern");
-
-        /// Primary template.
-        if(auto CTD = CRD->getDescribedClassTemplate()) {
-            return CTD;
-        }
-
-        /// Partial specialization.
-        return CRD;
+        return CTSD->getTemplateInstantiationPattern();
     }
 
     if(auto FD = llvm::dyn_cast<clang::FunctionDecl>(decl)) {
@@ -77,10 +68,6 @@ const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
     }
 
     if(auto CRD = llvm::dyn_cast<clang::CXXRecordDecl>(decl)) {
-        if(auto CTD = CRD->getDescribedClassTemplate()) {
-            return CTD;
-        }
-
         return CRD->getInstantiatedFromMemberClass();
     }
 

@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Compiler.h"
 #include "Resolver.h"
 #include "Utility.h"
@@ -127,7 +129,7 @@ public:
         return location.isInvalid() || (mainFileOnly && !srcMgr.isInMainFile(location));
     }
 
-    void dump(clang::SourceLocation loc) {
+    void dump [[gnu::noinline]] (clang::SourceLocation loc) {
         auto location = srcMgr.getPresumedLoc(loc);
         llvm::SmallString<128> path;
         auto err = fs::real_path(location.getFilename(), path);
@@ -141,9 +143,7 @@ public:
     /// filter some nodes with invalid location.
     ///
     /// Always uses spelling location if the original location is a macro location.
-    void handleOccurrence(const clang::Decl* decl,
-                          clang::SourceLocation location,
-                          RelationKind kind = RelationKind::Invalid) {}
+    void handleOccurrence(const clang::Decl* decl, clang::SourceRange range, RelationKind kind) {}
 
     /// Builtin type doesn't have corresponding decl. So we handle it separately.
     /// And it is possible that a builtin type is composed of multiple tokens.
@@ -584,8 +584,12 @@ public:
     VISIT_EXPR(CallExpr) {
         // TODO: consider lambda expression.
         auto caller = decls.back();
+        if(llvm::isa<clang::StaticAssertDecl>(caller)) {
+            caller = llvm::cast<clang::NamedDecl>(caller->getDeclContext());
+        }
+
         auto callee = expr->getCalleeDecl();
-        if(callee) {
+        if(callee && caller) {
             getDerived().handleOccurrence(caller, expr->getSourceRange(), RelationKind::Caller);
             getDerived().handleOccurrence(callee, expr->getSourceRange(), RelationKind::Callee);
         }
@@ -604,9 +608,14 @@ public:
     VISIT_EXPR(MemberExpr) {
         /// `foo.bar`
         ///       ^~~~ reference
-        getDerived().handleOccurrence(expr->getMemberDecl(),
-                                      expr->getMemberLoc(),
-                                      RelationKind::Reference);
+        if(expr->getMemberLoc().isValid()) {
+            /// FIXME: if the location of member loc is invalid, this represents it is a
+            /// implicit member expr, e.g. `if(x)`, implicit `if(x.operator bool())`. Try to
+            /// use parens around the member loc.
+            getDerived().handleOccurrence(expr->getMemberDecl(),
+                                          expr->getMemberLoc(),
+                                          RelationKind::Reference);
+        }
         return true;
     }
 
@@ -622,11 +631,14 @@ public:
     VISIT_EXPR(DependentScopeDeclRefExpr) {
         /// `std::is_same<T, U>::value`
         ///                        ^~~~ reference
-        for(auto decl: resolver.lookup(expr)) {
-            getDerived().handleOccurrence(decl,
-                                          expr->getNameInfo().getLoc(),
-                                          RelationKind::Reference);
-        }
+        /// dump(expr->getLocation());
+        /// FIXME:
+        /// TemplateResolver::debug = true;
+        // for(auto decl: resolver.lookup(expr)) {
+        //     getDerived().handleOccurrence(decl,
+        //                                   expr->getNameInfo().getLoc(),
+        //                                   RelationKind::Reference);
+        // }
         return true;
     }
 

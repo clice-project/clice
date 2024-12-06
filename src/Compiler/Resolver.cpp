@@ -1,4 +1,4 @@
-#include "Support/TypeTraits.h"
+#include "Support/Support.h"
 #include <Compiler/Resolver.h>
 #include <clang/Sema/Template.h>
 #include <clang/Sema/TreeTransform.h>
@@ -481,14 +481,70 @@ public:
         });
 
         type = DesugarOnly(sema).TransformType(type);
+
+#ifndef NDEBUG
+        if(TemplateResolver::debug) {
+            llvm::SmallString<128> args;
+            for(auto& frame: stack.frames()) {
+                args += "<";
+                for(auto& arg: frame.second) {
+                    switch(arg.getKind()) {
+                        case clang::TemplateArgument::Null:
+                        case clang::TemplateArgument::Type: {
+                            args += arg.getAsType().getAsString();
+                            break;
+                        }
+                        case clang::TemplateArgument::Declaration: {
+                            args += arg.getAsDecl()->getNameAsString();
+                            break;
+                        }
+                        case clang::TemplateArgument::NullPtr: {
+                            args += "nullptr";
+                            break;
+                        }
+                        case clang::TemplateArgument::Integral: {
+                            arg.getAsIntegral().toString(args, 10);
+                            break;
+                        }
+                        case clang::TemplateArgument::StructuralValue: {
+                            args += arg.getAsStructuralValue().getAsString(
+                                context,
+                                arg.getStructuralValueType());
+                            break;
+                        }
+                        case clang::TemplateArgument::Template: {
+                            args += arg.getAsTemplate().getAsTemplateDecl()->getNameAsString();
+                            break;
+                        }
+                        case clang::TemplateArgument::TemplateExpansion: {
+                            args += arg.getAsTemplateOrTemplatePattern()
+                                        .getAsTemplateDecl()
+                                        ->getNameAsString();
+                            break;
+                        }
+                        case clang::TemplateArgument::Expression: {
+                            args += arg.getAsExpr()->getStmtClassName();
+                            break;
+                        }
+                        case clang::TemplateArgument::Pack: {
+                            args += "pack";
+                            break;
+                        }
+                    }
+                    args += ", ";
+                }
+                args += ">, ";
+            }
+            print("try instantiate [{}] with arguments: {}\n", type.getAsString(), args.str());
+        }
+
+#endif
+
         auto result = sema.SubstType(type, list, {}, {});
 
 #ifndef NDEBUG
         if(TemplateResolver::debug) {
-            llvm::outs() << "--------------------------------------------------------------\n";
-            llvm::outs() << "instantiate: { " << type.getAsString() << " }\n";
-            list.dump();
-            llvm::outs() << "result: { " << result.getAsString() << " }\n";
+            print("instantiate success: {}\n", result.getAsString());
         }
 #endif
 

@@ -23,6 +23,6 @@ using String = Array<char>;
 }  // namespace binary
 
 /// Convert `memory::Index` to `binary::Index`.
-binary::Index toBinary(const memory::Index& index);
+std::vector<char> toBinary(const memory::Index& index);
 
 }  // namespace clice::index

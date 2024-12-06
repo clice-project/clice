@@ -4,6 +4,18 @@ namespace clice {
 
 namespace {
 
+TEST(Index, Test) {
+    const char* code = R"cpp(
+struct F{
+
+};
+)cpp";
+    foreachFile("Index", [](auto name,llvm::StringRef content) {
+        IndexerTester tester{content};
+    });
+
+}
+
 TEST(Index, ClassTemplate) {
     const char* code = R"cpp(
     template <typename T, typename U>

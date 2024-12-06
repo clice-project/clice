@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Basic/Location.h"
 #include "Compiler/Semantic.h"
 #include "Support/Support.h"

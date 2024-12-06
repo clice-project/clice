@@ -4,39 +4,16 @@
 #include "Annotation.h"
 
 #include "Compiler/Compiler.h"
-// #include "Index/Loader.h"
 #include "Support/Support.h"
+#include "Index/Binary.h"
 
 namespace clice {
 
 using namespace index;
 
-/// Recursively test the binary index has the totally same content
-/// with the original index.
-// template <typename In, typename Out>
-// void testEqual(const Loader& loader, const In& in, const Out& out) {
-//     if constexpr(requires { in == out; }) {
-//         EXPECT_TRUE(in == out);
-//     } else if constexpr(std::is_same_v<Out, binary::string>) {
-//         EXPECT_EQ(in, loader.string(out));
-//     } else if constexpr(is_specialization_of<Out, binary::array>) {
-//         using value_type = typename Out::value_type;
-//         auto array = loader.make_range(out);
-//         for(std::size_t i = 0; i < in.size(); i++) {
-//             testEqual(loader, in[i], array[i]);
-//         }
-//     } else {
-//         support::foreach(in, out, [&](const auto& lhs, const auto& rhs) {
-//             testEqual(loader, lhs, rhs);
-//         });
-//     }
-// }
-
 struct IndexerTester {
+    ASTInfo info;
     Annotation annotation;
-    /// std::unique_ptr<Loader> loader;
-    std::unique_ptr<ASTInfo> compiler;
-    FileRef mainFile;
 
     IndexerTester(llvm::StringRef source, bool json = false) : annotation(source) {
         std::vector<const char*> args = {
@@ -47,26 +24,58 @@ struct IndexerTester {
             "/home/ykiko/C++/clice2/build/lib/clang/20",
         };
 
-        /// FIXME:
-        // compiler = std::make_unique<Compiler>("main.cpp", annotation.source(), args);
-        // compiler->buildAST();
+        CompliationParams params;
+        params.path = "main.cpp";
+        params.args = args;
+        params.content = source;
 
-        /// auto index = index::index(*compiler);
+        auto begin1 = std::chrono::high_resolution_clock::now();
+        if(auto info = buildAST(params)) {
+            this->info = std::move(*info);
+        } else {
+            llvm::errs() << "Failed to build AST\n";
+            std::terminate();
+        }
+        auto end1 = std::chrono::high_resolution_clock::now();
 
-        // if(json) {
-        //     std::error_code error;
-        //     llvm::raw_fd_ostream file("index.json", error);
-        //     file << index::toJson(index);
-        // }
+        auto begin2 = std::chrono::high_resolution_clock::now();
+        auto index = index::index(info);
+        auto end2 = std::chrono::high_resolution_clock::now();
 
-        /// loader = std::make_unique<Loader>(index::toBinary(index));
+        auto begin3 = std::chrono::high_resolution_clock::now();
+        auto j = index::toJSON(index);
+        auto end3 = std::chrono::high_resolution_clock::now();
 
-        /// Test equal here.
-        /// testEqual(*loader, index, loader->getIndex());
+        auto begin4 = std::chrono::high_resolution_clock::now();
+        auto binary = index::toBinary(index);
+        auto end4 = std::chrono::high_resolution_clock::now();
 
-        // auto files = loader->locateFile("main.cpp");
-        // assert(files.size() == 1);
-        // mainFile = {static_cast<uint32_t>(files.begin() - loader->files().begin())};
+        print("build AST: {}, index: {}, json: {}, binary: {}\n",
+              std::chrono::duration_cast<std::chrono::milliseconds>(end1 - begin1),
+              std::chrono::duration_cast<std::chrono::milliseconds>(end2 - begin2),
+              std::chrono::duration_cast<std::chrono::milliseconds>(end3 - begin3),
+              std::chrono::duration_cast<std::chrono::milliseconds>(end4 - begin4));
+
+        std::size_t size = 0;
+        for(auto& symbol: index.symbols) {
+            size += symbol.relations.size();
+        }
+
+        print("files count: {}, symbols count: {}, location count: {}, relation count: {}\n",
+              index.files.size(),
+              index.symbols.size(),
+              index.occurrences.size(),
+              size);
+
+        print("binary size: {}MB\n", binary.size() / (1024 * 1024));
+
+        std::error_code error;
+        llvm::raw_fd_ostream os("index.json", error);
+        if(error) {
+            llvm::errs() << error.message() << "\n";
+            std::terminate();
+        }
+        os << j;
     }
 };
 

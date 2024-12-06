@@ -4,9 +4,23 @@ namespace clice::index {
 
 namespace {
 
+const static clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
+    if(!decl) {
+        std::terminate();
+    }
+
+    decl = llvm::cast<clang::NamedDecl>(decl->getCanonicalDecl());
+
+    if(auto ND = instantiatedFrom(llvm::cast<clang::NamedDecl>(decl))) {
+        return llvm::cast<clang::NamedDecl>(ND->getCanonicalDecl());
+    }
+
+    return decl;
+}
+
 class IndexBuilder : public SemanticVisitor<IndexBuilder> {
 public:
-    IndexBuilder(ASTInfo& info) : SemanticVisitor(info) {}
+    IndexBuilder(ASTInfo& info, memory::Index& index) : SemanticVisitor(info), index(&index) {}
 
     /// Add a file to the index.
     FileRef addFile(clang::FileID id) {
@@ -79,16 +93,8 @@ public:
     }
 
     /// Add a symbol to the index.
-    void addSymbol(const clang::NamedDecl* decl) {
-        if(!decl) {
-            llvm::errs() << "Invalid decl\n";
-            std::terminate();
-        }
-
-        if(auto instantiated = instantiatedFrom(decl)) {
-            decl = instantiated;
-        }
-
+    SymbolRef addSymbol(const clang::NamedDecl* decl) {
+        decl = normalize(decl);
         auto& symbols = index->symbols;
         auto canonical = decl->getCanonicalDecl();
 
@@ -105,15 +111,42 @@ public:
             symbol.name = decl->getNameAsString();
         }
 
-        /// return SymbolProxy(offset, *this);
+        return SymbolRef{offset};
+    }
+
+    void addRelation(SymbolRef symbol, RelationKind kind, LocationRef location) {
+        index->symbols[symbol.offset].relations.emplace_back(kind, location);
+    }
+
+    void addOccurrence(LocationRef location, SymbolRef symbol) {
+        index->occurrences.emplace_back(location, symbol);
     }
 
 public:
     using SemanticVisitor::handleOccurrence;
 
-    void handleOccurrence(const clang::Decl* decl,
-                          clang::SourceRange range,
-                          RelationKind kind = RelationKind::Invalid) {}
+    void handleOccurrence(const clang::Decl* decl, clang::SourceRange range, RelationKind kind) {
+        auto symbolRef = addSymbol(llvm::cast<clang::NamedDecl>(decl));
+        auto [begin, end] = range;
+        if(kind == RelationKind::Declaration || kind == RelationKind::Definition ||
+           kind == RelationKind::Reference) {
+            assert(begin == end && "Expect a single location");
+
+            /// If the location is a file location or its spelling location is in macro arguments,
+            /// Then we expect to trigger goto on them to get the correct location.
+            /// So add Occurrence for them.
+            if(begin.isFileID() || (begin.isMacroID() && srcMgr.isMacroArgExpansion(begin))) {
+                auto spelling = srcMgr.getSpellingLoc(begin);
+                addOccurrence(addLocation(spelling), symbolRef);
+            }
+        }
+
+        /// For relation we always use expansion relation, so that you can check which macro
+        /// expansion generates the relation.
+        auto expansion =
+            clang::SourceRange(srcMgr.getExpansionLoc(begin), srcMgr.getExpansionLoc(end));
+        addRelation(symbolRef, kind, addLocation(expansion));
+    }
 
 private:
     /// Index cache.
@@ -131,15 +164,18 @@ private:
 /// Index the AST information.
 memory::Index index(ASTInfo& info) {
     memory::Index index = {};
-    IndexBuilder builder(info);
+    IndexBuilder builder(info, index);
     builder.TraverseAST(info.context());
     return index;
 }
 
+}  // namespace clice::index
+
+namespace clice {
+
 /// Convert `memory::Index` to JSON.
-json::Value toJSON(const memory::Index& index) {
-    json::Value value = {};
-    return value;
+json::Value index::toJSON(const index::memory::Index& index) {
+    return json::serialize(index);
 }
 
-}  // namespace clice::index
+}  // namespace clice
