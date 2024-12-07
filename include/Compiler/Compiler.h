@@ -135,7 +135,7 @@ struct CompliationParams {
     /// Information about reuse PCM(name, path).
     llvm::SmallVector<std::pair<std::string, std::string>> pcms;
 
-    llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs = llvm::vfs::getRealFileSystem();
+    llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 
     uint32_t line = 0, column = 0;
 
