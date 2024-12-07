@@ -141,11 +141,18 @@ struct CompliationParams {
     /// `#include` directive that includes the header to speed up the parsing.
     std::optional<clang::PreambleBounds> bounds;
 
-    /// Output file path.
-    llvm::SmallString<128> outPath;
+    /// Computes the preamble bounds for the given content.
+    /// If the bounds are not provided explicitly, they will be calculated based on the content.
+    ///
+    /// - If the header is empty, the bounds can be determined by lexing the source file.
+    /// - If the header is not empty, the preprocessor must be executed to compute the bounds.
+    void computeBounds(llvm::StringRef header = "");
 
     /// Command line arguments.
     llvm::ArrayRef<const char*> args;
+
+    /// Output file path.
+    llvm::SmallString<128> outPath;
 
     llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 
@@ -160,8 +167,6 @@ struct CompliationParams {
     llvm::StringRef file = "";
     uint32_t line = 0;
     uint32_t column = 0;
-
-    void computeBounds();
 
     void addPCH(const PCHInfo& info) {
         pch = info.path;

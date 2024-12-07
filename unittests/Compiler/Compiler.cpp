@@ -33,6 +33,69 @@ int main(){
     ASSERT_TRUE(bool(info));
 }
 
+TEST(Compiler, ComputeBounds) {
+
+    llvm::SmallVector<const char*, 5> compileArgs = {
+        "clang++",
+        "-std=c++20",
+        "main.cpp",
+        "-resource-dir",
+        "/home/ykiko/C++/clice2/build/lib/clang/20",
+    };
+
+    const char* code = R"cpp(
+#include <cstdio>
+int main(){
+    printf("Hello world");
+    return 0;
+})cpp";
+
+    /// Test in no header file.
+    CompliationParams params;
+    params.srcPath = "main.cpp";
+    params.args = compileArgs;
+    params.content = code;
+    params.computeBounds();
+
+    ASSERT_TRUE(params.bounds.has_value());
+    ASSERT_EQ(params.bounds->Size, 19);
+
+    params.bounds.reset();
+
+    compileArgs = {"clang++", "-std=c++20", "main.cpp"};
+
+    std::unique_ptr<vfs::InMemoryFileSystem> vfs(new vfs::InMemoryFileSystem);
+    const char* header = R"cpp(
+#include "target.h"
+)cpp";
+
+    vfs->addFile("header.h", 0, llvm::MemoryBuffer::getMemBuffer(header));
+    vfs->addFile("header2.h", 0, llvm::MemoryBuffer::getMemBuffer(""));
+    vfs->addFile("target.h", 0, llvm::MemoryBuffer::getMemBuffer(""));
+
+    code = R"cpp(
+#include "header2.h"
+#include "header.h"
+int main(){
+    return 0;
+})cpp";
+
+    compileArgs = {
+        "clang++",
+        "-std=c++20",
+        "main.cpp",
+    };
+
+    params.srcPath = "main.cpp";
+    params.args = compileArgs;
+    params.content = code;
+    params.vfs = std::move(vfs);
+    params.computeBounds("target.h");
+
+    ASSERT_TRUE(params.bounds.has_value());
+    ASSERT_EQ(params.bounds->Size, 43);
+}
+
 TEST(Compiler, buildPCH) {
     const char* code = R"cpp(
 #include <cstdio>
@@ -63,14 +126,16 @@ int main(){
     }
 
     CompliationParams params;
-    params.srcPath = "main.cpp";
     params.content = code;
+    params.srcPath = "main.cpp";
     params.outPath = outpath;
     params.args = compileArgs;
+    params.computeBounds();
 
     PCHInfo pch;
     ASSERT_TRUE(bool(clice::compile(params, pch)));
 
+    params.bounds.reset();
     params.addPCH(pch);
 
     auto ast = compile(params);
@@ -121,12 +186,6 @@ int main(){
     return 0;
 }
 )cpp";
-
-    compileArgs = {
-        "clang++",
-        "-std=c++20",
-        "main.cpp",
-    };
 
     params.srcPath = "main.cpp";
     params.content = code2;
