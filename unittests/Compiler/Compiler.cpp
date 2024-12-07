@@ -25,7 +25,7 @@ int main(){
     };
 
     CompliationParams params;
-    params.path = "main.cpp";
+    params.srcPath = "main.cpp";
     params.content = code;
     params.args = compileArgs;
 
@@ -63,9 +63,9 @@ int main(){
     }
 
     CompliationParams params;
-    params.path = "main.cpp";
+    params.srcPath = "main.cpp";
     params.content = code;
-    params.outpath = outpath;
+    params.outPath = outpath;
     params.args = compileArgs;
 
     PCHInfo pch;
@@ -104,9 +104,9 @@ export int foo() {
     };
 
     CompliationParams params;
-    params.path = "main.cppm";
+    params.srcPath = "main.cppm";
     params.content = code;
-    params.outpath = outpath;
+    params.outPath = outpath;
     params.args = compileArgs;
 
     PCMInfo pcm;
@@ -128,7 +128,7 @@ int main(){
         "main.cpp",
     };
 
-    params.path = "main.cpp";
+    params.srcPath = "main.cpp";
     params.content = code2;
     params.args = compileArgs;
     params.addPCM(pcm);
@@ -150,7 +150,7 @@ export int foo = 1;
     };
 
     CompliationParams params;
-    params.path = "main.cppm";
+    params.srcPath = "main.cppm";
     params.content = code;
     params.args = compileArgs;
     params.line = 3;

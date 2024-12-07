@@ -12,21 +12,21 @@ async::promise<void> Scheduler::updatePCH(llvm::StringRef filepath,
         Tracer tracer;
 
         CompliationParams params;
-        params.path = filepath;
+        params.srcPath = filepath;
         params.content = content;
         params.args = args;
-        params.outpath = filepath;
-        path::replace_path_prefix(params.outpath,
+        params.outPath = filepath;
+        path::replace_path_prefix(params.outPath,
                                   config::workplace(),
                                   config::frontend().cache_directory);
-        path::replace_extension(params.outpath, ".pch");
+        path::replace_extension(params.outPath, ".pch");
 
-        log::info("Start building PCH for {0} at {1}", params.path, params.outpath);
+        log::info("Start building PCH for {0} at {1}", params.srcPath, params.outPath);
 
         PCHInfo pch;
 
         co_await async::schedule_task([&] {
-            auto dir = path::parent_path(params.outpath);
+            auto dir = path::parent_path(params.outPath);
             if(!fs::exists(dir)) {
                 if(auto error = fs::create_directories(dir)) {
                     log::fatal("Failed to create directory {0}, because {1}, build PCH stopped",
@@ -98,7 +98,7 @@ async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringR
     log::info("Start building AST for {0}, command: [{1}]", filepath, command.str());
 
     CompliationParams params;
-    params.path = path;
+    params.srcPath = path;
     params.content = content;
     params.args = args;
     params.addPCH(pchs.at(filepath));
@@ -162,13 +162,13 @@ async::promise<proto::CompletionResult> Scheduler::codeComplete(llvm::StringRef 
     };
 
     CompliationParams params;
-    params.path = path;
+    params.srcPath = path;
     params.args = args;
     params.content = iter->second.content;
 
     /// through arguments to judge is it a module.
     bool isModule = false;
-    co_await (isModule ? updatePCM() : updatePCH(params.path, params.content, args));
+    co_await (isModule ? updatePCM() : updatePCH(params.srcPath, params.content, args));
     params.addPCH(pchs.at(filepath));
 
     Tracer tracer;

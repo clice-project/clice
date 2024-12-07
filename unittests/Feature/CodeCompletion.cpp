@@ -26,7 +26,7 @@ int main() {
     };
 
     CompliationParams params;
-    params.path = "main.cpp";
+    params.srcPath = "main.cpp";
     params.content = code;
     params.args = compileArgs;
 

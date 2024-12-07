@@ -24,7 +24,7 @@ struct IndexerTester {
         };
 
         CompliationParams params;
-        params.path = "main.cpp";
+        params.srcPath = "main.cpp";
         params.args = args;
         params.content = source;
 

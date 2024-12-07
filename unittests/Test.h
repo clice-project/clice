@@ -102,7 +102,7 @@ public:
 
 public:
     Tester(llvm::StringRef file, llvm::StringRef content) {
-        params.path = file;
+        params.srcPath = file;
         params.content = annoate(content);
         vfs = std::make_unique<llvm::vfs::InMemoryFileSystem>();
     }
@@ -158,7 +158,7 @@ public:
         llvm::SmallVector<const char*> args = {
             "clang++",
             standard,
-            params.path.c_str(),
+            params.srcPath.c_str(),
             "-resource-dir",
             test::resource_dir().data(),
         };

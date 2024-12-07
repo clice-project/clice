@@ -95,10 +95,13 @@ private:
 struct PCHInfo {
     /// PCM file path.
     std::string path;
+
     /// Source file path.
-    std::string mainpath;
+    std::string srcPath;
+
     /// The content of source file used to build this PCM.
     std::string preamble;
+
     /// Files involved in building this PCM.
     std::vector<std::string> deps;
 
@@ -115,6 +118,10 @@ struct PCHInfo {
 struct PCMInfo {
     /// PCM file path.
     std::string path;
+
+    /// Source file path.
+    std::string srcPath;
+
     /// Module name.
     std::string name;
 
@@ -122,26 +129,43 @@ struct PCMInfo {
 };
 
 struct CompliationParams {
+    /// Source file path.
+    llvm::SmallString<128> srcPath;
+
+    /// Source file content.
     llvm::StringRef content;
-    llvm::SmallString<128> path;
-    llvm::SmallString<128> outpath;
-    llvm::SmallString<128> mainpath;
+
+    /// - If we are building PCH, we need a size to verify the bounds of preamble. That is
+    /// which source code range the PCH will cover.
+    /// - If we are building main file AST for header, we need a size to cut off code after the
+    /// `#include` directive that includes the header to speed up the parsing.
+    std::optional<clang::PreambleBounds> bounds;
+
+    /// Output file path.
+    llvm::SmallString<128> outPath;
+
+    /// Command line arguments.
     llvm::ArrayRef<const char*> args;
+
+    llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 
     /// Information about reuse PCH.
     std::string pch;
-    clang::PreambleBounds bounds = {0, false};
+    clang::PreambleBounds pchBounds = {0, false};
 
     /// Information about reuse PCM(name, path).
     llvm::SmallVector<std::pair<std::string, std::string>> pcms;
 
-    llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
+    /// Code completion file:line:column.
+    llvm::StringRef file = "";
+    uint32_t line = 0;
+    uint32_t column = 0;
 
-    uint32_t line = 0, column = 0;
+    void computeBounds();
 
     void addPCH(const PCHInfo& info) {
         pch = info.path;
-        bounds = info.bounds();
+        pchBounds = info.bounds();
     }
 
     void addPCM(const PCMInfo& info) {
@@ -154,10 +178,13 @@ struct CompliationParams {
 /// their reusability and update in time.
 llvm::Expected<ASTInfo> compile(CompliationParams& params);
 
+/// Build PCH from given file path and content.
 llvm::Expected<ASTInfo> compile(CompliationParams& params, PCHInfo& out);
 
+/// Build PCM from given file path and content.
 llvm::Expected<ASTInfo> compile(CompliationParams& params, PCMInfo& out);
 
+/// Run code completion at the given location.
 llvm::Expected<ASTInfo> compile(CompliationParams& params, clang::CodeCompleteConsumer* consumer);
 
 }  // namespace clice

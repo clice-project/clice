@@ -18,7 +18,7 @@ struct TemplateResolverTester : public clang::RecursiveASTVisitor<TemplateResolv
             "/home/ykiko/C++/clice2/build/lib/clang/20",
         };
         CompliationParams params;
-        params.path = "main.cpp";
+        params.srcPath = "main.cpp";
         params.content = code;
         params.args = compileArgs;
         auto info = compile(params);
