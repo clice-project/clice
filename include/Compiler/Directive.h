@@ -4,7 +4,16 @@
 
 namespace clice {
 
-struct Include {};
+struct Include {
+    /// The path of the included file.
+    llvm::StringRef path;
+
+    /// Location of the directive identifier.
+    clang::SourceLocation loc;
+
+    /// Range of the filename.
+    clang::SourceRange range;
+};
 
 struct Condition {
     enum BranchKind : uint8_t {

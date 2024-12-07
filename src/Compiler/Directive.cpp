@@ -7,13 +7,16 @@ namespace clice {
 
 namespace {
 
-struct PPCallback : public clang::PPCallbacks {
-    clang::Preprocessor& pp;
-    llvm::DenseMap<clang::FileID, Directive>& directives;
-    llvm::DenseMap<clang::MacroInfo*, std::size_t> macroCache;
-
+class PPCallback : public clang::PPCallbacks {
+public:
     PPCallback(clang::Preprocessor& pp, llvm::DenseMap<clang::FileID, Directive>& directives) :
         pp(pp), directives(directives) {}
+
+private:
+    void addInclude(llvm::StringRef path, clang::SourceLocation loc, clang::SourceRange range) {
+        auto& directive = directives[pp.getSourceManager().getFileID(loc)];
+        directive.includes.emplace_back(Include{path, loc, range});
+    }
 
     void addCondition(clang::SourceLocation loc,
                       Condition::BranchKind kind,
@@ -58,27 +61,34 @@ struct PPCallback : public clang::PPCallbacks {
     }
 
     void addMacro(const clang::MacroInfo* def, MacroRef::Kind kind, clang::SourceLocation loc) {
+        if(pp.getSourceManager().isWrittenInBuiltinFile(loc) ||
+           pp.getSourceManager().isWrittenInCommandLineFile(loc)) {
+            return;
+        }
+
         auto& directive = directives[pp.getSourceManager().getFileID(loc)];
         directive.macros.emplace_back(MacroRef{kind, loc, def});
     }
 
-public:
+private:
     void FileChanged(clang::SourceLocation loc,
                      clang::PPCallbacks::FileChangeReason reason,
                      clang::SrcMgr::CharacteristicKind fileType,
                      clang::FileID) override {}
 
-    void InclusionDirective(clang::SourceLocation HashLoc,
-                            const clang::Token& IncludeTok,
-                            llvm::StringRef FileName,
-                            bool IsAngled,
-                            clang::CharSourceRange FilenameRange,
-                            clang::OptionalFileEntryRef File,
-                            clang::StringRef SearchPath,
-                            llvm::StringRef RelativePath,
-                            const clang::Module* SuggestedModule,
-                            bool ModuleImported,
-                            clang::SrcMgr::CharacteristicKind FileType) override {}
+    void InclusionDirective(clang::SourceLocation hashLoc,
+                            const clang::Token& includeTok,
+                            llvm::StringRef filename,
+                            bool isAngled,
+                            clang::CharSourceRange filenameRange,
+                            clang::OptionalFileEntryRef file,
+                            llvm::StringRef searchPath,
+                            llvm::StringRef relativePath,
+                            const clang::Module* suggestedModule,
+                            bool moduleImported,
+                            clang::SrcMgr::CharacteristicKind fileType) override {
+        addInclude(filename, includeTok.getLocation(), filenameRange.getAsRange());
+    }
 
     void PragmaDirective(clang::SourceLocation Loc,
                          clang::PragmaIntroducerKind Introducer) override {}
@@ -168,6 +178,11 @@ public:
             addMacro(def, MacroRef::Undef, name.getLocation());
         }
     }
+
+private:
+    clang::Preprocessor& pp;
+    llvm::DenseMap<clang::FileID, Directive>& directives;
+    llvm::DenseMap<clang::MacroInfo*, std::size_t> macroCache;
 };
 
 }  // namespace

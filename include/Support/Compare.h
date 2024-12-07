@@ -5,16 +5,16 @@
 
 namespace clice::support {
 
-template <typename T>
+template <typename LHS, typename RHS = LHS>
 struct Equal {
-    static bool equal(const T& lhs, const T& rhs) {
+    static bool equal(const LHS& lhs, const RHS& rhs) {
         return lhs == rhs;
     }
 };
 
-template <typename T>
-bool equal(const T& lhs, const T& rhs) {
-    return Equal<T>::equal(lhs, rhs);
+template <typename LHS, typename RHS>
+bool equal(const LHS& lhs, const RHS& rhs) {
+    return Equal<LHS, RHS>::equal(lhs, rhs);
 }
 
 template <typename T>

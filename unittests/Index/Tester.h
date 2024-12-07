@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../Test.h"
-#include "Annotation.h"
 
 #include "Compiler/Compiler.h"
 #include "Support/Support.h"

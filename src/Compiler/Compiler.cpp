@@ -28,18 +28,21 @@ void adjustInvocation(clang::CompilerInvocation& invocation) {
     // FIXME: add more.
 }
 
-auto createInstance(llvm::ArrayRef<const char*> args) {
+auto createInstance(CompliationParams& params) {
     auto instance = std::make_unique<clang::CompilerInstance>();
 
     /// TODO: Figure out `CreateInvocationOptions`.
     clang::CreateInvocationOptions options = {};
-    instance->setInvocation(clang::createInvocation(args, options));
+    options.VFS = params.vfs;
+    instance->setInvocation(clang::createInvocation(params.args, options));
 
     /// TODO: use a thread safe filesystem and our customized `DiagnosticConsumer`.
     instance->createDiagnostics(
-        *llvm::vfs::getRealFileSystem(),
+        *params.vfs,
         new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()),
         true);
+
+    instance->createFileManager(params.vfs);
 
     adjustInvocation(instance->getInvocation());
 
@@ -123,7 +126,7 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
 }  // namespace
 
 llvm::Expected<ASTInfo> compile(CompliationParams& params) {
-    auto instance = createInstance(params.args);
+    auto instance = createInstance(params);
 
     auto buffer = llvm::MemoryBuffer::getMemBufferCopy(params.content);
     instance->getPreprocessorOpts().addRemappedFile(params.path, buffer.release());
@@ -134,7 +137,7 @@ llvm::Expected<ASTInfo> compile(CompliationParams& params) {
 }
 
 llvm::Expected<ASTInfo> compile(CompliationParams& params, PCHInfo& out) {
-    auto instance = createInstance(params.args);
+    auto instance = createInstance(params);
 
     clang::PreambleBounds bounds = {0, false};
     if(params.mainpath.empty() || params.mainpath == params.path) {
@@ -172,7 +175,7 @@ llvm::Expected<ASTInfo> compile(CompliationParams& params, PCHInfo& out) {
 }
 
 llvm::Expected<ASTInfo> compile(CompliationParams& params, PCMInfo& out) {
-    auto instance = createInstance(params.args);
+    auto instance = createInstance(params);
 
     /// Set options to generate PCM.
     instance->getFrontendOpts().OutputFile = params.outpath.str();
@@ -194,7 +197,7 @@ llvm::Expected<ASTInfo> compile(CompliationParams& params, PCMInfo& out) {
 }
 
 llvm::Expected<ASTInfo> compile(CompliationParams& params, clang::CodeCompleteConsumer* consumer) {
-    auto instance = createInstance(params.args);
+    auto instance = createInstance(params);
 
     /// Set options to run code completion.
     instance->getFrontendOpts().CodeCompletionAt.FileName = params.path.str();

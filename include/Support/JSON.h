@@ -173,6 +173,13 @@ struct Serde<double> {
     }
 };
 
+template <std::size_t N>
+struct Serde<char[N]> {
+    static json::Value serialize(const char (&v)[N]) {
+        return json::Value(llvm::StringRef(v, N));
+    }
+};
+
 template <>
 struct Serde<llvm::StringRef> {
     using V = llvm::StringRef;

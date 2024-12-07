@@ -80,6 +80,10 @@ public:
         return llvm::StringRef(srcMgr().getCharacterData(loc), getTokenLength(loc));
     }
 
+    auto getLocation(clang::SourceLocation loc) {
+        return srcMgr().getPresumedLoc(loc);
+    }
+
 private:
     std::unique_ptr<clang::ASTFrontendAction> action;
     std::unique_ptr<clang::CompilerInstance> instance;
@@ -130,6 +134,8 @@ struct CompliationParams {
 
     /// Information about reuse PCM(name, path).
     llvm::SmallVector<std::pair<std::string, std::string>> pcms;
+
+    llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs = llvm::vfs::getRealFileSystem();
 
     uint32_t line = 0, column = 0;
 
