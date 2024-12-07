@@ -80,3 +80,18 @@ struct std::formatter<clice::json::Value> : std::formatter<llvm::StringRef> {
     }
 };
 
+template <typename E>
+    requires clice::support::special_enum<E>
+struct std::formatter<E> : std::formatter<std::string_view> {
+    using Base = std::formatter<std::string_view>;
+
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext& ctx) {
+        return Base::parse(ctx);
+    }
+
+    template <typename FormatContext>
+    auto format(const E& e, FormatContext& ctx) const {
+        return Base::format(e.name(), ctx);
+    }
+};

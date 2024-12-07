@@ -4,8 +4,11 @@
 #include <vector>
 #include <string_view>
 
-#include "Support/ADT.h"
-#include "Support/TypeTraits.h"
+#include "ADT.h"
+#include "TypeTraits.h"
+#include "Enum.h"
+#include "Struct.h"
+
 #include "llvm/Support/JSON.h"
 
 namespace clice::json {
@@ -265,6 +268,51 @@ struct Serde<llvm::ArrayRef<T>> {
             array.push_back(json::serialize(element, std::forward<Serdes>(serdes)...));
         }
         return array;
+    }
+};
+
+template <typename E>
+    requires support::special_enum<E>
+struct Serde<E> {
+    static json::Value serialize(const E& e) {
+        return json::Value(e.value());
+    }
+
+    static E deserialize(const json::Value& value) {
+        assert(value.kind() == json::Value::Number && "Expect a number");
+        return E(value.getAsNumber().value());
+    }
+};
+
+template <support::reflectable T>
+struct Serde<T> {
+    constexpr inline static bool stateful =
+        support::member_types<T>::apply([]<typename... Ts> { return (stateful_serde<Ts> || ...); });
+
+    template <typename... Serdes>
+    static json::Value serialize(const T& t, Serdes&&... serdes) {
+        json::Object object;
+        support::foreach(t, [&](std::string_view name, auto&& member) {
+            object.try_emplace(llvm::StringRef(name),
+                               json::serialize(member, std::forward<Serdes>(serdes)...));
+        });
+        return object;
+    }
+
+    template <typename... Serdes>
+    static T deserialize(const json::Value& value, Serdes&&... serdes) {
+        T t = {};
+        if constexpr(!std::is_empty_v<T>) {
+            assert(value.kind() == json::Value::Object && "Expect an object");
+            support::foreach(t, [&](std::string_view name, auto&& member) {
+                auto v = value.getAsObject()->get(llvm::StringRef(name));
+                assert(v && "Member not found");
+                member = json::deserialize<std::remove_cvref_t<decltype(member)>>(
+                    *v,
+                    std::forward<Serdes>(serdes)...);
+            });
+        }
+        return t;
     }
 };
 

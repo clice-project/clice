@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Support/ADT.h"
+#include "Struct.h"
 
 namespace clice::support {
 
@@ -30,6 +31,18 @@ struct Equal<std::vector<T>> {
         }
 
         return true;
+    }
+};
+
+template <reflectable T>
+    requires (!requires(T lhs, T rhs) {
+        { lhs == rhs } -> std::convertible_to<bool>;
+    })
+struct Equal<T> {
+    static bool equal(const T& lhs, const T& rhs) {
+        return foreach(lhs, rhs, [](const auto& lhs, const auto& rhs) {
+            return support::equal(lhs, rhs);
+        });
     }
 };
 

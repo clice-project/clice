@@ -5,10 +5,7 @@
 #include <string_view>
 #include <source_location>
 
-#include "Support/Compare.h"
-#include "Support/Format.h"
-#include "Support/Hash.h"
-#include "Support/JSON.h"
+#include "TypeTraits.h"
 
 namespace clice::support {
 
@@ -270,64 +267,3 @@ constexpr bool foreach(LHS&& lhs, RHS&& rhs, const Callback& callback) {
 
 }  // namespace clice::support
 
-namespace clice::json {
-
-template <support::reflectable T>
-struct Serde<T> {
-    constexpr inline static bool stateful =
-        support::member_types<T>::apply([]<typename... Ts> { return (stateful_serde<Ts> || ...); });
-
-    template <typename... Serdes>
-    static json::Value serialize(const T& t, Serdes&&... serdes) {
-        json::Object object;
-        support::foreach(t, [&](std::string_view name, auto&& member) {
-            object.try_emplace(llvm::StringRef(name),
-                               json::serialize(member, std::forward<Serdes>(serdes)...));
-        });
-        return object;
-    }
-
-    template <typename... Serdes>
-    static T deserialize(const json::Value& value, Serdes&&... serdes) {
-        T t = {};
-        if constexpr(!std::is_empty_v<T>) {
-            assert(value.kind() == json::Value::Object && "Expect an object");
-            support::foreach(t, [&](std::string_view name, auto&& member) {
-                auto v = value.getAsObject()->get(llvm::StringRef(name));
-                assert(v && "Member not found");
-                member = json::deserialize<std::remove_cvref_t<decltype(member)>>(
-                    *v,
-                    std::forward<Serdes>(serdes)...);
-            });
-        }
-        return t;
-    }
-};
-
-}  // namespace clice::json
-
-namespace clice::support {
-
-template <reflectable T>
-struct Hash<T> {
-    static llvm::hash_code hash(const T& value) {
-        llvm::SmallVector<llvm::hash_code, 8> hashes;
-        foreach(value,
-                [&](auto, const auto& member) { hashes.emplace_back(support::hash(member)); });
-        return llvm::hash_combine_range(hashes.begin(), hashes.end());
-    }
-};
-
-template <reflectable T>
-    requires (!requires(T lhs, T rhs) {
-        { lhs == rhs } -> std::convertible_to<bool>;
-    })
-struct Equal<T> {
-    static bool equal(const T& lhs, const T& rhs) {
-        return foreach(lhs, rhs, [](const auto& lhs, const auto& rhs) {
-            return support::equal(lhs, rhs);
-        });
-    }
-};
-
-}  // namespace clice::support

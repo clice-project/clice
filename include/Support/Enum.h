@@ -8,8 +8,6 @@
 #include <source_location>
 
 #include "TypeTraits.h"
-#include "JSON.h"
-#include "Format.h"
 
 namespace clice::support {
 
@@ -250,35 +248,3 @@ concept special_enum = requires {
 
 }  // namespace clice::support
 
-namespace clice::json {
-
-template <typename E>
-    requires support::special_enum<E>
-struct Serde<E> {
-    static json::Value serialize(const E& e) {
-        return json::Value(e.value());
-    }
-
-    static E deserialize(const json::Value& value) {
-        assert(value.kind() == json::Value::Number && "Expect a number");
-        return E(value.getAsNumber().value());
-    }
-};
-
-}  // namespace clice::json
-
-template <typename E>
-    requires clice::support::special_enum<E>
-struct std::formatter<E> : std::formatter<std::string_view> {
-    using Base = std::formatter<std::string_view>;
-
-    template <typename ParseContext>
-    constexpr auto parse(ParseContext& ctx) {
-        return Base::parse(ctx);
-    }
-
-    template <typename FormatContext>
-    auto format(const E& e, FormatContext& ctx) const {
-        return Base::format(e.name(), ctx);
-    }
-};
