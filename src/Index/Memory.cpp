@@ -189,6 +189,43 @@ void sortSymbols(memory::Index& index) {
     // }
 }
 
+bool checkOccurrencesDisjoint(memory::Index& index) {
+    for(uint32_t i = 1; i < index.occurrences.size(); ++i) {
+        auto& prev = index.occurrences[i - 1];
+        auto& curr = index.occurrences[i];
+
+        /// It is expected that a location may correspond to multiple symbols.
+        /// e.g. a using declaration and macro arguments.
+        if(refl::equal(prev.location, curr.location)) {
+            /// We expect that the symbols are different.
+            if(refl::equal(prev.symbol, curr.symbol)) {
+                llvm::errs() << "Same symbol at the same location\n";
+                return false;
+            }
+
+            continue;
+        }
+
+        auto& prevLoc = index.locations[prev.location.offset];
+        auto& currLoc = index.locations[curr.location.offset];
+
+        /// If they are in different files, then they are disjoint.
+        if(!refl::equal(prevLoc.file, currLoc.file)) {
+            continue;
+        }
+
+        /// If they are in the same file, then they should be disjoint.
+        if(refl::less(prevLoc.range.end, currLoc.range.start)) {
+            continue;
+        }
+
+        llvm::errs() << "Occurrences are disjoint\n";
+        return false;
+    }
+
+    return true;
+}
+
 }  // namespace
 
 /// Index the AST information.
@@ -206,6 +243,7 @@ memory::Index index(ASTInfo& info) {
         return index.locations[occurrence.location.offset];
     });
 
+    assert(checkOccurrencesDisjoint(index) && "Occurrences should be not disjoint");
     return index;
 }
 

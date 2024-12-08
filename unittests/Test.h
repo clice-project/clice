@@ -90,6 +90,37 @@ inline void foreachFile(std::string name, const Callback& callback) {
     }
 }
 
+#undef EXPECT_EQ
+#undef EXPECT_NE
+
+inline void EXPECT_FAILURE(std::string msg,
+                           std::source_location current = std::source_location::current()) {
+    ::testing::internal::AssertHelper(::testing ::TestPartResult ::kNonFatalFailure,
+                                      current.file_name(),
+                                      current.line(),
+                                      msg.c_str()) = ::testing ::Message();
+}
+
+inline void EXPECT_EQ(const auto& lhs,
+                      const auto& rhs,
+                      std::source_location current = std::source_location::current()) {
+    if(!refl::equal(lhs, rhs)) {
+        EXPECT_FAILURE(
+            std::format("expect: {}, actual: {}\n", json::serialize(lhs), json::serialize(rhs)),
+            current);
+    }
+}
+
+inline void EXPECT_NE(const auto& lhs,
+                      const auto& rhs,
+                      std::source_location current = std::source_location::current()) {
+    if(refl::equal(lhs, rhs)) {
+        EXPECT_FAILURE(
+            std::format("expect: {}, actual: {}\n", json::serialize(lhs), json::serialize(rhs)),
+            current);
+    }
+}
+
 class Tester {
 public:
     CompliationParams params;

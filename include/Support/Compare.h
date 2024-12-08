@@ -109,4 +109,13 @@ struct Less<T> {
     }
 };
 
+struct less_equal_t {
+    template <typename LHS, typename RHS = LHS>
+    constexpr static bool operator() (const LHS& lhs, const RHS& rhs) {
+        return equal(lhs, rhs) || less(lhs, rhs);
+    }
+};
+
+constexpr inline less_equal_t less_equal;
+
 }  // namespace clice::refl

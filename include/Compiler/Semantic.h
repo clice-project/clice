@@ -349,15 +349,15 @@ public:
     }
 
     VISIT_DECL(VarDecl) {
-        /// FIXME:
-        /// Because `TraverseVarTemplateSpecializationDecl` will also traverse it's templated
-        /// variable. We already handled the template variable in `VisitVar...`.
-        /// So we skip them here.
-        // if(decl->getDescribedVarTemplate() ||
-        //    llvm::isa<clang::VarTemplateSpecializationDecl,
-        //              clang::VarTemplatePartialSpecializationDecl>(decl)) {
-        //     return true;
-        // }
+        /// FIXME: Implicit instantiation of should occur in the lexical context. But clang
+        /// currently doesn't record the information of explicit instantiation correctly.
+        if(auto VTSD = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl)) {
+            if(VTSD->getSpecializationKind() == clang::TSK_ImplicitInstantiation ||
+               VTSD->getSpecializationKind() == clang::TSK_ExplicitInstantiationDeclaration ||
+               VTSD->getSpecializationKind() == clang::TSK_ExplicitInstantiationDefinition) {
+                return true;
+            }
+        }
 
         /// `int foo;`
         ///       ^~~~ declaration/definition
@@ -429,7 +429,7 @@ public:
             return Base::TraverseTypeLoc(QL.getUnqualifiedLoc());
         }
 
-        if(needFilter(loc.getLocalSourceRange().getBegin())) {
+        if(needFilter(loc.getSourceRange().getBegin())) {
             return true;
         }
 

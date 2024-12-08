@@ -158,9 +158,12 @@ const clang::NamedDecl* declForType(clang::QualType type) {
 
         /// For a template specialization type, the template name is possibly a `ClassTemplateDecl`
         ///  `TypeAliasTemplateDecl` or `TemplateTemplateParmDecl` and `BuiltinTemplateDecl`.
+        if(llvm::isa<clang::TypeAliasTemplateDecl>(decl)) {
+            return decl->getTemplatedDecl();
+        }
 
         if(llvm::isa<clang::TemplateTemplateParmDecl,
-                     clang::TypeAliasTemplateDecl,
+
                      clang::BuiltinTemplateDecl>(decl)) {
             return decl;
         }
