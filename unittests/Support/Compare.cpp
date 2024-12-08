@@ -1,4 +1,5 @@
-#include "Test.h"
+#include "gtest/gtest.h"
+#include "Support/Compare.h"
 
 namespace clice {
 
