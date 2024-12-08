@@ -1,12 +1,9 @@
 #include "../Test.h"
-#include "Compiler/Compiler.h"
-#include "Support/Support.h"
-
 #include "Feature/CodeCompletion.h"
 
-namespace {
+namespace clice {
 
-using namespace clice;
+namespace {
 
 TEST(Feature, CodeCompletion) {
     const char* code = R"cpp(
@@ -41,3 +38,6 @@ int main() {
 }
 
 }  // namespace
+
+}  // namespace clice
+

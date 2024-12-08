@@ -2,9 +2,9 @@
 #include "Compiler/Compiler.h"
 #include <Support/FileSystem.h>
 
-namespace {
+namespace clice {
 
-using namespace clice;
+namespace {
 
 TEST(Compiler, buildAST) {
     const char* code = R"cpp(
@@ -223,3 +223,6 @@ export int foo = 1;
 }
 
 }  // namespace
+
+}  // namespace clice
+

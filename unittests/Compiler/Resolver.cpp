@@ -2,11 +2,9 @@
 #include <Compiler/Compiler.h>
 #include <Compiler/Resolver.h>
 
+namespace clice {
+
 namespace {
-
-using namespace clice;
-
-namespace testing {}  // namespace testing
 
 struct TemplateResolverTester : public clang::RecursiveASTVisitor<TemplateResolverTester> {
     TemplateResolverTester(llvm::StringRef code) {
@@ -484,4 +482,6 @@ struct test {
 }
 
 }  // namespace
+
+}  // namespace clice
 

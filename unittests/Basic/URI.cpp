@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
 #include <Basic/URI.h>
 
-namespace {
+namespace clice {
 
-using namespace clice;
+namespace {
 
 TEST(URITest, ConstructorAndAccessors) {
     URI uri("https", "reviews.llvm.org", "/D41946");
@@ -42,4 +42,6 @@ TEST(URITest, ParseFunction) {
 }
 
 }  // namespace
+
+}  // namespace clice
 

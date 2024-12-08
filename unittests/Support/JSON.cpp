@@ -38,11 +38,11 @@ TEST(Support, JSON) {
         {"y", 2},
     };
 
-    auto point = clice::json::deserialize<Point>(std::move(object));
+    auto point = json::deserialize<Point>(std::move(object));
     ASSERT_EQ(point.x, 1);
     ASSERT_EQ(point.y, 2);
 
-    auto result = clice::json::serialize(point);
+    auto result = json::serialize(point);
     ASSERT_EQ(result, object);
 }
 

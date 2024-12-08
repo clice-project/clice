@@ -1,9 +1,9 @@
 #include "../Test.h"
 #include "Server/Async.h"
 
-namespace {
+namespace clice {
 
-using namespace clice;
+namespace {
 
 async::promise<int> add(int a, int b) {
     co_return a + b;
@@ -23,3 +23,6 @@ TEST(clice, coroutine) {
 }
 
 }  // namespace
+
+}  // namespace clice
+
