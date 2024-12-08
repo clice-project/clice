@@ -187,7 +187,7 @@ public:
     Tester& equal(const auto& lhs,
                   const auto& rhs,
                   std::source_location loc = std::source_location::current()) {
-        if(!support::equal(lhs, rhs)) {
+        if(!refl::equal(lhs, rhs)) {
             return fail(lhs, rhs, loc);
         }
         return *this;

@@ -267,7 +267,7 @@ struct Serde<llvm::ArrayRef<T>> {
 
     constexpr inline static bool stateful = stateful_serde<T>;
 
-    /// Only support serialization.
+    /// Only refl serialization.
     template <typename... Serdes>
     static json::Value serialize(const V& v, Serdes&&... serdes) {
         json::Array array;
@@ -279,7 +279,7 @@ struct Serde<llvm::ArrayRef<T>> {
 };
 
 template <typename E>
-    requires support::special_enum<E>
+    requires refl::special_enum<E>
 struct Serde<E> {
     static json::Value serialize(const E& e) {
         return json::Value(e.value());
@@ -291,15 +291,15 @@ struct Serde<E> {
     }
 };
 
-template <support::reflectable T>
+template <refl::reflectable T>
 struct Serde<T> {
     constexpr inline static bool stateful =
-        support::member_types<T>::apply([]<typename... Ts> { return (stateful_serde<Ts> || ...); });
+        refl::member_types<T>::apply([]<typename... Ts> { return (stateful_serde<Ts> || ...); });
 
     template <typename... Serdes>
     static json::Value serialize(const T& t, Serdes&&... serdes) {
         json::Object object;
-        support::foreach(t, [&](std::string_view name, auto&& member) {
+        refl::foreach(t, [&](std::string_view name, auto&& member) {
             object.try_emplace(llvm::StringRef(name),
                                json::serialize(member, std::forward<Serdes>(serdes)...));
         });
@@ -311,7 +311,7 @@ struct Serde<T> {
         T t = {};
         if constexpr(!std::is_empty_v<T>) {
             assert(value.kind() == json::Value::Object && "Expect an object");
-            support::foreach(t, [&](std::string_view name, auto&& member) {
+            refl::foreach(t, [&](std::string_view name, auto&& member) {
                 auto v = value.getAsObject()->get(llvm::StringRef(name));
                 assert(v && "Member not found");
                 member = json::deserialize<std::remove_cvref_t<decltype(member)>>(

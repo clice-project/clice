@@ -7,7 +7,7 @@
 
 #include "TypeTraits.h"
 
-namespace clice::support {
+namespace clice::refl {
 
 namespace impl {
 
@@ -199,12 +199,12 @@ struct Inheritance : Ts... {};
 /// Use to define a reflectable struct with inheritance.
 #define inherited_struct(name, ...)                                                                \
     struct name##Body;                                                                             \
-    using name = clice::support::Inheritance<__VA_ARGS__, name##Body>;                             \
+    using name = clice::refl::Inheritance<__VA_ARGS__, name##Body>;                             \
     struct name##Body
 
 template <typename... Ts>
 struct Struct<Inheritance<Ts...>> {
-    constexpr inline static bool reflectable = (support::reflectable<Ts> && ...);
+    constexpr inline static bool reflectable = (refl::reflectable<Ts> && ...);
 
     constexpr static std::size_t member_count() {
         return (Struct<Ts>::member_count() + ...);
@@ -265,5 +265,5 @@ constexpr bool foreach(LHS&& lhs, RHS&& rhs, const Callback& callback) {
     }(std::make_index_sequence<L::member_count()>{});
 }
 
-}  // namespace clice::support
+}  // namespace clice::refl
 

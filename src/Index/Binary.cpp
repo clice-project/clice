@@ -52,7 +52,7 @@ public:
         if constexpr(requires { out = in; }) {
             out = in;
         } else {
-            support::foreach(in, out, [&]<typename U>(const auto& in, U& out) { pack(in, out); });
+            refl::foreach(in, out, [&]<typename U>(const auto& in, U& out) { pack(in, out); });
         }
     }
 

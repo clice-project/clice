@@ -1,4 +1,5 @@
 #include "Index/Memory.h"
+#include <ranges>
 
 namespace clice::index {
 
@@ -159,6 +160,35 @@ private:
     memory::Index* index = nullptr;
 };
 
+void sortSymbols(memory::Index& index) {
+    /// new(index) -> old(value)
+    std::vector<uint32_t> new2old(index.symbols.size());
+    std::ranges::iota(new2old, 0u);
+
+    /// Sort the symbols by `Symbol::id`.
+    std::ranges::sort(std::ranges::views::zip(index.symbols, new2old), {}, [](const auto& element) {
+        return std::get<0>(element).id;
+    });
+
+    /// old(index) -> new(value)
+    std::vector<uint32_t> old2new(index.symbols.size());
+    for(uint32_t i = 0; i < index.symbols.size(); ++i) {
+        old2new[new2old[i]] = i;
+    }
+
+    /// Adjust the all symbol references.
+    for(auto& occurrence: index.occurrences) {
+        occurrence.symbol.offset = old2new[occurrence.symbol.offset];
+    }
+
+    /// FIXME: may need to adjust the relations.
+    // for(auto& symbol : index.symbols) {
+    //     for(auto& relation : symbol.relations) {
+    //
+    //     }
+    // }
+}
+
 }  // namespace
 
 /// Index the AST information.
@@ -166,6 +196,16 @@ memory::Index index(ASTInfo& info) {
     memory::Index index = {};
     IndexBuilder builder(info, index);
     builder.TraverseAST(info.context());
+
+    /// Sort symbols by `Symbol::id`.
+    sortSymbols(index);
+
+    /// Sort occurrences by `Occurrence::Location`. Note that file is the first field of `Location`,
+    /// this means that location with the same file will be adjacent.
+    std::ranges::sort(index.occurrences, refl::less, [&](const Occurrence& occurrence) {
+        return index.locations[occurrence.location.offset];
+    });
+
     return index;
 }
 

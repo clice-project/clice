@@ -16,7 +16,7 @@ namespace clice {
 /// consistently across our responses to the client and in the index. Users who prefer to stick to
 /// standard LSP kinds can map our `SymbolKind` to the corresponding LSP kinds through
 /// configuration.
-struct SymbolKind : support::Enum<SymbolKind, false, uint8_t> {
+struct SymbolKind : refl::Enum<SymbolKind, false, uint8_t> {
     enum Kind : uint8_t {
         Comment = 0,     ///< C/C++ comments.
         Number,          ///< C/C++ number literal.
@@ -61,7 +61,7 @@ struct SymbolKind : support::Enum<SymbolKind, false, uint8_t> {
 };
 
 /// A bit field enum to describe the kind of relation between two symbols.
-struct RelationKind : support::Enum<RelationKind, true, uint32_t> {
+struct RelationKind : refl::Enum<RelationKind, true, uint32_t> {
     enum Kind : uint32_t {
         Invalid,
         Declaration,

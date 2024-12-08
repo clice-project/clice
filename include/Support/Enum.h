@@ -9,7 +9,7 @@
 
 #include "TypeTraits.h"
 
-namespace clice::support {
+namespace clice::refl {
 
 template <typename T>
     requires std::is_enum_v<T>
@@ -89,7 +89,7 @@ public:
     /// Get the name of the enum.
     constexpr std::string_view name() const {
         using E = typename Derived::Kind;
-        return support::enum_name<E, begin(), end()>(static_cast<E>(m_Value));
+        return refl::enum_name<E, begin(), end()>(static_cast<E>(m_Value));
     }
 
     constexpr explicit operator bool () const {
@@ -115,7 +115,7 @@ private:
         if constexpr(requires { Derived::LastEnum; }) {
             return Derived::LastEnum;
         } else {
-            return support::enum_max<typename Derived::Kind, begin()>();
+            return refl::enum_max<typename Derived::Kind, begin()>();
         }
     }
 
@@ -178,7 +178,7 @@ public:
             }
 
             using E = typename Derived::Kind;
-            masks += support::enum_name<E, begin(), end()>(static_cast<E>(i));
+            masks += refl::enum_name<E, begin(), end()>(static_cast<E>(i));
         }
         return masks;
     }
@@ -232,7 +232,7 @@ private:
         if constexpr(requires { Derived::LastEnum; }) {
             return Derived::LastEnum;
         } else {
-            return support::enum_max<typename Derived::Kind, begin()>();
+            return refl::enum_max<typename Derived::Kind, begin()>();
         }
     }
 
@@ -246,5 +246,5 @@ concept special_enum = requires {
     requires T::is_special_enum_v;
 };
 
-}  // namespace clice::support
+}  // namespace clice::refl
 

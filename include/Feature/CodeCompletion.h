@@ -15,7 +15,7 @@ struct CompletionOptions {
     std::vector<string> triggerCharacters;
 };
 
-struct CompletionItemKind : support::Enum<CompletionItemKind> {
+struct CompletionItemKind : refl::Enum<CompletionItemKind> {
     enum Kind : uint8_t {
         Invalid = 0,
         Text,

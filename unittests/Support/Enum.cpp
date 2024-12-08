@@ -4,7 +4,7 @@ namespace clice {
 
 namespace {
 
-struct Color : support::Enum<Color> {
+struct Color : refl::Enum<Color> {
     enum Kind : uint8_t {
         Red,
         Green,
@@ -39,7 +39,7 @@ TEST(Support, NormalEnum) {
     static_assert(red == red2);
 }
 
-struct Mask : support::Enum<Mask, true, uint32_t> {
+struct Mask : refl::Enum<Mask, true, uint32_t> {
     enum Kind {
         A = 0,
         B,

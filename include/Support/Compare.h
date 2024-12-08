@@ -3,29 +3,33 @@
 #include "Support/ADT.h"
 #include "Struct.h"
 
-namespace clice::support {
+namespace clice::refl {
 
 template <typename LHS, typename RHS = LHS>
 struct Equal {
-    static bool equal(const LHS& lhs, const RHS& rhs) {
+    constexpr static bool equal(const LHS& lhs, const RHS& rhs) {
         return lhs == rhs;
     }
 };
 
-template <typename LHS, typename RHS>
-bool equal(const LHS& lhs, const RHS& rhs) {
-    return Equal<LHS, RHS>::equal(lhs, rhs);
-}
+struct equal_t {
+    template <typename LHS, typename RHS = LHS>
+    constexpr static bool operator() (const LHS& lhs, const RHS& rhs) {
+        return Equal<LHS, RHS>::equal(lhs, rhs);
+    }
+};
+
+constexpr inline equal_t equal;
 
 template <typename T>
 struct Equal<std::vector<T>> {
-    static bool equal(const std::vector<T>& lhs, const std::vector<T>& rhs) {
+    constexpr static bool equal(const std::vector<T>& lhs, const std::vector<T>& rhs) {
         if(lhs.size() != rhs.size()) {
             return false;
         }
 
         for(std::size_t i = 0; i < lhs.size(); ++i) {
-            if(!support::equal(lhs[i], rhs[i])) {
+            if(!refl::equal(lhs[i], rhs[i])) {
                 return false;
             }
         }
@@ -39,11 +43,70 @@ template <reflectable T>
         { lhs == rhs } -> std::convertible_to<bool>;
     })
 struct Equal<T> {
-    static bool equal(const T& lhs, const T& rhs) {
+    constexpr static bool equal(const T& lhs, const T& rhs) {
         return foreach(lhs, rhs, [](const auto& lhs, const auto& rhs) {
-            return support::equal(lhs, rhs);
+            return refl::equal(lhs, rhs);
         });
     }
 };
 
-}  // namespace clice::support
+template <typename RHS, typename LHS = RHS>
+struct Less {
+    constexpr static bool less(const LHS& lhs, const RHS& rhs) {
+        return lhs < rhs;
+    }
+};
+
+struct less_t {
+    template <typename RHS, typename LHS = RHS>
+    constexpr static bool operator() (const LHS& lhs, const RHS& rhs) {
+        return Less<RHS, LHS>::less(lhs, rhs);
+    }
+};
+
+constexpr inline less_t less;
+
+template <typename T>
+struct Less<std::vector<T>> {
+    constexpr static bool less(const std::vector<T>& lhs, const std::vector<T>& rhs) {
+        if(lhs.size() != rhs.size()) {
+            return lhs.size() < rhs.size();
+        }
+
+        for(std::size_t i = 0; i < lhs.size(); ++i) {
+            if(refl::less(lhs[i], rhs[i])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+};
+
+template <reflectable T>
+    requires (!requires(T lhs, T rhs) {
+        { lhs < rhs } -> std::convertible_to<bool>;
+    })
+struct Less<T> {
+    constexpr static bool less(const T& lhs, const T& rhs) {
+        bool result = false;
+        foreach(lhs, rhs, [&](const auto& lhs, const auto& rhs) {
+            /// return false to break the loop.
+            if(refl::less(lhs, rhs)) {
+                result = true;
+                return false;
+            }
+
+            if(refl::less(rhs, lhs)) {
+                result = false;
+                return false;
+            }
+
+            /// continue the loop.
+            return true;
+        });
+        return result;
+    }
+};
+
+}  // namespace clice::refl

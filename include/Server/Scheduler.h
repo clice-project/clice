@@ -35,11 +35,11 @@ struct llvm::DenseMapInfo<clice::SourceContext> {
     }
 
     static unsigned getHashValue(const clice::SourceContext& context) {
-        return clice::support::hash(context);
+        return clice::refl::hash(context);
     }
 
     static bool isEqual(const clice::SourceContext& lhs, const clice::SourceContext& rhs) {
-        return clice::support::equal(lhs, rhs);
+        return clice::refl::equal(lhs, rhs);
     }
 };
 
