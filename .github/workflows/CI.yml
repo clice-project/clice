@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          submodules: false
+          submodules: recursive
           fetch-depth: 0
 
       - name: Set up CMake
@@ -47,10 +47,10 @@ jobs:
 
       - name: Build LLVM
         run: |
-          python3 /scripts/build-llvm-dev.py
+          python3 ./scripts/build-llvm-dev.py
 
       # Step 5: Always run the test build script
       - name: Build and Test
         run: |
-          bash /scripts/build-dev-test.sh
-          bash /build/bin/clice-tests --test-dir=./tests
+          bash ./scripts/build-dev-test.sh
+          bash ./build/bin/clice-tests --test-dir=./tests
