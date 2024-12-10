@@ -11,6 +11,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Cache Submodules
+        id: cache-submodules
+        uses: actions/cache@v4
+        with:
+          path: deps
+          key: ${{ runner.os }}-cache-submodules
+      
+      - name: Update Submodules
+        run: 
+          git submodule update --init --recursive
+          git submodule update --recursive --remote
+          
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -31,17 +43,7 @@ jobs:
         run: |
           sudo apt-get install -y lld ninja-build
 
-      - name: Cache Submodules
-        id: cache-submodules
-        uses: actions/cache@v4
-        with:
-          path: deps
-          key: ${{ runner.os }}-cache-submodules
-      
-      - name: Update Submodules
-        run: 
-          git submodule update --init --recursive
-          git submodule update --recursive --remote
+
 
 
 
