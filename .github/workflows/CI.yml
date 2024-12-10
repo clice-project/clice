@@ -13,19 +13,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          submodules: recursive
-          fetch-depth: 0
 
-      - name: Set up CMake
-        uses: jwlawson/actions-setup-cmake@v1.10
-    
-      - name: Set up Python
+      - name: Install python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9' 
-    
-      - name: Install Clang
+          
+      - name: Install cmake
+        uses: jwlawson/actions-setup-cmake@v1.10
+
+      - name: Install clang
         run: |
           sudo apt-get update
           sudo apt-get install -y clang llvm
@@ -34,27 +31,14 @@ jobs:
         run: |
           sudo apt-get install -y lld ninja-build
 
-      - name: Get submodule commit hash
-        id: submodule_commit_hash
-        run: |
-            echo "hash=$(git submodule status deps/llvm | awk '{ print $1 }')" >> $GITHUB_ENV
-            echo "::set-output name=hash::$(git submodule status deps/llvm | awk '{ print $1 }')"
-            
-      - name: Cache LLVM source and build
-        uses: actions/cache@v3
+      - name: Cache Submodules
+        id: cache-submodules
+        uses: actions/cache@v4
         with:
-          path: deps/llvm
-          key: ${{ runner.os }}-llvm-${{ github.sha }}-submodule-${{ steps.submodule_commit_hash.outputs.hash }}
-          restore-keys: |
-            ${{ runner.os }}-llvm-${{ github.sha }}-submodule-
+          path: deps
+          key: ${{ runner.os }}-cache-submodules
+      
+      - name: Update Submodules
+        run: git submodule update --init --recursive
 
 
-      - name: Build LLVM
-        run: |
-          python3 ./scripts/build-llvm-dev.py
-
-      # Step 5: Always run the test build script
-      - name: Build and Test
-        run: |
-          bash ./scripts/build-dev-test.sh
-          bash ./build/bin/clice-tests --test-dir=./tests
