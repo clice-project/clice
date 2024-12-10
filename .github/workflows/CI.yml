@@ -22,7 +22,7 @@ jobs:
           key: ${{ runner.os }}-cache-submodules
       
       - name: Update Submodules
-        run: 
+        run: |
           git submodule update --init --recursive
           git submodule update --recursive --remote
 
