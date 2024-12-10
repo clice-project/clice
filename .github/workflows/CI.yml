@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          submodules: false
+          fetch-depth: 0
+
+      - name: Install CMake
+        uses: cmake/setup-cmake@v3
+        with:
+          cmake-version: '3.23'
+    
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9' 
+    
+      - name: Install Clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm
+
+      - name: Get submodule commit hash
+        id: submodule_commit_hash
+        run: |
+            echo "hash=$(git submodule status deps/llvm | awk '{ print $1 }')" >> $GITHUB_ENV
+            echo "::set-output name=hash::$(git submodule status deps/llvm | awk '{ print $1 }')"
+            
+      - name: Cache LLVM source and build
+        uses: actions/cache@v3
+        with:
+          path: deps/llvm
+          key: ${{ runner.os }}-llvm-${{ github.sha }}-submodule-${{ steps.submodule_commit_hash.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-llvm-${{ github.sha }}-submodule-
+
+
+      - name: Build LLVM
+        run: |
+          python3 /scripts/build-llvm-dev.py
+
+      # Step 5: Always run the test build script
+      - name: Build and Test
+        run: |
+          bash /scripts/build-dev-test.sh
+          bash /build/bin/clice-tests --test-dir=./tests
