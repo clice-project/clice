@@ -166,6 +166,7 @@ export int foo = 1;
     params.content = code;
     params.srcPath = "main.cppm";
     params.command = "clang++ -std=c++20 main.cppm";
+    params.file = "main.cppm";
     params.line = 3;
     params.column = 10;
 

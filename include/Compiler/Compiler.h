@@ -156,6 +156,9 @@ struct CompliationParams {
 
     llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 
+    /// Remapped files. Currently, this is only used for testing.
+    llvm::SmallVector<std::pair<std::string, std::string>> remappedFiles;
+
     /// Information about reuse PCH.
     std::string pch;
     clang::PreambleBounds pchBounds = {0, false};

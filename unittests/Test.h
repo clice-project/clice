@@ -101,23 +101,49 @@ inline void EXPECT_FAILURE(std::string msg,
                                       msg.c_str()) = ::testing ::Message();
 }
 
-inline void EXPECT_EQ(const auto& lhs,
-                      const auto& rhs,
+template <typename LHS, typename RHS>
+inline void EXPECT_EQ(const LHS& lhs,
+                      const RHS& rhs,
                       std::source_location current = std::source_location::current()) {
     if(!refl::equal(lhs, rhs)) {
-        EXPECT_FAILURE(
-            std::format("expect: {}, actual: {}\n", json::serialize(lhs), json::serialize(rhs)),
-            current);
+        std::string expect;
+        if constexpr(requires { sizeof(json::Serde<LHS>); }) {
+            llvm::raw_string_ostream(expect) << json::serialize(lhs);
+        } else {
+            expect = "cannot dump value";
+        }
+
+        std::string actual;
+        if constexpr(requires { sizeof(json::Serde<RHS>); }) {
+            llvm::raw_string_ostream(actual) << json::serialize(rhs);
+        } else {
+            actual = "cannot dump value";
+        }
+
+        EXPECT_FAILURE(std::format("expect: {}, actual: {}\n", expect, actual), current);
     }
 }
 
-inline void EXPECT_NE(const auto& lhs,
-                      const auto& rhs,
+template <typename LHS, typename RHS>
+inline void EXPECT_NE(const LHS& lhs,
+                      const RHS& rhs,
                       std::source_location current = std::source_location::current()) {
     if(refl::equal(lhs, rhs)) {
-        EXPECT_FAILURE(
-            std::format("expect: {}, actual: {}\n", json::serialize(lhs), json::serialize(rhs)),
-            current);
+        std::string expect;
+        if constexpr(requires { sizeof(json::Serde<LHS>); }) {
+            llvm::raw_string_ostream(expect) << json::serialize(lhs);
+        } else {
+            expect = "cannot dump value";
+        }
+
+        std::string actual;
+        if constexpr(requires { sizeof(json::Serde<RHS>); }) {
+            llvm::raw_string_ostream(actual) << json::serialize(rhs);
+        } else {
+            actual = "cannot dump value";
+        }
+
+        EXPECT_FAILURE(std::format("expect: {}, actual: {}\n", expect, actual), current);
     }
 }
 
@@ -135,11 +161,10 @@ public:
     Tester(llvm::StringRef file, llvm::StringRef content) {
         params.srcPath = file;
         params.content = annoate(content);
-        vfs = std::make_unique<llvm::vfs::InMemoryFileSystem>();
     }
 
     void addFile(llvm::StringRef name, llvm::StringRef content) {
-        vfs->addFile(name, 0, llvm::MemoryBuffer::getMemBufferCopy(annoate(content)));
+        params.remappedFiles.emplace_back(name, content);
     }
 
     llvm::StringRef annoate(llvm::StringRef content) {
@@ -185,7 +210,7 @@ public:
 
     Tester& run(const char* standard = "-std=c++20") {
         params.vfs = std::move(vfs);
-        params.command = std::format("clang++ {} {} main.cpp", standard, params.srcPath);
+        params.command = std::format("clang++ {} {}", standard, params.srcPath);
 
         auto info = compile(params);
         if(!info) {

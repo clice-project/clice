@@ -30,10 +30,6 @@ TEST(clice, Command) {
 
     auto error = mangleCommand(command, args, buffer);
     ASSERT_FALSE(bool(error));
-
-    for(auto arg: args) {
-        llvm::outs() << arg << '\n';
-    }
 }
 
 }  // namespace

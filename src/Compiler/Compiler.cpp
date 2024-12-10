@@ -29,7 +29,11 @@ auto createInvocation(CompliationParams& params) {
 
     clang::CreateInvocationOptions options = {};
     options.VFS = params.vfs;
+
     auto invocation = clang::createInvocation(args, options);
+    if(!invocation) {
+        std::terminate();
+    }
 
     auto& frontOpts = invocation->getFrontendOpts();
     frontOpts.DisableFree = false;
@@ -60,9 +64,16 @@ auto createInstance(CompliationParams& params) {
 
     assert(!instance->getPreprocessorOpts().RetainRemappedFileBuffers &&
            "RetainRemappedFileBuffers should be false");
-    auto buffer =
-        llvm::MemoryBuffer::getMemBufferCopy(params.content.substr(0, size), params.srcPath);
-    instance->getPreprocessorOpts().addRemappedFile(params.srcPath, buffer.release());
+    instance->getPreprocessorOpts().addRemappedFile(
+        params.srcPath,
+        llvm::MemoryBuffer::getMemBufferCopy(params.content.substr(0, size), params.srcPath)
+            .release());
+
+    for(auto& [file, content]: params.remappedFiles) {
+        instance->getPreprocessorOpts().addRemappedFile(
+            file,
+            llvm::MemoryBuffer::getMemBufferCopy(content, file).release());
+    }
 
     return instance;
 }

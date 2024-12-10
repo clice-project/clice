@@ -19,9 +19,9 @@ TEST(Directive, Include) {
 )cpp";
 
     Tester tester("main.cpp", main);
-    tester.addFile("test.h", test);
-    tester.addFile("test2.h", test2);
-    tester.addFile("test3.h", "");
+    tester.addFile("./test.h", test);
+    tester.addFile("./test2.h", test2);
+    tester.addFile("./test3.h", "");
     tester.run();
 
     auto& info = tester.info;

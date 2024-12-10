@@ -17,16 +17,17 @@ int main() {
     CompliationParams params;
     params.content = code;
     params.srcPath = "main.cpp";
-    params.content = "clang++ -std=c++20 main.cpp";
+    params.command = "clang++ -std=c++20 main.cpp";
+    params.file = "main.cpp";
 
     auto result = feature::codeCompletion(params, 5, 7, "main.cpp", {});
-    for(auto& item: result) {
-        llvm::outs() << std::format("kind: {}, label: {}, range: {}\n",
-                                    item.kind.name(),
-                                    item.label,
-                                    json::serialize(item.textEdit.range))
-                     << "\n";
-    }
+    // for(auto& item: result) {
+    //     llvm::outs() << std::format("kind: {}, label: {}, range: {}\n",
+    //                                 item.kind.name(),
+    //                                 item.label,
+    //                                 json::serialize(item.textEdit.range))
+    //                  << "\n";
+    // }
 }
 
 }  // namespace

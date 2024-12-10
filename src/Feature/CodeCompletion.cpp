@@ -209,6 +209,7 @@ proto::CompletionResult codeCompletion(CompliationParams& params,
     auto consumer = new CodeCompletionCollector(completions, line, column, params.content);
 
     params.srcPath = file;
+    params.file = file;
     params.line = line;
     params.column = column;
 
