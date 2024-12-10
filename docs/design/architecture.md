@@ -5,7 +5,7 @@ clice is a language server, which is also a kind of server. It uses [libuv](http
 
 - communicate with the client
 - initialize the server
-- distrubute tasks to the thread pool
+- distribute tasks to the thread pool
 - manage all opened files
 
 ## Protocol
