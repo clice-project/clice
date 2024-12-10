@@ -45,6 +45,15 @@ jobs:
         run: |
           sudo apt-get install -y lld ninja-build
 
+      - name: Build
+        run: |
+          python3 ./scripts/build-llvm-dev.py
+          bash ./scripts/build-dev-test.sh
+          ./build/bin/clice-tests --test-dir=./tests
+
+      
+      
+
 
 
 
