@@ -15,7 +15,28 @@ enum class Level {
 };
 
 template <typename... Args>
-void log(Level level, std::string_view fmt, Args&&... args) {
+struct FmtStrWithLoc {
+    std::string_view format;
+    std::source_location location;
+
+    constexpr FmtStrWithLoc(const char* fmt,
+                            std::source_location loc = std::source_location::current()) :
+        format(fmt), location(loc) {
+        // check if the format string is valid in compile-time
+        // this will give a readable error message
+        [[maybe_unused]] bool is_invalid_format = (std::format_string<Args...>{fmt}, true);
+    }
+};
+
+/// As the notes in https://en.cppreference.com/w/cpp/utility/format/basic_format_string.
+/// The alias templates `Fswl` use std::type_identity_t to inhibit
+/// template argument deduction. Typically, when they appear as a function parameter, their template
+/// arguments are deduced from other function arguments.
+template <typename... Args>
+using Fswl = FmtStrWithLoc<std::type_identity_t<Args>...>;
+
+template <typename... Args>
+void log(Level level, std::string_view fmt, std::source_location _loc, Args&&... args) {
     namespace chrono = std::chrono;
     auto now = chrono::floor<chrono::milliseconds>(chrono::system_clock::now());
     auto time = chrono::zoned_time(chrono::current_zone(), now);
@@ -33,28 +54,28 @@ void log(Level level, std::string_view fmt, Args&&... args) {
 }
 
 template <typename... Args>
-void info(std::format_string<Args...> fmt, Args&&... args) {
-    log::log(Level::INFO, fmt.get(), std::forward<Args>(args)...);
+void info(Fswl<Args...> fmt, Args&&... args) {
+    log::log(Level::INFO, fmt.format, fmt.location, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void warn(std::format_string<Args...> fmt, Args&&... args) {
-    log::log(Level::WARN, fmt.get(), std::forward<Args>(args)...);
+void warn(Fswl<Args...> fmt, Args&&... args) {
+    log::log(Level::WARN, fmt.format, fmt.location, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void debug(std::format_string<Args...> fmt, Args&&... args) {
-    log::log(Level::DEBUG, fmt.get(), std::forward<Args>(args)...);
+void debug(Fswl<Args...> fmt, Args&&... args) {
+    log::log(Level::DEBUG, fmt.format, fmt.location, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void trace(std::format_string<Args...> fmt, Args&&... args) {
-    log::log(Level::TRACE, fmt.get(), std::forward<Args>(args)...);
+void trace(Fswl<Args...> fmt, Args&&... args) {
+    log::log(Level::TRACE, fmt.format, fmt.location, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void fatal [[noreturn]] (std::format_string<Args...> fmt, Args&&... args) {
-    log::log(Level::FATAL, fmt.get(), std::forward<Args>(args)...);
+void fatal [[noreturn]] (Fswl<Args...> fmt, Args&&... args) {
+    log::log(Level::FATAL, fmt.format, fmt.location, std::forward<Args>(args)...);
     std::terminate();
 }
 
