@@ -23,9 +23,21 @@ jobs:
       
       - name: Update Submodules
         run: |
-          git submodule sync
-          git submodule update --init --recursive
-          git submodule update --recursive --remote
+          git clone --depth=1 https://github.com/libuv/libuv.git deps/libuv
+          git clone --depth=1 https://github.com/marzer/tomlplusplus.git deps/toml
+          git clone --depth=1 https://github.com/google/googletest.git deps/googletest
+          if [ -d "deps/llvm/.git" ]; then
+            echo "Directory deps/llvm already exists, fetching updates..."
+            cd deps/llvm
+            git fetch --depth=1
+            git checkout main
+            git pull --ff-only
+            cd -
+          else
+            echo "Cloning repository https://github.com/llvm/llvm-project.git into deps/llvm..."
+            git clone --depth=1 https://github.com/llvm/llvm-project.git deps/llvm
+          fi
+
 
       - name: Install python
         uses: actions/setup-python@v4
@@ -44,7 +56,7 @@ jobs:
         run: |
           sudo apt-get install -y lld ninja-build
 
-          
+
 
 
 
