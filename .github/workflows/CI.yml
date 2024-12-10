@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
       - name: Cache Submodules
         id: cache-submodules
         uses: actions/cache@v4
@@ -22,9 +25,6 @@ jobs:
         run: 
           git submodule update --init --recursive
           git submodule update --recursive --remote
-          
-      - name: Checkout repository
-        uses: actions/checkout@v3
 
       - name: Install python
         uses: actions/setup-python@v4
