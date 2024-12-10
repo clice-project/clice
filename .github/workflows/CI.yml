@@ -17,10 +17,8 @@ jobs:
           submodules: false
           fetch-depth: 0
 
-      - name: Install CMake
-        uses: cmake/setup-cmake@v3
-        with:
-          cmake-version: '3.23'
+      - name: Set up CMake
+        uses: jwlawson/actions-setup-cmake@v1.10
     
       - name: Set up Python
         uses: actions/setup-python@v4
