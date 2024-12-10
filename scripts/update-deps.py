@@ -18,11 +18,11 @@ def run_command(command):
         print(result.stdout)
 
 def update_or_clone_submodule(repo_url, submodule_dir):
-    if os.path.isdir(os.path.join(submodule_dir, ".git")):
+    if os.path.exists(submodule_dir):
         print(f"Directory {submodule_dir} already exists, updating...")
         os.chdir(submodule_dir)
         run_command("git fetch --depth=1")
-        run_command("git pull --ff-only")
+        run_command("git pull")
         os.chdir("../..")
     else:
         print(f"Directory {submodule_dir} does not exist, cloning...")
