@@ -22,6 +22,12 @@ int Server::run(int argc, const char** argv) {
         log::info("Successfully loaded configuration file from {0}.", cl::config.getValue());
     }
 
+    /// Get the resource directory.
+    if(auto error = fs::init_resource_dir(argv[0])) {
+        log::fatal("Failed to get resource directory, because {0}", error);
+        return 1;
+    }
+
     auto dispatch = [this](json::Value value) -> async::promise<void> {
         assert(value.kind() == json::Value::Object);
         auto object = value.getAsObject();

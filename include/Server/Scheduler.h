@@ -73,7 +73,7 @@ class Scheduler {
 private:
     async::promise<void> updatePCH(llvm::StringRef path,
                                    llvm::StringRef content,
-                                   llvm::ArrayRef<const char*> args);
+                                   llvm::StringRef command);
 
     async::promise<void> updatePCM() {
         co_return;

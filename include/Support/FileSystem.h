@@ -7,9 +7,30 @@
 
 namespace clice {
 
-namespace vfs = llvm::vfs;
-namespace fs = llvm::sys::fs;
 namespace path = llvm::sys::path;
+
+namespace fs {
+
+using namespace llvm::sys::fs;
+
+inline std::string resource_dir = "";
+
+inline llvm::Error init_resource_dir(llvm::StringRef execute) {
+    llvm::SmallString<128> path;
+    path::append(path, path::parent_path(execute), "..");
+    path::append(path, "lib", "clang", "20");
+
+    if(auto error = real_path(path, path)) {
+        return llvm::make_error<llvm::StringError>(error.message(), error);
+    }
+
+    resource_dir = path.str();
+    return llvm::Error::success();
+}
+
+}  // namespace fs
+
+namespace vfs = llvm::vfs;
 
 class ThreadSafeFS : public vfs::ProxyFileSystem {
 public:

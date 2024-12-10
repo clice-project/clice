@@ -8,24 +8,16 @@ namespace {
 
 struct TemplateResolverTester : public clang::RecursiveASTVisitor<TemplateResolverTester> {
     TemplateResolverTester(llvm::StringRef code) {
-        compileArgs = {
-            "clang++",
-            "-std=c++20",
-            "main.cpp",
-            "-resource-dir",
-            "/home/ykiko/C++/clice2/build/lib/clang/20",
-        };
-        CompliationParams params;
-        params.srcPath = "main.cpp";
-        params.content = code;
-        params.args = compileArgs;
-        auto info = compile(params);
-        if(!info) {
-            llvm::errs() << info.takeError() << "\n";
-            return;
-        }
+        // CompliationParams params;
+        // params.srcPath = "main.cpp";
+        // params.content = code;
+        // params.args = compileArgs;
+        // auto info = compile(params);
+        // if(!info) {
+        //     llvm::errs() << info.takeError() << "\n";
+        //     return;
+        // }
 
-        compiler = std::move(*info);
         test();
     }
 

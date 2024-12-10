@@ -6,16 +6,17 @@ namespace clice {
 
 async::promise<void> Scheduler::updatePCH(llvm::StringRef filepath,
                                           llvm::StringRef content,
-                                          llvm::ArrayRef<const char*> args) {
+                                          llvm::StringRef command) {
     auto [iter, success] = pchs.try_emplace(filepath);
     if(success || iter->second.needUpdate(content)) {
         Tracer tracer;
 
         CompliationParams params;
-        params.srcPath = filepath;
         params.content = content;
-        params.args = args;
+        params.srcPath = filepath;
         params.outPath = filepath;
+        params.command = command;
+
         path::replace_path_prefix(params.outPath,
                                   config::workplace(),
                                   config::frontend().cache_directory);
@@ -77,31 +78,19 @@ async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringR
         initCmd = true;
     }
 
-    /// FIXME: lookup from CDB file and adjust and remove unnecessary arguments.1
-    auto cmd = cmdMgr.lookup(filepath);
-    llvm::SmallVector<const char*> args;
-    for(auto& arg: cmd) {
-        args.push_back(arg.c_str());
-    }
-
-    /// through arguments to judge is it a module.
-    bool isModule = false;
-    co_await (isModule ? updatePCM() : updatePCH(filepath, content, args));
-
-    Tracer tracer;
-
-    llvm::SmallString<128> command;
-    llvm::raw_svector_ostream os(command);
-    for(auto arg: args) {
-        os << arg << " ";
-    }
-    log::info("Start building AST for {0}, command: [{1}]", filepath, command.str());
-
     CompliationParams params;
     params.srcPath = path;
     params.content = content;
-    params.args = args;
+    params.command = cmdMgr.lookupFirst(filepath);
     params.addPCH(pchs.at(filepath));
+
+    /// through arguments to judge is it a module.
+    bool isModule = false;
+    co_await (isModule ? updatePCM() : updatePCH(filepath, content, params.command));
+
+    Tracer tracer;
+
+    log::info("Start building AST for {0}, command: [{1}]", filepath, params.command.str());
 
     auto task = [&] {
         /// FIXME: We cannot use reference capture the `pch` here, beacuse the reference may be
@@ -153,22 +142,15 @@ async::promise<proto::CompletionResult> Scheduler::codeComplete(llvm::StringRef 
 
     llvm::SmallString<128> path = filepath;
     /// FIXME: lookup from CDB file and adjust and remove unnecessary arguments.1
-    llvm::SmallVector<const char*> args = {
-        "clang++",
-        "-std=c++20",
-        path.c_str(),
-        "-resource-dir",
-        "/home/ykiko/C++/clice2/build/lib/clang/20",
-    };
 
     CompliationParams params;
-    params.srcPath = path;
-    params.args = args;
     params.content = iter->second.content;
+    params.srcPath = path;
+    params.command = cmdMgr.lookupFirst(filepath);
 
     /// through arguments to judge is it a module.
     bool isModule = false;
-    co_await (isModule ? updatePCM() : updatePCH(params.srcPath, params.content, args));
+    co_await (isModule ? updatePCM() : updatePCH(params.srcPath, params.content, params.command));
     params.addPCH(pchs.at(filepath));
 
     Tracer tracer;

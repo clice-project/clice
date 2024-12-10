@@ -1,4 +1,6 @@
+#include <Compiler/Command.h>
 #include <Compiler/Compiler.h>
+
 #include <clang/Lex/PreprocessorOptions.h>
 #include <clang/Frontend/TextDiagnosticPrinter.h>
 
@@ -17,24 +19,32 @@ bool PCHInfo::needUpdate(llvm::StringRef content) {
 
 namespace {
 
-void adjustInvocation(clang::CompilerInvocation& invocation) {
-    auto& frontOpts = invocation.getFrontendOpts();
+auto createInvocation(CompliationParams& params) {
+    llvm::SmallString<1024> buffer;
+    llvm::SmallVector<const char*, 16> args;
+
+    if(auto error = mangleCommand(params.command, args, buffer)) {
+        std::terminate();
+    }
+
+    clang::CreateInvocationOptions options = {};
+    options.VFS = params.vfs;
+    auto invocation = clang::createInvocation(args, options);
+
+    auto& frontOpts = invocation->getFrontendOpts();
     frontOpts.DisableFree = false;
 
-    clang::LangOptions& langOpts = invocation.getLangOpts();
+    clang::LangOptions& langOpts = invocation->getLangOpts();
     langOpts.CommentOpts.ParseAllComments = true;
     langOpts.RetainCommentsFromSystemHeaders = true;
 
-    // FIXME: add more.
+    return invocation;
 }
 
 auto createInstance(CompliationParams& params) {
     auto instance = std::make_unique<clang::CompilerInstance>();
 
-    /// TODO: Figure out `CreateInvocationOptions`.
-    clang::CreateInvocationOptions options = {};
-    options.VFS = params.vfs;
-    instance->setInvocation(clang::createInvocation(params.args, options));
+    instance->setInvocation(createInvocation(params));
 
     /// TODO: use a thread safe filesystem and our customized `DiagnosticConsumer`.
     instance->createDiagnostics(
@@ -43,8 +53,6 @@ auto createInstance(CompliationParams& params) {
         true);
 
     instance->createFileManager(params.vfs);
-
-    adjustInvocation(instance->getInvocation());
 
     /// Add remapped files, if bounds is provided, cut off the content.
     std::size_t size =
@@ -140,7 +148,7 @@ void CompliationParams::computeBounds(llvm::StringRef header) {
     assert(!content.empty() && "Source content is required to compute bounds");
 
     if(header.empty()) {
-        auto invocation = clang::createInvocation(args, {});
+        auto invocation = createInvocation(*this);
         bounds = clang::Lexer::ComputePreamble(content, invocation->getLangOpts());
         return;
     }

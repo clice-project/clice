@@ -9,9 +9,16 @@ class CommandManager {
 public:
     void update(llvm::StringRef dir);
 
-    std::vector<std::string> lookup(llvm::StringRef file);
+    /// Return the commands of first meet file.
+    llvm::StringRef lookupFirst(llvm::StringRef file);
+
+    llvm::ArrayRef<std::string> lookup(llvm::StringRef file);
+
 private:
-    llvm::StringMap<std::unique_ptr<clang::tooling::CompilationDatabase>> CDBs;
+    /// CDB file -> file -> [commands]
+    using Commands = std::vector<std::string>;
+    using CDB = llvm::StringMap<Commands>;
+    llvm::StringMap<CDB> CDBs;
 };
 
 }  // namespace clice

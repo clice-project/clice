@@ -129,11 +129,17 @@ struct PCMInfo {
 };
 
 struct CompliationParams {
+    /// Source file content.
+    llvm::StringRef content;
+
     /// Source file path.
     llvm::SmallString<128> srcPath;
 
-    /// Source file content.
-    llvm::StringRef content;
+    /// Output file path.
+    llvm::SmallString<128> outPath;
+
+    /// Responsible for storing the arguments.
+    llvm::SmallString<1024> command;
 
     /// - If we are building PCH, we need a size to verify the bounds of preamble. That is
     /// which source code range the PCH will cover.
@@ -147,12 +153,6 @@ struct CompliationParams {
     /// - If the header is empty, the bounds can be determined by lexing the source file.
     /// - If the header is not empty, the preprocessor must be executed to compute the bounds.
     void computeBounds(llvm::StringRef header = "");
-
-    /// Command line arguments.
-    llvm::ArrayRef<const char*> args;
-
-    /// Output file path.
-    llvm::SmallString<128> outPath;
 
     llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 

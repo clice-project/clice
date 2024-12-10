@@ -16,33 +16,16 @@ int main(){
 }
 )cpp";
 
-    llvm::SmallVector<const char*, 5> compileArgs = {
-        "clang++",
-        "-std=c++20",
-        "main.cpp",
-        "-resource-dir",
-        "/home/ykiko/C++/clice2/build/lib/clang/20",
-    };
-
     CompliationParams params;
-    params.srcPath = "main.cpp";
     params.content = code;
-    params.args = compileArgs;
+    params.srcPath = "main.cpp";
+    params.command = "clang++ -std=c++20 main.cpp";
 
     auto info = compile(params);
     ASSERT_TRUE(bool(info));
 }
 
 TEST(Compiler, ComputeBounds) {
-
-    llvm::SmallVector<const char*, 5> compileArgs = {
-        "clang++",
-        "-std=c++20",
-        "main.cpp",
-        "-resource-dir",
-        "/home/ykiko/C++/clice2/build/lib/clang/20",
-    };
-
     const char* code = R"cpp(
 #include <cstdio>
 int main(){
@@ -52,17 +35,15 @@ int main(){
 
     /// Test in no header file.
     CompliationParams params;
-    params.srcPath = "main.cpp";
-    params.args = compileArgs;
     params.content = code;
+    params.srcPath = "main.cpp";
+    params.command = "clang++ -std=c++20 main.cpp";
     params.computeBounds();
 
     ASSERT_TRUE(params.bounds.has_value());
     ASSERT_EQ(params.bounds->Size, 19);
 
     params.bounds.reset();
-
-    compileArgs = {"clang++", "-std=c++20", "main.cpp"};
 
     std::unique_ptr<vfs::InMemoryFileSystem> vfs(new vfs::InMemoryFileSystem);
     const char* header = R"cpp(
@@ -80,14 +61,7 @@ int main(){
     return 0;
 })cpp";
 
-    compileArgs = {
-        "clang++",
-        "-std=c++20",
-        "main.cpp",
-    };
-
     params.srcPath = "main.cpp";
-    params.args = compileArgs;
     params.content = code;
     params.vfs = std::move(vfs);
     params.computeBounds("target.h");
@@ -106,14 +80,6 @@ int main(){
 }
 )cpp";
 
-    llvm::SmallVector<const char*, 5> compileArgs = {
-        "clang++",
-        "-std=c++20",
-        "main.cpp",
-        "-resource-dir",
-        "/home/ykiko/C++/clice2/build/lib/clang/20",
-    };
-
     llvm::SmallString<128> outpath;
     if(auto error = llvm::sys::fs::createTemporaryFile("main", "pch", outpath)) {
         llvm::errs() << error.message() << "\n";
@@ -129,7 +95,7 @@ int main(){
     params.content = code;
     params.srcPath = "main.cpp";
     params.outPath = outpath;
-    params.args = compileArgs;
+    params.command = "clang++ -std=c++20 main.cpp";
     params.computeBounds();
 
     PCHInfo pch;
@@ -162,17 +128,11 @@ export int foo() {
         return;
     }
 
-    llvm::SmallVector<const char*, 5> compileArgs = {
-        "clang++",
-        "-std=c++20",
-        "main.cppm",
-    };
-
     CompliationParams params;
     params.srcPath = "main.cppm";
     params.content = code;
     params.outPath = outpath;
-    params.args = compileArgs;
+    params.command = "clang++ -std=c++20 main.cppm";
 
     PCMInfo pcm;
     ASSERT_TRUE(bool(clice::compile(params, pcm)));
@@ -189,7 +149,7 @@ int main(){
 
     params.srcPath = "main.cpp";
     params.content = code2;
-    params.args = compileArgs;
+    params.command = "clang++ -std=c++20 main.cpp";
     params.addPCM(pcm);
 
     auto info = compile(params);
@@ -202,16 +162,10 @@ export module A;
 export int foo = 1;
 )cpp";
 
-    llvm::SmallVector<const char*, 5> compileArgs = {
-        "clang++",
-        "-std=c++20",
-        "main.cppm",
-    };
-
     CompliationParams params;
-    params.srcPath = "main.cppm";
     params.content = code;
-    params.args = compileArgs;
+    params.srcPath = "main.cppm";
+    params.command = "clang++ -std=c++20 main.cppm";
     params.line = 3;
     params.column = 10;
 

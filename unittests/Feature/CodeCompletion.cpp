@@ -14,18 +14,10 @@ int main() {
 }
 )cpp";
 
-    llvm::SmallVector<const char*, 5> compileArgs = {
-        "clang++",
-        "-std=c++20",
-        "main.cpp",
-        "-resource-dir",
-        "/home/ykiko/C++/clice2/build/lib/clang/20",
-    };
-
     CompliationParams params;
-    params.srcPath = "main.cpp";
     params.content = code;
-    params.args = compileArgs;
+    params.srcPath = "main.cpp";
+    params.content = "clang++ -std=c++20 main.cpp";
 
     auto result = feature::codeCompletion(params, 5, 7, "main.cpp", {});
     for(auto& item: result) {

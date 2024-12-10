@@ -185,15 +185,7 @@ public:
 
     Tester& run(const char* standard = "-std=c++20") {
         params.vfs = std::move(vfs);
-
-        llvm::SmallVector<const char*> args = {
-            "clang++",
-            standard,
-            params.srcPath.c_str(),
-            "-resource-dir",
-            test::resource_dir().data(),
-        };
-        params.args = args;
+        params.command = std::format("clang++ {} {} main.cpp", standard, params.srcPath);
 
         auto info = compile(params);
         if(!info) {

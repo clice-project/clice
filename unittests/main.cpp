@@ -29,13 +29,15 @@ llvm::StringRef resource_dir() {
 }  // namespace clice
 
 int main(int argc, char** argv) {
+    using namespace clice;
+
+    if(auto error = fs::init_resource_dir(argv[0])) {
+        llvm::outs() << std::format("Failed to get resource directory, because {}\n", error);
+        return 1;
+    }
+
     testing::InitGoogleTest(&argc, argv);
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
-
-    if(auto error = clice::fs::real_path(llvm::Twine(argv[0]) + "/../../lib/clang/20)",
-                                         clice::cl::resource_dir)) {
-        llvm::errs() << "Failed to get resource directory, because " << error.message() << '\n';
-    }
 
     return RUN_ALL_TESTS();
 }
