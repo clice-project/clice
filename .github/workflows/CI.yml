@@ -30,6 +30,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang llvm
 
+      - name: Install lld and ninja
+        run: |
+          sudo apt-get install -y lld ninja-build
+
       - name: Get submodule commit hash
         id: submodule_commit_hash
         run: |
