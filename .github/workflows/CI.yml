@@ -18,18 +18,21 @@ jobs:
         id: cache-submodules
         uses: actions/cache@v4
         with:
-          path: ./depss
+          path: |
+            ./deps
+            .git/modules/deps/
           key: ${{ runner.os }}-cache-submodules
+      
+      - name: Update Submodules
+        run: |
+          git submodule init 
+          git submodule update --recursive --depth 1
 
       - name: Install python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9' 
-
-      - name: Update Submodules
-        run: |
-         
-
+          
       - name: Install cmake
         uses: jwlawson/actions-setup-cmake@v1.10
 
