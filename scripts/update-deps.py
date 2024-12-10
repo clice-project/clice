@@ -3,10 +3,10 @@ import subprocess
 
 
 submodules = [
-    ("https://github.com/llvm/llvm-project.git", "deps/llvm"),
-    ("https://github.com/libuv/libuv.git", "deps/libuv"),
-    ("https://github.com/marzer/tomlplusplus.git", "deps/toml"),
-    ("https://github.com/google/googletest.git", "deps/googletest"),
+    ("https://github.com/llvm/llvm-project.git", "./deps/llvm"),
+    ("https://github.com/libuv/libuv.git", "./deps/libuv"),
+    ("https://github.com/marzer/tomlplusplus.git", "./deps/toml"),
+    ("https://github.com/google/googletest.git", "./deps/googletest"),
 ]
 
 def run_command(command):
