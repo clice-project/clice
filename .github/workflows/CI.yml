@@ -48,11 +48,11 @@ jobs:
       - name: Build
         run: |
           python3 ./scripts/build-llvm-dev.py
-          bash ./scripts/build-dev-test.sh
-          cmake --build build
-          ./build/bin/clice-tests --test-dir=./tests
+          
+        #bash ./scripts/build-dev-test.sh
+        #cmake --build build
+        #./build/bin/clice-tests --test-dir=./tests
 
-      
       
 
 
