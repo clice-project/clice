@@ -23,6 +23,7 @@ jobs:
       
       - name: Update Submodules
         run: |
+          git submodule sync
           git submodule update --init --recursive
           git submodule update --recursive --remote
 
