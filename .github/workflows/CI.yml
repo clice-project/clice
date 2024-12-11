@@ -44,11 +44,7 @@ jobs:
           wget -O - https://apt.llvm.org/llvm.sh | sudo bash
           sudo apt update
           sudo apt install -y clang-18 llvm-18
-          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
-          sudo update-alternatives --install /usr/bin/llvm llvm /usr/bin/llvm-18 100
-          sudo update-alternatives --config clang
-          sudo update-alternatives --config llvm  
-
+ 
       - name: Install gcc
         run: |
           sudo apt install -y software-properties-common
