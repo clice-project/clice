@@ -37,13 +37,13 @@ jobs:
           
       - name: Install cmake
         uses: jwlawson/actions-setup-cmake@v1.10
-
+          
       - name: Install clang
         run: |
           sudo apt install -y wget
           wget -O - https://apt.llvm.org/llvm.sh | sudo bash
           sudo apt update
-          sudo apt install -y clang-18 llvm-18
+          sudo apt install -y clang-18 llvm-18 lld-18
  
       - name: Install gcc
         run: |
@@ -55,7 +55,11 @@ jobs:
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
           sudo update-alternatives --config gcc
           sudo update-alternatives --config g++
-  
+
+      - name: Install ninja
+        run: |
+          sudo apt install -y ninja-build 
+
       - name: Build LLVM
         run: |
           python3 ./scripts/build-llvm-dev.py
