@@ -37,10 +37,10 @@ jobs:
                     
       - name: Install gcc
         run: |
-          sudo apt upgrade
-          sudo apt install -y software-properties-common
           sudo apt update
+          sudo apt install -y software-properties-common
           sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
           sudo apt install -y gcc-14 g++-14 libstdc++-14-dev
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
@@ -49,9 +49,9 @@ jobs:
 
       - name: Install clang
         run: |
+          sudo apt update
           sudo apt install -y wget
           wget -O - https://apt.llvm.org/llvm.sh | sudo bash
-          sudo apt update
           sudo apt install -y llvm-18 llvm-18-tools clang-18 libclang-rt-18-dev lld-18
       
       - name: Install cmake and ninja
