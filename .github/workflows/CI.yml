@@ -37,6 +37,7 @@ jobs:
                     
       - name: Install gcc
         run: |
+          sudo apt upgrade
           sudo apt install -y software-properties-common
           sudo apt update
           sudo add-apt-repository ppa:ubuntu-toolchain-r/test
@@ -52,7 +53,6 @@ jobs:
           wget -O - https://apt.llvm.org/llvm.sh | sudo bash
           sudo apt update
           sudo apt install -y llvm-18 llvm-18-tools clang-18 libclang-rt-18-dev lld-18
-          which llvm-ar
       
       - name: Install cmake and ninja
         run: |
