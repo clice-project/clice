@@ -40,7 +40,6 @@ jobs:
 
       - name: Install clang
         run: |
-          sudo apt update
           sudo apt install -y wget
           wget -O - https://apt.llvm.org/llvm.sh | sudo bash
           sudo apt update
@@ -48,14 +47,13 @@ jobs:
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
           sudo update-alternatives --install /usr/bin/llvm llvm /usr/bin/llvm-18 100
           sudo update-alternatives --config clang
-          sudo update-alternatives --config llvm
+          sudo update-alternatives --config llvm  
 
       - name: Install gcc
         run: |
-          sudo apt update
           sudo apt install -y software-properties-common
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
           sudo apt update
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
           sudo apt install -y gcc-14 g++-14 libstdc++-14-dev
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
