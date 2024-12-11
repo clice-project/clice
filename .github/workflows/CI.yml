@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -38,40 +38,37 @@ jobs:
       - name: Install cmake
         uses: jwlawson/actions-setup-cmake@v1.10
 
-      - name: Install Clang 18
+      - name: Install clang
         run: |
           sudo apt-get update
           sudo apt-get install -y wget
           wget -O - https://apt.llvm.org/llvm.sh | sudo bash
-          sudo apt-get install -y clang-18 llvm-18
+          sudo apt-get install -y clang-19 llvm-19
 
-      - name: Install GCC 13.2
+      - name: Install gcc
         run: |
           sudo apt update
           sudo apt install -y software-properties-common
           sudo add-apt-repository ppa:ubuntu-toolchain-r/test
           sudo apt update
-          sudo apt install -y gcc-13 g++-13 libstdc++-13-dev
-
-      - name: Set GCC 13.2 as default
-        run: |
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
+          sudo apt install -y gcc-14 g++-14 libstdc++-14-dev
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
           sudo update-alternatives --config gcc
           sudo update-alternatives --config g++
-
-      - name: Check GCC version
-        run: gcc --version
-      - name: Install lld and ninja
-        run: |
-          sudo apt-get install -y lld ninja-build
-
-      - name: Build
+  
+      - name: Build LLVM
         run: |
           python3 ./scripts/build-llvm-dev.py
+
+      - name: Build clice
+        run: |
           bash ./scripts/build-dev-test.sh
           cmake --build build
-          ./build/bin/clice-tests --test-dir=./tests
+      
+      - name: Run tests
+        run: ./build/bin/clice-tests --test-dir=./tests
+          
 
       
 
