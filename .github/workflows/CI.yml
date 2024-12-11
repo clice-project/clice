@@ -44,8 +44,8 @@ jobs:
           sudo apt install -y gcc-14 g++-14 libstdc++-14-dev
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-          sudo update-alternatives --config gcc
-          sudo update-alternatives --config g++
+          sudo update-alternatives --set gcc /usr/bin/gcc-14
+          sudo update-alternatives --set g++ /usr/bin/g++-14
 
       - name: Install clang
         run: |
@@ -64,8 +64,7 @@ jobs:
 
       - name: Build clice
         run: |
-          bash ./scripts/build-dev-test.sh
-          cmake --build build
+          bash ./scripts/build-dev-test.sh && cmake --build build
       
       - name: Run tests
         run: ./build/bin/clice-tests --test-dir=./tests
