@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Cache Submodules
+        id: cache-submodules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./deps
+            .git/modules/deps/
+          key: submodules-${{ github.sha }}
+          restore-keys: |
+            submodules-
+      
+      - name: Update Submodules
+        run: |
+          git submodule init 
+          git submodule update --recursive --depth 1
+
+      - name: Install python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9' 
+                    
+      - name: Install gcc
+        run: |
+          sudo apt update
+          sudo apt install -y software-properties-common
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y gcc-14 g++-14 libstdc++-14-dev
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo update-alternatives --set gcc /usr/bin/gcc-14
+          sudo update-alternatives --set g++ /usr/bin/g++-14
+
+      - name: Install clang
+        run: |
+          sudo apt update
+          sudo apt install -y wget
+          wget -O - https://apt.llvm.org/llvm.sh | sudo bash
+          sudo apt install -y llvm-18 llvm-18-tools clang-18 libclang-rt-18-dev lld-18
+          sudo ln -s /usr/bin/llvm-ar-18 /usr/bin/llvm-ar
+          sudo ln -s /usr/bin/llvm-ranlib-18 /usr/bin/llvm-ranlib
+      
+      - name: Install cmake and ninja
+        run: |
+          sudo apt install -y cmake ninja-build 
+
+      - name: Build LLVM
+        run: |
+          python3 ./scripts/build-llvm-dev.py
+
+      - name: Build clice
+        run: |
+          bash ./scripts/build-dev-test.sh && cmake --build build
+      
+      - name: Run tests
+        run: ./build/bin/clice-tests --test-dir=./tests
+          
+
+      
+
+
+
+
+
+
+
+
+
+
+
