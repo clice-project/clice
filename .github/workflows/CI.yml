@@ -25,6 +25,16 @@ jobs:
           restore-keys: |
             submodules-
       
+      - name: Cache Clice 
+        id: cache-clice
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./build/CMakeFiles/**/*.o
+          key: clice-${{ github.sha }}
+          restore-keys: |
+            clice-
+      
       - name: Update Submodules
         run: |
           git submodule init 
@@ -70,17 +80,3 @@ jobs:
       
       - name: Run tests
         run: ./build/bin/clice-tests --test-dir=./tests
-          
-
-      
-
-
-
-
-
-
-
-
-
-
-
