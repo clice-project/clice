@@ -43,6 +43,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang llvm
 
+      - name: Install GCC 13.2
+        run: |
+          sudo apt update
+          sudo apt install -y software-properties-common
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y gcc-13 g++-13 libstdc++-13-dev
+
+      - name: Set GCC 13.2 as default
+        run: |
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
+          sudo update-alternatives --config gcc
+          sudo update-alternatives --config g++
+
+      - name: Check GCC version
+        run: gcc --version
       - name: Install lld and ninja
         run: |
           sudo apt-get install -y lld ninja-build
