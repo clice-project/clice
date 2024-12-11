@@ -80,17 +80,3 @@ jobs:
       
       - name: Run tests
         run: ./build/bin/clice-tests --test-dir=./tests
-          
-
-      
-
-
-
-
-
-
-
-
-
-
-
