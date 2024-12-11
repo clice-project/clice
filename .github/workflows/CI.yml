@@ -34,17 +34,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.9' 
-          
-      - name: Install cmake
-        uses: jwlawson/actions-setup-cmake@v1.10
-          
-      - name: Install clang
-        run: |
-          sudo apt install -y wget
-          wget -O - https://apt.llvm.org/llvm.sh | sudo bash
-          sudo apt update
-          sudo apt install -y llvm-18 clang-18 libclang-rt-18-dev lld-18
- 
+                    
       - name: Install gcc
         run: |
           sudo apt install -y software-properties-common
@@ -56,9 +46,17 @@ jobs:
           sudo update-alternatives --config gcc
           sudo update-alternatives --config g++
 
-      - name: Install ninja
+      - name: Install clang
         run: |
-          sudo apt install -y ninja-build 
+          sudo apt install -y wget
+          wget -O - https://apt.llvm.org/llvm.sh | sudo bash
+          sudo apt update
+          sudo apt install -y llvm-18 llvm-18-tools clang-18 libclang-rt-18-dev lld-18
+          which llvm-ar
+      
+      - name: Install cmake and ninja
+        run: |
+          sudo apt install -y cmake ninja-build 
 
       - name: Build LLVM
         run: |
