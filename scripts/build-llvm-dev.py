@@ -20,7 +20,7 @@ args = [
 ]
 
 subprocess.run(["cmake"] + args)
-subprocess.run(["cmake", "--build", "build", "--target", "clang"])
+subprocess.run(["cmake", "--build", "build"])
 subprocess.run(["cmake", "--build", "build", "--target", "install"])
 
 src = "./clang/lib/Sema/"
