@@ -75,6 +75,11 @@ auto createInstance(CompliationParams& params) {
             llvm::MemoryBuffer::getMemBufferCopy(content, file).release());
     }
 
+    if(!instance->createTarget()) {
+        /// FIXME: add error handle here.
+        std::terminate();
+    }
+
     return instance;
 }
 
@@ -97,23 +102,26 @@ void applyPreamble(clang::CompilerInstance& instance, CompliationParams& params)
     }
 }
 
-llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> instance,
-                                      clang::frontend::ActionKind kind) {
-    std::unique_ptr<clang::ASTFrontendAction> action;
-    if(kind == clang::frontend::ActionKind::ParseSyntaxOnly) {
-        action = std::make_unique<clang::SyntaxOnlyAction>();
-    } else if(kind == clang::frontend::ActionKind::GeneratePCH) {
-        action = std::make_unique<clang::GeneratePCHAction>();
-    } else if(kind == clang::frontend::ActionKind::GenerateReducedModuleInterface) {
-        action = std::make_unique<clang::GenerateReducedModuleInterfaceAction>();
-    } else {
-        llvm::errs() << "Unsupported action kind\n";
-        std::terminate();
+/// Execute given action with the on the given instance. `callback` is called after
+/// `BeginSourceFile`. Beacuse `BeginSourceFile` may create new preprocessor.
+llvm::Error ExecuteAction(clang::CompilerInstance& instance,
+                          clang::FrontendAction& action,
+                          auto&& callback) {
+    if(!action.BeginSourceFile(instance, instance.getFrontendOpts().Inputs[0])) {
+        return error("Failed to begin source file");
     }
 
-    if(!instance->createTarget()) {
-        return error("Failed to create target");
+    callback();
+
+    if(auto error = action.Execute()) {
+        return error;
     }
+
+    return llvm::Error::success();
+}
+
+llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> instance,
+                                      std::unique_ptr<clang::FrontendAction> action) {
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         return error("Failed to begin source file");
@@ -129,12 +137,13 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
     llvm::DenseMap<clang::FileID, Directive> directives;
     Directive::attach(pp, directives);
 
-    std::optional<clang::syntax::TokenCollector> collector;
+    /// Collect tokens.
+    std::optional<clang::syntax::TokenCollector> tokCollector;
 
     /// It is not necessary to collect tokens if we are running code completion.
     /// And in fact will cause assertion failure.
     if(!instance->hasCodeCompletionConsumer()) {
-        collector.emplace(pp);
+        tokCollector.emplace(pp);
     }
 
     if(auto error = action->Execute()) {
@@ -142,14 +151,18 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
     }
 
     std::unique_ptr<clang::syntax::TokenBuffer> tokBuf;
-    if(collector) {
-        tokBuf = std::make_unique<clang::syntax::TokenBuffer>(std::move(*collector).consume());
+    if(tokCollector) {
+        tokBuf = std::make_unique<clang::syntax::TokenBuffer>(std::move(*tokCollector).consume());
     }
+
+    /// FIXME: getDependencies currently return ArrayRef<std::string>, which actually results in
+    /// extra copy. It would be great to avoid this copy.
 
     return ASTInfo(std::move(action),
                    std::move(instance),
                    std::move(tokBuf),
-                   std::move(directives));
+                   std::move(directives),
+                   {});
 }
 
 }  // namespace
@@ -248,12 +261,96 @@ void CompliationParams::computeBounds(llvm::StringRef header) {
     }
 }
 
+/// Scan the module name. This will not run the preprocessor.
+std::string scanModuleName(llvm::StringRef content) {
+    clang::LangOptions langOpts;
+    langOpts.Modules = true;
+    langOpts.CPlusPlus20 = true;
+    clang::Lexer lexer(clang::SourceLocation(),
+                       langOpts,
+                       content.begin(),
+                       content.begin(),
+                       content.end());
+
+    clang::Token token;
+    lexer.Lex(token);
+
+    while(!token.is(clang::tok::eof)) {
+        llvm::outs() << token.getName() << "\n";
+        if(token.is(clang::tok::kw_module)) {
+            lexer.Lex(token);
+
+            if(token.is(clang::tok::coloncolon)) {
+                lexer.Lex(token);
+            }
+
+            if(token.is(clang::tok::identifier)) {
+                return token.getIdentifierInfo()->getName().str();
+            }
+        }
+
+        lexer.Lex(token);
+    }
+
+    return "";
+}
+
+llvm::Expected<ModuleInfo> scanModule(CompliationParams& params) {
+    struct ModuleCollector : public clang::PPCallbacks {
+        ModuleInfo& info;
+
+        ModuleCollector(ModuleInfo& info) : info(info) {}
+
+        void moduleImport(clang::SourceLocation importLoc,
+                          clang::ModuleIdPath path,
+                          const clang::Module* imported) override {
+            assert(path.size() == 1);
+            info.mods.emplace_back(path[0].first->getName());
+        }
+    };
+
+    ModuleInfo info;
+    clang::PreprocessOnlyAction action;
+    auto instance = createInstance(params);
+
+    if(!action.BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
+        return error("Failed to begin source file");
+    }
+
+    auto& pp = instance->getPreprocessor();
+
+    pp.addPPCallbacks(std::make_unique<ModuleCollector>(info));
+
+    if(auto error = action.Execute()) {
+        return error;
+    }
+
+    info.isInterfaceUnit = pp.isInNamedInterfaceUnit();
+    info.name = pp.getNamedModuleName();
+
+    return info;
+}
+
 llvm::Expected<ASTInfo> compile(CompliationParams& params) {
     auto instance = createInstance(params);
 
     applyPreamble(*instance, params);
 
-    return ExecuteAction(std::move(instance), clang::frontend::ActionKind::ParseSyntaxOnly);
+    return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
+}
+
+llvm::Expected<ASTInfo> compile(CompliationParams& params, clang::CodeCompleteConsumer* consumer) {
+    auto instance = createInstance(params);
+
+    /// Set options to run code completion.
+    instance->getFrontendOpts().CodeCompletionAt.FileName = params.srcPath.str();
+    instance->getFrontendOpts().CodeCompletionAt.Line = params.line;
+    instance->getFrontendOpts().CodeCompletionAt.Column = params.column;
+    instance->setCodeCompletionConsumer(consumer);
+
+    applyPreamble(*instance, params);
+
+    return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
 
 llvm::Expected<ASTInfo> compile(CompliationParams& params, PCHInfo& out) {
@@ -268,22 +365,24 @@ llvm::Expected<ASTInfo> compile(CompliationParams& params, PCHInfo& out) {
     instance->getPreprocessorOpts().GeneratePreamble = true;
     instance->getLangOpts().CompilingPCH = true;
 
-    if(auto info = ExecuteAction(std::move(instance), clang::frontend::ActionKind::GeneratePCH)) {
-        out.path = params.outPath.str();
-        out.srcPath = params.srcPath.str();
-
-        auto& bounds = *params.bounds;
-        out.preamble = params.content.substr(0, bounds.Size).str();
-        if(bounds.PreambleEndsAtStartOfLine) {
-            out.preamble.append("@");
-        }
-
-        /// TODO: collect files involved in building this PCH.
-
-        return std::move(*info);
-    } else {
+    auto info = ExecuteAction(std::move(instance), std::make_unique<clang::GeneratePCHAction>());
+    if(!info) {
         return info.takeError();
     }
+
+    out.path = params.outPath.str();
+    out.srcPath = params.srcPath.str();
+
+    auto& bounds = *params.bounds;
+    out.preamble = params.content.substr(0, bounds.Size).str();
+    out.deps = info->deps();
+    if(bounds.PreambleEndsAtStartOfLine) {
+        out.preamble.append("@");
+    }
+
+    /// TODO: collect files involved in building this PCH.
+
+    return std::move(*info);
 }
 
 llvm::Expected<ASTInfo> compile(CompliationParams& params, PCMInfo& out) {
@@ -295,29 +394,18 @@ llvm::Expected<ASTInfo> compile(CompliationParams& params, PCMInfo& out) {
 
     applyPreamble(*instance, params);
 
-    if(auto info = ExecuteAction(std::move(instance),
-                                 clang::frontend::ActionKind::GenerateReducedModuleInterface)) {
-        out.path = params.outPath.str();
-        out.name = info->context().getCurrentNamedModule()->Name;
-
-        return std::move(*info);
-    } else {
+    auto info = ExecuteAction(std::move(instance),
+                              std::make_unique<clang::GenerateReducedModuleInterfaceAction>());
+    if(!info) {
         return info.takeError();
     }
-}
 
-llvm::Expected<ASTInfo> compile(CompliationParams& params, clang::CodeCompleteConsumer* consumer) {
-    auto instance = createInstance(params);
+    out.path = params.outPath.str();
+    out.srcPath = params.srcPath.str();
+    out.name = info->context().getCurrentNamedModule()->Name;
+    out.deps = info->deps();
 
-    /// Set options to run code completion.
-    instance->getFrontendOpts().CodeCompletionAt.FileName = params.srcPath.str();
-    instance->getFrontendOpts().CodeCompletionAt.Line = params.line;
-    instance->getFrontendOpts().CodeCompletionAt.Column = params.column;
-    instance->setCodeCompletionConsumer(consumer);
-
-    applyPreamble(*instance, params);
-
-    return ExecuteAction(std::move(instance), clang::frontend::ActionKind::ParseSyntaxOnly);
+    return std::move(*info);
 }
 
 }  // namespace clice
