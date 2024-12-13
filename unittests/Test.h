@@ -102,8 +102,7 @@ inline void EXPECT_FAILURE(std::string msg,
 }
 
 template <typename LHS, typename RHS>
-inline void EXPECT_EQ(const LHS& lhs,
-                      const RHS& rhs,
+inline void EXPECT_EQ(const LHS& lhs, const RHS& rhs,
                       std::source_location current = std::source_location::current()) {
     if(!refl::equal(lhs, rhs)) {
         std::string expect;
@@ -125,8 +124,7 @@ inline void EXPECT_EQ(const LHS& lhs,
 }
 
 template <typename LHS, typename RHS>
-inline void EXPECT_NE(const LHS& lhs,
-                      const RHS& rhs,
+inline void EXPECT_NE(const LHS& lhs, const RHS& rhs,
                       std::source_location current = std::source_location::current()) {
     if(refl::equal(lhs, rhs)) {
         std::string expect;
@@ -224,16 +222,15 @@ public:
 
     Tester& fail(const auto& lhs, const auto& rhs, std::source_location loc) {
         auto msg =
-            std::format("expect: {}, actual: {}\n", json::serialize(lhs), json::serialize(rhs));
-        ::testing::internal::AssertHelper(::testing ::TestPartResult ::kNonFatalFailure,
+            std::format("left : {}\nright: {}\n", json::serialize(lhs), json::serialize(rhs));
+        ::testing::internal::AssertHelper(::testing ::TestPartResult ::kFatalFailure,
                                           loc.file_name(),
                                           loc.line(),
                                           msg.c_str()) = ::testing ::Message();
         return *this;
     }
 
-    Tester& equal(const auto& lhs,
-                  const auto& rhs,
+    Tester& equal(const auto& lhs, const auto& rhs,
                   std::source_location loc = std::source_location::current()) {
         if(!refl::equal(lhs, rhs)) {
             return fail(lhs, rhs, loc);
@@ -241,8 +238,7 @@ public:
         return *this;
     }
 
-    Tester& expect(llvm::StringRef name,
-                   clang::SourceLocation loc,
+    Tester& expect(llvm::StringRef name, clang::SourceLocation loc,
                    std::source_location current = std::source_location::current()) {
         auto pos = locations.lookup(name);
         auto presumed = info.srcMgr().getPresumedLoc(loc);
