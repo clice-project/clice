@@ -327,8 +327,8 @@ llvm::Expected<ModuleInfo> scanModule(CompliationParams& params) {
         return error;
     }
 
-    if(pp.isInNamedInterfaceUnit()) {
-        info.isInterfaceUnit = true;
+    if(pp.isInNamedModule()) {
+        info.isInterfaceUnit = pp.isInNamedInterfaceUnit();
         info.name = pp.getNamedModuleName();
     }
 
