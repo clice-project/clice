@@ -5,6 +5,7 @@
 #include "Server/Config.h"
 #include "Server/Logger.h"
 #include "Server/Scheduler.h"
+#include "Server/Synchronizer.h"
 #include "Server/Protocol.h"
 #include "Support/Support.h"
 
@@ -145,6 +146,7 @@ private:
 
 private:
     Scheduler scheduler;
+    Synchronizer synchronizer;
     llvm::StringMap<onRequest> requests;
     llvm::StringMap<onNotification> notifications;
 };

@@ -65,16 +65,16 @@ URI URI::from(llvm::StringRef file) {
     return URI("file", "", path);
 }
 
-std::expected<URI, std::string> URI::parse(llvm::StringRef content) {
+llvm::Expected<URI> URI::parse(llvm::StringRef content) {
     URI result("", "", "");
     llvm::StringRef uri = content;
     auto pos = uri.find(':');
     if(pos == llvm::StringRef::npos) {
-        return std::unexpected(std::format("scheme is missing in URI: {}", content));
+        return error("scheme is missing in URI: {}", content);
     } else {
         result.m_scheme = uri.substr(0, pos);
         if(!isValidScheme(result.m_scheme)) {
-            return std::unexpected(std::format("invalid scheme in URI: {}", content));
+            return error("invalid scheme in URI: {}", content);
         }
         uri = uri.substr(pos + 1);
     }

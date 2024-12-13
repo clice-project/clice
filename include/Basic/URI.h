@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <expected>
 
 #include "Support/Support.h"
 
@@ -20,7 +19,7 @@ public:
     static URI from(llvm::StringRef file);
 
     /// Parse the given URI string to create a URI object.
-    static std::expected<URI, std::string> parse(llvm::StringRef content);
+    static llvm::Expected<URI> parse(llvm::StringRef content);
 
     /// Same as `parse`, but will crash if failed.
     static std::string resolve(llvm::StringRef content);

@@ -43,7 +43,7 @@ TEST(URI, Parse) {
     auto expectedUri = URI::parse("https://reviews.llvm.org/D41946");
     ASSERT_TRUE(bool(expectedUri));
 
-    URI uri = expectedUri.value();
+    URI& uri = expectedUri.get();
     EXPECT_EQ(uri.scheme(), "https");
     EXPECT_EQ(uri.authority(), "reviews.llvm.org");
     EXPECT_EQ(uri.body(), "/D41946");

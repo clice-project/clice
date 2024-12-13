@@ -5,7 +5,6 @@
 #include <vector>
 #include <compare>
 #include <ranges>
-#include <expected>
 
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/StringRef.h>
@@ -15,9 +14,6 @@
 #include <llvm/ADT/StringExtras.h>
 
 namespace clice {
-
-template <typename T>
-using expected = std::expected<T, std::string>;
 
 namespace ranges = std::ranges;
 namespace views = std::ranges::views;

@@ -64,10 +64,12 @@ auto createInstance(CompliationParams& params) {
 
     assert(!instance->getPreprocessorOpts().RetainRemappedFileBuffers &&
            "RetainRemappedFileBuffers should be false");
-    instance->getPreprocessorOpts().addRemappedFile(
-        params.srcPath,
-        llvm::MemoryBuffer::getMemBufferCopy(params.content.substr(0, size), params.srcPath)
-            .release());
+    if(!params.content.empty()) {
+        instance->getPreprocessorOpts().addRemappedFile(
+            params.srcPath,
+            llvm::MemoryBuffer::getMemBufferCopy(params.content.substr(0, size), params.srcPath)
+                .release());
+    }
 
     for(auto& [file, content]: params.remappedFiles) {
         instance->getPreprocessorOpts().addRemappedFile(
@@ -325,8 +327,10 @@ llvm::Expected<ModuleInfo> scanModule(CompliationParams& params) {
         return error;
     }
 
-    info.isInterfaceUnit = pp.isInNamedInterfaceUnit();
-    info.name = pp.getNamedModuleName();
+    if(pp.isInNamedInterfaceUnit()) {
+        info.isInterfaceUnit = true;
+        info.name = pp.getNamedModuleName();
+    }
 
     return info;
 }

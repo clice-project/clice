@@ -13,6 +13,12 @@ async::promise<void> Server::onInitialize(json::Value id, const proto::Initializ
 
     proto::InitializeResult result = {};
     async::response(std::move(id), json::serialize(result));
+
+    /// Load the compile commands from the workspace.
+    for(auto dir: config::frontend().compile_commands_directorys) {
+        synchronizer.sync(dir + "/compile_commands.json");
+    }
+
     co_return;
 }
 
