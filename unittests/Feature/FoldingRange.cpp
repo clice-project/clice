@@ -21,16 +21,24 @@ void dbg(const proto::FoldingRangeResult& result) {
     }
 }
 
+// convert 0-0 based location in LSP to 1-1 based location in clang.
+auto fromLspLocation(const clang::SourceManager* src, proto::FoldingRange range)
+    -> std::pair<clang::SourceLocation, clang::SourceLocation> {
+    auto fileID = src->getMainFileID();
+    return {src->translateLineCol(fileID, range.startLine + 1, range.startCharacter + 1),
+            src->translateLineCol(fileID, range.endLine + 1, range.endCharacter + 1)};
+}
+
 TEST(FoldingRange, Namespace) {
     const char* main = R"cpp(
 namespace single_line {$(1)
-//
-}$(2)
+//$(2)
+}
 
 namespace with_nodes {$(3)
 //
-//struct _ {};
-}$(4)
+//struct _ {};$(4)
+}
 
 namespace empty {}
 
@@ -38,8 +46,8 @@ namespace ugly
 
 {$(5)
 //
-//
-}$(6)
+//$(6)
+}
 
 )cpp";
 
@@ -47,26 +55,26 @@ namespace ugly
     txs.run();
 
     auto& info = txs.info;
-    auto toLoc = [srcMgr = &info.srcMgr()](uint lsp_ln, uint lsp_col) -> clang::SourceLocation {
-        auto fileID = srcMgr->getMainFileID();
-        return srcMgr->translateLineCol(fileID, lsp_ln + 2, lsp_col + 2);
-    };
 
     FoldingRangeParams param;
     auto res = feature::foldingRange(param, info);
 
     // dbg(res);
 
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
+    };
+
     txs.equal(res.size(), 3)
         //
-        .expect("1", toLoc(res[0].startLine, res[0].startCharacter))
-        .expect("2", toLoc(res[0].endLine, res[0].endCharacter))
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
         //
-        .expect("3", toLoc(res[1].startLine, res[1].startCharacter))
-        .expect("4", toLoc(res[1].endLine, res[1].endCharacter))
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
         //
-        .expect("5", toLoc(res[2].startLine, res[2].startCharacter))
-        .expect("6", toLoc(res[2].endLine, res[2].endCharacter))
+        .expect("5", toLoc(res[2]).first)
+        .expect("6", toLoc(res[2]).second)
         //
         ;
 }
@@ -76,16 +84,16 @@ TEST(FoldingRange, Enum) {
 enum _0 {$(1)
     A,
     B,
-    C
-};$(2)
+    C$(2)
+};
 
 enum _1 { D };
 
 enum class _2 {$(3)
     A,
     B,
-    C
-};$(4)
+    C$(4)
+};
 
 )cpp";
 
@@ -93,9 +101,8 @@ enum class _2 {$(3)
     txs.run();
 
     auto& info = txs.info;
-    auto toLoc = [srcMgr = &info.srcMgr()](uint lsp_ln, uint lsp_col) -> clang::SourceLocation {
-        auto fileID = srcMgr->getMainFileID();
-        return srcMgr->translateLineCol(fileID, lsp_ln + 2, lsp_col + 2);
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
     };
 
     FoldingRangeParams param;
@@ -105,22 +112,21 @@ enum class _2 {$(3)
 
     txs.equal(res.size(), 2)
         //
-        .expect("1", toLoc(res[0].startLine, res[0].startCharacter))
-        .expect("2", toLoc(res[0].endLine, res[0].endCharacter))
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
         //
-        .expect("3", toLoc(res[1].startLine, res[1].startCharacter))
-        .expect("4", toLoc(res[1].endLine, res[1].endCharacter))
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
         //
         ;
 }
 
 TEST(FoldingRange, RecordDecl) {
-
     const char* main = R"cpp(
 struct _2 {$(1)
     int x;
-    float y;
-};$(2)
+    float y;$(2)
+};
 
 struct _3 {};
 
@@ -128,8 +134,22 @@ struct _4;
 
 union _5 {$(3)
     int x;
-    float y;
-};$(4)
+    float y;$(4)
+};
+
+struct _6 {$(5)
+    struct nested {$(7)
+        //$(8)
+    };
+    
+    //$(6)
+};
+
+void f() {$(9)
+    struct nested {$(11)
+        //$(12)
+    };$(10)
+}
 
 )cpp";
 
@@ -137,9 +157,8 @@ union _5 {$(3)
     txs.run();
 
     auto& info = txs.info;
-    auto toLoc = [srcMgr = &info.srcMgr()](uint lsp_ln, uint lsp_col) -> clang::SourceLocation {
-        auto fileID = srcMgr->getMainFileID();
-        return srcMgr->translateLineCol(fileID, lsp_ln + 2, lsp_col + 2);
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
     };
 
     FoldingRangeParams param;
@@ -147,13 +166,25 @@ union _5 {$(3)
 
     // dbg(res);
 
-    txs.equal(res.size(), 2)
+    txs.equal(res.size(), 6)
         //
-        .expect("1", toLoc(res[0].startLine, res[0].startCharacter))
-        .expect("2", toLoc(res[0].endLine, res[0].endCharacter))
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
         //
-        .expect("3", toLoc(res[1].startLine, res[1].startCharacter))
-        .expect("4", toLoc(res[1].endLine, res[1].endCharacter))
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
+        //
+        .expect("5", toLoc(res[2]).first)
+        .expect("6", toLoc(res[2]).second)
+        //
+        .expect("7", toLoc(res[3]).first)
+        .expect("8", toLoc(res[3]).second)
+        //
+        .expect("9", toLoc(res[4]).first)
+        .expect("10", toLoc(res[4]).second)
+        //
+        .expect("11", toLoc(res[5]).first)
+        .expect("12", toLoc(res[5]).second)
         //
         ;
 }
@@ -164,19 +195,21 @@ struct _2 {$(1)
     int x;
     float y;
 
-    _2() = default;
-};$(2)
+    _2() = default;$(2)
+};
 
 struct _3 {$(3)
     void method() {$(5)
-        int x = 0;
-    }$(6)
+        int x = 0;$(6)
+    }
 
     void parameter (){$(7)
-        //
-    }$(8)
+        //$(8)
+    }
 
-};$(4)
+    void skip() {};
+$(4)
+};
 
 struct _4;
 )cpp";
@@ -185,9 +218,8 @@ struct _4;
     txs.run();
 
     auto& info = txs.info;
-    auto toLoc = [srcMgr = &info.srcMgr()](uint lsp_ln, uint lsp_col) -> clang::SourceLocation {
-        auto fileID = srcMgr->getMainFileID();
-        return srcMgr->translateLineCol(fileID, lsp_ln + 2, lsp_col + 2);
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
     };
 
     FoldingRangeParams param;
@@ -197,17 +229,17 @@ struct _4;
 
     txs.equal(res.size(), 4)
         //
-        .expect("1", toLoc(res[0].startLine, res[0].startCharacter))
-        .expect("2", toLoc(res[0].endLine, res[0].endCharacter))
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
         //
-        .expect("3", toLoc(res[1].startLine, res[1].startCharacter))
-        .expect("4", toLoc(res[1].endLine, res[1].endCharacter))
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
         //
-        .expect("5", toLoc(res[2].startLine, res[2].startCharacter))
-        .expect("6", toLoc(res[2].endLine, res[2].endCharacter))
+        .expect("5", toLoc(res[2]).first)
+        .expect("6", toLoc(res[2]).second)
         //
-        .expect("7", toLoc(res[3].startLine, res[3].startCharacter))
-        .expect("8", toLoc(res[3].endLine, res[3].endCharacter))
+        .expect("7", toLoc(res[3]).first)
+        .expect("8", toLoc(res[3]).second)
         //
         // .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
         // .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
@@ -225,9 +257,8 @@ TEST(FoldingRange, LambdaCapture) {
     txs.run();
 
     auto& info = txs.info;
-    auto toLoc = [srcMgr = &info.srcMgr()](uint lsp_ln, uint lsp_col) -> clang::SourceLocation {
-        auto fileID = srcMgr->getMainFileID();
-        return srcMgr->translateLineCol(fileID, lsp_ln + 2, lsp_col + 2);
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
     };
 
     FoldingRangeParams param;
@@ -237,17 +268,17 @@ TEST(FoldingRange, LambdaCapture) {
 
     // txs.equal(res.size(), 4)
     //     //
-    //     .expect("1", toLoc(res[0].startLine, res[0].startCharacter))
-    //     .expect("2", toLoc(res[0].endLine, res[0].endCharacter))
+    //     .expect("1", toLoc(res[0]).first)
+    //     .expect("2", toLoc(res[0]).first)
     //     //
-    //     .expect("3", toLoc(res[1].startLine, res[1].startCharacter))
-    //     .expect("4", toLoc(res[1].endLine, res[1].endCharacter))
+    //     .expect("3", toLoc(res[1]).first)
+    //     .expect("4", toLoc(res[1]).second)
     //     //
-    //     .expect("5", toLoc(res[2].startLine, res[2].startCharacter))
-    //     .expect("6", toLoc(res[2].endLine, res[2].endCharacter))
+    //     .expect("5", toLoc(res[2]).first)
+    //     .expect("6", toLoc(res[2]).second)
     //     //
-    //     .expect("7", toLoc(res[3].startLine, res[3].startCharacter))
-    //     .expect("8", toLoc(res[3].endLine, res[3].endCharacter))
+    //     .expect("7", toLoc(res[3]).first)
+    //     .expect("8", toLoc(res[3]).second)
     //     //
     //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
     //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
@@ -257,17 +288,26 @@ TEST(FoldingRange, LambdaCapture) {
 
 TEST(FoldingRange, FnParas) {
     const char* main = R"cpp(
+void e() {}
 
+void f($(1)
+//
+//$(2)
+) {}
 
+void g($(3)
+int x,
+int y = 2
+//$(4)
+) {}
 )cpp";
 
     Tester txs("main.cpp", main);
     txs.run();
 
     auto& info = txs.info;
-    auto toLoc = [srcMgr = &info.srcMgr()](uint lsp_ln, uint lsp_col) -> clang::SourceLocation {
-        auto fileID = srcMgr->getMainFileID();
-        return srcMgr->translateLineCol(fileID, lsp_ln + 2, lsp_col + 2);
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
     };
 
     FoldingRangeParams param;
@@ -275,22 +315,13 @@ TEST(FoldingRange, FnParas) {
 
     dbg(res);
 
-    // txs.equal(res.size(), 4)
+    // txs.equal(res.size(), 2)
     //     //
-    //     .expect("1", toLoc(res[0].startLine, res[0].startCharacter))
-    //     .expect("2", toLoc(res[0].endLine, res[0].endCharacter))
+    //     .expect("1", toLoc(res[0]).first)
+    //     .expect("2", toLoc(res[0]).first)
     //     //
-    //     .expect("3", toLoc(res[1].startLine, res[1].startCharacter))
-    //     .expect("4", toLoc(res[1].endLine, res[1].endCharacter))
-    //     //
-    //     .expect("5", toLoc(res[2].startLine, res[2].startCharacter))
-    //     .expect("6", toLoc(res[2].endLine, res[2].endCharacter))
-    //     //
-    //     .expect("7", toLoc(res[3].startLine, res[3].startCharacter))
-    //     .expect("8", toLoc(res[3].endLine, res[3].endCharacter))
-    //     //
-    //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
-    //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
+    //     .expect("3", toLoc(res[1]).first)
+    //     .expect("4", toLoc(res[1]).second)
     //     //
     //     ;
 }
@@ -298,41 +329,49 @@ TEST(FoldingRange, FnParas) {
 TEST(FoldingRange, FnBody) {
     const char* main = R"cpp(
 
+void f() {$(1)
+//
+//$(2)
+}
 
+void g() {$(3)
+    int x = 0;$(4)
+}
+
+void e() {}
+
+void n() {$(5)
+    { // inner block 
+
+    }$(6)
+}
 )cpp";
 
     Tester txs("main.cpp", main);
     txs.run();
 
     auto& info = txs.info;
-    auto toLoc = [srcMgr = &info.srcMgr()](uint lsp_ln, uint lsp_col) -> clang::SourceLocation {
-        auto fileID = srcMgr->getMainFileID();
-        return srcMgr->translateLineCol(fileID, lsp_ln + 2, lsp_col + 2);
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
     };
 
     FoldingRangeParams param;
     auto res = feature::foldingRange(param, info);
 
-    dbg(res);
+    // dbg(res);
 
-    // txs.equal(res.size(), 4)
-    //     //
-    //     .expect("1", toLoc(res[0].startLine, res[0].startCharacter))
-    //     .expect("2", toLoc(res[0].endLine, res[0].endCharacter))
-    //     //
-    //     .expect("3", toLoc(res[1].startLine, res[1].startCharacter))
-    //     .expect("4", toLoc(res[1].endLine, res[1].endCharacter))
-    //     //
-    //     .expect("5", toLoc(res[2].startLine, res[2].startCharacter))
-    //     .expect("6", toLoc(res[2].endLine, res[2].endCharacter))
-    //     //
-    //     .expect("7", toLoc(res[3].startLine, res[3].startCharacter))
-    //     .expect("8", toLoc(res[3].endLine, res[3].endCharacter))
-    //     //
-    //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
-    //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
-    //     //
-    //     ;
+    txs.equal(res.size(), 3)
+        //
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
+        //
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
+        //
+        .expect("5", toLoc(res[2]).first)
+        .expect("6", toLoc(res[2]).second)
+        //
+        ;
 }
 
 TEST(FoldingRange, CompoundStmt) {
@@ -360,9 +399,8 @@ int main () {
     txs.run();
 
     auto& info = txs.info;
-    auto toLoc = [srcMgr = &info.srcMgr()](uint lsp_ln, uint lsp_col) -> clang::SourceLocation {
-        auto fileID = srcMgr->getMainFileID();
-        return srcMgr->translateLineCol(fileID, lsp_ln + 2, lsp_col + 2);
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
     };
 
     FoldingRangeParams param;
@@ -372,17 +410,17 @@ int main () {
 
     // txs.equal(res.size(), 4)
     //     //
-    //     .expect("1", toLoc(res[0].startLine, res[0].startCharacter))
-    //     .expect("2", toLoc(res[0].endLine, res[0].endCharacter))
+    //     .expect("1", toLoc(res[0]).first)
+    //     .expect("2", toLoc(res[0]).first)
     //     //
-    //     .expect("3", toLoc(res[1].startLine, res[1].startCharacter))
-    //     .expect("4", toLoc(res[1].endLine, res[1].endCharacter))
+    //     .expect("3", toLoc(res[1]).first)
+    //     .expect("4", toLoc(res[1]).second)
     //     //
-    //     .expect("5", toLoc(res[2].startLine, res[2].startCharacter))
-    //     .expect("6", toLoc(res[2].endLine, res[2].endCharacter))
+    //     .expect("5", toLoc(res[2]).first)
+    //     .expect("6", toLoc(res[2]).second)
     //     //
-    //     .expect("7", toLoc(res[3].startLine, res[3].startCharacter))
-    //     .expect("8", toLoc(res[3].endLine, res[3].endCharacter))
+    //     .expect("7", toLoc(res[3]).first)
+    //     .expect("8", toLoc(res[3]).second)
     //     //
     //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
     //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
@@ -392,61 +430,61 @@ int main () {
 
 TEST(FoldingRange, AccessControlBlock) {
     const char* main = R"cpp(
-class _0 {
-public:
-    int x;
+// struct empty { int x; };
 
-private:
-    int z;
+class _0 {$(1)
+public:$(3)
+    int x;$(4)
+private:$(5)
+    int z;$(2)$(6)
 };
 
-struct _1 {
+// struct _1 {
 
-    int x;
+//     int x;
 
-private:
-    int z;
-};
+// private:
+//     int z;
+// };
 
-struct _2 {
-public:
-private:
-public:
-};
+// struct _2 {
+// public:
+// private:
+// public:
+// };
 )cpp";
 
     Tester txs("main.cpp", main);
     txs.run();
 
     auto& info = txs.info;
-    auto toLoc = [srcMgr = &info.srcMgr()](uint lsp_ln, uint lsp_col) -> clang::SourceLocation {
-        auto fileID = srcMgr->getMainFileID();
-        return srcMgr->translateLineCol(fileID, lsp_ln + 2, lsp_col + 2);
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
     };
 
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    // FoldingRangeParams param;
+    // auto res = feature::foldingRange(param, info);
 
-    dbg(res);
+    // dbg(res);
 
-    // txs.equal(res.size(), 4)
+    // txs.equal(res.size(), 3)
     //     //
-    //     .expect("1", toLoc(res[0].startLine, res[0].startCharacter))
-    //     .expect("2", toLoc(res[0].endLine, res[0].endCharacter))
+    //     .expect("1", toLoc(res[0]).first)
+    //     .expect("2", toLoc(res[0]).second)
     //     //
-    //     .expect("3", toLoc(res[1].startLine, res[1].startCharacter))
-    //     .expect("4", toLoc(res[1].endLine, res[1].endCharacter))
+    //     .expect("3", toLoc(res[1]).first)
+    //     .expect("4", toLoc(res[1]).second)
     //     //
-    //     .expect("5", toLoc(res[2].startLine, res[2].startCharacter))
-    //     .expect("6", toLoc(res[2].endLine, res[2].endCharacter))
-    //     //
-    //     .expect("7", toLoc(res[3].startLine, res[3].startCharacter))
-    //     .expect("8", toLoc(res[3].endLine, res[3].endCharacter))
-    //     //
-    //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
-    //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
-    //     //
-    //     ;
+    //     .expect("5", toLoc(res[2]).first)
+    //     .expect("6", toLoc(res[2]).second)
+    //
+    // .expect("7", toLoc(res[3]).first)
+    // .expect("8", toLoc(res[3]).second)
+    //
+    // .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
+    // .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
+    //
+    ;
 }
 
 }  // namespace
