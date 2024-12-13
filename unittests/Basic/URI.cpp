@@ -5,7 +5,7 @@ namespace clice {
 
 namespace {
 
-TEST(URITest, ConstructorAndAccessors) {
+TEST(URI, Basic) {
     URI uri("https", "reviews.llvm.org", "/D41946");
 
     EXPECT_EQ(uri.scheme(), "https");
@@ -13,7 +13,7 @@ TEST(URITest, ConstructorAndAccessors) {
     EXPECT_EQ(uri.body(), "/D41946");
 }
 
-TEST(URITest, CopyConstructor) {
+TEST(URI, Copy) {
     URI uri1("https", "reviews.llvm.org", "/D41946");
     URI uri2(uri1);
 
@@ -22,7 +22,7 @@ TEST(URITest, CopyConstructor) {
     EXPECT_EQ(uri2.body(), "/D41946");
 }
 
-TEST(URITest, EqualityOperator) {
+TEST(URI, Eq) {
     URI uri1("https", "reviews.llvm.org", "/D41946");
     URI uri2("https", "reviews.llvm.org", "/D41946");
     URI uri3("http", "example.com", "/index.html");
@@ -31,11 +31,19 @@ TEST(URITest, EqualityOperator) {
     EXPECT_FALSE(uri1 == uri3);
 }
 
-TEST(URITest, ParseFunction) {
-    auto expectedUri = URI::parse("https://reviews.llvm.org/D41946");
-    ASSERT_TRUE(static_cast<bool>(expectedUri));
+TEST(URI, File) {
+    auto uri = URI::from("/home/user/file.txt");
+    EXPECT_EQ(uri.scheme(), "file");
+    EXPECT_EQ(uri.authority(), "");
+    EXPECT_EQ(uri.body(), "/home/user/file.txt");
+    EXPECT_EQ(uri.toString(), "file:///home/user/file.txt");
+}
 
-    URI uri = expectedUri.get();
+TEST(URI, Parse) {
+    auto expectedUri = URI::parse("https://reviews.llvm.org/D41946");
+    ASSERT_TRUE(bool(expectedUri));
+
+    URI uri = expectedUri.value();
     EXPECT_EQ(uri.scheme(), "https");
     EXPECT_EQ(uri.authority(), "reviews.llvm.org");
     EXPECT_EQ(uri.body(), "/D41946");

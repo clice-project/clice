@@ -1,7 +1,9 @@
 #pragma once
 
 #include <string>
-#include <Support/Error.h>
+#include <expected>
+
+#include "Support/Support.h"
 
 namespace clice {
 
@@ -14,18 +16,33 @@ public:
 
     bool operator== (const URI&) const = default;
 
-    /// Returns decoded scheme e.g. "https"
-    llvm::StringRef scheme() const { return m_scheme; }
+    /// Construct a URI object from the given file path.
+    static URI from(llvm::StringRef file);
 
-    /// Returns decoded authority e.g. "reviews.lvm.org"
-    llvm::StringRef authority() const { return m_authority; }
+    /// Parse the given URI string to create a URI object.
+    static std::expected<URI, std::string> parse(llvm::StringRef content);
+
+    /// Same as `parse`, but will crash if failed.
+    static std::string resolve(llvm::StringRef content);
+
+    /// Returns decoded scheme e.g. "https"
+    llvm::StringRef scheme() const {
+        return m_scheme;
+    }
+
+    /// Returns decoded authority e.g. "reviews.llvm.org"
+    llvm::StringRef authority() const {
+        return m_authority;
+    }
 
     /// Returns decoded body e.g. "/D41946"
-    llvm::StringRef body() const { return m_body; }
+    llvm::StringRef body() const {
+        return m_body;
+    }
 
-    static llvm::Expected<URI> parse(llvm::StringRef content);
-
-    static std::string resolve(llvm::StringRef content);
+    std::string toString() const {
+        return std::format("{}://{}{}", m_scheme, m_authority, m_body);
+    }
 
 private:
     std::string m_scheme;

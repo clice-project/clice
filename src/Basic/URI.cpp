@@ -5,6 +5,8 @@
 
 namespace clice {
 
+namespace {
+
 /// returns true if the scheme is valid according to RFC 3986.
 bool isValidScheme(llvm::StringRef scheme) {
     if(scheme.empty()) {
@@ -39,16 +41,40 @@ static std::string decodePercent(llvm::StringRef content) {
     return result;
 }
 
-llvm::Expected<URI> URI::parse(llvm::StringRef content) {
+}  // namespace
+
+URI URI::from(llvm::StringRef file) {
+    if(!path::is_absolute(file)) {
+        std::terminate();
+    }
+
+    llvm::SmallString<128> path;
+
+    for(auto c: file) {
+        if(c == '\\') {
+            path.push_back('/');
+        } else if(std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '/') {
+            path.push_back(c);
+        } else {
+            path.push_back('%');
+            path.push_back(llvm::hexdigit(c >> 4));
+            path.push_back(llvm::hexdigit(c & 0xF));
+        }
+    }
+
+    return URI("file", "", path);
+}
+
+std::expected<URI, std::string> URI::parse(llvm::StringRef content) {
     URI result("", "", "");
     llvm::StringRef uri = content;
     auto pos = uri.find(':');
     if(pos == llvm::StringRef::npos) {
-        return error("scheme is missing in URI: {}", content);
+        return std::unexpected(std::format("scheme is missing in URI: {}", content));
     } else {
         result.m_scheme = uri.substr(0, pos);
         if(!isValidScheme(result.m_scheme)) {
-            return error("invalid scheme in URI: {}", content);
+            return std::unexpected(std::format("invalid scheme in URI: {}", content));
         }
         uri = uri.substr(pos + 1);
     }

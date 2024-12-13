@@ -19,6 +19,9 @@ private:
     using Commands = std::vector<std::string>;
     using CDB = llvm::StringMap<Commands>;
     llvm::StringMap<CDB> CDBs;
+
+    /// Module name -> module file path.
+    llvm::StringMap<std::string> moduleMap;
 };
 
 }  // namespace clice

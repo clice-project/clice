@@ -127,6 +127,8 @@ private:
     llvm::StringMap<PCHInfo> pchs;
     llvm::StringMap<File> files;
     CommandManager cmdMgr;
+
+
 };
 
 }  // namespace clice

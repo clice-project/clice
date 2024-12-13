@@ -33,7 +33,64 @@ struct ClientInfo {
     string version;
 };
 
-struct ClientCapabilities {};
+struct DidChangeWatchedFilesClientCapabilities {
+    /// Did change watched files notification supports dynamic registration.
+    /// Please note that the current protocol doesn't support static
+    /// configuration for file changes from the server side.
+    bool dynamicRegistration = false;
+};
+
+struct ClientCapabilities {
+    ///  Workspace specific client capabilities.
+    struct {
+        /// Capabilities specific to the `workspace/didChangeWatchedFiles`
+        /// notification.
+        DidChangeWatchedFilesClientCapabilities didChangeWatchedFiles;
+    } workspace;
+};
+
+struct FileSystemWatcher {
+    /// The glob pattern to watch.
+    std::string globPattern;
+
+    enum WatchKind {
+        Create = 1,
+        Change = 2,
+        Delete = 4,
+    };
+
+    /// The kind of events of interest.
+    int kind = WatchKind::Create | WatchKind::Change | WatchKind::Delete;
+};
+
+struct DidChangeWatchedFilesRegistrationOptions {
+    /// The watchers to register.
+    std::vector<FileSystemWatcher> watchers;
+};
+
+enum class FileChangeType {
+    /// The file got created.
+    Created = 1,
+
+    /// The file got changed.
+    Changed = 2,
+
+    /// The file got deleted.
+    Deleted = 3,
+};
+
+struct FileEvent {
+    /// The file's URI.
+    string uri;
+
+    /// The change type.
+    FileChangeType type;
+};
+
+struct DidChangeWatchedFilesParams {
+    /// The actual file events.
+    std::vector<FileEvent> changes;
+};
 
 struct Workplace {
     /// The associated URI for this workspace folder.

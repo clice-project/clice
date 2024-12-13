@@ -16,6 +16,7 @@ async::promise<void> Scheduler::updatePCH(llvm::StringRef filepath,
         params.srcPath = filepath;
         params.outPath = filepath;
         params.command = command;
+        params.computeBounds();
 
         path::replace_path_prefix(params.outPath,
                                   config::workplace(),
@@ -82,11 +83,12 @@ async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringR
     params.srcPath = path;
     params.content = content;
     params.command = cmdMgr.lookupFirst(filepath);
-    params.addPCH(pchs.at(filepath));
 
     /// through arguments to judge is it a module.
     bool isModule = false;
     co_await (isModule ? updatePCM() : updatePCH(filepath, content, params.command));
+
+    params.addPCH(pchs.at(filepath));
 
     Tracer tracer;
 

@@ -128,6 +128,12 @@ private:
                                            const proto::DocumentRangeFormattingParams& params);
 
     /// ============================================================================
+    ///                             Workspace Features
+    /// ============================================================================
+
+    async::promise<void> onDidChangeWatchedFiles(const proto::DidChangeWatchedFilesParams& params);
+
+    /// ============================================================================
     ///                                 Extension
     /// ============================================================================
 

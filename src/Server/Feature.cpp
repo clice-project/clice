@@ -93,7 +93,7 @@ async::promise<void> Server::onSemanticTokens(json::Value id,
     auto tokens = co_await scheduler.schedule(path, [&](ASTInfo& compiler) {
         return feature::semanticTokens(compiler, "");
     });
-    async::write(std::move(id), json::serialize(tokens));
+    async::response(std::move(id), json::serialize(tokens));
     co_return;
 }
 
@@ -107,7 +107,7 @@ async::promise<void> Server::onCodeCompletion(json::Value id,
     auto result = co_await scheduler.codeComplete(path,
                                                   params.position.line + 1,
                                                   params.position.character + 1);
-    async::write(std::move(id), json::serialize(result));
+    async::response(std::move(id), json::serialize(result));
     co_return;
 }
 
