@@ -11,7 +11,8 @@
             "program": "${workspaceFolder}/build/bin/clice",
             "args": [
                 "--config=${workspaceFolder}/docs/clice.toml"
-            ]
+            ],
+            "preLaunchTask": "Build Dev"
         },
         {
             "type": "lldb",
@@ -20,7 +21,8 @@
             "program": "${workspaceFolder}/build-release/bin/clice",
             "args": [
                 "--config=${workspaceFolder}/docs/clice.toml"
-            ]
+            ],
+            "preLaunchTask": "Build Release"
         },
         {
             "type": "lldb",
@@ -29,8 +31,9 @@
             "program": "${workspaceFolder}/build/bin/clice-tests",
             "args": [
                 "--test-dir=${workspaceFolder}/tests",
-                "${input:filter}"
+                "--gtest_filter=${input:filter}"
             ],
+            "preLaunchTask": "Build Dev Test"
         }
     ],
     "inputs": [
