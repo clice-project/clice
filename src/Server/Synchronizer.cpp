@@ -76,7 +76,7 @@ void Synchronizer::sync(llvm::StringRef filename) {
               commands.size());
 
     /// Scan all files to build module map.
-    CompliationParams params;
+    CompilationParams params;
     for(auto& [path, command]: commands) {
         params.srcPath = path;
         params.command = command;
@@ -99,12 +99,20 @@ void Synchronizer::sync(llvm::StringRef name, llvm::StringRef path) {
     moduleMap[name] = path;
 }
 
-llvm::StringRef Synchronizer::lookup(llvm::StringRef file) {
-    return commands.at(file);
+llvm::StringRef Synchronizer::lookup(llvm::StringRef file) const {
+    auto iter = commands.find(file);
+    if(iter == commands.end()) {
+        return "";
+    }
+    return iter->second;
 }
 
-llvm::StringRef Synchronizer::map(llvm::StringRef name) {
-    return moduleMap.at(name);
+llvm::StringRef Synchronizer::map(llvm::StringRef name) const {
+    auto iter = moduleMap.find(name);
+    if(iter == moduleMap.end()) {
+        return "";
+    }
+    return iter->second;
 }
 
 }  // namespace clice

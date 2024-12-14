@@ -200,7 +200,7 @@ json::Value capability(json::Value clientCapabilities) {
     };
 }
 
-proto::CompletionResult codeCompletion(CompliationParams& params,
+proto::CompletionResult codeCompletion(CompilationParams& params,
                                        uint32_t line,
                                        uint32_t column,
                                        llvm::StringRef file,

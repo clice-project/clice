@@ -11,7 +11,7 @@ PCMInfo buildPCM(llvm::StringRef file, llvm::StringRef code) {
     llvm::SmallString<128> outPath;
     fs::createUniquePath(llvm::Twine(file) + "%%%%%%.pcm", outPath, true);
 
-    CompliationParams params;
+    CompilationParams params;
     params.content = code;
     params.srcPath = file;
     params.outPath = outPath;
@@ -28,7 +28,7 @@ PCMInfo buildPCM(llvm::StringRef file, llvm::StringRef code) {
 }
 
 ModuleInfo scan(llvm::StringRef content) {
-    CompliationParams params;
+    CompilationParams params;
     params.content = content;
     params.srcPath = "main.ixx";
     params.command = "clang++ -std=c++20 -x c++ main.ixx";

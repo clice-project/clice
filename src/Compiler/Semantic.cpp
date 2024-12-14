@@ -35,6 +35,8 @@ SymbolKind SymbolKind::from(const clang::Decl* decl) {
     }
 }
 
-SymbolKind SymbolKind::from(const clang::tok::TokenKind kind) {}
+SymbolKind SymbolKind::from(const clang::tok::TokenKind kind) {
+    return {};
+}
 
 }  // namespace clice

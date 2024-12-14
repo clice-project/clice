@@ -19,7 +19,7 @@ bool PCHInfo::needUpdate(llvm::StringRef content) {
 
 namespace {
 
-auto createInvocation(CompliationParams& params) {
+auto createInvocation(CompilationParams& params) {
     llvm::SmallString<1024> buffer;
     llvm::SmallVector<const char*, 16> args;
 
@@ -45,7 +45,7 @@ auto createInvocation(CompliationParams& params) {
     return invocation;
 }
 
-auto createInstance(CompliationParams& params) {
+auto createInstance(CompilationParams& params) {
     auto instance = std::make_unique<clang::CompilerInstance>();
 
     instance->setInvocation(createInvocation(params));
@@ -85,11 +85,11 @@ auto createInstance(CompliationParams& params) {
     return instance;
 }
 
-void applyPreamble(clang::CompilerInstance& instance, CompliationParams& params) {
+void applyPreamble(clang::CompilerInstance& instance, CompilationParams& params) {
     auto& PPOpts = instance.getPreprocessorOpts();
     auto& pch = params.pch;
     auto& bounds = params.pchBounds;
-    auto& pcms = params.pcms;
+
     if(bounds.Size != 0) {
         PPOpts.UsePredefines = false;
         PPOpts.ImplicitPCHInclude = std::move(pch);
@@ -98,9 +98,10 @@ void applyPreamble(clang::CompilerInstance& instance, CompliationParams& params)
         PPOpts.DisablePCHOrModuleValidation = clang::DisableValidationForModuleKind::PCH;
     }
 
+    auto& pcms = params.pcms;
     for(auto& [name, path]: pcms) {
         auto& HSOpts = instance.getHeaderSearchOpts();
-        HSOpts.PrebuiltModuleFiles.try_emplace(std::move(name), std::move(path));
+        HSOpts.PrebuiltModuleFiles.try_emplace(name.str(), std::move(path));
     }
 }
 
@@ -169,7 +170,7 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
 
 }  // namespace
 
-void CompliationParams::computeBounds(llvm::StringRef header) {
+void CompilationParams::computeBounds(llvm::StringRef header) {
     assert(!bounds.has_value() && "Bounds is already computed");
     assert(!content.empty() && "Source content is required to compute bounds");
 
@@ -297,7 +298,7 @@ std::string scanModuleName(llvm::StringRef content) {
     return "";
 }
 
-llvm::Expected<ModuleInfo> scanModule(CompliationParams& params) {
+llvm::Expected<ModuleInfo> scanModule(CompilationParams& params) {
     struct ModuleCollector : public clang::PPCallbacks {
         ModuleInfo& info;
 
@@ -335,7 +336,7 @@ llvm::Expected<ModuleInfo> scanModule(CompliationParams& params) {
     return info;
 }
 
-llvm::Expected<ASTInfo> compile(CompliationParams& params) {
+llvm::Expected<ASTInfo> compile(CompilationParams& params) {
     auto instance = createInstance(params);
 
     applyPreamble(*instance, params);
@@ -343,7 +344,7 @@ llvm::Expected<ASTInfo> compile(CompliationParams& params) {
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
 
-llvm::Expected<ASTInfo> compile(CompliationParams& params, clang::CodeCompleteConsumer* consumer) {
+llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteConsumer* consumer) {
     auto instance = createInstance(params);
 
     /// Set options to run code completion.
@@ -357,7 +358,7 @@ llvm::Expected<ASTInfo> compile(CompliationParams& params, clang::CodeCompleteCo
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
 
-llvm::Expected<ASTInfo> compile(CompliationParams& params, PCHInfo& out) {
+llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
     assert(params.bounds.has_value() && "Preamble bounds is required to build PCH");
 
     auto instance = createInstance(params);
@@ -389,7 +390,7 @@ llvm::Expected<ASTInfo> compile(CompliationParams& params, PCHInfo& out) {
     return std::move(*info);
 }
 
-llvm::Expected<ASTInfo> compile(CompliationParams& params, PCMInfo& out) {
+llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out) {
     auto instance = createInstance(params);
 
     /// Set options to generate PCM.
@@ -405,6 +406,9 @@ llvm::Expected<ASTInfo> compile(CompliationParams& params, PCMInfo& out) {
     }
 
     out.path = params.outPath.str();
+    for(auto& [name, path]: params.pcms) {
+        out.mods.emplace_back(name);
+    }
     out.srcPath = params.srcPath.str();
     out.name = info->context().getCurrentNamedModule()->Name;
     out.deps = info->deps();

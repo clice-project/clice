@@ -4,7 +4,7 @@
 #include <Support/JSON.h>
 
 namespace clice {
-struct CompliationParams;
+struct CompilationParams;
 }
 
 namespace clice::proto {
@@ -117,7 +117,7 @@ json::Value capability(json::Value clientCapabilities);
 /// Run code completion in given file and location. `compiler` should be
 /// set properly if any PCH or PCM is needed. Each completion requires a
 /// new compiler instance.
-proto::CompletionResult codeCompletion(CompliationParams& compliation,
+proto::CompletionResult codeCompletion(CompilationParams& compliation,
                                        uint32_t line,
                                        uint32_t column,
                                        llvm::StringRef file,

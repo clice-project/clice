@@ -16,7 +16,7 @@ int main(){
 }
 )cpp";
 
-    CompliationParams params;
+    CompilationParams params;
     params.content = code;
     params.srcPath = "main.cpp";
     params.command = "clang++ -std=c++20 main.cpp";
@@ -34,7 +34,7 @@ int main(){
 })cpp";
 
     /// Test in no header file.
-    CompliationParams params;
+    CompilationParams params;
     params.content = code;
     params.srcPath = "main.cpp";
     params.command = "clang++ -std=c++20 main.cpp";
@@ -91,7 +91,7 @@ int main(){
         return;
     }
 
-    CompliationParams params;
+    CompilationParams params;
     params.content = code;
     params.srcPath = "main.cpp";
     params.outPath = outpath;
@@ -128,7 +128,7 @@ export int foo() {
         return;
     }
 
-    CompliationParams params;
+    CompilationParams params;
     params.srcPath = "main.cppm";
     params.content = code;
     params.outPath = outpath;
@@ -162,7 +162,7 @@ export module A;
 export int foo = 1;
 )cpp";
 
-    CompliationParams params;
+    CompilationParams params;
     params.content = code;
     params.srcPath = "main.cppm";
     params.command = "clang++ -std=c++20 main.cppm";

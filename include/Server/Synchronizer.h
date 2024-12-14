@@ -19,10 +19,10 @@ public:
     void sync(llvm::StringRef name, llvm::StringRef path);
 
     /// Lookup the compile commands of the given file.
-    llvm::StringRef lookup(llvm::StringRef file);
+    llvm::StringRef lookup(llvm::StringRef file) const;
 
     /// Lookup the module interface unit file path of the given module name.
-    llvm::StringRef map(llvm::StringRef name);
+    llvm::StringRef map(llvm::StringRef name) const;
 
 private:
     /// FIXME: currently we assume that a file only occurs once in the CDB.

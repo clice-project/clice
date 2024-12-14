@@ -10,7 +10,7 @@
 
 namespace clice {
 
-struct CompliationParams;
+struct CompilationParams;
 
 /// All information about AST.
 class ASTInfo {
@@ -109,10 +109,10 @@ private:
 /// Build AST from given file path and content. If pch or pcm provided, apply them to the compiler.
 /// Note this function will not check whether we need to update the PCH or PCM, caller should check
 /// their reusability and update in time.
-llvm::Expected<ASTInfo> compile(CompliationParams& params);
+llvm::Expected<ASTInfo> compile(CompilationParams& params);
 
 /// Run code completion at the given location.
-llvm::Expected<ASTInfo> compile(CompliationParams& params, clang::CodeCompleteConsumer* consumer);
+llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteConsumer* consumer);
 
 struct PCHInfo {
     /// PCM file path.
@@ -138,7 +138,7 @@ struct PCHInfo {
 };
 
 /// Build PCH from given file path and content.
-llvm::Expected<ASTInfo> compile(CompliationParams& params, PCHInfo& out);
+llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out);
 
 struct ModuleInfo {
     /// Whether this module is an interface unit.
@@ -154,7 +154,7 @@ struct ModuleInfo {
 
 /// Run the preprocessor to scan the given module unit to
 /// collect its module name and dependencies.
-llvm::Expected<ModuleInfo> scanModule(CompliationParams& params);
+llvm::Expected<ModuleInfo> scanModule(CompilationParams& params);
 
 struct PCMInfo : ModuleInfo {
     /// PCM file path.
@@ -166,13 +166,15 @@ struct PCMInfo : ModuleInfo {
     /// Files involved in building this PCM(not include module).
     std::vector<std::string> deps;
 
-    bool needUpdate();
+    bool needUpdate() {
+        return true;
+    }
 };
 
 /// Build PCM from given file path and content.
-llvm::Expected<ASTInfo> compile(CompliationParams& params, PCMInfo& out);
+llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out);
 
-struct CompliationParams {
+struct CompilationParams {
     /// Source file content.
     llvm::StringRef content;
 
@@ -208,7 +210,7 @@ struct CompliationParams {
     clang::PreambleBounds pchBounds = {0, false};
 
     /// Information about reuse PCM(name, path).
-    llvm::SmallVector<std::pair<std::string, std::string>> pcms;
+    llvm::StringMap<std::string> pcms;
 
     /// Code completion file:line:column.
     llvm::StringRef file = "";
@@ -221,7 +223,9 @@ struct CompliationParams {
     }
 
     void addPCM(const PCMInfo& info) {
-        pcms.emplace_back(info.name, info.path);
+        assert((!pcms.contains(info.name) || pcms[info.name] == info.path) &&
+               "Add a different PCM with the same name");
+        pcms[info.name] = info.path;
     }
 };
 
