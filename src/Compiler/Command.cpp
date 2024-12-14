@@ -58,6 +58,10 @@ llvm::Error mangleCommand(llvm::StringRef command,
             continue;
         }
 
+        if(arg.starts_with("@CMakeFiles")) {
+            continue;
+        }
+
         /// TODO: remove PCH.
 
         out.push_back(arg.data());

@@ -100,6 +100,8 @@ Server::Server() {
     addMethod("textDocument/formatting", &Server::onFormatting);
     addMethod("textDocument/rangeFormatting", &Server::onRangeFormatting);
 
+    addMethod("workspace/didChangeWatchedFiles", &Server::onDidChangeWatchedFiles);
+
     addMethod("context/current", &Server::onContextCurrent);
     addMethod("context/switch", &Server::onContextSwitch);
     addMethod("context/all", &Server::onContextAll);

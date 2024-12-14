@@ -35,7 +35,7 @@ extern uv_loop_t* loop;
 template <typename T, typename U>
 T& uv_cast(U* u) {
     assert(u && u->data && "uv_cast: invalid uv handle");
-    return *static_cast<T*>(u->data);
+    return *static_cast<std::remove_cvref_t<T>*>(u->data);
 }
 
 using Callback = llvm::unique_function<promise<void>(json::Value)>;
@@ -44,7 +44,17 @@ void start_server(Callback callback);
 
 void start_server(Callback callback, const char* ip, unsigned int port);
 
-void write(json::Value id, json::Value result);
+/// Send a request to the client.
+void request(llvm::StringRef method, json::Value params);
+
+/// Send a notification to the client.
+void notify(llvm::StringRef method, json::Value params);
+
+/// Send a response to the client.
+void response(json::Value id, json::Value result);
+
+/// Send an register capability to the client.
+void registerCapacity(llvm::StringRef id, llvm::StringRef method, json::Value registerOptions);
 
 template <typename Value>
 struct result {

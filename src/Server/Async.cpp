@@ -75,6 +75,39 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     }
 }
 
+/// Write a JSON value to the client.
+void write(json::Value value) {
+    struct Buffer {
+        uv_write_t req;
+        llvm::SmallString<128> header;
+        llvm::SmallString<4096> message;
+    };
+
+    Buffer* buffer = new Buffer();
+    buffer->req.data = buffer;
+
+    llvm::raw_svector_ostream os(buffer->message);
+    os << value;
+
+    llvm::raw_svector_ostream sos(buffer->header);
+    sos << "Content-Length: " << buffer->message.size() << "\r\n\r\n";
+
+    uv_buf_t bufs[2] = {
+        uv_buf_init(buffer->header.data(), buffer->header.size()),
+        uv_buf_init(buffer->message.data(), buffer->message.size()),
+    };
+
+    auto on_write = [](uv_write_t* req, int status) {
+        if(status < 0) {
+            log::fatal("An error occurred while writing: {0}", uv_strerror(status));
+        }
+
+        delete static_cast<Buffer*>(req->data);
+    };
+
+    uv_check_call(uv_write, &buffer->req, writer, bufs, 2, on_write);
+}
+
 }  // namespace
 
 void start_server(Callback callback) {
@@ -126,42 +159,45 @@ void start_server(Callback callback, const char* ip, unsigned int port) {
     uv_check_call(uv_run, async::loop, UV_RUN_DEFAULT);
 }
 
-void write(json::Value id, json::Value result) {
-    json::Value response = json::Object{
-        {"jsonrpc", "2.0" },
-        {"id",      id    },
-        {"result",  result},
-    };
+/// Send a request to the client.
+void request(llvm::StringRef method, json::Value params) {
+    static std::uint32_t id = 0;
+    write(json::Object{
+        {"jsonrpc", "2.0"            },
+        {"id",      id += 1          },
+        {"method",  method           },
+        {"params",  std::move(params)},
+    });
+}
 
-    struct Buffer {
-        uv_write_t req;
-        llvm::SmallString<128> header;
-        llvm::SmallString<4096> message;
-    };
+/// Send a notification to the client.
+void notify(llvm::StringRef method, json::Value params) {
+    write(json::Object{
+        {"jsonrpc", "2.0"            },
+        {"method",  method           },
+        {"params",  std::move(params)},
+    });
+}
 
-    Buffer* buffer = new Buffer();
-    buffer->req.data = buffer;
+void response(json::Value id, json::Value result) {
+    write(json::Object{
+        {"jsonrpc", "2.0"            },
+        {"id",      id               },
+        {"result",  std::move(result)},
+    });
+}
 
-    llvm::raw_svector_ostream os(buffer->message);
-    os << response;
-
-    llvm::raw_svector_ostream sos(buffer->header);
-    sos << "Content-Length: " << buffer->message.size() << "\r\n\r\n";
-
-    uv_buf_t bufs[2] = {
-        uv_buf_init(buffer->header.data(), buffer->header.size()),
-        uv_buf_init(buffer->message.data(), buffer->message.size()),
-    };
-
-    auto on_write = [](uv_write_t* req, int status) {
-        if(status < 0) {
-            log::fatal("An error occurred while writing: {0}", uv_strerror(status));
-        }
-
-        delete static_cast<Buffer*>(req->data);
-    };
-
-    uv_check_call(uv_write, &buffer->req, writer, bufs, 2, on_write);
+/// Send an register capability to the client.
+void registerCapacity(llvm::StringRef id, llvm::StringRef method, json::Value registerOptions) {
+    request("client/registerCapability",
+            json::Object{
+                {"registrations",
+                 json::Array{json::Object{
+                     {"id", id},
+                     {"method", method},
+                     {"registerOptions", std::move(registerOptions)},
+                 }}},
+    });
 }
 
 }  // namespace clice::async

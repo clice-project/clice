@@ -149,7 +149,7 @@ inline void EXPECT_NE(const LHS& lhs,
 
 class Tester {
 public:
-    CompliationParams params;
+    CompilationParams params;
     std::unique_ptr<llvm::vfs::InMemoryFileSystem> vfs;
     ASTInfo info;
 

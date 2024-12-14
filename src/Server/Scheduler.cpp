@@ -4,185 +4,276 @@
 
 namespace clice {
 
-async::promise<void> Scheduler::updatePCH(llvm::StringRef filepath,
-                                          llvm::StringRef content,
-                                          llvm::StringRef command) {
-    auto [iter, success] = pchs.try_emplace(filepath);
-    if(success || iter->second.needUpdate(content)) {
-        Tracer tracer;
+static std::string getPCHOutPath(llvm::StringRef srcPath) {
+    llvm::SmallString<128> outPath = srcPath;
+    path::replace_path_prefix(outPath, config::workplace(), config::frontend().cache_directory);
+    path::replace_extension(outPath, ".pch");
 
-        CompliationParams params;
-        params.content = content;
-        params.srcPath = filepath;
-        params.outPath = filepath;
-        params.command = command;
-
-        path::replace_path_prefix(params.outPath,
-                                  config::workplace(),
-                                  config::frontend().cache_directory);
-        path::replace_extension(params.outPath, ".pch");
-
-        log::info("Start building PCH for {0} at {1}", params.srcPath, params.outPath);
-
-        PCHInfo pch;
-
-        co_await async::schedule_task([&] {
-            auto dir = path::parent_path(params.outPath);
-            if(!fs::exists(dir)) {
-                if(auto error = fs::create_directories(dir)) {
-                    log::fatal("Failed to create directory {0}, because {1}, build PCH stopped",
-                               dir,
-                               error.message());
-                    return;
-                }
-            }
-
-            if(auto info = compile(params, pch); !info) {
-                log::fatal("Failed to build PCH for {0}, because {1}",
-                           filepath.str(),
-                           info.takeError());
-                return;
-            }
-        });
-
-        log::info("PCH for {0} is up-to-date, elapsed {1}ms",
-                  filepath.str(),
-                  tracer.duration().count());
-
-        pchs[filepath] = std::move(pch);
-    } else {
-        log::info("Reuse PCH for {0} from {1}", filepath.str(), iter->second.path);
-    }
-    co_return;
-}
-
-async::promise<void> Scheduler::buildAST(llvm::StringRef filepath, llvm::StringRef content) {
-    llvm::SmallString<128> path = filepath;
-
-    auto [iter, success] = files.try_emplace(filepath);
-    if(!success && !iter->second.isIdle) {
-        /// If the file is already existed and is building, append the task to the waiting list.
-        co_await async::suspend([&](auto handle) {
-            iter->second.waitings.emplace_back(Task{
-                .isBuild = true,
-                .waiting = handle,
-            });
-        });
-    }
-
-    files[filepath].isIdle = false;
-
-    static bool initCmd = false;
-    if(!initCmd) {
-        cmdMgr.update(config::frontend().compile_commands_directorys[0]);
-        initCmd = true;
-    }
-
-    CompliationParams params;
-    params.srcPath = path;
-    params.content = content;
-    params.command = cmdMgr.lookupFirst(filepath);
-    params.addPCH(pchs.at(filepath));
-
-    /// through arguments to judge is it a module.
-    bool isModule = false;
-    co_await (isModule ? updatePCM() : updatePCH(filepath, content, params.command));
-
-    Tracer tracer;
-
-    log::info("Start building AST for {0}, command: [{1}]", filepath, params.command.str());
-
-    auto task = [&] {
-        /// FIXME: We cannot use reference capture the `pch` here, beacuse the reference may be
-        /// Invalid Because other changed the `pchs` map. We also cannot to retrieve the `pch` from
-        /// the `pchs` map in this task, beacuse it is called in thread pool which will result in
-        /// data race. So temporarily copy the `pch` here. There must be a better way to solve this
-        /// problem.
-        auto info = clice::compile(params);
-        if(!info) {
-            log::fatal("Failed to build AST for {0}", filepath);
+    if(auto dir = path::parent_path(outPath); !fs::exists(dir)) {
+        if(auto error = fs::create_directories(dir)) {
+            log::fatal("Failed to create directory {0}, because {1}", dir, error.message());
         }
-        return std::move(*info);
-    };
-
-    auto compiler = co_await async::schedule_task(std::move(task));
-
-    auto& file = files[path];
-    file.content = content;
-    file.compiler = std::move(compiler);
-
-    log::info("Build AST successfully for {0}, elapsed {1}", filepath, tracer.duration());
-
-    if(!file.waitings.empty()) {
-        auto task = std::move(file.waitings.front());
-        async::schedule(task.waiting);
-        file.waitings.pop_front();
     }
 
-    file.isIdle = true;
+    return outPath.str().str();
 }
 
-async::promise<proto::CompletionResult> Scheduler::codeComplete(llvm::StringRef filepath,
-                                                                unsigned int line,
-                                                                unsigned int column) {
-    auto iter = files.find(filepath);
-    if(iter == files.end()) {
-        log::fatal("File {0} is not building, skip code completion", filepath);
+static std::string getPCMOutPath(llvm::StringRef srcPath) {
+    llvm::SmallString<128> outPath = srcPath;
+    path::replace_path_prefix(outPath, config::workplace(), config::frontend().cache_directory);
+    path::replace_extension(outPath, ".pcm");
+
+    if(auto dir = path::parent_path(outPath); !fs::exists(dir)) {
+        if(auto error = fs::create_directories(dir)) {
+            log::fatal("Failed to create directory {0}, because {1}", dir, error.message());
+        }
     }
 
-    if(iter->second.isIdle) {
-        /// If the file is already existed and is building, append the task to the waiting list.
-        co_await async::suspend([&](auto handle) {
-            iter->second.waitings.emplace_back(Task{
-                .isBuild = true,
-                .waiting = handle,
-            });
-        });
+    return outPath.str().str();
+}
+
+async::promise<> Scheduler::updatePCH(CompilationParams& params, class Synchronizer& sync) {
+    llvm::StringRef srcPath = params.srcPath;
+
+    auto& pch = pchs[srcPath];
+    /// FIXME: judge need update here ...
+    if(!pch.needUpdate(params.content)) {
+        log::info("PCH for {0} is already up-to-date, reuse it", srcPath);
+        co_return;
     }
 
-    llvm::SmallString<128> path = filepath;
-    /// FIXME: lookup from CDB file and adjust and remove unnecessary arguments.1
+    /// Construct the output path.
+    params.outPath = getPCHOutPath(srcPath);
 
-    CompliationParams params;
-    params.content = iter->second.content;
-    params.srcPath = path;
-    params.command = cmdMgr.lookupFirst(filepath);
-
-    /// through arguments to judge is it a module.
-    bool isModule = false;
-    co_await (isModule ? updatePCM() : updatePCH(params.srcPath, params.content, params.command));
-    params.addPCH(pchs.at(filepath));
+    /// Build PCH.
+    PCHInfo info;
 
     Tracer tracer;
-    log::info("Run code completion at {0}:{1}:{2}", filepath, line, column);
+    log::info("Building PCH for {0}", srcPath);
 
-    auto task = [&] {
-        return feature::codeCompletion(params, line, column, filepath, {});
-    };
+    /// FIXME: consider header context.
+    params.computeBounds();
 
-    auto result = co_await async::schedule_task(std::move(task));
+    llvm::Error error = co_await async::schedule_task([&] -> llvm::Error {
+        auto result = compile(params, info);
+        if(!result) {
+            return result.takeError();
+        }
 
-    log::info("Code completion for {0} is done, elapsed {1}", filepath, tracer.duration());
+        /// FIXME: consider indexing PCH here.
 
-    co_return result;
+        return llvm::Error::success();
+    });
+
+    pchs[srcPath] = std::move(info);
+
+    if(error) {
+        log::warn("Failed to build PCH for {0}, because {1}", srcPath, error);
+        co_return;
+    } else {
+        log::info("PCH for {0} is up-to-date, elapsed {1}", srcPath, tracer.duration());
+    }
 }
 
-async::promise<void> Scheduler::add(llvm::StringRef path, llvm::StringRef content) {
-    co_await buildAST(path, content);
-    co_return;
+llvm::Error Scheduler::addModuleDeps(CompilationParams& params,
+                                     const ModuleInfo& moduleInfo) const {
+    for(auto& mod: moduleInfo.mods) {
+        auto iter = pcms.find(mod);
+
+        if(iter == pcms.end()) {
+            return error("Cannot find PCM for module {0}", mod);
+        }
+
+        /// Add prerequired PCM.
+        if(auto error = addModuleDeps(params, iter->second)) {
+            return error;
+        }
+
+        params.addPCM(iter->second);
+    }
+
+    return llvm::Error::success();
 }
 
-async::promise<void> Scheduler::update(llvm::StringRef path, llvm::StringRef content) {
-    co_await buildAST(path, content);
-    co_return;
+async::promise<> Scheduler::updatePCM(llvm::StringRef moduleName, class Synchronizer& sync) {
+    llvm::StringRef srcPath = sync.map(moduleName);
+    if(srcPath.empty()) {
+        log::warn("Cannot find source file for module {0}", moduleName);
+        co_return;
+    }
+
+    auto& pcm = pcms[moduleName];
+    if(!pcm.needUpdate()) {
+        log::info("PCM for {0} is already up-to-date, reuse it", srcPath);
+    }
+
+    CompilationParams params;
+    params.srcPath = srcPath;
+    params.command = sync.lookup(srcPath);
+    params.outPath = getPCMOutPath(srcPath);
+
+    auto moduleInfo = scanModule(params);
+    if(!moduleInfo) {
+        log::warn("Build AST for {0} failed, because {1}", srcPath, moduleInfo.takeError());
+        co_return;
+    }
+
+    /// Build prerequired PCM.
+    for(auto& mod: moduleInfo->mods) {
+        co_await updatePCM(mod, sync);
+    }
+
+    /// Build PCM.
+    PCMInfo info;
+
+    Tracer tracer;
+    log::info("Building PCM for {0}", srcPath);
+
+    /// Add deps.
+    if(auto error = addModuleDeps(params, *moduleInfo)) {
+        log::warn("Failed to build PCM for {0}, because {1}", srcPath, error);
+        co_return;
+    }
+
+    llvm::Error error = co_await async::schedule_task([&] -> llvm::Error {
+        auto result = compile(params, info);
+        if(!result) {
+            return result.takeError();
+        }
+
+        /// FIXME: consider indexing PCH here.
+
+        return llvm::Error::success();
+    });
+
+    pcms[moduleName] = std::move(info);
+
+    if(error) {
+        log::warn("Failed to build PCM for {0}, because {1}", srcPath, error);
+        co_return;
+    } else {
+        log::info("PCM for {0} is up-to-date, elapsed {1}", srcPath, tracer.duration());
+    }
 }
 
-async::promise<void> Scheduler::save(llvm::StringRef path) {
-    co_return;
+async::promise<> Scheduler::update(llvm::StringRef filename,
+                                   llvm::StringRef content,
+                                   class Synchronizer& sync) {
+    CompilationParams params;
+    params.content = content;
+    params.srcPath = filename;
+    params.command = sync.lookup(filename);
+
+    auto moduleInfo = scanModule(params);
+    if(!moduleInfo) {
+        log::warn("Build AST for {0} failed, because {1}", filename, moduleInfo.takeError());
+        co_return;
+    }
+
+    if(moduleInfo->name.empty() && moduleInfo->mods.empty()) {
+        co_await updatePCH(params, sync);
+        params.bounds.reset();
+        params.addPCH(pchs[params.srcPath]);
+    } else {
+        for(auto& mod: moduleInfo->mods) {
+            co_await updatePCM(mod, sync);
+        }
+
+        if(auto error = addModuleDeps(params, *moduleInfo)) {
+            log::warn("Failed to build PCM for {0}, because {1}", filename, error);
+            co_return;
+        }
+    }
+
+    /// Build AST.
+    ASTInfo info;
+
+    Tracer tracer;
+
+    log::info("Building AST for {0}", filename);
+
+    co_await async::schedule_task([&] {
+        auto result = compile(params);
+        if(!result) {
+            log::warn("Failed to build AST for {0}, because {1}", filename, result.takeError());
+            return;
+        }
+
+        info = std::move(*result);
+    });
+
+    /// Build AST successfully.
+
+    log::info("AST for {0} is up-to-date, elapsed {1}", filename, tracer.duration());
 }
 
-async::promise<void> Scheduler::close(llvm::StringRef path) {
-    co_return;
+void Scheduler::loadFromDisk() {
+    llvm::SmallString<128> fileName;
+    path::append(fileName, config::frontend().cache_directory, "cache.json");
+
+    auto buffer = llvm::MemoryBuffer::getFile(fileName);
+    if(!buffer) {
+        log::warn("Failed to load cache from disk, because {0}", buffer.getError().message());
+        return;
+    }
+
+    auto json = json::parse(buffer.get()->getBuffer());
+    if(!json) {
+        log::warn("Failed to parse cache from disk, because {0}", json.takeError());
+        return;
+    }
+
+    auto object = json->getAsObject();
+    if(!object) {
+        log::warn("Failed to parse cache from disk, because {0}", json.takeError());
+        return;
+    }
+
+    if(auto pchArray = object->getArray("pch")) {
+        for(auto& value: *pchArray) {
+            auto pch = json::deserialize<PCHInfo>(value);
+            pchs[pch.srcPath] = std::move(pch);
+        }
+    }
+
+    if(auto pcmArray = object->getArray("pcm")) {
+        for(auto& value: *pcmArray) {
+            auto pcm = json::deserialize<PCMInfo>(value);
+            pcms[pcm.name] = std::move(pcm);
+        }
+    }
+
+    log::info("Cache loaded from {0}", fileName);
+}
+
+void Scheduler::saveToDisk() const {
+    json::Object result;
+
+    json::Array pchArray;
+    for(auto& [name, pch]: pchs) {
+        pchArray.emplace_back(json::serialize(pch));
+    }
+    result.try_emplace("pch", std::move(pchArray));
+
+    json::Array pcmArray;
+    for(auto& [name, pcm]: pcms) {
+        pcmArray.emplace_back(json::serialize(pcm));
+    }
+    result.try_emplace("pcm", std::move(pcmArray));
+
+    llvm::SmallString<128> fileName;
+    path::append(fileName, config::frontend().cache_directory, "cache.json");
+
+    std::error_code EC;
+    llvm::raw_fd_ostream stream(fileName, EC, llvm::sys::fs::OF_Text);
+
+    if(EC) {
+        log::warn("Failed save cache to disk, because {0}", EC.message());
+        return;
+    }
+
+    stream << json::Value(std::move(result));
+    log::info("Cache saved to {0}", fileName);
 }
 
 }  // namespace clice

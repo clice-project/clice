@@ -90,10 +90,10 @@ async::promise<void> Server::onDocumentSymbol(json::Value id,
 async::promise<void> Server::onSemanticTokens(json::Value id,
                                               const proto::SemanticTokensParams& params) {
     auto path = URI::resolve(params.textDocument.uri);
-    auto tokens = co_await scheduler.schedule(path, [&](ASTInfo& compiler) {
-        return feature::semanticTokens(compiler, "");
-    });
-    async::write(std::move(id), json::serialize(tokens));
+    // auto tokens = co_await scheduler.schedule(path, [&](ASTInfo& compiler) {
+    //     return feature::semanticTokens(compiler, "");
+    // });
+    /// async::response(std::move(id), json::serialize(tokens));
     co_return;
 }
 
@@ -104,10 +104,10 @@ async::promise<void> Server::onInlayHint(json::Value id, const proto::InlayHintP
 async::promise<void> Server::onCodeCompletion(json::Value id,
                                               const proto::CompletionParams& params) {
     auto path = URI::resolve(params.textDocument.uri);
-    auto result = co_await scheduler.codeComplete(path,
-                                                  params.position.line + 1,
-                                                  params.position.character + 1);
-    async::write(std::move(id), json::serialize(result));
+    // auto result = co_await scheduler.codeComplete(path,
+    //                                               params.position.line + 1,
+    //                                               params.position.character + 1);
+    // async::response(std::move(id), json::serialize(result));
     co_return;
 }
 

@@ -14,7 +14,7 @@ int main() {
 }
 )cpp";
 
-    CompliationParams params;
+    CompilationParams params;
     params.content = code;
     params.srcPath = "main.cpp";
     params.command = "clang++ -std=c++20 main.cpp";

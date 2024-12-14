@@ -5,21 +5,26 @@
 #include <Compiler/Resolver.h>
 
 #include <Support/Error.h>
+#include "Basic/Location.h"
+#include "llvm/ADT/StringSet.h"
 
 namespace clice {
+
+struct CompilationParams;
 
 /// All information about AST.
 class ASTInfo {
 public:
     ASTInfo() = default;
 
-    ASTInfo(std::unique_ptr<clang::ASTFrontendAction> action,
+    ASTInfo(std::unique_ptr<clang::FrontendAction> action,
             std::unique_ptr<clang::CompilerInstance> instance,
             std::unique_ptr<clang::syntax::TokenBuffer> tokBuf,
-            llvm::DenseMap<clang::FileID, Directive>&& directives) :
-        action(std::move(action)), instance(std::move(instance)), m_TokBuf(std::move(tokBuf)),
-        m_Directives(std::move(directives)) {
-        m_Resolver = std::make_unique<TemplateResolver>(this->instance->getSema());
+            llvm::DenseMap<clang::FileID, Directive>&& directives,
+            std::vector<std::string> deps) :
+        action(std::move(action)), m_Instance(std::move(instance)), m_TokBuf(std::move(tokBuf)),
+        m_Directives(std::move(directives)), m_Deps(std::move(deps)) {
+        m_Resolver = std::make_unique<TemplateResolver>(this->m_Instance->getSema());
     }
 
     ASTInfo(const ASTInfo&) = delete;
@@ -33,32 +38,32 @@ public:
         }
     }
 
-    clang::Sema& sema() {
-        return instance->getSema();
+    auto& sema() {
+        return m_Instance->getSema();
     }
 
-    clang::ASTContext& context() {
-        return instance->getASTContext();
+    auto& context() {
+        return m_Instance->getASTContext();
     }
 
-    clang::SourceManager& srcMgr() {
-        return instance->getSourceManager();
+    auto& srcMgr() {
+        return m_Instance->getSourceManager();
     }
 
-    clang::Preprocessor& pp() {
-        return instance->getPreprocessor();
+    auto& pp() {
+        return m_Instance->getPreprocessor();
     }
 
     clang::TranslationUnitDecl* tu() {
-        return instance->getASTContext().getTranslationUnitDecl();
+        return m_Instance->getASTContext().getTranslationUnitDecl();
     }
 
-    clang::syntax::TokenBuffer& tokBuf() {
+    auto& tokBuf() {
         assert(m_TokBuf && "Token buffer is not available");
         return *m_TokBuf;
     }
 
-    TemplateResolver& resolver() {
+    auto& resolver() {
         return *m_Resolver;
     }
 
@@ -66,13 +71,21 @@ public:
         return m_Directives;
     }
 
-    Directive& directive(clang::FileID id) {
+    auto& directive(clang::FileID id) {
         return m_Directives[id];
+    }
+
+    auto& deps() {
+        return m_Deps;
+    }
+
+    auto& instance() {
+        return *m_Instance;
     }
 
     /// Get the length of the token at the given location.
     auto getTokenLength(clang::SourceLocation loc) {
-        return clang::Lexer::MeasureTokenLength(loc, srcMgr(), instance->getLangOpts());
+        return clang::Lexer::MeasureTokenLength(loc, srcMgr(), m_Instance->getLangOpts());
     }
 
     /// Get the spelling of the token at the given location.
@@ -85,12 +98,21 @@ public:
     }
 
 private:
-    std::unique_ptr<clang::ASTFrontendAction> action;
-    std::unique_ptr<clang::CompilerInstance> instance;
+    std::unique_ptr<clang::FrontendAction> action;
+    std::unique_ptr<clang::CompilerInstance> m_Instance;
     std::unique_ptr<clang::syntax::TokenBuffer> m_TokBuf;
     std::unique_ptr<TemplateResolver> m_Resolver;
     llvm::DenseMap<clang::FileID, Directive> m_Directives;
+    std::vector<std::string> m_Deps;
 };
+
+/// Build AST from given file path and content. If pch or pcm provided, apply them to the compiler.
+/// Note this function will not check whether we need to update the PCH or PCM, caller should check
+/// their reusability and update in time.
+llvm::Expected<ASTInfo> compile(CompilationParams& params);
+
+/// Run code completion at the given location.
+llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteConsumer* consumer);
 
 struct PCHInfo {
     /// PCM file path.
@@ -115,20 +137,44 @@ struct PCHInfo {
     bool needUpdate(llvm::StringRef content);
 };
 
-struct PCMInfo {
+/// Build PCH from given file path and content.
+llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out);
+
+struct ModuleInfo {
+    /// Whether this module is an interface unit.
+    /// i.e. has export module declaration.
+    bool isInterfaceUnit = false;
+
+    /// Module name.
+    std::string name;
+
+    /// Dependent modules of this module.
+    std::vector<std::string> mods;
+};
+
+/// Run the preprocessor to scan the given module unit to
+/// collect its module name and dependencies.
+llvm::Expected<ModuleInfo> scanModule(CompilationParams& params);
+
+inherited_struct(PCMInfo, ModuleInfo) {
     /// PCM file path.
     std::string path;
 
     /// Source file path.
     std::string srcPath;
 
-    /// Module name.
-    std::string name;
+    /// Files involved in building this PCM(not include module).
+    std::vector<std::string> deps;
 
-    bool needUpdate();
+    bool needUpdate() {
+        return true;
+    }
 };
 
-struct CompliationParams {
+/// Build PCM from given file path and content.
+llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out);
+
+struct CompilationParams {
     /// Source file content.
     llvm::StringRef content;
 
@@ -164,7 +210,7 @@ struct CompliationParams {
     clang::PreambleBounds pchBounds = {0, false};
 
     /// Information about reuse PCM(name, path).
-    llvm::SmallVector<std::pair<std::string, std::string>> pcms;
+    llvm::StringMap<std::string> pcms;
 
     /// Code completion file:line:column.
     llvm::StringRef file = "";
@@ -177,22 +223,10 @@ struct CompliationParams {
     }
 
     void addPCM(const PCMInfo& info) {
-        pcms.emplace_back(info.name, info.path);
+        assert((!pcms.contains(info.name) || pcms[info.name] == info.path) &&
+               "Add a different PCM with the same name");
+        pcms[info.name] = info.path;
     }
 };
-
-/// Build AST from given file path and content. If pch or pcm provided, apply them to the compiler.
-/// Note this function will not check whether we need to update the PCH or PCM, caller should check
-/// their reusability and update in time.
-llvm::Expected<ASTInfo> compile(CompliationParams& params);
-
-/// Build PCH from given file path and content.
-llvm::Expected<ASTInfo> compile(CompliationParams& params, PCHInfo& out);
-
-/// Build PCM from given file path and content.
-llvm::Expected<ASTInfo> compile(CompliationParams& params, PCMInfo& out);
-
-/// Run code completion at the given location.
-llvm::Expected<ASTInfo> compile(CompliationParams& params, clang::CodeCompleteConsumer* consumer);
 
 }  // namespace clice

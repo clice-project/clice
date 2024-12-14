@@ -5,6 +5,8 @@
 
 namespace clice {
 
+namespace {
+
 /// returns true if the scheme is valid according to RFC 3986.
 bool isValidScheme(llvm::StringRef scheme) {
     if(scheme.empty()) {
@@ -37,6 +39,30 @@ static std::string decodePercent(llvm::StringRef content) {
         result += c;
     }
     return result;
+}
+
+}  // namespace
+
+URI URI::from(llvm::StringRef file) {
+    if(!path::is_absolute(file)) {
+        std::terminate();
+    }
+
+    llvm::SmallString<128> path;
+
+    for(auto c: file) {
+        if(c == '\\') {
+            path.push_back('/');
+        } else if(std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '/') {
+            path.push_back(c);
+        } else {
+            path.push_back('%');
+            path.push_back(llvm::hexdigit(c >> 4));
+            path.push_back(llvm::hexdigit(c & 0xF));
+        }
+    }
+
+    return URI("file", "", path);
 }
 
 llvm::Expected<URI> URI::parse(llvm::StringRef content) {
