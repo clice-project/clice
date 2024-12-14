@@ -32,22 +32,65 @@ static std::string getPCMOutPath(llvm::StringRef srcPath) {
     return outPath.str().str();
 }
 
-async::promise<> Scheduler::updatePCH(CompilationParams& params, class Synchronizer& sync) {
-    llvm::StringRef srcPath = params.srcPath;
+/// Check whether the file has been modified after the given status.
+static bool hasModifiedAfter(fs::file_status& src, llvm::StringRef file) {
+    fs::file_status status;
+    if(auto error = fs::status(file, status)) {
+        log::warn("Failed to get status of {0}, because {1}", file, error.message());
+        return true;
+    }
 
-    auto& pch = pchs[srcPath];
-    /// FIXME: judge need update here ...
-    if(!pch.needUpdate(params.content)) {
+    return status.getLastModificationTime() > src.getLastModificationTime();
+}
+
+async::promise<> Scheduler::updatePCH(llvm::StringRef srcPath, llvm::StringRef content) {
+    bool needUpdate = false;
+
+    PCHInfo info;
+
+    /// Check whether the PCH needs to be updated.
+    if(auto iter = pchs.find(srcPath); iter == pchs.end()) {
+        needUpdate = true;
+    } else {
+        info = iter->second;
+        co_await async::schedule_task([&content, &needUpdate, &info] {
+            /// Check whether PCH file exists.
+            if(!fs::exists(info.path)) {
+                needUpdate = true;
+            }
+
+            /// Check whether the content of the PCH is consistent with the source file.
+            auto size = info.bounds().Size;
+            if(content.substr(0, size) != info.preamble.substr(0, size)) {
+                needUpdate = true;
+            }
+
+            /// Check whether the dependent files have been modified.
+            fs::file_status status;
+            if(auto error = fs::status(info.path, status)) {
+                log::warn("Failed to get status of {0}, because {1}", info.path, error.message());
+                needUpdate = true;
+            }
+
+            for(auto& dep: info.deps) {
+                if(hasModifiedAfter(status, dep)) {
+                    needUpdate = true;
+                }
+            }
+        });
+    }
+
+    if(!needUpdate) {
         log::info("PCH for {0} is already up-to-date, reuse it", srcPath);
         co_return;
     }
 
-    /// Construct the output path.
+    CompilationParams params;
+    params.content = content;
+    params.srcPath = srcPath;
     params.outPath = getPCHOutPath(srcPath);
 
     /// Build PCH.
-    PCHInfo info;
-
     Tracer tracer;
     log::info("Building PCH for {0}", srcPath);
 
@@ -102,11 +145,7 @@ async::promise<> Scheduler::updatePCM(llvm::StringRef moduleName, class Synchron
         co_return;
     }
 
-    auto& pcm = pcms[moduleName];
-    if(!pcm.needUpdate()) {
-        log::info("PCM for {0} is already up-to-date, reuse it", srcPath);
-    }
-
+    /// At first, scan the module to get module name and dependent modules.
     CompilationParams params;
     params.srcPath = srcPath;
     params.command = sync.lookup(srcPath);
@@ -118,14 +157,62 @@ async::promise<> Scheduler::updatePCM(llvm::StringRef moduleName, class Synchron
         co_return;
     }
 
-    /// Build prerequired PCM.
+    /// If the module is an interface unit, we need to update the module map.
+    if(moduleInfo->isInterfaceUnit) {
+        sync.sync(moduleName, srcPath);
+    }
+
+    /// FIXME: If two pcms have same deps, we will check the same deps twice.
+    /// Try to skip this by using a set to store deps.
+
+    /// Try to update dependent PCMs.
     for(auto& mod: moduleInfo->mods) {
         co_await updatePCM(mod, sync);
     }
 
-    /// Build PCM.
+    /// All dependent PCMs are up-to-date, check whether the PCM needs to be updated.
+    bool needUpdate = false;
+
     PCMInfo info;
 
+    if(auto iter = pcms.find(moduleName); iter == pcms.end()) {
+        needUpdate = true;
+    } else {
+        info = iter->second;
+        needUpdate = co_await async::schedule_task([&info] {
+            /// Check whether PCM file exists.
+            if(!fs::exists(info.path)) {
+                return true;
+            }
+
+            fs::file_status status;
+            if(auto error = fs::status(info.path, status)) {
+                log::warn("Failed to get status of {0}, because {1}", info.path, error.message());
+                return true;
+            }
+
+            /// Check whether the source file has been modified.
+            if(hasModifiedAfter(status, info.srcPath)) {
+                return true;
+            }
+
+            /// Check whether the dependent files have been modified.
+            for(auto& dep: info.deps) {
+                if(hasModifiedAfter(status, dep)) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }
+
+    if(!needUpdate) {
+        log::info("PCM for {0} is already up-to-date, reuse it", srcPath);
+        co_return;
+    }
+
+    /// Build PCM.
     Tracer tracer;
     log::info("Building PCM for {0}", srcPath);
 
@@ -171,10 +258,10 @@ async::promise<> Scheduler::update(llvm::StringRef filename,
     }
 
     if(moduleInfo->name.empty() && moduleInfo->mods.empty()) {
-        co_await updatePCH(params, sync);
-        params.bounds.reset();
+        co_await updatePCH(filename, content);
         params.addPCH(pchs[params.srcPath]);
     } else {
+        /// FIXME: it is possible that building PCM parallelly, if they have same deps.
         for(auto& mod: moduleInfo->mods) {
             co_await updatePCM(mod, sync);
         }
@@ -203,7 +290,6 @@ async::promise<> Scheduler::update(llvm::StringRef filename,
     });
 
     /// Build AST successfully.
-
     log::info("AST for {0} is up-to-date, elapsed {1}", filename, tracer.duration());
 }
 

@@ -47,7 +47,7 @@ namespace clice {
 /// Responsible for manage the files and schedule the tasks.
 class Scheduler {
 private:
-    async::promise<> updatePCH(CompilationParams& params, class Synchronizer& sync);
+    async::promise<> updatePCH(llvm::StringRef srcPath, llvm::StringRef content);
 
     /// Clang requires all direct and indirect dependent modules to be added during module building.
     /// This function adds the dependencies of the given module to the compilation parameters.
