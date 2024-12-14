@@ -34,7 +34,7 @@ async::promise<void> Server::onInitialized(const proto::InitializedParams& param
                             json::serialize(options));
 
     /// Load all information about PCHs and PCMs from disk.
-    scheduler.loadFromDisk();
+    scheduler.loadCache();
     co_return;
 }
 
@@ -44,7 +44,7 @@ async::promise<void> Server::onExit(const proto::None&) {
 
 async::promise<void> Server::onShutdown(json::Value id, const proto::None&) {
     /// Save all information about PCHs and PCMs to disk.
-    scheduler.saveToDisk();
+    scheduler.saveCache();
     co_return;
 }
 

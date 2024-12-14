@@ -243,9 +243,9 @@ async::promise<> Scheduler::updatePCM(llvm::StringRef moduleName, class Synchron
     }
 }
 
-async::promise<> Scheduler::update(llvm::StringRef filename,
-                                   llvm::StringRef content,
-                                   class Synchronizer& sync) {
+async::promise<> Scheduler::updateAST(llvm::StringRef filename,
+                                      llvm::StringRef content,
+                                      class Synchronizer& sync) {
     CompilationParams params;
     params.content = content;
     params.srcPath = filename;
@@ -273,7 +273,7 @@ async::promise<> Scheduler::update(llvm::StringRef filename,
     }
 
     /// Build AST.
-    ASTInfo info;
+    ASTInfo& info = *files[filename].info;
 
     Tracer tracer;
 
@@ -293,7 +293,7 @@ async::promise<> Scheduler::update(llvm::StringRef filename,
     log::info("AST for {0} is up-to-date, elapsed {1}", filename, tracer.duration());
 }
 
-void Scheduler::loadFromDisk() {
+void Scheduler::loadCache() {
     llvm::SmallString<128> fileName;
     path::append(fileName, config::frontend().cache_directory, "cache.json");
 
@@ -315,14 +315,14 @@ void Scheduler::loadFromDisk() {
         return;
     }
 
-    if(auto pchArray = object->getArray("pch")) {
+    if(auto pchArray = object->getArray("PCH")) {
         for(auto& value: *pchArray) {
             auto pch = json::deserialize<PCHInfo>(value);
             pchs[pch.srcPath] = std::move(pch);
         }
     }
 
-    if(auto pcmArray = object->getArray("pcm")) {
+    if(auto pcmArray = object->getArray("PCM")) {
         for(auto& value: *pcmArray) {
             auto pcm = json::deserialize<PCMInfo>(value);
             pcms[pcm.name] = std::move(pcm);
@@ -332,20 +332,20 @@ void Scheduler::loadFromDisk() {
     log::info("Cache loaded from {0}", fileName);
 }
 
-void Scheduler::saveToDisk() const {
+void Scheduler::saveCache() const {
     json::Object result;
 
     json::Array pchArray;
     for(auto& [name, pch]: pchs) {
         pchArray.emplace_back(json::serialize(pch));
     }
-    result.try_emplace("pch", std::move(pchArray));
+    result.try_emplace("PCH", std::move(pchArray));
 
     json::Array pcmArray;
     for(auto& [name, pcm]: pcms) {
         pcmArray.emplace_back(json::serialize(pcm));
     }
-    result.try_emplace("pcm", std::move(pcmArray));
+    result.try_emplace("PCM", std::move(pcmArray));
 
     llvm::SmallString<128> fileName;
     path::append(fileName, config::frontend().cache_directory, "cache.json");
@@ -360,6 +360,57 @@ void Scheduler::saveToDisk() const {
 
     stream << json::Value(std::move(result));
     log::info("Cache saved to {0}", fileName);
+}
+
+async::promise<> Scheduler::waitForFile(llvm::StringRef filename) {
+    File* file = &files[filename];
+
+    if(!file->isIdle) {
+        co_await async::suspend([file](auto handle) { file->waiters.push_back(handle); });
+    }
+}
+
+void Scheduler::scheduleNext(llvm::StringRef filename) {
+    auto file = &files[filename];
+    if(file->waiters.empty()) {
+        file->isIdle = true;
+    } else {
+        /// If waiters exist, wake up the first waiter.
+        auto handle = file->waiters.front();
+        file->waiters.pop_front();
+        async::schedule(handle);
+    }
+}
+
+async::promise<> Scheduler::update(llvm::StringRef filename,
+                                   llvm::StringRef content,
+                                   class Synchronizer& sync) {
+    co_await waitForFile(filename);
+
+    /// files may be modified during the action.
+    auto file = &files[filename];
+    file->isIdle = false;
+
+    /// If the file is idle, execute the action directly.
+    assert(file->info && "ASTInfo is required");
+    co_await updateAST(filename, content, sync);
+
+    scheduleNext(filename);
+}
+
+async::promise<> Scheduler::execute(llvm::StringRef filename,
+                                    llvm::unique_function<void(ASTInfo& info)> action) {
+    co_await waitForFile(filename);
+
+    /// files may be modified during the action.
+    auto file = &files[filename];
+    assert(file->info && "ASTInfo is required");
+
+    /// If the file is idle, execute the action directly.
+    file->isIdle = false;
+    co_await async::schedule_task([&action, file] { action(*file->info); });
+
+    scheduleNext(filename);
 }
 
 }  // namespace clice

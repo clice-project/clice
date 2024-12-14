@@ -330,10 +330,12 @@ private:
     coroutine_handle h;
 };
 
+
+
 /// Suspend current coroutine and invoke the callback with its handle.
 /// Note the callback invoked before the coroutine is suspended. So it is
 ///
-template <typename Callback>
+template <std::invocable<std::coroutine_handle<>> Callback>
 auto suspend(Callback&& callback) {
     struct suspend_awaiter {
         Callback callback;
