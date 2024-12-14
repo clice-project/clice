@@ -286,6 +286,60 @@ TEST(FoldingRange, LambdaCapture) {
     //     ;
 }
 
+TEST(FoldingRange, LambdaExpression) {
+    const char* main = R"cpp(
+
+auto _0 = [](int _) {};
+
+auto _1 = [](int _) {$(1)
+    //$(2)
+};
+
+auto _2 = [](int _) {$(3)
+    //
+    return 0;$(4)
+};
+
+auto _3 = []($(5)
+        int _1,
+        int _2$(6)
+    ) {};
+
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
+    };
+
+    FoldingRangeParams param;
+    auto res = feature::foldingRange(param, info);
+
+    // dbg(res);
+
+    txs.equal(res.size(), 3)
+        //
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
+        //
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
+        //
+        .expect("5", toLoc(res[2]).first)
+        .expect("6", toLoc(res[2]).second)
+        //
+        //     .expect("7", toLoc(res[3]).first)
+        //     .expect("8", toLoc(res[3]).second)
+        //     //
+        //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
+        //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
+        //     //
+        ;
+}
+
 TEST(FoldingRange, FnParas) {
     const char* main = R"cpp(
 void e() {}
@@ -300,51 +354,12 @@ int x,
 int y = 2
 //$(4)
 ) {}
-)cpp";
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
-
-    dbg(res);
-
-    // txs.equal(res.size(), 2)
-    //     //
-    //     .expect("1", toLoc(res[0]).first)
-    //     .expect("2", toLoc(res[0]).first)
-    //     //
-    //     .expect("3", toLoc(res[1]).first)
-    //     .expect("4", toLoc(res[1]).second)
-    //     //
-    //     ;
-}
-
-TEST(FoldingRange, FnBody) {
-    const char* main = R"cpp(
-
-void f() {$(1)
-//
-//$(2)
-}
-
-void g() {$(3)
-    int x = 0;$(4)
-}
-
-void e() {}
-
-void n() {$(5)
-    { // inner block 
-
-    }$(6)
-}
+void d($(5)
+    int _1,
+    int _2,
+    ...$(6)
+);
 )cpp";
 
     Tester txs("main.cpp", main);
@@ -374,23 +389,80 @@ void n() {$(5)
         ;
 }
 
+TEST(FoldingRange, FnBody) {
+    const char* main = R"cpp(
+
+void f() {$(1)
+//
+//$(2)
+}
+
+void g() {$(3)
+    int x = 0;$(4)
+}
+
+void e() {}
+
+void n() {$(5)
+    {$(7)
+        // empty bock $(8)
+    }
+    //$(6)
+}
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
+    };
+
+    FoldingRangeParams param;
+    auto res = feature::foldingRange(param, info);
+
+    // dbg(res);
+
+    txs.equal(res.size(), 4)
+        //
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
+        //
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
+        //
+        .expect("5", toLoc(res[2]).first)
+        .expect("6", toLoc(res[2]).second)
+        //
+        .expect("7", toLoc(res[3]).first)
+        .expect("8", toLoc(res[3]).second)
+        //
+        ;
+}
+
 TEST(FoldingRange, CompoundStmt) {
     const char* main = R"cpp(
 #include <vector>
 
-int main () {
+int main () {$(1)
 
-    std::vector<int> _0 = {
-        1, 2, 3,
+    std::vector<int> _0 = {$(3)
+        1, 2, 3,$(4)
     };
 
 
-    std::vector<int> _1 = {
-        1, 
-        2, 
-        3,
+    std::vector<std::vector<int>> _1 = {$(5)
+        {$(7)
+            1,
+            2,
+            3,$(8)
+        }, 
+        {1, 2, 3}, 
+        {},$(6)
     };
 
+    return 0;$(2)
 }
 
 )cpp";
@@ -406,31 +478,31 @@ int main () {
     FoldingRangeParams param;
     auto res = feature::foldingRange(param, info);
 
-    dbg(res);
+    // dbg(res);
 
-    // txs.equal(res.size(), 4)
-    //     //
-    //     .expect("1", toLoc(res[0]).first)
-    //     .expect("2", toLoc(res[0]).first)
-    //     //
-    //     .expect("3", toLoc(res[1]).first)
-    //     .expect("4", toLoc(res[1]).second)
-    //     //
-    //     .expect("5", toLoc(res[2]).first)
-    //     .expect("6", toLoc(res[2]).second)
-    //     //
-    //     .expect("7", toLoc(res[3]).first)
-    //     .expect("8", toLoc(res[3]).second)
-    //     //
-    //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
-    //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
-    //     //
-    //     ;
+    txs.equal(res.size(), 4)
+        //
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
+        //
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
+        //
+        .expect("5", toLoc(res[2]).first)
+        .expect("6", toLoc(res[2]).second)
+        //     //
+        //     .expect("7", toLoc(res[3]).first)
+        //     .expect("8", toLoc(res[3]).second)
+        //     //
+        //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
+        //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
+        //     //
+        ;
 }
 
 TEST(FoldingRange, AccessControlBlock) {
     const char* main = R"cpp(
-// struct empty { int x; };
+struct empty { int x; };
 
 class _0 {$(1)
 public:$(3)
@@ -439,19 +511,19 @@ private:$(5)
     int z;$(2)$(6)
 };
 
-// struct _1 {
+struct _1 {$(7)
 
-//     int x;
+    int x;
 
-// private:
-//     int z;
-// };
+private:$(9)
+    int z;$(8)$(10)
+};
 
-// struct _2 {
-// public:
-// private:
-// public:
-// };
+struct _2 {$(11)
+public:
+private:
+public:$(12)
+};
 )cpp";
 
     Tester txs("main.cpp", main);
@@ -462,29 +534,83 @@ private:$(5)
         return fromLspLocation(src, fr);
     };
 
-    // FoldingRangeParams param;
-    // auto res = feature::foldingRange(param, info);
+    FoldingRangeParams param;
+    auto res = feature::foldingRange(param, info);
 
     // dbg(res);
 
-    // txs.equal(res.size(), 3)
-    //     //
-    //     .expect("1", toLoc(res[0]).first)
-    //     .expect("2", toLoc(res[0]).second)
-    //     //
-    //     .expect("3", toLoc(res[1]).first)
-    //     .expect("4", toLoc(res[1]).second)
-    //     //
-    //     .expect("5", toLoc(res[2]).first)
-    //     .expect("6", toLoc(res[2]).second)
-    //
-    // .expect("7", toLoc(res[3]).first)
-    // .expect("8", toLoc(res[3]).second)
-    //
-    // .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
-    // .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
-    //
-    ;
+    txs.equal(res.size(), 6)
+        //
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
+        //
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
+        //
+        .expect("5", toLoc(res[2]).first)
+        .expect("6", toLoc(res[2]).second)
+        //
+        .expect("7", toLoc(res[3]).first)
+        .expect("8", toLoc(res[3]).second)
+        //
+        .expect("9", toLoc(res[4]).first)
+        .expect("10", toLoc(res[4]).second)
+        //
+        .expect("11", toLoc(res[5]).first)
+        .expect("12", toLoc(res[5]).second);
+}
+
+TEST(FoldingRange, Macro) {
+    const char* main = R"cpp(
+
+#$(1)ifdef M1
+$(2)
+#$(3)else
+
+    #$(5)ifdef M2
+    
+    //$(6)
+    #endif
+
+//$(4)
+#endif
+
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
+    };
+
+    FoldingRangeParams param;
+    auto res = feature::foldingRange(param, info);
+
+    // dbg(res);
+
+    txs.equal(res.size(), 3)
+        //
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
+        //
+        .expect("5", toLoc(res[1]).first)
+        .expect("6", toLoc(res[1]).second)
+        //
+        .expect("3", toLoc(res[2]).first)
+        .expect("4", toLoc(res[2]).second)
+        // //
+        // .expect("7", toLoc(res[3]).first)
+        // .expect("8", toLoc(res[3]).second)
+        // //
+        // .expect("9", toLoc(res[4]).first)
+        // .expect("10", toLoc(res[4]).second)
+        // //
+        // .expect("11", toLoc(res[5]).first)
+        // .expect("12", toLoc(res[5]).second)
+
+        ;
 }
 
 }  // namespace

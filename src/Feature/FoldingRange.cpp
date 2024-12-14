@@ -113,33 +113,32 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
         auto tks = tkbuf->expandedTokens(decl->getSourceRange());
 
-        // If there is no access control blocks, return.
-        if(!std::ranges::any_of(tks, is_accctrl)) {
-            return;
-        }
-
-        // Move to first token after '{'
-        auto [lb, rb] = decl->getBraceRange();
-        tks = tks.drop_while([&lb](auto& tk) { return tk.location() <= lb; });
-
-        // -1:  to avoid empty region like
-        // public:
-        // private:
         auto tryCollectRegion = [this](clang::SourceLocation ll, clang::SourceLocation lr) {
+            // Skip continous access control keywords.
+            if(src->getPresumedLineNumber(ll) == src->getPresumedLineNumber(lr))
+                return;
             collect({ll, prevLineLastColOf(lr)});
         };
 
-        clang::SourceLocation last = lb;
-        while(last <= rb) {
-            tks = tks.drop_until([](auto& tk) { return is_accctrl(tk); });
+        // If there is no access control blocks, return.
+        tks = tks.drop_until(is_accctrl);
+        if(tks.empty()) {
+            return;
+        }
+
+        auto [_, rb] = decl->getBraceRange();
+        tks = tks.drop_front();  // Move to ':' after private/public/protected
+        clang::SourceLocation last = tks.front().endLocation();
+        while(true) {
+            tks = tks.drop_until(is_accctrl);
             if(tks.empty()) {
                 tryCollectRegion(last, rb);
                 break;
             }
 
-            last = tks.front().endLocation();
             tryCollectRegion(last, tks.front().location());
-            tks = tks.drop_front();
+            tks = tks.drop_front();  // Move to ':' after private/public/protected
+            last = tks.front().endLocation();
         }
     }
 
@@ -161,19 +160,64 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
         return true;
     }
 
+    /// Collect function parameter list between '(' and ')'.
+    void collectParameterList(clang::SourceLocation left, clang::SourceLocation right) {
+        auto tks = tkbuf->expandedTokens({left, right});
+
+        tks = tks.drop_until([](auto& tk) { return tk.kind() == clang::tok::l_paren; });
+        auto lr = tks.front().endLocation();
+
+        auto iter = std::find_if(tks.rbegin(), tks.rend(), [](auto& tk) {
+            return tk.kind() == clang::tok::r_paren;
+        });
+        assert(iter != tks.rend() && "No ')' found in parameter list.");
+        auto rr = iter->location();
+
+        collect({lr, prevLineLastColOf(rr)});
+    }
+
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
-        /// TODO: fold parameter list
+        // Left parent.
+        auto pl = decl->isTemplateDecl()
+                      ? decl->getTemplateParameterList(1)->getSourceRange().getEnd()
+                      : decl->getBeginLoc();
 
-        // {
-        //     auto [lb, rb] = decl->getParametersSourceRange();
-        //     collect({lb.getLocWithOffset(1), prevLineLastColOf(rb)});
-        // }
+        // Right parent.
+        auto pr =
+            decl->hasBody() ? decl->getBody()->getBeginLoc() : decl->getSourceRange().getEnd();
 
-        if(!decl->hasBody())
-            return true;
+        collectParameterList(pl, pr);
 
-        auto [lb, rb] = decl->getBody()->getSourceRange();
-        collect({lb.getLocWithOffset(1), prevLineLastColOf(rb)});
+        // Function body was collected by `VisitCompoundStmt`.
+        return true;
+    }
+
+    bool VisitLambdaExpr(clang::LambdaExpr* expr) {
+        auto [il, ir] = expr->getIntroducerRange();
+        collect({il.getLocWithOffset(1), prevLineLastColOf(ir)});
+
+        if(expr->hasExplicitParameters())
+            collectParameterList(ir, expr->getCompoundStmtBody()->getLBracLoc());
+
+        return true;
+    }
+
+    bool VisitCompoundStmt(clang::CompoundStmt* stmt) {
+        collect({stmt->getLBracLoc().getLocWithOffset(1), prevLineLastColOf(stmt->getRBracLoc())});
+        return true;
+    }
+
+    bool VisitCXXConstructExpr(clang::CXXConstructExpr* stmt) {
+        if(auto range = stmt->getParenOrBraceRange(); range.isValid())
+            collect({range.getBegin().getLocWithOffset(1), prevLineLastColOf(range.getEnd())});
+        return true;
+    }
+
+    bool VisitInitListExpr(clang::InitListExpr* expr) {
+        collect({
+            expr->getLBraceLoc().getLocWithOffset(1),
+            prevLineLastColOf(expr->getRBraceLoc()),
+        });
         return true;
     }
 
@@ -184,8 +228,50 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
             if(fileid != src->getMainFileID())
                 continue;
 
-            for(auto& cond: dirc.conditions) {
-                collect(cond.conditionRange);
+            collectConditionMacro(dirc.conditions);
+
+            /// TODO:
+            /// Collect multiline include statement.
+        }
+    }
+
+    /// Collect all condition macro's block as folding range.
+    void collectConditionMacro(const std::vector<Condition>& conds) {
+
+        // All condition directives have been stored in `conds` variable, ordered by presumed line
+        // number increasement, so use a stack to handle the branch structure.
+        llvm::SmallVector<Condition, 8> stack = {};
+
+        for(auto& cond: conds) {
+            switch(cond.kind) {
+                case Condition::BranchKind::If:
+                case Condition::BranchKind::Ifdef:
+                case Condition::BranchKind::Ifndef:
+                case Condition::BranchKind::Elif:
+                case Condition::BranchKind::Elifndef: {
+                    stack.push_back(cond);
+                    break;
+                }
+
+                case Condition::BranchKind::Else: {
+                    if(!stack.empty()) {
+                        auto last = stack.pop_back_val();
+                        collect({last.loc, prevLineLastColOf(cond.loc)});
+                    }
+
+                    stack.push_back(cond);
+                    break;
+                }
+
+                case Condition::BranchKind::EndIf: {
+                    if(!stack.empty()) {
+                        auto last = stack.pop_back_val();
+                        collect({last.loc, prevLineLastColOf(cond.loc)});
+                    }
+                    break;
+                }
+
+                default:;
             }
         }
     }
