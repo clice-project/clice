@@ -405,12 +405,17 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out) {
         return info.takeError();
     }
 
-    out.path = params.outPath.str();
+    assert(info->pp().isInNamedInterfaceUnit() &&
+           "Only module interface unit could be built as PCM");
+
+    out.isInterfaceUnit = true;
+    out.name = info->pp().getNamedModuleName();
     for(auto& [name, path]: params.pcms) {
         out.mods.emplace_back(name);
     }
+
+    out.path = params.outPath.str();
     out.srcPath = params.srcPath.str();
-    out.name = info->context().getCurrentNamedModule()->Name;
     out.deps = info->deps();
 
     return std::move(*info);

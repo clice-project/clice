@@ -156,7 +156,7 @@ struct ModuleInfo {
 /// collect its module name and dependencies.
 llvm::Expected<ModuleInfo> scanModule(CompilationParams& params);
 
-struct PCMInfo : ModuleInfo {
+inherited_struct(PCMInfo, ModuleInfo) {
     /// PCM file path.
     std::string path;
 

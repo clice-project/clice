@@ -75,20 +75,21 @@ async::promise<> Scheduler::updatePCH(CompilationParams& params, class Synchroni
     }
 }
 
-llvm::Error Scheduler::addModuleDeps(CompilationParams& params, ModuleInfo& moduleInfo) {
+llvm::Error Scheduler::addModuleDeps(CompilationParams& params,
+                                     const ModuleInfo& moduleInfo) const {
     for(auto& mod: moduleInfo.mods) {
-        auto& pcm = pcms[mod];
+        auto iter = pcms.find(mod);
 
-        /// Add prerequired PCM.
-        if(auto error = addModuleDeps(params, pcm)) {
-            return error;
-        }
-
-        if(pcm.name.empty()) {
+        if(iter == pcms.end()) {
             return error("Cannot find PCM for module {0}", mod);
         }
 
-        params.addPCM(pcm);
+        /// Add prerequired PCM.
+        if(auto error = addModuleDeps(params, iter->second)) {
+            return error;
+        }
+
+        params.addPCM(iter->second);
     }
 
     return llvm::Error::success();
@@ -204,6 +205,75 @@ async::promise<> Scheduler::update(llvm::StringRef filename,
     /// Build AST successfully.
 
     log::info("AST for {0} is up-to-date, elapsed {1}", filename, tracer.duration());
+}
+
+void Scheduler::loadFromDisk() {
+    llvm::SmallString<128> fileName;
+    path::append(fileName, config::frontend().cache_directory, "cache.json");
+
+    auto buffer = llvm::MemoryBuffer::getFile(fileName);
+    if(!buffer) {
+        log::warn("Failed to load cache from disk, because {0}", buffer.getError().message());
+        return;
+    }
+
+    auto json = json::parse(buffer.get()->getBuffer());
+    if(!json) {
+        log::warn("Failed to parse cache from disk, because {0}", json.takeError());
+        return;
+    }
+
+    auto object = json->getAsObject();
+    if(!object) {
+        log::warn("Failed to parse cache from disk, because {0}", json.takeError());
+        return;
+    }
+
+    if(auto pchArray = object->getArray("pch")) {
+        for(auto& value: *pchArray) {
+            auto pch = json::deserialize<PCHInfo>(value);
+            pchs[pch.srcPath] = std::move(pch);
+        }
+    }
+
+    if(auto pcmArray = object->getArray("pcm")) {
+        for(auto& value: *pcmArray) {
+            auto pcm = json::deserialize<PCMInfo>(value);
+            pcms[pcm.name] = std::move(pcm);
+        }
+    }
+
+    log::info("Cache loaded from {0}", fileName);
+}
+
+void Scheduler::saveToDisk() const {
+    json::Object result;
+
+    json::Array pchArray;
+    for(auto& [name, pch]: pchs) {
+        pchArray.emplace_back(json::serialize(pch));
+    }
+    result.try_emplace("pch", std::move(pchArray));
+
+    json::Array pcmArray;
+    for(auto& [name, pcm]: pcms) {
+        pcmArray.emplace_back(json::serialize(pcm));
+    }
+    result.try_emplace("pcm", std::move(pcmArray));
+
+    llvm::SmallString<128> fileName;
+    path::append(fileName, config::frontend().cache_directory, "cache.json");
+
+    std::error_code EC;
+    llvm::raw_fd_ostream stream(fileName, EC, llvm::sys::fs::OF_Text);
+
+    if(EC) {
+        log::warn("Failed save cache to disk, because {0}", EC.message());
+        return;
+    }
+
+    stream << json::Value(std::move(result));
+    log::info("Cache saved to {0}", fileName);
 }
 
 }  // namespace clice

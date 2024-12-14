@@ -52,7 +52,7 @@ private:
     /// Clang requires all direct and indirect dependent modules to be added during module building.
     /// This function adds the dependencies of the given module to the compilation parameters.
     /// Note: It is assumed that all dependent modules have already been built.
-    llvm::Error addModuleDeps(CompilationParams& params, ModuleInfo& moduleInfo);
+    llvm::Error addModuleDeps(CompilationParams& params, const ModuleInfo& moduleInfo) const;
 
     async::promise<> updatePCM(llvm::StringRef name, class Synchronizer& sync);
 
@@ -61,10 +61,20 @@ public:
                             llvm::StringRef content,
                             class Synchronizer& sync);
 
+    /// Load all Information about PCHs and PCMs from disk.
+    void loadFromDisk();
+
+    /// Save all Information about PCHs and PCMs to disk.
+    /// So that we can reuse them next time.
+    void saveToDisk() const;
+
     struct File {};
 
 private:
+    /// [file name] -> [PCHInfo]
     llvm::StringMap<PCHInfo> pchs;
+
+    /// [module name] -> [PCMInfo]
     llvm::StringMap<PCMInfo> pcms;
 };
 

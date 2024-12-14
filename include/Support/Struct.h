@@ -199,7 +199,7 @@ struct Inheritance : Ts... {};
 /// Use to define a reflectable struct with inheritance.
 #define inherited_struct(name, ...)                                                                \
     struct name##Body;                                                                             \
-    using name = clice::refl::Inheritance<__VA_ARGS__, name##Body>;                             \
+    using name = clice::refl::Inheritance<__VA_ARGS__, name##Body>;                                \
     struct name##Body
 
 template <typename... Ts>
@@ -216,7 +216,11 @@ struct Struct<Inheritance<Ts...>> {
 
     template <typename Object>
     constexpr static auto collcet_members(Object&& object) {
-        return std::tuple_cat(Struct<Ts>::collcet_members(static_cast<Ts&>(object))...);
+        if constexpr(std::is_const_v<std::remove_reference_t<Object>>) {
+            return std::tuple_cat(Struct<Ts>::collcet_members(static_cast<const Ts&>(object))...);
+        } else {
+            return std::tuple_cat(Struct<Ts>::collcet_members(static_cast<Ts&>(object))...);
+        }
     }
 };
 
