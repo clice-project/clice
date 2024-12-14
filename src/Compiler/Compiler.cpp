@@ -6,17 +6,6 @@
 
 namespace clice {
 
-bool PCHInfo::needUpdate(llvm::StringRef content) {
-    auto size = this->bounds().Size;
-    if(content.substr(0, size) != preamble.substr(0, size)) {
-        return true;
-    }
-
-    /// FIXME: check timestamp of all files involved in building this PCH.
-
-    return false;
-}
-
 namespace {
 
 auto createInvocation(CompilationParams& params) {

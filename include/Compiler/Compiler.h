@@ -133,8 +133,6 @@ struct PCHInfo {
         unsigned int size = preamble.size() - endAtStart;
         return {size, endAtStart};
     }
-
-    bool needUpdate(llvm::StringRef content);
 };
 
 /// Build PCH from given file path and content.
@@ -165,10 +163,6 @@ inherited_struct(PCMInfo, ModuleInfo) {
 
     /// Files involved in building this PCM(not include module).
     std::vector<std::string> deps;
-
-    bool needUpdate() {
-        return true;
-    }
 };
 
 /// Build PCM from given file path and content.
