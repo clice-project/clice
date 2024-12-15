@@ -249,7 +249,16 @@ struct _4;
 
 TEST(FoldingRange, LambdaCapture) {
     const char* main = R"cpp(
+auto z = [$(1)
+    x = 0, y = 1$(2)
+]() {$(3)
+    //$(4)
+};
 
+auto s = [$(5)
+    x=0, 
+    y = 1$(6)
+](){ return; };
 
 )cpp";
 
@@ -264,26 +273,26 @@ TEST(FoldingRange, LambdaCapture) {
     FoldingRangeParams param;
     auto res = feature::foldingRange(param, info);
 
-    dbg(res);
+    // dbg(res);
 
-    // txs.equal(res.size(), 4)
-    //     //
-    //     .expect("1", toLoc(res[0]).first)
-    //     .expect("2", toLoc(res[0]).first)
-    //     //
-    //     .expect("3", toLoc(res[1]).first)
-    //     .expect("4", toLoc(res[1]).second)
-    //     //
-    //     .expect("5", toLoc(res[2]).first)
-    //     .expect("6", toLoc(res[2]).second)
-    //     //
-    //     .expect("7", toLoc(res[3]).first)
-    //     .expect("8", toLoc(res[3]).second)
-    //     //
-    //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
-    //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
-    //     //
-    //     ;
+    txs.equal(res.size(), 3)
+        //
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
+        //
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
+        //
+        .expect("5", toLoc(res[2]).first)
+        .expect("6", toLoc(res[2]).second)
+        //     //
+        //     .expect("7", toLoc(res[3]).first)
+        //     .expect("8", toLoc(res[3]).second)
+        //     //
+        //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
+        //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
+        //     //
+        ;
 }
 
 TEST(FoldingRange, LambdaExpression) {
@@ -438,6 +447,52 @@ void n() {$(5)
         .expect("7", toLoc(res[3]).first)
         .expect("8", toLoc(res[3]).second)
         //
+        ;
+}
+
+TEST(FoldingRange, FnCall) {
+    const char* main = R"cpp(
+
+int f(int _1, int _2, int _3, int _4, int _5, int _6) { return _1 + _2; }
+
+int main() {$(1)
+
+    int _ = f(1, (1 + 2), 3, 4, 5, 6);
+
+    return f($(3)
+        1, 2, 3, 
+        4, 5, 6$(4)
+    );$(2)
+}
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
+    };
+
+    FoldingRangeParams param;
+    auto res = feature::foldingRange(param, info);
+
+    // dbg(res);
+
+    txs.equal(res.size(), 2)
+        //
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
+        //
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
+        //
+        // .expect("5", toLoc(res[2]).first)
+        // .expect("6", toLoc(res[2]).second)
+        // //
+        // .expect("7", toLoc(res[3]).first)
+        // .expect("8", toLoc(res[3]).second)
+        // //
         ;
 }
 

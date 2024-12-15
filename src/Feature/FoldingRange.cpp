@@ -49,7 +49,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
         result.push_back(Range);
     }
 
-    TRAVERSE_DECL(NamespaceDecl) {
+    bool TraverseNamespaceDecl(clang::NamespaceDecl* decl) {
         if(!decl || needFilter(decl->getLocation()))
             return true;
 
@@ -142,7 +142,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
         }
     }
 
-    TRAVERSE_DECL(Decl) {
+    bool TraverseDecl(clang ::Decl* decl) {
         if(!decl || needFilter(decl->getLocation()))
             return true;
 
@@ -176,6 +176,13 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
         collect({lr, prevLineLastColOf(rr)});
     }
 
+    bool TraverseFunctionDecl(clang ::FunctionDecl* decl) {
+        if(!decl || needFilter(decl->getLocation()))
+            return true;
+
+        return Base::TraverseFunctionDecl(decl);
+    }
+
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
         // Left parent.
         auto pl = decl->isTemplateDecl()
@@ -192,7 +199,14 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
         return true;
     }
 
-    bool VisitLambdaExpr(clang::LambdaExpr* expr) {
+    bool TraverseLambdaExpr(clang ::LambdaExpr* expr) {
+        if(!expr || needFilter(expr->getBeginLoc()))
+            return true;
+
+        return Base::TraverseLambdaExpr(expr);
+    }
+
+    bool VisitLambdaExpr(const clang::LambdaExpr* expr) {
         auto [il, ir] = expr->getIntroducerRange();
         collect({il.getLocWithOffset(1), prevLineLastColOf(ir)});
 
@@ -202,15 +216,63 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
         return true;
     }
 
-    bool VisitCompoundStmt(clang::CompoundStmt* stmt) {
+    bool TraverseCompoundStmt(clang ::CompoundStmt* stmt) {
+        if(!stmt || needFilter(stmt->getBeginLoc()))
+            return true;
+
+        return Base::TraverseCompoundStmt(stmt);
+    }
+
+    bool VisitCompoundStmt(const clang::CompoundStmt* stmt) {
         collect({stmt->getLBracLoc().getLocWithOffset(1), prevLineLastColOf(stmt->getRBracLoc())});
         return true;
     }
 
-    bool VisitCXXConstructExpr(clang::CXXConstructExpr* stmt) {
+    bool TraverseCallExpr(clang ::CallExpr* expr) {
+        if(!expr || needFilter(expr->getBeginLoc()))
+            return true;
+
+        return Base::TraverseCallExpr(expr);
+    }
+
+    bool VisitCallExpr(const clang::CallExpr* expr) {
+        auto tks = tkbuf->expandedTokens(expr->getSourceRange());
+        // assert(tks.back().kind() == clang::tok::r_paren);
+        auto rp = tks.back().location();
+
+        size_t depth = 0;
+        while(true) {
+            auto kind = tks.back().kind();
+            if(kind == clang::tok::r_paren)
+                depth += 1;
+            else if(kind == clang::tok::l_paren && --depth == 0) {
+                collect({tks.back().endLocation(), prevLineLastColOf(rp)});
+                break;
+            }
+            tks = tks.drop_back();
+        }
+
+        return true;
+    }
+
+    bool TraverseCXXConstructExpr(clang::CXXConstructExpr* expr) {
+        if(!expr || needFilter(expr->getLocation()))
+            return true;
+
+        return Base::TraverseCXXConstructExpr(expr);
+    }
+
+    bool VisitCXXConstructExpr(const clang::CXXConstructExpr* stmt) {
         if(auto range = stmt->getParenOrBraceRange(); range.isValid())
             collect({range.getBegin().getLocWithOffset(1), prevLineLastColOf(range.getEnd())});
         return true;
+    }
+
+    bool TraverseInitListExpr(clang::InitListExpr* expr) {
+        if(!expr || needFilter(expr->getBeginLoc()))
+            return true;
+
+        return Base::TraverseInitListExpr(expr);
     }
 
     bool VisitInitListExpr(clang::InitListExpr* expr) {
