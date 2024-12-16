@@ -498,24 +498,20 @@ int main() {$(1)
 
 TEST(FoldingRange, CompoundStmt) {
     const char* main = R"cpp(
-#include <vector>
 
 int main () {$(1)
 
-    std::vector<int> _0 = {$(3)
-        1, 2, 3,$(4)
-    };
+    {$(3)
+        {$(5)
+            //$(6)
+        }
 
-
-    std::vector<std::vector<int>> _1 = {$(5)
         {$(7)
-            1,
-            2,
-            3,$(8)
-        }, 
-        {1, 2, 3}, 
-        {},$(6)
-    };
+            //$(8)
+        }
+
+        //$(4)
+    }
 
     return 0;$(2)
 }
@@ -552,6 +548,49 @@ int main () {$(1)
         //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
         //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
         //     //
+        ;
+}
+
+TEST(FoldingRange, InitializeList) {
+    const char* main = R"cpp(
+
+struct L { int xs[4]; };
+
+L l1 = {$(1)
+    1, 2, 3, 4$(2)
+};
+
+L l2 = {$(3)
+//
+//$(4)
+};
+
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
+        return fromLspLocation(src, fr);
+    };
+
+    FoldingRangeParams param;
+    auto res = feature::foldingRange(param, info);
+
+    // dbg(res);
+
+    txs.equal(res.size(), 2)
+        //
+        .expect("1", toLoc(res[0]).first)
+        .expect("2", toLoc(res[0]).second)
+        //
+        .expect("3", toLoc(res[1]).first)
+        .expect("4", toLoc(res[1]).second)
+        //
+        // .expect("5", toLoc(res[2]).first)
+        // .expect("6", toLoc(res[2]).second)
+        //
         ;
 }
 
