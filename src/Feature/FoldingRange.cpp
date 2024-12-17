@@ -59,9 +59,9 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
     bool VisitNamespaceDecl(const clang::NamespaceDecl* decl) {
         auto tks = tkbuf->expandedTokens(decl->getSourceRange());
 
-        // Find first '{'.
-        auto shrink = tks.drop_while([](const clang::syntax::Token& tk) -> bool {
-            return tk.kind() != clang::tok::l_brace;
+        // Find first '{' in namespace declaration.
+        auto shrink = tks.drop_until([](const clang::syntax::Token& tk) -> bool {
+            return tk.kind() == clang::tok::l_brace;
         });
 
         collect({shrink.front().endLocation(), prevLineLastColOf(shrink.back().location())});
@@ -72,8 +72,8 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
     void collectLambdaCapture(const clang::CXXRecordDecl* decl) {
         auto tks = tkbuf->expandedTokens(decl->getSourceRange());
 
-        auto shrink = tks.drop_while([](const clang::syntax::Token& tk) {
-            return tk.kind() != clang::tok::TokenKind::l_square;
+        auto shrink = tks.drop_until([](const clang::syntax::Token& tk) -> bool {
+            return tk.kind() == clang::tok::TokenKind::l_square;
         });
 
         auto ls = shrink.front();
@@ -82,9 +82,8 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
             shrink = shrink.drop_until([depth = 0](const clang::syntax::Token& tk) mutable {
                 switch(tk.kind()) {
                     case clang::tok::TokenKind::r_square: {
-                        if(depth == 0)
+                        if(depth-- == 0)
                             return true;
-                        depth--;
                         break;
                     }
 
@@ -164,15 +163,19 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
     void collectParameterList(clang::SourceLocation left, clang::SourceLocation right) {
         auto tks = tkbuf->expandedTokens({left, right});
 
-        tks = tks.drop_until([](auto& tk) { return tk.kind() == clang::tok::l_paren; });
-        auto lr = tks.front().endLocation();
+        tks = tks.drop_until([](const auto& tk) { return tk.kind() == clang::tok::l_paren; });
+        if(tks.empty())
+            return;
 
-        auto iter = std::find_if(tks.rbegin(), tks.rend(), [](auto& tk) {
+        auto iter = std::find_if(tks.rbegin(), tks.rend(), [](const auto& tk) {
             return tk.kind() == clang::tok::r_paren;
         });
-        assert(iter != tks.rend() && "No ')' found in parameter list.");
-        auto rr = iter->location();
 
+        if(iter == tks.rend())
+            return;
+
+        auto lr = tks.front().endLocation();
+        auto rr = iter->location();
         collect({lr, prevLineLastColOf(rr)});
     }
 
@@ -237,11 +240,12 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
     bool VisitCallExpr(const clang::CallExpr* expr) {
         auto tks = tkbuf->expandedTokens(expr->getSourceRange());
-        // assert(tks.back().kind() == clang::tok::r_paren);
-        auto rp = tks.back().location();
+        if(tks.back().kind() != clang::tok::r_paren)
+            return true;
 
+        auto rp = tks.back().location();
         size_t depth = 0;
-        while(true) {
+        while(!tks.empty()) {
             auto kind = tks.back().kind();
             if(kind == clang::tok::r_paren)
                 depth += 1;
@@ -275,7 +279,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
         return Base::TraverseInitListExpr(expr);
     }
 
-    bool VisitInitListExpr(clang::InitListExpr* expr) {
+    bool VisitInitListExpr(const clang::InitListExpr* expr) {
         collect({
             expr->getLBraceLoc().getLocWithOffset(1),
             prevLineLastColOf(expr->getRBraceLoc()),
@@ -285,8 +289,8 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
     using ASTDirectives = std::remove_reference_t<decltype(std::declval<ASTInfo>().directives())>;
 
-    void collectDrectives(const ASTDirectives& directives) {
-        for(auto& [fileid, dirc]: directives) {
+    void collectDrectives(const ASTDirectives& direcs) {
+        for(auto& [fileid, dirc]: direcs) {
             if(fileid != src->getMainFileID())
                 continue;
 
@@ -333,7 +337,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
                     break;
                 }
 
-                default:;
+                default: break;
             }
         }
     }
