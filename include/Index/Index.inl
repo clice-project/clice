@@ -45,8 +45,8 @@ struct Index {
     /// The filepath of the source file.
     String path;
 
-    /// The context of the source file.
-    String context;
+    /// The content of the source file.
+    String content;
 
     /// The commands used to compile the source file.
     Array<String> commands;

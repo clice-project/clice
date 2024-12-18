@@ -54,6 +54,8 @@ public:
             type = proto::SemanticTokenType::Label;
         } else if(llvm::isa<clang::ConceptDecl>(decl)) {
             type = proto::SemanticTokenType::Concept;
+        } else if(llvm::isa<clang::ImportDecl>(decl)) {
+            type = proto::SemanticTokenType::Module;
         }
 
         if(type != proto::SemanticTokenType::Invalid) {
@@ -101,8 +103,14 @@ public:
         }
     }
 
-    void run() {
-        TraverseAST(sema.getASTContext());
+    void handleOccurrence(clang::SourceLocation keywordLoc,
+                          llvm::ArrayRef<clang::syntax::Token> identifiers) {
+        addToken(keywordLoc, proto::SemanticTokenType::Keyword);
+        for(auto& token: identifiers) {
+            if(token.kind() == clang::tok::identifier) {
+                addToken(token.location(), proto::SemanticTokenType::Module);
+            }
+        }
     }
 
     HighlightBuilder& addToken(clang::SourceLocation location, proto::SemanticTokenType type) {
@@ -185,7 +193,7 @@ public:
         }
 
         /// Collect semantic tokens from AST.
-        TraverseAST(sema.getASTContext());
+        run();
 
         proto::SemanticTokens result;
         std::ranges::sort(tokens, [](const SemanticToken& lhs, const SemanticToken& rhs) {

@@ -289,6 +289,8 @@ async::promise<> Scheduler::updateAST(llvm::StringRef filename,
         info = std::move(*result);
     });
 
+    info.tu()->dump();
+
     /// Build AST successfully.
     log::info("AST for {0} is up-to-date, elapsed {1}", filename, tracer.duration());
 }

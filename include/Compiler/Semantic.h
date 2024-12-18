@@ -111,10 +111,8 @@ public:
     using Base = clang::RecursiveASTVisitor<SemanticVisitor>;
 
     SemanticVisitor(ASTInfo& info, bool mainFileOnly = false) :
-        sema(info.sema()), pp(info.pp()), resolver(info.resolver()), srcMgr(info.srcMgr()),
-        tokBuf(info.tokBuf()), mainFileOnly(mainFileOnly) {}
-
-public:
+        sema(info.sema()), pp(info.pp()), resolver(info.resolver()), context(info.context()),
+        srcMgr(info.srcMgr()), tokBuf(info.tokBuf()), mainFileOnly(mainFileOnly) {}
 
 public:
     consteval bool VisitImplicitInstantiation() {
@@ -136,6 +134,38 @@ public:
         llvm::outs() << path << ":" << location.getLine() << ":" << location.getColumn() << "\n";
     }
 
+    void run() {
+        if(auto module = context.getCurrentNamedModule()) {
+            auto keywordLoc = module->DefinitionLoc;
+            auto begin = tokBuf.spelledTokenContaining(keywordLoc);
+            assert(begin->kind() == clang::tok::identifier && begin->text(srcMgr) == "module" &&
+                   "Invalid module declaration");
+
+            begin += 1;
+            auto end = tokBuf.spelledTokens(srcMgr.getFileID(keywordLoc)).end();
+
+            for(auto iter = begin; iter != end; ++iter) {
+                if(iter->kind() == clang::tok::identifier) {
+                    if(auto next = iter + 1; next != end && (next->kind() == clang::tok::period ||
+                                                             next->kind() == clang::tok::colon)) {
+                        iter += 1;
+                        continue;
+                    }
+
+                    end = iter + 1;
+                    break;
+                } else {
+                    std::terminate();
+                }
+            }
+
+            getDerived().handleOccurrence(keywordLoc,
+                                          llvm::ArrayRef<clang::syntax::Token>(begin, end));
+        }
+
+        Base::TraverseAST(sema.getASTContext());
+    }
+
     /// An occurrence directly corresponding to a symbol in source code.
     /// In most cases, a location just correspondings to unique decl.
     /// So a location will be just visited once. But in some other cases,
@@ -153,6 +183,12 @@ public:
                           OccurrenceKind kind = OccurrenceKind::Source) {}
 
     void handleOccurrence(const clang::Attr* attr, clang::SourceRange range) {}
+
+    /// Handle the occurrence of a module name.
+    /// @param keywordLoc The location of the keyword `module` or `import`.
+    /// @param tokens The tokens of the module name, may contain `:` or `.`.
+    void handleOccurrence(clang::SourceLocation keywordLoc,
+                          llvm::ArrayRef<clang::syntax::Token> identifiers) {}
 
 public:
     /// ============================================================================
@@ -173,6 +209,35 @@ public:
         decls.pop_back();
         return result;
     }
+
+    VISIT_DECL(ImportDecl) {
+        auto tokens = tokBuf.expandedTokens(decl->getSourceRange());
+
+        assert(tokens.size() >= 2 && tokens[0].kind() == clang::tok::identifier &&
+               tokens[0].text(srcMgr) == "import" && "Invalid import declaration");
+        assert([&]() {
+            auto range = tokens.drop_front(1);
+            for(auto iter = range.begin(); iter != range.end(); ++iter) {
+                if(iter->kind() == clang::tok::identifier) {
+                    if(auto next = iter + 1;
+                       next != range.end() && (next->kind() == clang::tok::coloncolon ||
+                                               next->kind() == clang::tok::period)) {
+                        continue;
+                    }
+                    break;
+                } else {
+                    return false;
+                }
+            }
+            return true;
+        }() && "Invalid import declaration");
+
+        getDerived().handleOccurrence(tokens[0].location(), tokens.drop_front(1));
+
+        return true;
+    }
+
+    VISIT_DECL(Module) {}
 
     VISIT_DECL(NamespaceDecl) {
         /// `namespace Foo { }`
@@ -653,6 +718,7 @@ protected:
     bool mainFileOnly;
     clang::Sema& sema;
     clang::Preprocessor& pp;
+    clang::ASTContext& context;
     TemplateResolver& resolver;
     clang::SourceManager& srcMgr;
     clang::syntax::TokenBuffer& tokBuf;
