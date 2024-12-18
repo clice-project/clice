@@ -4,5 +4,5 @@ cmake -B build-release -G Ninja \
 -DCLICE_ENABLE_TEST=ON \
 -DCMAKE_BUILD_TYPE=Release \
 -DCMAKE_CXX_FLAGS="-fno-rtti -fno-exceptions -O3 -g" \
--DLLVM_INSTALL_PATH="./deps/llvm/build-release-install" \
+-DLLVM_INSTALL_PATH="./deps/llvm/build-install" \
 -DCLICE_LIB_TYPE=STATIC
