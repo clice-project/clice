@@ -1,4 +1,5 @@
 #include "Feature/DocumentSymbol.h"
+
 namespace clice {
 
 namespace {
@@ -76,9 +77,6 @@ struct DocumentSymbolCollector :
     bool TraverseDecl(clang::Decl* decl) {
         if(!decl)
             return true;
-
-        if(llvm::isa<clang::TranslationUnitDecl>(decl))
-            return Base::TraverseDecl(decl);
 
         if(!llvm::isa<clang::NamedDecl>(decl))
             return true;
@@ -295,7 +293,8 @@ json::Value documentSymbolCapability(json::Value clientCapabilities) {
 proto::DocumentSymbolResult documentSymbol(ASTInfo& ast) {
     DocumentSymbolCollector collector;
     collector.src = &ast.srcMgr();
-    collector.TraverseDecl(ast.tu());
+
+    collector.TraverseTranslationUnitDecl(ast.tu());
     return std::move(collector.result);
 }
 
