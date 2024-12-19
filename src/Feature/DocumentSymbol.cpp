@@ -1,5 +1,4 @@
 #include "Feature/DocumentSymbol.h"
-
 namespace clice {
 
 namespace {
@@ -279,9 +278,18 @@ struct DocumentSymbolCollector :
 
 namespace feature {
 
+// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#serverCapabilities
+// ```
+// 	/**
+//	 * The server provides document symbol support.
+//	 */
+//	documentSymbolProvider?: boolean | DocumentSymbolOptions;
+// ```
+// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentSymbolOptions
 json::Value documentSymbolCapability(json::Value clientCapabilities) {
-    /// TODO:
-    return {};
+    return json::Object{
+        {"documentSymbolProvider", true},
+    };
 }
 
 proto::DocumentSymbolResult documentSymbol(ASTInfo& ast) {

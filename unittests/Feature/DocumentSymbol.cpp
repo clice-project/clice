@@ -204,10 +204,6 @@ int y = 2;
     ASSERT_EQ(total_size(res), 2);
 }
 
-#define VAR(X) int X = 1;
-
-VAR(test)
-
 TEST(DocumentSymbol, Macro) {
     const char* main = R"cpp(
 #define CLASS(X) class X 
