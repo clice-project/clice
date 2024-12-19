@@ -37,8 +37,8 @@ struct LspProtoAdaptor {
 
 /// Use DFS to traverse the AST and collect document symbols.
 struct DocumentSymbolCollector :
-    public clang::RecursiveASTVisitor<DocumentSymbolCollector>,
-    public LspProtoAdaptor {
+    clang::RecursiveASTVisitor<DocumentSymbolCollector>,
+    LspProtoAdaptor {
 
     using Base = clang::RecursiveASTVisitor<DocumentSymbolCollector>;
 
@@ -59,18 +59,13 @@ struct DocumentSymbolCollector :
         auto last = std::move(stack.back());
         stack.pop_back();
 
-        if(stack.empty())
-            result.push_back(std::move(last));
-        else
-            stack.back().children.push_back(std::move(last));
+        collect(std::move(last));
     }
 
     /// Collect a leaf node as the DocumentSymbol.
     void collect(proto::DocumentSymbol symbol) {
-        if(stack.empty())
-            result.push_back(std::move(symbol));
-        else
-            stack.back().children.push_back(std::move(symbol));
+        auto& ref = stack.empty() ? result : stack.back().children;
+        ref.push_back(std::move(symbol));
     }
 
     /// Mark the symbol as deprecated.
@@ -88,9 +83,6 @@ struct DocumentSymbolCollector :
 
         if(!llvm::isa<clang::NamedDecl>(decl))
             return true;
-
-        // auto* named = llvm::dyn_cast<clang::NamedDecl>(decl);
-        // auto name = named->getName();
 
         if(notInMainFile(decl->getLocation()) || decl->isImplicit())
             return true;
@@ -229,7 +221,6 @@ struct DocumentSymbolCollector :
         if(!decl)
             return true;
 
-        auto name = decl->getName();
         if(auto spec = decl->getTemplateSpecializationInfo();
            spec && !spec->isExplicitSpecialization()) {
             return true;
@@ -293,7 +284,7 @@ json::Value documentSymbolCapability(json::Value clientCapabilities) {
     return {};
 }
 
-proto::DocumentSymbolResult documentSymbol(proto::DocumentSymbolParams params, ASTInfo& ast) {
+proto::DocumentSymbolResult documentSymbol(ASTInfo& ast) {
     DocumentSymbolCollector collector;
     collector.src = &ast.srcMgr();
     collector.TraverseDecl(ast.tu());

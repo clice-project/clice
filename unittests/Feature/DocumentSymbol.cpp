@@ -11,13 +11,16 @@ void dbg(const proto::DocumentSymbolResult& result, size_t ident = 0) {
     for(auto& item: result) {
         for(size_t i = 0; i < ident; ++i)
             llvm::outs() << ' ';
-        llvm::outs() << std::format("kind: {}, name:{}, detail:{}, deprecated:{}, children_num:{}",
-                                    item.kind.name(),
-                                    item.name,
-                                    item.detail,
-                                    item.deprecated,
-                                    item.children.size())
-                     << '\n';
+        llvm::outs()
+            << std::format(
+                   "kind: {}, name:{}, detail:{}, deprecated:{}, range: {}, children_num:{}",
+                   item.kind.name(),
+                   item.name,
+                   item.detail,
+                   item.deprecated,
+                   json::serialize(item.range),
+                   item.children.size())
+            << '\n';
 
         dbg(item.children, ident + 2);
     }
@@ -61,9 +64,7 @@ namespace _1::_2{
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto& info = txs.info;
-    proto::DocumentSymbolParams param;
-    auto res = feature::documentSymbol(param, info);
+    auto res = feature::documentSymbol(txs.info);
     // dbg(res);
     ASSERT_EQ(total_size(res), 8);
 }
@@ -92,9 +93,7 @@ int main(int argc, char* argv[]) {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto& info = txs.info;
-    proto::DocumentSymbolParams param;
-    auto res = feature::documentSymbol(param, info);
+    auto res = feature::documentSymbol(txs.info);
     // dbg(res);
     ASSERT_EQ(total_size(res), 9);
 }
@@ -119,9 +118,7 @@ struct x {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto& info = txs.info;
-    proto::DocumentSymbolParams param;
-    auto res = feature::documentSymbol(param, info);
+    auto res = feature::documentSymbol(txs.info);
     // dbg(res);
     ASSERT_EQ(total_size(res), 7);
 }
@@ -141,9 +138,7 @@ struct S {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto& info = txs.info;
-    proto::DocumentSymbolParams param;
-    auto res = feature::documentSymbol(param, info);
+    auto res = feature::documentSymbol(txs.info);
     // dbg(res);
     ASSERT_EQ(total_size(res), 6);
 }
@@ -165,9 +160,7 @@ struct _0 {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto& info = txs.info;
-    proto::DocumentSymbolParams param;
-    auto res = feature::documentSymbol(param, info);
+    auto res = feature::documentSymbol(txs.info);
     // dbg(res);
     ASSERT_EQ(total_size(res), 7);
 }
@@ -192,9 +185,7 @@ enum B {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto& info = txs.info;
-    proto::DocumentSymbolParams param;
-    auto res = feature::documentSymbol(param, info);
+    auto res = feature::documentSymbol(txs.info);
     // dbg(res);
     ASSERT_EQ(total_size(res), 8);
 }
@@ -208,11 +199,35 @@ int y = 2;
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto& info = txs.info;
-    proto::DocumentSymbolParams param;
-    auto res = feature::documentSymbol(param, info);
+    auto res = feature::documentSymbol(txs.info);
     // dbg(res);
     ASSERT_EQ(total_size(res), 2);
+}
+
+#define VAR(X) int X = 1;
+
+VAR(test)
+
+TEST(DocumentSymbol, Macro) {
+    const char* main = R"cpp(
+#define CLASS(X) class X 
+
+CLASS(test) {
+    int x = 1;
+};
+
+#define VAR(X) int X = 1;
+
+VAR(test)
+
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto res = feature::documentSymbol(txs.info);
+    // dbg(res);
+    ASSERT_EQ(total_size(res), 3);
 }
 
 }  // namespace
