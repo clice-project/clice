@@ -1,4 +1,5 @@
 #include "Index/Memory.h"
+#include <numeric>
 #include <ranges>
 
 namespace clice::index {

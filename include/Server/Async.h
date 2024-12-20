@@ -1,5 +1,10 @@
 #pragma once
 
+#if defined(_WIN32)
+// libuv uses windows.h
+// Stops windows.h from spamming min and max macros
+#define NOMINMAX
+#endif
 #include "uv.h"
 
 #include "llvm/ADT/SmallVector.h"
@@ -202,7 +207,8 @@ struct fs_awaiter {
             uv_timespec_t& mtime = req->statbuf.st_mtim;
             using namespace std::chrono;
             awaiter.modified =
-                system_clock::time_point(seconds(mtime.tv_sec) + nanoseconds(mtime.tv_nsec));
+                system_clock::time_point(duration_cast<system_clock::duration>(
+                    seconds(mtime.tv_sec) + nanoseconds(mtime.tv_nsec)));
             awaiter.caller.resume();
             delete req;
         };
