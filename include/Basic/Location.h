@@ -6,12 +6,12 @@
 namespace clice::proto {
 
 /// A set of predefined position encoding kinds.
-struct PositionEncodingKind : refl::Enum<PositionEncodingKind, false, string_literal> {
+struct PositionEncodingKind : refl::Enum<PositionEncodingKind, false, std::string_view> {
     using Enum::Enum;
 
-    constexpr inline static string_literal UTF8 = "utf-8";
-    constexpr inline static string_literal UTF16 = "utf-16";
-    constexpr inline static string_literal UTF32 = "utf-32";
+    constexpr inline static std::string_view UTF8 = "utf-8";
+    constexpr inline static std::string_view UTF16 = "utf-16";
+    constexpr inline static std::string_view UTF32 = "utf-32";
 
     constexpr inline static std::array All = {UTF8, UTF16, UTF32};
 };
