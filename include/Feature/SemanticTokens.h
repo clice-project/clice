@@ -56,10 +56,16 @@ struct SemanticTokens {
 
 }  // namespace clice::proto
 
+namespace clice {
+
+class ASTInfo;
+
+}
+
 namespace clice::feature {
 
 /// FIXME:
-proto::SemanticTokens semanticTokens(ASTInfo& compiler, llvm::StringRef filename);
+proto::SemanticTokens semanticTokens(class ASTInfo& info, llvm::StringRef filename);
 
 }  // namespace clice::feature
 
