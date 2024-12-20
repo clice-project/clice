@@ -245,7 +245,7 @@ template <typename Derived, typename underlying>
     requires (!integral<underlying>)
 class Enum<Derived, false, underlying> {
 public:
-    Enum(underlying value) : m_Value(value) {
+    constexpr Enum(underlying value) : m_Value(value) {
         static_assert(
             requires { Derived::All; },
             "Derived enum must define all possible enum values.");
@@ -254,7 +254,7 @@ public:
                "Invalid enum value.");
     }
 
-    Enum(const Enum&) = default;
+    constexpr Enum(const Enum&) = default;
 
     constexpr friend bool operator== (Enum lhs, Enum rhs) = default;
 
