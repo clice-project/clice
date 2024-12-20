@@ -5,32 +5,44 @@
 namespace clice::config {
 
 /// Read the config file, call when the program starts.
-void parse(llvm::StringRef execute, llvm::StringRef filepath);
+void load(llvm::StringRef execute, llvm::StringRef filename);
 
-/// initialize the config, replace all predefined variables in the config file.
+/// Initialize the config, replace all predefined variables in the config file.
 /// called in `Server::initialize`.
 void init(std::string_view workplace);
 
-struct ServerOption {
-    std::string mode = "socket";
-    unsigned int port;
-    std::string address;
+struct ServerOptions {
+    std::vector<std::string> compile_commands_dirs;
 };
 
-struct FrontendOption {
+struct CacheOptions {
+    std::string dir;
+    uint32_t limit = 0;
+};
+
+struct IndexOptions {
+    std::string dir;
+    bool implicitInstantiation = true;
+};
+
+struct Rule {
+    std::string pattern;
     std::vector<std::string> append;
     std::vector<std::string> remove;
-    std::string index_directory = "${workplace}/.clice/index";
-    std::string cache_directory = "${workplace}/.clice/cache";
-    std::string resource_dictionary = "${binary}/../../lib/clang/${llvm_version}";
-    std::vector<std::string> compile_commands_directorys = {"${workplace}/build"};
+    std::string readonly;
+    std::string header;
+    std::vector<std::string> context;
 };
 
-llvm::StringRef workplace();
+extern llvm::StringRef version;
+extern llvm::StringRef binary;
+extern llvm::StringRef llvm_version;
+extern llvm::StringRef workspace;
 
-const ServerOption& server();
-
-const FrontendOption& frontend();
+extern const ServerOptions& server;
+extern const CacheOptions& cache;
+extern const IndexOptions& index;
+extern llvm::ArrayRef<Rule> rules;
 
 };  // namespace clice::config
 

@@ -7,10 +7,7 @@
 
 namespace clice::config {
 
-namespace {
-
-/// predefined variables.
-llvm::StringMap<std::string> predefined = {
+static llvm::StringMap<std::string> predefined = {
     /// the directory of the workplace.
     {"workplace",    ""     },
     /// the directory of the executable.
@@ -21,16 +18,78 @@ llvm::StringMap<std::string> predefined = {
     {"llvm_version", "20"   },
 };
 
+/// predefined variables.
+llvm::StringRef version = predefined["version"];
+llvm::StringRef binary = predefined["binary"];
+llvm::StringRef llvm_version = predefined["llvm_version"];
+llvm::StringRef workspace = predefined["workplace"];
+
 struct Config {
-    ServerOption server;
-    FrontendOption frontend;
+    ServerOptions server;
+    CacheOptions cache;
+    IndexOptions index;
+    std::vector<Rule> rules;
 };
 
 /// global config instance.
-Config config = {};
+static Config config = {};
+
+const ServerOptions& server = config.server;
+const CacheOptions& cache = config.cache;
+const IndexOptions& index = config.index;
+llvm::ArrayRef<Rule> rules = config.rules;
+
+template <typename Object>
+static void parse(Object& object, auto&& value) {
+    if constexpr(std::is_same_v<Object, bool>) {
+        if(auto v = value.as_boolean()) {
+            object = v->get();
+        }
+    } else if constexpr(clice::integral<Object>) {
+        if(auto v = value.as_integer()) {
+            object = v->get();
+        }
+    } else if constexpr(std::is_same_v<Object, std::string>) {
+        if(auto v = value.as_string()) {
+            object = v->get();
+        }
+    } else if constexpr(clice::is_specialization_of<Object, std::vector>) {
+        if(auto v = value.as_array()) {
+            for(auto& item: *v) {
+                object.emplace_back();
+                parse(object.back(), item);
+            }
+        }
+    } else if constexpr(refl::reflectable<Object>) {
+        if(auto table = value.as_table()) {
+            refl::foreach(object, [&](std::string_view key, auto& member) {
+                if(auto v = (*table)[key]) {
+                    parse(member, v);
+                }
+            });
+        }
+    } else {
+        static_assert(dependent_false<Object>, "Unsupported type");
+    }
+}
+
+void load(llvm::StringRef execute, llvm::StringRef filename) {
+    predefined["version"] = "0.0.1";
+    predefined["binary"] = execute;
+    predefined["llvm_version"] = "20";
+
+    auto toml = toml::parse_file(filename);
+    if(toml.failed()) {
+        log::fatal("Failed to parse config file: {0}. Because: {1}",
+                   filename,
+                   toml.error().description());
+    }
+
+    parse(config, toml.table());
+}
 
 /// replace all predefined variables in the text.
-void resolve(std::string& input) {
+static void resolve(std::string& input) {
     std::string_view text = input;
     llvm::SmallString<128> path;
     std::size_t pos = 0;
@@ -60,58 +119,26 @@ void resolve(std::string& input) {
     input = path.str();
 }
 
-}  // namespace
-
-void parse(llvm::StringRef execute, llvm::StringRef filepath) {
-    predefined["binary"] = execute;
-
-    auto toml = toml::parse_file(filepath);
-    if(toml.failed()) {
-        log::fatal("Failed to parse config file: {0}. Because: {1}",
-                   filepath,
-                   toml.error().description());
-    }
-
-    auto table = toml["server"];
-    if(table) {
-        if(auto mode = table["mode"]) {
-            config.server.mode = mode.as_string()->get();
+template <typename Object>
+static void replace(Object& object) {
+    if constexpr(std::is_same_v<Object, std::string>) {
+        resolve(object);
+    } else if constexpr(clice::is_specialization_of<Object, std::vector>) {
+        for(auto& item: object) {
+            replace(item);
         }
-
-        if(auto port = table["port"]) {
-            config.server.port = port.as_integer()->get();
-        }
-
-        if(auto address = table["address"]) {
-            config.server.address = address.as_string()->get();
-        }
+    } else if constexpr(refl::reflectable<Object>) {
+        refl::foreach(object, [&](auto, auto& member) { replace(member); });
     }
 }
 
 void init(std::string_view workplace) {
-    predefined["workplace"] = workplace;
+    predefined["workspace"] = workplace;
 
-    resolve(config.frontend.index_directory);
-    resolve(config.frontend.cache_directory);
-    resolve(config.frontend.resource_dictionary);
-    for(auto& directory: config.frontend.compile_commands_directorys) {
-        resolve(directory);
-    }
+    replace(config);
 
     log::info("Config initialized successfully: {0}", json::serialize(config));
     return;
-}
-
-llvm::StringRef workplace() {
-    return predefined["workplace"];
-}
-
-const ServerOption& server() {
-    return config.server;
-}
-
-const FrontendOption& frontend() {
-    return config.frontend;
 }
 
 }  // namespace clice::config
