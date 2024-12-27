@@ -47,4 +47,21 @@ struct TextDocumentPositionParams {
     Position position;
 };
 
+struct MarkupKind {
+    std::string_view m_value;
+
+    constexpr MarkupKind(std::string_view value) : m_value(value) {}
+
+    constexpr static std::string_view PlainText = "plaintext";
+    constexpr static std::string_view Markdown = "markdown";
+};
+
+struct MarkupContent {
+    /// The type of the Markup.
+    MarkupKind kind;
+
+    /// The content itself.
+    string value;
+};
+
 }  // namespace clice::proto
