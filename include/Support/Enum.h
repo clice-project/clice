@@ -4,6 +4,7 @@
 #include <array>
 #include <string>
 #include <cstdint>
+#include <algorithm>
 #include <string_view>
 #include <source_location>
 
@@ -234,6 +235,31 @@ private:
         } else {
             return refl::enum_max<typename Derived::Kind, begin()>();
         }
+    }
+
+private:
+    underlying m_Value;
+};
+
+template <typename Derived, typename underlying>
+    requires (!integral<underlying>)
+class Enum<Derived, false, underlying> {
+public:
+    constexpr Enum(underlying value) : m_Value(value) {
+        static_assert(
+            requires { Derived::All; },
+            "Derived enum must define all possible enum values.");
+
+        assert(std::ranges::any_of(Derived::All, [&](auto v) { return v == value; }) &&
+               "Invalid enum value.");
+    }
+
+    constexpr Enum(const Enum&) = default;
+
+    constexpr friend bool operator== (Enum lhs, Enum rhs) = default;
+
+    constexpr underlying value() const {
+        return m_Value;
     }
 
 private:
