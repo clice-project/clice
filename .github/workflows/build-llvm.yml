@@ -1,0 +1,41 @@
+name: Build and upload artifact to another repo
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out repository A
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+        fetch-depth: 1
+
+    - name: Prepare fake build folder
+      run: |
+        mkdir -p deps/llvm/build-install
+        mkdir -p deps/llvm/build-install/bin
+        mkdir -p deps/llvm/build-install/lib
+        echo "This is a fake LLVM bin file" > deps/llvm/build-install/bin/fake-llvm-binary
+        echo "This is a fake LLVM library" > deps/llvm/build-install/lib/fake-llvm-lib
+
+    - name: Archive artifact
+      run: |
+        tar -czf llvm.tar.gz deps/llvm/build-install
+
+    - name: Create or update release
+      uses: ncipollo/release-action@v1
+      with:
+        token: ${{ secrets.LLVM_BINARY_TOKEN }}
+        owner: "clice-project"
+        repo: "llvm-binary"
+        tag: "v1.0.0"
+        body: "Fake release for testing"
+        allowUpdates: true
+        artifacts: "llvm.tar.gz"
