@@ -13,6 +13,7 @@
     # Compile commands directories to search for compile_commands.json files.
     compile_commands_dirs = ["${workspace}/build"]
 
+
 # Cache configuration for storing precompiled headers and modules.
 [cache]
     # Directory for storing PCH and PCM files.
@@ -21,7 +22,6 @@
     # Maximum number of cache files to keep. If the total exceeds this limit, clice
     # deletes the oldest files automatically. Set to 0 to disable the limit.
     limit = 0
-
 
 # Index configuration for symbol and feature indexing.
 [index]
@@ -48,7 +48,7 @@
     # - `[!...]`: Negates a range of characters to match in a path segment 
     #   (e.g., `example.[!0-9]` matches `example.a`, `example.b`, but not `example.0`).
     pattern = "**/*"
-    
+
     # Commands to append to the original command list (e.g., ["-std=c++17"]).
     append = []
 
