@@ -42,6 +42,7 @@ struct Relation {
 struct Symbol {
     int64_t id;
     String name;
+    SymbolKind kind;
     Array<Relation> relations;
 };
 
@@ -118,6 +119,10 @@ llvm::StringRef SymbolIndex::SymbolID::name() {
     return index->getString(symbol->name);
 }
 
+SymbolKind SymbolIndex::Symbol::kind() {
+    return static_cast<const binary::Symbol*>(data)->kind;
+}
+
 ArrayView<SymbolIndex::Relation> SymbolIndex::Symbol::relations() {
     auto index = static_cast<const binary::ProxyIndex*>(base);
     auto symbol = static_cast<const binary::Symbol*>(data);
@@ -171,6 +176,7 @@ public:
     struct Symbol {
         int64_t id;
         std::string name;
+        SymbolKind kind;
         std::vector<binary::Relation> relations;
     };
 
@@ -185,8 +191,6 @@ public:
     };
 
 public:
-    using SemanticVisitor::handleOccurrence;
-
     bool checkSourceRange(clang::SourceRange range, RelationKind kind) {
         assert(range.isValid() && "Invalid source range");
         auto [begin, end] = range;
@@ -195,16 +199,13 @@ public:
                           RelationKind::Reference)) {
             assert(begin == end && "Expect a single location");
         }
+        return true;
     }
 
-    void handleOccurrence(const clang::Decl* decl, clang::SourceRange range, RelationKind kind) {
-        auto ND = normalize(llvm::cast<clang::NamedDecl>(decl));
-        auto [begin, end] = range;
-        auto beginLoc = srcMgr.getPresumedLoc(begin);
-        auto endLoc = srcMgr.getPresumedLoc(
-            clang::Lexer::getLocForEndOfToken(end, 0, srcMgr, sema.getLangOpts()));
-
-        assert(beginLoc.getFileID() == endLoc.getFileID() && "Expected the same file");
+    void handleDeclOccurrence(const clang::NamedDecl* decl,
+                              clang::SourceLocation location,
+                              RelationKind kind) {
+        println("{}", kind.name());
     }
 
 private:
@@ -212,5 +213,11 @@ private:
 };
 
 }  // namespace
+
+void test(ASTInfo& info) {
+    binary::SymbolIndex index;
+    SymbolIndexCollector collector(info, index);
+    collector.run();
+}
 
 }  // namespace clice::index

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Basic/RelationKind.h"
+#include "Basic/SymbolKind.h"
+#include "Compiler/Compiler.h"
 
 namespace clice::index {
 
@@ -85,6 +87,8 @@ public:
     };
 
     struct Symbol : SymbolID {
+        SymbolKind kind();
+
         /// all relations of this symbol.
         ArrayView<Relation> relations();
     };
@@ -113,5 +117,7 @@ private:
     void* base;
     std::size_t size;
 };
+
+void test(ASTInfo& info);
 
 }  // namespace clice::index

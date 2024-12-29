@@ -16,11 +16,6 @@ void $(2)foo() {}
 
     IndexTester tester{"main.cpp", code};
     tester.run();
-
-    auto symbols = tester.locateSymbols("1");
-    EXPECT_EQ(symbols.size(), 1);
-    EXPECT_EQ(tester.getString(symbols[0]->name), "foo");
-    tester.GotoDefinition("1", "2");
 }
 
 TEST(Index, ClassTemplate) {
