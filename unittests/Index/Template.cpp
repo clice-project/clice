@@ -7,15 +7,25 @@ namespace {
 TEST(Index, Test) {
 
     const char* code = R"cpp(
-void bar();
-
-void $(1)foo();
-
-void $(2)foo() {}
+#include <iostream>
 )cpp";
 
     IndexTester tester{"main.cpp", code};
     tester.run();
+    auto indices = index::test(tester.info);
+
+    std::size_t total = 0;
+    for(auto& [id, index]: indices) {
+        auto& srcMgr = tester.info.srcMgr();
+        auto entry = srcMgr.getFileEntryRefForID(id);
+
+        llvm::SmallString<128> path;
+        auto err = fs::real_path(entry->getName(), path);
+        print("File: {}, Size: {}k\n", path.str(), index.size / 1024);
+        total += index.size;
+    }
+
+    print("Total size: {}k\n", total / 1024);
 }
 
 TEST(Index, ClassTemplate) {

@@ -21,6 +21,8 @@ struct Location {
 struct Relative {
     const void* base;
     const void* data;
+
+    bool operator== (const Relative& other) const = default;
 };
 
 template <typename T>
@@ -43,7 +45,7 @@ public:
             return *this;
         }
 
-        friend bool operator== (const Iterator& lhs, const Iterator& rhs) = default;
+        bool operator== (const Iterator& other) const = default;
 
     private:
         std::size_t stride;
@@ -57,7 +59,7 @@ public:
         return Iterator(base, static_cast<const char*>(data) + size * stride, stride);
     }
 
-    friend bool operator== (const ArrayView& lhs, const ArrayView& rhs) = default;
+    bool operator== (const ArrayView& other) const = default;
 
 private:
     std::size_t size;
@@ -66,6 +68,17 @@ private:
 
 class SymbolIndex {
 public:
+    SymbolIndex(void* base, std::size_t size) : base(base), size(size) {}
+
+    SymbolIndex(SymbolIndex&& other) : base(other.base), size(other.size) {
+        other.base = nullptr;
+        other.size = 0;
+    }
+
+    ~SymbolIndex() {
+        std::free(base);
+    }
+
     struct Symbol;
 
     struct Relation : Relative {
@@ -80,16 +93,17 @@ public:
 
     struct SymbolID : Relative {
         /// Symbol id.
-        int64_t id();
+        uint64_t id();
 
         /// Symbol name.
         llvm::StringRef name();
     };
 
     struct Symbol : SymbolID {
+        /// Symbol kind.
         SymbolKind kind();
 
-        /// all relations of this symbol.
+        /// All relations of this symbol.
         ArrayView<Relation> relations();
     };
 
@@ -113,11 +127,11 @@ public:
     /// Locate symbol with the given id(usually from another index).
     Symbol locateSymbol(SymbolID ID);
 
-private:
+public:
     void* base;
     std::size_t size;
 };
 
-void test(ASTInfo& info);
+llvm::DenseMap<clang::FileID, SymbolIndex> test(ASTInfo& info);
 
 }  // namespace clice::index

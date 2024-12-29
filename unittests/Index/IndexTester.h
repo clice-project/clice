@@ -10,7 +10,6 @@ struct IndexTester : Tester {
 
     IndexTester& run(const char* standard = "-std=c++20") {
         Tester::run(standard);
-        index::test(info);
         return *this;
     }
 

@@ -52,7 +52,8 @@ public:
         assert(decl && "Invalid decl");
         assert(kind.is_one_of(RelationKind::Declaration,
                               RelationKind::Definition,
-                              RelationKind::Reference) &&
+                              RelationKind::Reference,
+                              RelationKind::WeakReference) &&
                "Invalid kind");
         assert(location.isValid() && "Invalid location");
 
@@ -69,8 +70,7 @@ public:
                                RelationKind kind,
                                clang::SourceLocation location) {
         assert(def && "Invalid macro");
-        assert(kind.is_one_of(RelationKind::Declaration, RelationKind::Reference) &&
-               "Invalid kind");
+        assert(kind.is_one_of(RelationKind::Definition, RelationKind::Reference) && "Invalid kind");
         assert(location.isValid() && "Invalid location");
 
         if constexpr(!std::same_as<decltype(&SemanticVisitor::handleMacroOccurrence),
@@ -102,7 +102,7 @@ public:
     void handleRelation(const clang::NamedDecl* decl,
                         RelationKind kind,
                         const clang::NamedDecl* target,
-                        clang::SourceRange range = {}) {
+                        clang::SourceRange range) {
         assert(decl && "Invalid decl");
         assert(target && "Invalid target");
 
@@ -270,7 +270,7 @@ public:
         handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
 
         if(auto target = declForType(decl->getType())) {
-            handleRelation(decl, RelationKind::TypeDefinition, target);
+            handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
         }
 
         return true;
@@ -281,7 +281,10 @@ public:
     VISIT_DECL(EnumConstantDecl) {
         handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
         handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
-        handleRelation(decl, RelationKind::TypeDefinition, declForType(decl->getType()));
+        handleRelation(decl,
+                       RelationKind::TypeDefinition,
+                       declForType(decl->getType()),
+                       decl->getLocation());
         return true;
     }
 
@@ -302,7 +305,7 @@ public:
         handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
 
         if(auto target = declForType(decl->getType())) {
-            handleRelation(decl, RelationKind::TypeDefinition, target);
+            handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
         }
 
         return true;
@@ -331,7 +334,7 @@ public:
         handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
 
         if(auto target = declForType(decl->getType())) {
-            handleRelation(decl, RelationKind::TypeDefinition, target);
+            handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
         }
 
         return true;
@@ -346,10 +349,14 @@ public:
         handleRelation(decl, kind, decl, decl->getLocation());
 
         if(auto CRD = llvm::dyn_cast<clang::CXXRecordDecl>(decl)) {
-            for(auto base: CRD->bases()) {
-                auto target = declForType(base.getType());
-                handleRelation(CRD, RelationKind::Base, target);
-                handleRelation(target, RelationKind::Derived, CRD);
+            if(auto def = CRD->getDefinition()) {
+                for(auto base: CRD->bases()) {
+                    /// FIXME: Handle dependent base class.
+                    if(auto target = declForType(base.getType())) {
+                        handleRelation(def, RelationKind::Base, target, base.getSourceRange());
+                        handleRelation(target, RelationKind::Derived, def, base.getSourceRange());
+                    }
+                }
             }
         }
 
@@ -386,18 +393,30 @@ public:
 
         if(auto method = llvm::dyn_cast<clang::CXXMethodDecl>(decl)) {
             for(auto override: method->overridden_methods()) {
-                handleRelation(method, RelationKind::Interface, override);
-                handleRelation(override, RelationKind::Implementation, method);
+                handleRelation(method, RelationKind::Interface, override, decl->getLocation());
+                handleRelation(override, RelationKind::Implementation, method, decl->getLocation());
             }
 
             if(auto ctor = llvm::dyn_cast<clang::CXXConstructorDecl>(method)) {
-                handleRelation(ctor, RelationKind::TypeDefinition, ctor->getParent());
-                handleRelation(ctor->getParent(), RelationKind::Constructor, ctor);
+                handleRelation(ctor,
+                               RelationKind::TypeDefinition,
+                               ctor->getParent(),
+                               decl->getLocation());
+                handleRelation(ctor->getParent(),
+                               RelationKind::Constructor,
+                               ctor,
+                               decl->getLocation());
             }
 
             if(auto dtor = llvm::dyn_cast<clang::CXXDestructorDecl>(method)) {
-                handleRelation(dtor, RelationKind::TypeDefinition, dtor->getParent());
-                handleRelation(dtor->getParent(), RelationKind::Destructor, dtor);
+                handleRelation(dtor,
+                               RelationKind::TypeDefinition,
+                               dtor->getParent(),
+                               decl->getLocation());
+                handleRelation(dtor->getParent(),
+                               RelationKind::Destructor,
+                               dtor,
+                               decl->getLocation());
             }
         }
 
@@ -411,7 +430,7 @@ public:
         handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
 
         if(auto target = declForType(decl->getUnderlyingType())) {
-            handleRelation(decl, RelationKind::TypeDefinition, target);
+            handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
         }
 
         return true;
@@ -446,7 +465,7 @@ public:
         handleRelation(decl, kind, decl, decl->getLocation());
 
         if(auto target = declForType(decl->getType())) {
-            handleRelation(decl, RelationKind::TypeDefinition, target);
+            handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
         }
 
         return true;
@@ -727,10 +746,11 @@ public:
         clang::NamedDecl* caller = llvm::isa<clang::StaticAssertDecl>(back)
                                        ? llvm::cast<clang::NamedDecl>(back->getDeclContext())
                                        : llvm::cast<clang::NamedDecl>(back);
-        auto callee = llvm::cast<clang::NamedDecl>(expr->getCalleeDecl());
+        auto callee =
+            expr->getCalleeDecl() ? llvm::cast<clang::NamedDecl>(expr->getCalleeDecl()) : nullptr;
         if(callee && caller) {
-            handleRelation(caller, RelationKind::Caller, callee);
-            handleRelation(callee, RelationKind::Callee, caller);
+            handleRelation(caller, RelationKind::Caller, callee, expr->getSourceRange());
+            handleRelation(callee, RelationKind::Callee, caller, expr->getSourceRange());
         }
         return true;
     }
