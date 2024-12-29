@@ -16,6 +16,16 @@ TEST(Index, Test) {
 
     std::size_t total = 0;
     for(auto& [id, index]: indices) {
+        // for(auto&& symbol: index.symbols()) {
+        //     print("Symbol: {}, Kind: {}\n", symbol.name(), symbol.kind().name());
+        //     for(auto&& relation: symbol.relations()) {
+        //         print(" Relation: {}, Range: {}, Symbol: {}\n",
+        //               relation.kind().name(),
+        //               json::serialize(relation.range()),
+        //               relation.symbol().name());
+        //     }
+        // }
+
         auto& srcMgr = tester.info.srcMgr();
         auto entry = srcMgr.getFileEntryRefForID(id);
 
@@ -23,6 +33,11 @@ TEST(Index, Test) {
         auto err = fs::real_path(entry->getName(), path);
         print("File: {}, Size: {}k\n", path.str(), index.size / 1024);
         total += index.size;
+
+        if(path == "/usr/include/stdlib.h") {
+            llvm::raw_fd_ostream os("stdlib.json", err);
+            os << index.toJSON();
+        }
     }
 
     print("Total size: {}k\n", total / 1024);

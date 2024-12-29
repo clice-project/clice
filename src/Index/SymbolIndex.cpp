@@ -1,149 +1,8 @@
+#include "BinarySymbolIndex.h"
 #include "Compiler/Semantic.h"
-#include "Index/SymbolIndex.h"
 #include "clang/Index/USRGeneration.h"
 
 namespace clice::index {
-
-namespace {
-
-/// This namespace defines the binary format of the index file. Generally,
-/// transform all pointer to offset to base address and cache location in the
-/// location array. And data only will be deserialized when it is accessed.
-namespace binary {
-
-template <typename T>
-struct Array {
-    /// offset to index start.
-    uint32_t offset;
-
-    /// number of elements.
-    uint32_t size;
-};
-
-using String = Array<char>;
-
-struct Relation {
-    RelationKind kind;
-    uint32_t location = std::numeric_limits<uint32_t>::max();
-    uint32_t extra = std::numeric_limits<uint32_t>::max();
-};
-
-struct Symbol {
-    uint64_t id;
-    String name;
-    SymbolKind kind;
-    Array<Relation> relations;
-};
-
-struct Occurrence {
-    uint32_t location = std::numeric_limits<uint32_t>::max();
-    uint32_t symbol = std::numeric_limits<uint32_t>::max();
-};
-
-struct SymbolIndex {
-    Array<Symbol> symbols;
-    Array<Occurrence> occurrences;
-    Array<Location> locations;
-};
-
-struct ProxyIndex : SymbolIndex {
-    llvm::StringRef getString(String string) const {
-        return {reinterpret_cast<const char*>(this) + string.offset, string.size};
-    }
-
-    template <typename T>
-    llvm::ArrayRef<T> getArray(Array<T> array) const {
-        return {reinterpret_cast<const T*>(reinterpret_cast<const char*>(this) + array.offset),
-                array.size};
-    }
-
-    llvm::ArrayRef<Symbol> getSymbols() const {
-        return getArray(symbols);
-    }
-
-    llvm::ArrayRef<Occurrence> getOccurrences() const {
-        return getArray(occurrences);
-    }
-
-    llvm::ArrayRef<Location> getLocations() const {
-        return getArray(locations);
-    }
-
-    template <typename To, typename From>
-    ArrayView<To> getArrayView(Array<From> array) const {
-        auto base = reinterpret_cast<const char*>(this);
-        return {base, base + array.offset, array.size, sizeof(From)};
-    }
-};
-
-}  // namespace binary
-
-}  // namespace
-
-RelationKind SymbolIndex::Relation::kind() {
-    return static_cast<const binary::Relation*>(data)->kind;
-}
-
-Location SymbolIndex::Relation::range() {
-    auto index = static_cast<const binary::ProxyIndex*>(base);
-    auto relation = static_cast<const binary::Relation*>(data);
-    assert(relation->location != std::numeric_limits<uint32_t>::max() &&
-           "Invalid location reference");
-    return index->getLocations()[relation->location];
-}
-
-SymbolIndex::Symbol SymbolIndex::Relation::symbol() {
-    auto index = static_cast<const binary::ProxyIndex*>(base);
-    auto relation = static_cast<const binary::Relation*>(data);
-    assert(relation->extra != std::numeric_limits<uint32_t>::max() && "Invalid extra reference");
-    return {base, &index->getSymbols()[relation->extra]};
-}
-
-uint64_t SymbolIndex::SymbolID::id() {
-    return static_cast<const binary::Symbol*>(data)->id;
-}
-
-llvm::StringRef SymbolIndex::SymbolID::name() {
-    auto index = static_cast<const binary::ProxyIndex*>(base);
-    auto symbol = static_cast<const binary::Symbol*>(data);
-    return index->getString(symbol->name);
-}
-
-SymbolKind SymbolIndex::Symbol::kind() {
-    return static_cast<const binary::Symbol*>(data)->kind;
-}
-
-ArrayView<SymbolIndex::Relation> SymbolIndex::Symbol::relations() {
-    auto index = static_cast<const binary::ProxyIndex*>(base);
-    auto symbol = static_cast<const binary::Symbol*>(data);
-    return index->getArrayView<SymbolIndex::Relation>(symbol->relations);
-}
-
-Location SymbolIndex::Occurrence::location() {
-    auto index = static_cast<const binary::ProxyIndex*>(base);
-    auto occurrence = static_cast<const binary::Occurrence*>(data);
-    assert(occurrence->location != std::numeric_limits<uint32_t>::max() &&
-           "Invalid occurrence reference");
-    return index->getLocations()[occurrence->location];
-}
-
-SymbolIndex::Symbol SymbolIndex::Occurrence::symbol() {
-    auto index = static_cast<const binary::ProxyIndex*>(base);
-    auto occurrence = static_cast<const binary::Occurrence*>(data);
-    assert(occurrence->symbol != std::numeric_limits<uint32_t>::max() &&
-           "Invalid symbol reference");
-    return {base, &index->getSymbols()[occurrence->symbol]};
-}
-
-ArrayView<SymbolIndex::Symbol> SymbolIndex::symbols() {
-    auto index = static_cast<const binary::ProxyIndex*>(base);
-    return index->getArrayView<SymbolIndex::Symbol>(index->symbols);
-}
-
-ArrayView<SymbolIndex::Occurrence> SymbolIndex::occurrences() {
-    auto index = static_cast<const binary::ProxyIndex*>(base);
-    return index->getArrayView<SymbolIndex::Occurrence>(index->occurrences);
-}
 
 namespace {
 
@@ -177,7 +36,7 @@ public:
         std::vector<binary::Occurrence> occurrences;
         std::vector<Location> locations;
 
-        llvm::DenseMap<const clang::Decl*, uint32_t> symbolCache;
+        llvm::DenseMap<const void*, uint32_t> symbolCache;
         llvm::DenseMap<std::pair<clang::SourceLocation, clang::SourceLocation>, uint32_t>
             locationCache;
     };
@@ -189,6 +48,7 @@ public:
         uint32_t locationBegin = 0;
         uint32_t stringBegin = 0;
         char* buffer;
+        File* file;
 
         binary::String writeString(llvm::StringRef string) {
             auto size = string.size();
@@ -203,6 +63,7 @@ public:
             auto offset = relationBegin;
             std::memcpy(buffer + relationBegin, &relation, sizeof(relation));
             relationBegin += sizeof(relation);
+
             return relation;
         }
 
@@ -213,11 +74,10 @@ public:
             return occurrence;
         }
 
-        Location writeLocation(Location location) {
+        void writeLocation(Location location) {
             auto offset = locationBegin;
             std::memcpy(buffer + locationBegin, &location, sizeof(location));
             locationBegin += sizeof(location);
-            return location;
         }
 
         binary::Symbol writeSymbol(Symbol symbol) {
@@ -239,20 +99,41 @@ public:
         }
 
         SymbolIndex writeIndex(File& file) {
+
+            /// ========================================
+            /// |              SymbolIndex             |
+            /// ========================================
+            /// |                Symbols               |
+            /// ========================================
+            /// |              Occurrences             |
+            /// ========================================
+            /// |               Relations              |
+            /// ========================================
+            /// |               Locations              |
+            /// ========================================
+            /// |                Strings               |
+            /// ========================================
+
             symbolBegin = sizeof(binary::SymbolIndex);
+
             occurrenceBegin = symbolBegin + file.symbols.size() * sizeof(binary::Symbol);
+
             relationBegin = occurrenceBegin + file.occurrences.size() * sizeof(binary::Occurrence);
+
+            locationBegin = relationBegin;
             for(auto& symbol: file.symbols) {
-                relationBegin += symbol.relations.size() * sizeof(binary::Relation);
+                locationBegin += symbol.relations.size() * sizeof(binary::Relation);
             }
-            locationBegin = relationBegin + file.occurrences.size() * sizeof(binary::Relation);
+
             stringBegin = locationBegin + file.locations.size() * sizeof(Location);
+
             std::size_t size = stringBegin;
             for(auto& symbol: file.symbols) {
                 size += symbol.name.size() + 1;
             }
 
             buffer = static_cast<char*>(std::malloc(size));
+            this->file = &file;
             auto index = new (buffer) binary::SymbolIndex{};
 
             index->symbols = {symbolBegin, static_cast<uint32_t>(file.symbols.size())};
@@ -261,6 +142,14 @@ public:
 
             for(auto& symbol: file.symbols) {
                 writeSymbol(symbol);
+            }
+
+            for(auto& occurrence: file.occurrences) {
+                writeOccurrence(occurrence);
+            }
+
+            for(auto& location: file.locations) {
+                writeLocation(location);
             }
 
             return SymbolIndex(buffer, size);
@@ -296,6 +185,8 @@ public:
         return iter->second;
     }
 
+    /// TODO: handle macro reference.
+
     auto getLocation(File& file, clang::SourceRange range) {
         /// add new location.
         auto [begin, end] = range;
@@ -304,7 +195,7 @@ public:
             auto presumedBegin = srcMgr.getPresumedLoc(begin);
             auto presumedEnd = srcMgr.getPresumedLoc(end);
             auto length = info.getTokenLength(end);
-            file.locations.push_back(Location{
+            file.locations.emplace_back(Location{
                 .begin = {presumedBegin.getLine(), presumedBegin.getColumn()       },
                 .end = {presumedEnd.getLine(),   presumedEnd.getColumn() + length},
             });
@@ -359,6 +250,15 @@ public:
         file.occurrences.emplace_back(binary::Occurrence{loc, symbol});
     }
 
+    void handleMacroOccurrence(const clang::MacroInfo* def,
+                               clang::SourceLocation location,
+                               RelationKind kind) {
+        auto spelling = srcMgr.getSpellingLoc(location);
+        clang::FileID id = srcMgr.getFileID(spelling);
+        assert(id.isValid() && "Invalid file id");
+        auto& file = files[id];
+    }
+
     void handleRelation(const clang::NamedDecl* decl,
                         RelationKind kind,
                         const clang::NamedDecl* target,
@@ -400,7 +300,7 @@ public:
     }
 
 private:
-    llvm::DenseMap<const clang::Decl*, uint64_t> symbolIDs;
+    llvm::DenseMap<const void*, uint64_t> symbolIDs;
     llvm::DenseMap<clang::FileID, File> files;
 };
 

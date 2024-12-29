@@ -3,6 +3,7 @@
 #include "Basic/RelationKind.h"
 #include "Basic/SymbolKind.h"
 #include "Compiler/Compiler.h"
+#include "Support/JSON.h"
 
 namespace clice::index {
 
@@ -36,7 +37,7 @@ public:
         Iterator(const void* base, const void* data, std::size_t stride) :
             Relative{base, data}, stride(stride) {}
 
-        T operator* () {
+        T operator* () const {
             return T{base, data};
         }
 
@@ -51,12 +52,20 @@ public:
         std::size_t stride;
     };
 
-    Iterator begin() {
+    Iterator begin() const {
         return Iterator(base, data, stride);
     }
 
-    Iterator end() {
+    Iterator end() const {
         return Iterator(base, static_cast<const char*>(data) + size * stride, stride);
+    }
+
+    uint32_t length() const {
+        return size;
+    }
+
+    T operator[] (uint32_t index) const {
+        return T{base, static_cast<const char*>(data) + index * stride};
     }
 
     bool operator== (const ArrayView& other) const = default;
@@ -83,49 +92,51 @@ public:
 
     struct Relation : Relative {
         /// Relation kind.
-        RelationKind kind();
+        RelationKind kind() const;
 
         /// Occurrence range.
-        Location range();
+        Location range() const;
 
-        Symbol symbol();
+        Symbol symbol() const;
     };
 
     struct SymbolID : Relative {
         /// Symbol id.
-        uint64_t id();
+        uint64_t id() const;
 
         /// Symbol name.
-        llvm::StringRef name();
+        llvm::StringRef name() const;
     };
 
     struct Symbol : SymbolID {
         /// Symbol kind.
-        SymbolKind kind();
+        SymbolKind kind() const;
 
         /// All relations of this symbol.
-        ArrayView<Relation> relations();
+        ArrayView<Relation> relations() const;
     };
 
     struct Occurrence : Relative {
         /// Occurrence range.
-        Location location();
+        Location location() const;
 
         /// Occurrence symbol.
-        Symbol symbol();
+        Symbol symbol() const;
     };
 
     /// All symbols in the index.
-    ArrayView<Symbol> symbols();
+    ArrayView<Symbol> symbols() const;
 
     /// All occurrences in the index.
-    ArrayView<Occurrence> occurrences();
+    ArrayView<Occurrence> occurrences() const;
 
     /// Locate symbols at the given position.
-    ArrayView<Symbol> locateSymbols(Position position);
+    ArrayView<Symbol> locateSymbols(Position position) const;
 
     /// Locate symbol with the given id(usually from another index).
-    Symbol locateSymbol(SymbolID ID);
+    Symbol locateSymbol(SymbolID ID) const;
+
+    json::Value toJSON() const;
 
 public:
     void* base;
