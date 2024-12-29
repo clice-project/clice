@@ -213,7 +213,7 @@ public:
             return true;
         }() && "Invalid import declaration");
 
-        getDerived().handleOccurrence(tokens[0].location(), tokens.drop_front(1));
+        handleModuleOccurrence(tokens[0].location(), tokens.drop_front(1));
 
         return true;
     }
@@ -723,12 +723,11 @@ public:
 
     VISIT_EXPR(CallExpr) {
         // FIXME: consider lambda expression.
-        auto caller = decls.back();
-        if(llvm::isa<clang::StaticAssertDecl>(caller)) {
-            caller = llvm::cast<clang::NamedDecl>(caller->getDeclContext());
-        }
-
-        auto callee = expr->getCalleeDecl();
+        auto back = decls.back();
+        clang::NamedDecl* caller = llvm::isa<clang::StaticAssertDecl>(back)
+                                       ? llvm::cast<clang::NamedDecl>(back->getDeclContext())
+                                       : llvm::cast<clang::NamedDecl>(back);
+        auto callee = llvm::cast<clang::NamedDecl>(expr->getCalleeDecl());
         if(callee && caller) {
             handleRelation(caller, RelationKind::Caller, callee);
             handleRelation(callee, RelationKind::Callee, caller);

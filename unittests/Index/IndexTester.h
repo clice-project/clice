@@ -96,6 +96,7 @@ struct IndexTester : Tester {
         }
 
         EXPECT_FAILURE("definition not found", current);
+        return *this;
     }
 };
 
