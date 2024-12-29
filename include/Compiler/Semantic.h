@@ -4,106 +4,11 @@
 #include "Resolver.h"
 #include "Utility.h"
 
+#include "Basic/RelationKind.h"
+#include "Basic/SymbolKind.h"
 #include "Support/Support.h"
 
 namespace clice {
-
-/// In the LSP, there are several different kinds, such as `SemanticTokenType`,
-/// `CompletionItemKind`, and `SymbolKind`. Unfortunately, these kinds do not cover all the semantic
-/// information we need. It's also inconsistent that some kinds exist in one category but not in
-/// another, for example, `Namespace` is present in `SemanticTokenType` but not in
-/// `CompletionItemKind`. To address this, we define our own `SymbolKind`, which will be used
-/// consistently across our responses to the client and in the index. Users who prefer to stick to
-/// standard LSP kinds can map our `SymbolKind` to the corresponding LSP kinds through
-/// configuration.
-struct SymbolKind : refl::Enum<SymbolKind, false, uint8_t> {
-    enum Kind : uint8_t {
-        Comment = 0,     ///< C/C++ comments.
-        Number,          ///< C/C++ number literal.
-        Character,       ///< C/C++ character literal.
-        String,          ///< C/C++ string literal.
-        Keyword,         ///< C/C++ keyword.
-        Directive,       ///< C/C++ preprocessor directive, e.g. `#include`.
-        Header,          ///< C/C++ header name, e.g. `<iostream>` and `"foo.h"`.
-        Module,          ///< C++20 module name.
-        Macro,           ///< C/C++ macro.
-        MacroParameter,  ///< C/C++ macro parameter.
-        Namespace,       ///> C++ namespace.
-        Class,           ///> C/C++ class.
-        Struct,          ///> C/C++ struct.
-        Union,           ///> C/C++ union.
-        Enum,            ///> C/C++ enum.
-        Type,            ///> C/C++ type alias and C++ template type parameter.
-        Field,           ///> C/C++ field.
-        EnumMember,      ///> C/C++ enum member.
-        Function,        ///> C/C++ function.
-        Method,          ///> C++ method.
-        Variable,        ///> C/C++ variable, includes C++17 structured bindings.
-        Parameter,       ///> C/C++ parameter.
-        Label,           ///> C/C++ label.
-        Concept,         ///> C++20 concept.
-        Attribute,       ///> GNU/MSVC/C++11/C23 attribute.
-        Operator,        ///> C/C++ operator.
-        Paren,           ///> `(` and `)`.
-        Bracket,         ///> `[` and `]`.
-        Brace,           ///> `{` and `}`.
-        Angle,           ///> `<` and `>`.
-        Invalid,
-    };
-
-    using Enum::Enum;
-
-    constexpr inline static auto InvalidEnum = Kind::Invalid;
-
-    static SymbolKind from(const clang::Decl* decl);
-
-    static SymbolKind from(const clang::tok::TokenKind kind);
-};
-
-/// A bit field enum to describe the kind of relation between two symbols.
-struct RelationKind : refl::Enum<RelationKind, true, uint32_t> {
-    enum Kind : uint32_t {
-        Invalid,
-        Declaration,
-        Definition,
-        Reference,
-        // Write Relation.
-        Read,
-        Write,
-        Interface,
-        Implementation,
-        /// When target is a type definition of source, source is possible type or constructor.
-        TypeDefinition,
-
-        /// When target is a base class of source.
-        Base,
-        /// When target is a derived class of source.
-        Derived,
-
-        /// When target is a constructor of source.
-        Constructor,
-        /// When target is a destructor of source.
-        Destructor,
-
-        // When target is a caller of source.
-        Caller,
-        // When target is a callee of source.
-        Callee,
-    };
-
-    using Enum::Enum;
-};
-
-enum class OccurrenceKind {
-    /// This occurrence directly corresponds to a unique source symbol.
-    Source,
-    /// This occurrence is a macro expansion.
-    MacroExpansion,
-    /// This occurrence is from `PseudoInstantiation` and may be not correct.
-    PseudoInstantiation,
-    /// This occurrence is from `ImplicitInstantiation` or `ExplicitInstantiation` of a template.
-    Instantiation,
-};
 
 template <typename Derived>
 class SemanticVisitor : public clang::RecursiveASTVisitor<SemanticVisitor<Derived>> {
@@ -141,18 +46,42 @@ public:
     /// So a location will be just visited once. But in some other cases,
     /// a location may correspond to multiple decls. Note that we already
     /// filter some nodes with invalid location.
-    ///
-    /// Always uses spelling location if the original location is a macro location.
-    void handleOccurrence(const clang::Decl* decl, clang::SourceRange range, RelationKind kind) {}
+
+    /// Invoked when a declaration occur in source code.
+    /// @param decl The decl corresponding to the symbol.
+    /// @param kind The kind of the occurrence, such as declaration, definition, reference.
+    /// @param location The location of the occurrence. Note that declaration name must be one
+    /// token, so just one source location is enough.
+    void handleDeclOccurrence(const clang::Decl* decl,
+                              RelationKind kind,
+                              clang::SourceLocation location) {
+        assert(decl && "Invalid decl");
+        assert(kind.is_one_of(RelationKind::Declaration,
+                              RelationKind::Definition,
+                              RelationKind::Reference) &&
+               "Invalid kind");
+        assert(location.isValid() && location.isFileID() && "Invalid location");
+
+        /// If the derived class has its own implementation, we call it.
+        if constexpr(!std::same_as<decltype(&SemanticVisitor::handleDeclOccurrence),
+                                   decltype(&Derived::handleDeclOccurrence)>) {
+            getDerived().handleDeclOccurrence(decl, location, kind);
+        }
+    }
+
+    void handleMacroOccurrence() {}
 
     /// Builtin type doesn't have corresponding decl. So we handle it separately.
     /// And it is possible that a builtin type is composed of multiple tokens.
     /// e.g. `unsigned long long`.
-    void handleOccurrence(const clang::BuiltinType* type,
-                          clang::SourceRange range,
-                          OccurrenceKind kind = OccurrenceKind::Source) {}
+    void handleOccurrence(const clang::BuiltinType* type, clang::SourceRange range) {}
 
     void handleOccurrence(const clang::Attr* attr, clang::SourceRange range) {}
+
+    void handleRelation(const clang::Decl* decl,
+                        RelationKind kind,
+                        const clang::Decl* target,
+                        clang::SourceRange range) {}
 
 public:
     /// ============================================================================

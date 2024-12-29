@@ -16,7 +16,7 @@ struct Include {
 };
 
 struct Condition {
-    enum BranchKind : uint8_t {
+    enum class BranchKind : uint8_t {
         If = 0,
         Elif,
         Ifdef,
@@ -27,12 +27,16 @@ struct Condition {
         EndIf,
     };
 
-    enum ConditionValue : uint8_t {
+    using enum BranchKind;
+
+    enum class ConditionValue : uint8_t {
         True = 0,
         False,
         Skipped,
         None,
     };
+
+    using enum ConditionValue;
 
     /// Kind of the branch.
     BranchKind kind;
@@ -48,11 +52,13 @@ struct Condition {
 };
 
 struct MacroRef {
-    enum Kind : uint8_t {
+    enum class Kind : uint8_t {
         Def = 0,
         Ref,
         Undef,
     };
+
+    using enum Kind;
 
     /// Kind of the macro reference.
     Kind kind;
