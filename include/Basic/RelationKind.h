@@ -10,6 +10,7 @@ struct RelationKind : refl::Enum<RelationKind, true, uint32_t> {
         Declaration,
         Definition,
         Reference,
+        WeakReference,
         // Write Relation.
         Read,
         Write,

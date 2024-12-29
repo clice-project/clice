@@ -60,14 +60,14 @@ struct MacroRef {
 
     using enum Kind;
 
+    /// The macro definition information.
+    const clang::MacroInfo* macro;
+
     /// Kind of the macro reference.
     Kind kind;
 
     /// The location of the macro name.
     clang::SourceLocation loc;
-
-    /// The macro definition information.
-    const clang::MacroInfo* macro;
 };
 
 /// Do we need to store pragma information?
