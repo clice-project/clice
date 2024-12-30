@@ -128,7 +128,7 @@ ArrayView<SymbolIndex::Occurrence> SymbolIndex::occurrences() const {
 
 /// Locate symbols at the given position.
 void SymbolIndex::locateSymbols(uint32_t position,
-                                llvm::SmallVectorImpl<SymbolIndex::Symbol> symbols) const {
+                                llvm::SmallVectorImpl<SymbolIndex::Symbol>& symbols) const {
     auto index = static_cast<const SymbolIndexVisitor*>(base);
     auto occurrences = index->getOccurrences();
     auto iter = std::ranges::lower_bound(occurrences, position, {}, [&](const auto& occurrence) {

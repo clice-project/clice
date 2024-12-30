@@ -75,7 +75,7 @@ public:
     ArrayView<Occurrence> occurrences() const;
 
     /// Locate symbols at the given position.
-    void locateSymbols(uint32_t position, llvm::SmallVectorImpl<Symbol> symbols) const;
+    void locateSymbols(uint32_t position, llvm::SmallVectorImpl<Symbol>& symbols) const;
 
     /// Locate symbol with the given id(usually from another index).
     Symbol locateSymbol(SymbolID ID) const;

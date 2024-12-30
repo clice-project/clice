@@ -7,7 +7,9 @@ namespace {
 TEST(Index, Test) {
 
     const char* code = R"cpp(
-#include <vector>
+void $(1)foo();
+
+void $(2)foo() {}
 )cpp";
 
     IndexTester tester{"main.cpp", code};
@@ -15,31 +17,24 @@ TEST(Index, Test) {
     auto indices = index::test(tester.info);
 
     std::size_t total = 0;
+    llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
+    tester.GotoDefinition("1", "2");
+
     for(auto& [id, index]: indices) {
-        // for(auto&& symbol: index.symbols()) {
-        //     print("Symbol: {}, Kind: {}\n", symbol.name(), symbol.kind().name());
-        //     for(auto&& relation: symbol.relations()) {
-        //         print(" Relation: {}, Range: {}, Symbol: {}\n",
-        //               relation.kind().name(),
-        //               json::serialize(relation.range()),
-        //               relation.symbol().name());
-        //     }
+        // auto& srcMgr = tester.info.srcMgr();
+        // auto entry = srcMgr.getFileEntryRefForID(id);
+        // if(!entry) {
+        //     continue;
         // }
-
-        auto& srcMgr = tester.info.srcMgr();
-        auto entry = srcMgr.getFileEntryRefForID(id);
-        if(!entry) {
-            continue;
-        }
-        llvm::SmallString<128> path;
-        auto err = fs::real_path(entry->getName(), path);
-        print("File: {}, Size: {}k\n", path.str(), index.size / 1024);
-        total += index.size;
-
-        if(path == "/usr/include/c++/13/bits/stl_vector.h") {
-            llvm::raw_fd_ostream os("stdlib.json", err);
-            os << index.toJSON();
-        }
+        // llvm::SmallString<128> path;
+        // auto err = fs::real_path(entry->getName(), path);
+        // print("File: {}, Size: {}k\n", path.str(), index.size / 1024);
+        // total += index.size;
+        //
+        // if(path == "/usr/include/c++/13/bits/stl_vector.h") {
+        //    llvm::raw_fd_ostream os("stdlib.json", err);
+        //    os << index.toJSON();
+        //}
     }
 
     print("Total size: {}k\n", total / 1024);

@@ -343,6 +343,27 @@ public:
     /// struct/class/union/enum Foo { ... };
     ///                          ^~~~ declaration/definition
     VISIT_DECL(TagDecl) {
+        if(auto CTSD = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(decl)) {
+            switch(CTSD->getSpecializationKind()) {
+                case clang::TSK_Undeclared:
+                case clang::TSK_ImplicitInstantiation: {
+                    std::unreachable();
+                }
+
+                case clang::TSK_ExplicitSpecialization: {
+                    break;
+                }
+
+                case clang::TSK_ExplicitInstantiationDeclaration:
+                case clang::TSK_ExplicitInstantiationDefinition: {
+                    auto decl = instantiatedFrom(CTSD);
+                    handleDeclOccurrence(decl, RelationKind::Reference, CTSD->getLocation());
+                    handleRelation(decl, RelationKind::Reference, decl, CTSD->getLocation());
+                    return true;
+                }
+            }
+        }
+
         RelationKind kind = decl->isThisDeclarationADefinition() ? RelationKind::Definition
                                                                  : RelationKind::Declaration;
         handleDeclOccurrence(decl, kind, decl->getLocation());
