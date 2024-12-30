@@ -1,4 +1,5 @@
-#include "Compiler/Semantic.h"
+#include "Basic/SymbolKind.h"
+#include "Compiler/Compiler.h"
 
 namespace clice {
 

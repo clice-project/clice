@@ -102,7 +102,8 @@ inline void EXPECT_FAILURE(std::string msg,
 }
 
 template <typename LHS, typename RHS>
-inline void EXPECT_EQ(const LHS& lhs, const RHS& rhs,
+inline void EXPECT_EQ(const LHS& lhs,
+                      const RHS& rhs,
                       std::source_location current = std::source_location::current()) {
     if(!refl::equal(lhs, rhs)) {
         std::string expect;
@@ -124,7 +125,8 @@ inline void EXPECT_EQ(const LHS& lhs, const RHS& rhs,
 }
 
 template <typename LHS, typename RHS>
-inline void EXPECT_NE(const LHS& lhs, const RHS& rhs,
+inline void EXPECT_NE(const LHS& lhs,
+                      const RHS& rhs,
                       std::source_location current = std::source_location::current()) {
     if(refl::equal(lhs, rhs)) {
         std::string expect;
@@ -154,6 +156,7 @@ public:
     /// Annoated locations.
     std::vector<std::string> sources;
     llvm::StringMap<proto::Position> locations;
+    llvm::StringMap<std::uint32_t> offsets;
 
 public:
     Tester(llvm::StringRef file, llvm::StringRef content) {
@@ -171,6 +174,8 @@ public:
 
         uint32_t line = 0;
         uint32_t column = 0;
+        uint32_t offset = 0;
+
         for(uint32_t i = 0; i < content.size();) {
             auto c = content[i];
 
@@ -179,6 +184,7 @@ public:
                 auto key = content.substr(i).take_until([](char c) { return c == ' '; });
                 assert(!locations.contains(key) && "duplicate key");
                 locations.try_emplace(key, line, column);
+                offsets.try_emplace(key, offset);
                 continue;
             }
 
@@ -189,6 +195,7 @@ public:
                 i += key.size() + 1;
                 assert(!locations.contains(key) && "duplicate key");
                 locations.try_emplace(key, line, column);
+                offsets.try_emplace(key, offset);
                 continue;
             }
 
@@ -200,6 +207,8 @@ public:
             }
 
             i += 1;
+            offset += 1;
+
             source.push_back(c);
         }
 
@@ -230,7 +239,8 @@ public:
         return *this;
     }
 
-    Tester& equal(const auto& lhs, const auto& rhs,
+    Tester& equal(const auto& lhs,
+                  const auto& rhs,
                   std::source_location loc = std::source_location::current()) {
         if(!refl::equal(lhs, rhs)) {
             return fail(lhs, rhs, loc);
@@ -238,7 +248,8 @@ public:
         return *this;
     }
 
-    Tester& expect(llvm::StringRef name, clang::SourceLocation loc,
+    Tester& expect(llvm::StringRef name,
+                   clang::SourceLocation loc,
                    std::source_location current = std::source_location::current()) {
         auto pos = locations.lookup(name);
         auto presumed = info.srcMgr().getPresumedLoc(loc);

@@ -1,118 +1,149 @@
-#include "Index/Binary.h"
+#include "Index.h"
 
 namespace clice::index {
 
 namespace {
 
-class Packer {
-
-    template <typename T>
-    struct Section {
-        std::size_t offset;
-        std::size_t count;
-        std::vector<T> data;
-    };
-
-    template <typename... Ts>
-    struct Sections {
-        std::tuple<Section<Ts>...> sections;
-
-        /// FIXME: use more flexible way to initialize the layout.
-        void initLayout(std::size_t& offset, const memory::Index& index) {
-            get<binary::String>().count = index.commands.size();
-            get<binary::File>().count = index.files.size();
-            get<binary::Symbol>().count = index.symbols.size();
-            get<Occurrence>().count = index.occurrences.size();
-
-            for(auto& symbol: index.symbols) {
-                get<Relation>().count += symbol.relations.size();
-            }
-
-            get<Location>().count = index.locations.size();
-
-            auto foreach = [&]<typename T>() {
-                auto& section = std::get<Section<T>>(sections);
-                section.offset = offset;
-                section.data.reserve(section.count);
-                offset += section.count * sizeof(T);
-            };
-
-            (foreach.template operator()<Ts>(), ...);
-        }
-
-        template <typename T>
-        auto& get() {
-            return std::get<Section<T>>(sections);
-        }
-    };
-
+class SymbolIndexSerder {
 public:
-    template <typename In, typename Out>
-    void pack(const In& in, Out& out) {
-        if constexpr(requires { out = in; }) {
-            out = in;
-        } else {
-            refl::foreach(in, out, [&]<typename U>(const auto& in, U& out) { pack(in, out); });
+    binary::Array<binary::Symbol> writeSymbols(llvm::ArrayRef<memory::Symbol> symbols) {
+        auto begin = symbolsOffset;
+
+        for(auto& symbol: symbols) {
+            binary::Symbol binarySymbol{
+                .id = symbol.id,
+                .name = writeString(symbol.name),
+                .kind = symbol.kind,
+                .relations = writeRelations(symbol.relations),
+            };
+            std::memcpy(buffer + symbolsOffset, &binarySymbol, sizeof(binarySymbol));
+            symbolsOffset += sizeof(binary::Symbol);
         }
+
+        return {begin, static_cast<uint32_t>(symbols.size())};
     }
 
-    template <typename T, typename U>
-    void pack(const std::vector<T>& in, binary::Array<U>& out) {
-        auto& section = sections.get<U>();
-        out.size = in.size();
-        out.offset = section.offset + sizeof(U) * section.data.size();
+    /// FIXME: Some structs have same layout between memory and binary.
 
-        for(const auto& item: in) {
-            pack(item, section.data.emplace_back());
+    binary::Array<binary::Occurrence>
+        writeOccurrences(llvm::ArrayRef<memory::Occurrence> occurrences) {
+        auto begin = occurrencesOffset;
+
+        for(auto& occurrence: occurrences) {
+            binary::Occurrence binaryOccurrence{
+                .location = {occurrence.location},
+                .symbol = {occurrence.symbol},
+            };
+            std::memcpy(buffer + occurrencesOffset, &binaryOccurrence, sizeof(binaryOccurrence));
+            occurrencesOffset += sizeof(binary::Occurrence);
         }
+
+        return {begin, static_cast<uint32_t>(occurrences.size())};
     }
 
-    void pack(const memory::String& in, binary::String& out) {
-        out.size = in.size();
-        out.offset = stringOffset;
-
-        if(in.size() != 0) {
-            stringBuffer.insert(stringBuffer.end(), in.begin(), in.end());
-            stringBuffer.push_back('\0');
-            stringOffset += in.size() + 1;
+    binary::Array<binary::Relation> writeRelations(llvm::ArrayRef<memory::Relation> relations) {
+        auto begin = relationsOffset;
+        for(auto& relation: relations) {
+            binary::Relation binaryRelation{
+                .kind = relation.kind,
+                .data = {relation.data[0], relation.data[1]},
+            };
+            std::memcpy(buffer + relationsOffset, &binaryRelation, sizeof(binaryRelation));
+            relationsOffset += sizeof(binary::Relation);
         }
+        return {begin, static_cast<uint32_t>(relations.size())};
     }
 
-    std::vector<char> pack(const memory::Index& in) {
-        binary::Index out = {};
-        stringOffset = sizeof(binary::Index);
-        sections.initLayout(stringOffset, in);
+    binary::Array<LocalSourceRange> writeRange(llvm::ArrayRef<LocalSourceRange> ranges) {
+        auto begin = rangesOffset;
 
-        pack(in, out);
+        for(auto& range: ranges) {
+            std::memcpy(buffer + rangesOffset, &range, sizeof(LocalSourceRange));
+            rangesOffset += sizeof(LocalSourceRange);
+        }
 
-        std::vector<char> binary;
-        binary.reserve(stringOffset);
-        binary.insert(binary.end(),
-                      reinterpret_cast<char*>(&out),
-                      reinterpret_cast<char*>(&out + 1));
-        std::apply(
-            [&binary](auto&... section) {
-                (binary.insert(binary.end(),
-                               reinterpret_cast<char*>(section.data.data()),
-                               reinterpret_cast<char*>(section.data.data() + section.data.size())),
-                 ...);
-            },
-            sections.sections);
+        return {begin, static_cast<uint32_t>(ranges.size())};
+    }
 
-        binary.insert(binary.end(), stringBuffer.begin(), stringBuffer.end());
-        return binary;
+    binary::String writeString(llvm::StringRef string) {
+        auto size = string.size();
+        auto begin = stringsOffset;
+        std::memcpy(buffer + stringsOffset, string.data(), size);
+        buffer[stringsOffset + size] = '\0';
+        stringsOffset += size + 1;
+        return {begin, static_cast<uint32_t>(size)};
+    }
+
+    SymbolIndex build(const memory::SymbolIndex& index) {
+        /// Following is the layout of the binary index format.
+        /// We first calculate the size of each section and then
+        /// allocate a buffer and wirte the data to the buffer.
+        ///
+        ///     ========================================
+        ///     |              SymbolIndex             |
+        ///     ========================================
+        ///     |                Symbols               |
+        ///     ========================================
+        ///     |              Occurrences             |
+        ///     ========================================
+        ///     |               Relations              |
+        ///     ========================================
+        ///     |                Ranges                |
+        ///     ========================================
+        ///     |                Strings               |
+        ///     ========================================
+
+        symbolsOffset = sizeof(binary::SymbolIndex);
+
+        occurrencesOffset = symbolsOffset + index.symbols.size() * sizeof(binary::Symbol);
+
+        relationsOffset = occurrencesOffset + index.occurrences.size() * sizeof(binary::Occurrence);
+
+        rangesOffset = relationsOffset;
+        for(auto& symbol: index.symbols) {
+            rangesOffset += symbol.relations.size() * sizeof(binary::Relation);
+        }
+
+        stringsOffset = rangesOffset + index.ranges.size() * sizeof(LocalSourceRange);
+
+        totalSize = stringsOffset;
+        for(auto& symbol: index.symbols) {
+            totalSize += symbol.name.size() + 1;
+        }
+
+        buffer = static_cast<char*>(std::malloc(totalSize));
+
+        /// There are several padding in structs, And because we use need
+        /// to compare the binary index for megere, fill the buffer with 0.
+        std::memset(buffer, 0, totalSize);
+
+        auto binary = new (buffer) binary::SymbolIndex{};
+        binary->symbols = writeSymbols(index.symbols);
+        binary->occurrences = writeOccurrences(index.occurrences);
+        binary->ranges = writeRange(index.ranges);
+        return SymbolIndex{buffer, totalSize};
     }
 
 private:
-    Sections<binary::String, binary::File, binary::Symbol, Occurrence, Relation, Location> sections;
-    std::size_t stringOffset;
-    std::vector<char> stringBuffer;
+    uint32_t symbolsOffset = 0;
+    uint32_t occurrencesOffset = 0;
+    uint32_t relationsOffset = 0;
+    uint32_t rangesOffset = 0;
+    uint32_t stringsOffset = 0;
+    std::size_t totalSize = 0;
+
+    char* buffer = nullptr;
 };
 
 }  // namespace
 
-std::vector<char> toBinary(const memory::Index& index) {
-    return Packer().pack(index);
+SymbolIndex serialize(const memory::SymbolIndex& index) {
+    SymbolIndexSerder serder;
+    return serder.build(index);
+}
+
+binary::FeatureIndex* serialize(const memory::FeatureIndex& index) {
+    return nullptr;
 }
 
 }  // namespace clice::index
