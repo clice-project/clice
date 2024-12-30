@@ -51,4 +51,20 @@ struct TextEdit {
 
 }  // namespace clice::proto
 
+namespace clice {
+
+/// Represents a source location in a file, it is corresponding
+/// to the `clang::SourceLocation` but decoded.
+struct SourceLocation {
+    /// The line number (1-based).
+    uint32_t line;
+
+    /// The column number (1-based).
+    uint32_t column;
+
+    /// The file name.
+    std::string filename;
+};
+
+}  // namespace clice
 

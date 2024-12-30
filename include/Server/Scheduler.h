@@ -89,11 +89,11 @@ public:
                              llvm::unique_function<void(ASTInfo&)> action);
 
     /// Load all Information about PCHs and PCMs from disk.
-    void loadCache();
+    void load();
 
     /// Save all Information about PCHs and PCMs to disk.
     /// So that we can reuse them next time.
-    void saveCache() const;
+    void save() const;
 
 private:
     /// [file name] -> [PCHInfo]
