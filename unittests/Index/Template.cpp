@@ -7,7 +7,7 @@ namespace {
 TEST(Index, Test) {
 
     const char* code = R"cpp(
-#include <iostream>
+#include <vector>
 )cpp";
 
     IndexTester tester{"main.cpp", code};
@@ -28,13 +28,15 @@ TEST(Index, Test) {
 
         auto& srcMgr = tester.info.srcMgr();
         auto entry = srcMgr.getFileEntryRefForID(id);
-
+        if(!entry) {
+            continue;
+        }
         llvm::SmallString<128> path;
         auto err = fs::real_path(entry->getName(), path);
         print("File: {}, Size: {}k\n", path.str(), index.size / 1024);
         total += index.size;
 
-        if(path == "/usr/include/stdlib.h") {
+        if(path == "/usr/include/c++/13/bits/stl_vector.h") {
             llvm::raw_fd_ostream os("stdlib.json", err);
             os << index.toJSON();
         }

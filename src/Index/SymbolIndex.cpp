@@ -1,5 +1,8 @@
-#include "BinarySymbolIndex.h"
+#include "Index.h"
+
+#include "Index/SymbolIndex.h"
 #include "Compiler/Semantic.h"
+
 #include "clang/Index/USRGeneration.h"
 
 namespace clice::index {
@@ -20,143 +23,16 @@ const static clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
     return decl;
 }
 
-class SymbolIndexCollector : public SemanticVisitor<SymbolIndexCollector> {
+class SymbolIndexBuilder : public SemanticVisitor<SymbolIndexBuilder> {
 public:
-    SymbolIndexCollector(ASTInfo& info) : SemanticVisitor(info) {}
+    SymbolIndexBuilder(ASTInfo& info) : SemanticVisitor(info) {}
 
-    struct Symbol {
-        uint64_t id;
-        std::string name;
-        SymbolKind kind;
-        std::vector<binary::Relation> relations;
-    };
-
-    struct File {
-        std::vector<Symbol> symbols;
-        std::vector<binary::Occurrence> occurrences;
-        std::vector<Location> locations;
-
+    struct File : memory::SymbolIndex {
         llvm::DenseMap<const void*, uint32_t> symbolCache;
         llvm::DenseMap<std::pair<clang::SourceLocation, clang::SourceLocation>, uint32_t>
             locationCache;
     };
 
-    struct Encoder {
-        uint32_t symbolBegin = 0;
-        uint32_t occurrenceBegin = 0;
-        uint32_t relationBegin = 0;
-        uint32_t locationBegin = 0;
-        uint32_t stringBegin = 0;
-        char* buffer;
-        File* file;
-
-        binary::String writeString(llvm::StringRef string) {
-            auto size = string.size();
-            auto begin = stringBegin;
-            std::memcpy(buffer + stringBegin, string.data(), size);
-            buffer[stringBegin + size] = '\0';
-            stringBegin += size + 1;
-            return {begin, static_cast<uint32_t>(size)};
-        }
-
-        binary::Relation writeRelation(binary::Relation relation) {
-            auto offset = relationBegin;
-            std::memcpy(buffer + relationBegin, &relation, sizeof(relation));
-            relationBegin += sizeof(relation);
-
-            return relation;
-        }
-
-        binary::Occurrence writeOccurrence(binary::Occurrence occurrence) {
-            auto offset = occurrenceBegin;
-            std::memcpy(buffer + occurrenceBegin, &occurrence, sizeof(occurrence));
-            occurrenceBegin += sizeof(occurrence);
-            return occurrence;
-        }
-
-        void writeLocation(Location location) {
-            auto offset = locationBegin;
-            std::memcpy(buffer + locationBegin, &location, sizeof(location));
-            locationBegin += sizeof(location);
-        }
-
-        binary::Symbol writeSymbol(Symbol symbol) {
-            auto offset = symbolBegin;
-            binary::Symbol binarySymbol = {
-                .id = symbol.id,
-                .name = writeString(symbol.name),
-                .kind = symbol.kind,
-                .relations = {relationBegin, static_cast<uint32_t>(symbol.relations.size())},
-            };
-
-            for(auto& relation: symbol.relations) {
-                writeRelation(relation);
-            }
-
-            std::memcpy(buffer + offset, &binarySymbol, sizeof(binarySymbol));
-            symbolBegin += sizeof(binary::Symbol);
-            return binarySymbol;
-        }
-
-        SymbolIndex writeIndex(File& file) {
-
-            /// ========================================
-            /// |              SymbolIndex             |
-            /// ========================================
-            /// |                Symbols               |
-            /// ========================================
-            /// |              Occurrences             |
-            /// ========================================
-            /// |               Relations              |
-            /// ========================================
-            /// |               Locations              |
-            /// ========================================
-            /// |                Strings               |
-            /// ========================================
-
-            symbolBegin = sizeof(binary::SymbolIndex);
-
-            occurrenceBegin = symbolBegin + file.symbols.size() * sizeof(binary::Symbol);
-
-            relationBegin = occurrenceBegin + file.occurrences.size() * sizeof(binary::Occurrence);
-
-            locationBegin = relationBegin;
-            for(auto& symbol: file.symbols) {
-                locationBegin += symbol.relations.size() * sizeof(binary::Relation);
-            }
-
-            stringBegin = locationBegin + file.locations.size() * sizeof(Location);
-
-            std::size_t size = stringBegin;
-            for(auto& symbol: file.symbols) {
-                size += symbol.name.size() + 1;
-            }
-
-            buffer = static_cast<char*>(std::malloc(size));
-            this->file = &file;
-            auto index = new (buffer) binary::SymbolIndex{};
-
-            index->symbols = {symbolBegin, static_cast<uint32_t>(file.symbols.size())};
-            index->occurrences = {occurrenceBegin, static_cast<uint32_t>(file.occurrences.size())};
-            index->locations = {locationBegin, static_cast<uint32_t>(file.locations.size())};
-
-            for(auto& symbol: file.symbols) {
-                writeSymbol(symbol);
-            }
-
-            for(auto& occurrence: file.occurrences) {
-                writeOccurrence(occurrence);
-            }
-
-            for(auto& location: file.locations) {
-                writeLocation(location);
-            }
-
-            return SymbolIndex(buffer, size);
-        }
-    };
-
-public:
     /// Get the symbol id for the given decl.
     uint64_t getSymbolID(const clang::Decl* decl) {
         auto iter = symbolIDs.find(decl);
@@ -176,7 +52,7 @@ public:
         auto [iter, success] = file.symbolCache.try_emplace(decl, file.symbols.size());
         /// If insert success, then we need to add a new symbol.
         if(success) {
-            file.symbols.emplace_back(Symbol{
+            file.symbols.emplace_back(memory::Symbol{
                 .id = getSymbolID(decl),
                 .name = decl->getNameAsString(),
                 .kind = SymbolKind::from(decl),
@@ -190,14 +66,14 @@ public:
     auto getLocation(File& file, clang::SourceRange range) {
         /// add new location.
         auto [begin, end] = range;
-        auto [iter, success] = file.locationCache.try_emplace({begin, end}, file.locations.size());
+        auto [iter, success] = file.locationCache.try_emplace({begin, end}, file.ranges.size());
         if(success) {
-            auto presumedBegin = srcMgr.getPresumedLoc(begin);
-            auto presumedEnd = srcMgr.getPresumedLoc(end);
+            auto presumedBegin = srcMgr.getDecomposedExpansionLoc(begin);
+            auto presumedEnd = srcMgr.getDecomposedExpansionLoc(end);
             auto length = info.getTokenLength(end);
-            file.locations.emplace_back(Location{
-                .begin = {presumedBegin.getLine(), presumedBegin.getColumn()       },
-                .end = {presumedEnd.getLine(),   presumedEnd.getColumn() + length},
+            file.ranges.emplace_back(LocalSourceRange{
+                .begin = presumedBegin.second,
+                .end = presumedEnd.second + length,
             });
         }
         return iter->second;
@@ -221,7 +97,7 @@ public:
 
         /// Adjust the all symbol references.
         for(auto& occurrence: file.occurrences) {
-            occurrence.symbol = old2new[occurrence.symbol];
+            occurrence.symbol = {old2new[occurrence.symbol]};
         }
 
         /// FIXME: may need to adjust the relations.
@@ -229,7 +105,7 @@ public:
         /// Sort occurrences by `Occurrence::Location`. Note that file is the first field of
         /// `Location`, this means that location with the same file will be adjacent.
         std::ranges::sort(file.occurrences, refl::less, [&](const auto& occurrence) {
-            return file.locations[occurrence.location];
+            return file.ranges[occurrence.location];
         });
     }
 
@@ -247,7 +123,7 @@ public:
 
         auto symbol = getSymbol(file, decl);
         auto loc = getLocation(file, {spelling, spelling});
-        file.occurrences.emplace_back(binary::Occurrence{loc, symbol});
+        file.occurrences.emplace_back(memory::Occurrence{loc, symbol});
     }
 
     void handleMacroOccurrence(const clang::MacroInfo* def,
@@ -257,12 +133,15 @@ public:
         clang::FileID id = srcMgr.getFileID(spelling);
         assert(id.isValid() && "Invalid file id");
         auto& file = files[id];
+
+        /// TODO:
     }
 
     void handleRelation(const clang::NamedDecl* decl,
                         RelationKind kind,
                         const clang::NamedDecl* target,
                         clang::SourceRange range) {
+        const clang::NamedDecl* original = decl;
         bool sameDecl = decl == target;
         decl = normalize(decl);
         target = sameDecl ? decl : normalize(target);
@@ -275,13 +154,32 @@ public:
         assert(id == srcMgr.getFileID(srcMgr.getExpansionLoc(end)) && "Source range cross file");
 
         auto& file = files[id];
-        auto symbol = getSymbol(file, decl);
-        auto extra = sameDecl ? symbol : getSymbol(file, target);
 
-        file.symbols[symbol].relations.emplace_back(binary::Relation{
+        memory::ValueRef data[2] = {};
+        if(kind.is_one_of(RelationKind::Definition, RelationKind::Declaration)) {
+            data[0] = {getLocation(file, range)};
+            data[1] = {getLocation(file, original->getSourceRange())};
+        } else if(kind.is_one_of(RelationKind::Reference, RelationKind::WeakReference)) {
+            data[0] = {getLocation(file, range)};
+        } else if(kind.is_one_of(RelationKind::Interface,
+                                 RelationKind::Implementation,
+                                 RelationKind::TypeDefinition,
+                                 RelationKind::Base,
+                                 RelationKind::Derived,
+                                 RelationKind::Constructor,
+                                 RelationKind::Destructor)) {
+            data[0] = {getSymbol(file, target)};
+        } else if(kind.is_one_of(RelationKind::Caller, RelationKind::Callee)) {
+            data[0] = {getSymbol(file, target)};
+            data[1] = {getLocation(file, range)};
+        } else {
+            assert(false && "Invalid relation kind");
+        }
+
+        auto symbol = getSymbol(file, decl);
+        file.symbols[symbol].relations.emplace_back(memory::Relation{
             .kind = kind,
-            .location = getLocation(file, range),
-            .extra = extra,
+            .data = {data[0], data[1]},
         });
     }
 
@@ -294,7 +192,7 @@ public:
 
         llvm::DenseMap<clang::FileID, SymbolIndex> indices;
         for(auto& [id, file]: files) {
-            indices.try_emplace(id, Encoder().writeIndex(file));
+            indices.try_emplace(id, serialize(file));
         }
         return std::move(indices);
     }
@@ -307,7 +205,7 @@ private:
 }  // namespace
 
 llvm::DenseMap<clang::FileID, SymbolIndex> test(ASTInfo& info) {
-    SymbolIndexCollector collector(info);
+    SymbolIndexBuilder collector(info);
     return collector.build();
 }
 
