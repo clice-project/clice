@@ -1,4 +1,5 @@
 #include "Basic/Document.h"
+#include "Basic/SourceCode.h"
 #include "Compiler/Compiler.h"
 
 namespace clice {
@@ -68,12 +69,11 @@ using FoldingRangeResult = std::vector<FoldingRange>;
 
 namespace feature {
 
-/// TODO:
-/// use `proto::FoldingRangeClientCapabilities` instead of `json::Value`to make a proper overload.
-// json::Value capability(json::Value FoldingRangeClientCapabilities);
+json::Value foldingRangeCapability(json::Value foldingRangeClientCapabilities);
 
 /// Return folding range in given file.
-proto::FoldingRangeResult foldingRange(FoldingRangeParams& params, ASTInfo& ast);
+proto::FoldingRangeResult foldingRange(FoldingRangeParams& params, ASTInfo& ast,
+                                       const SourceConverter& converter);
 
 }  // namespace feature
 

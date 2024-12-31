@@ -12,6 +12,9 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
     using Base = clang::RecursiveASTVisitor<FoldingRangeCollector>;
 
+    /// The converter used to adapt LSP protocol.
+    const SourceConverter* cvtr;
+
     /// The source manager of given AST.
     clang::SourceManager* src;
 
@@ -35,17 +38,23 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
     /// Collect source range as a folding range.
     void collect(const clang::SourceRange sr) {
-        // - 1: convert 1-1 based LSP location to 0-0 based LSP location.
-        proto::FoldingRange Range;
-        Range.startLine = src->getPresumedLineNumber(sr.getBegin()) - 1;
-        Range.endLine = src->getPresumedLineNumber(sr.getEnd()) - 1;
+
+        auto startLine = src->getPresumedLineNumber(sr.getBegin()) - 1;
+        auto endLine = src->getPresumedLineNumber(sr.getEnd()) - 1;
 
         // Skip ranges on a single line.
-        if(Range.startLine >= Range.endLine)
+        if(startLine >= endLine)
             return;
 
-        Range.startCharacter = src->getPresumedColumnNumber(sr.getBegin()) - 1;
-        Range.endCharacter = src->getPresumedColumnNumber(sr.getEnd()) - 1;
+        auto [sline, scol] = cvtr->toPosition(sr.getBegin(), *src);
+        auto [eline, ecol] = cvtr->toPosition(sr.getEnd(), *src);
+
+        proto::FoldingRange Range = {
+            .startLine = sline,
+            .endLine = eline,
+            .startCharacter = scol,
+            .endCharacter = ecol,
+        };
         result.push_back(Range);
     }
 
@@ -121,9 +130,8 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
         // If there is no access control blocks, return.
         tks = tks.drop_until(is_accctrl);
-        if(tks.empty()) {
+        if(tks.empty())
             return;
-        }
 
         auto [_, rb] = decl->getBraceRange();
         tks = tks.drop_front();  // Move to ':' after private/public/protected
@@ -150,6 +158,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
     bool VisitTagDecl(const clang::TagDecl* decl) {
         auto [lb, rb] = decl->getBraceRange();
+        auto name = decl->getName();
         collect({lb.getLocWithOffset(1), prevLineLastColOf(rb)});
 
         if(auto cxd = llvm::dyn_cast<clang::CXXRecordDecl>(decl);
@@ -347,12 +356,19 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
 namespace feature {
 
-proto::FoldingRangeResult foldingRange(FoldingRangeParams& _, ASTInfo& ast) {
+json::Value foldingRangeCapability(json::Value foldingRangeClientCapabilities) {
+    // Always return empty object.
+    // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_foldingRange
+    return {};
+}
+
+proto::FoldingRangeResult foldingRange(FoldingRangeParams& _, ASTInfo& ast,
+                                       const SourceConverter& converter) {
 
     FoldingRangeCollector collector{
+        .cvtr = &converter,
         .src = &ast.srcMgr(),
         .tkbuf = &ast.tokBuf(),
-        .result = {},
     };
 
     collector.collectDrectives(ast.directives());

@@ -86,10 +86,8 @@ std::size_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kind)
     std::unreachable();
 }
 
-proto::Position toPosition(llvm::StringRef content,
-                           clang::SourceLocation location,
-                           proto::PositionEncodingKind kind,
-                           const clang::SourceManager& SM) {
+proto::Position toPosition(llvm::StringRef content, clang::SourceLocation location,
+                           proto::PositionEncodingKind kind, const clang::SourceManager& SM) {
     assert(location.isValid() && location.isFileID() &&
            "SourceLocation must be valid and not a macro location");
     auto [fileID, offset] = SM.getDecomposedSpellingLoc(location);
@@ -101,13 +99,16 @@ proto::Position toPosition(llvm::StringRef content,
     proto::Position position;
     /// Line doesn't need to be adjusted. It is encoding-dependent.
     position.line = line;
+
     /// Column needs to be adjusted based on the encoding.
-    position.character = remeasure(content.substr(offset - column, column), kind);
+    if(auto word = content.substr(offset - column, column); !word.empty())
+        position.character = remeasure(word, kind);
+    else
+        position.character = column;  // word is the last column of that line.
     return position;
 }
 
-proto::Position toPosition(clang::SourceLocation location,
-                           proto::PositionEncodingKind kind,
+proto::Position toPosition(clang::SourceLocation location, proto::PositionEncodingKind kind,
                            const clang::SourceManager& SM) {
     bool isInvalid = false;
     llvm::StringRef content = SM.getCharacterData(location, &isInvalid);
@@ -115,8 +116,7 @@ proto::Position toPosition(clang::SourceLocation location,
     return toPosition(content, location, kind, SM);
 }
 
-std::size_t toOffset(llvm::StringRef content,
-                     proto::Position position,
+std::size_t toOffset(llvm::StringRef content, proto::Position position,
                      proto::PositionEncodingKind kind) {
     std::size_t offset = 0;
     for(auto i = 0; i < position.line; i++) {
