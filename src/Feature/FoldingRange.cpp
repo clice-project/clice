@@ -13,41 +13,40 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
     using Base = clang::RecursiveASTVisitor<FoldingRangeCollector>;
 
     /// The converter used to adapt LSP protocol.
-    const SourceConverter* cvtr;
+    const SourceConverter& cvtr;
 
     /// The source manager of given AST.
-    clang::SourceManager* src;
+    clang::SourceManager& src;
 
     /// Token buffer of given AST.
-    clang::syntax::TokenBuffer* tkbuf;
+    clang::syntax::TokenBuffer& tkbuf;
 
     /// The result of folding ranges.
     proto::FoldingRangeResult result;
 
     /// Do not produce folding ranges if either range ends is not within the main file.
     bool needFilter(clang::SourceLocation loc) {
-        return loc.isInvalid() || !src->isInMainFile(loc);
+        return loc.isInvalid() || !src.isInMainFile(loc);
     }
 
     /// Get last column of previous line of a location.
     clang::SourceLocation prevLineLastColOf(clang::SourceLocation loc) {
-        return src->translateLineCol(src->getMainFileID(),
-                                     src->getPresumedLineNumber(loc) - 1,
-                                     std::numeric_limits<unsigned>::max());
+        return src.translateLineCol(src.getMainFileID(),
+                                    src.getPresumedLineNumber(loc) - 1,
+                                    std::numeric_limits<unsigned>::max());
     }
 
     /// Collect source range as a folding range.
     void collect(const clang::SourceRange sr) {
-
-        auto startLine = src->getPresumedLineNumber(sr.getBegin()) - 1;
-        auto endLine = src->getPresumedLineNumber(sr.getEnd()) - 1;
+        auto startLine = src.getPresumedLineNumber(sr.getBegin()) - 1;
+        auto endLine = src.getPresumedLineNumber(sr.getEnd()) - 1;
 
         // Skip ranges on a single line.
         if(startLine >= endLine)
             return;
 
-        auto [sline, scol] = cvtr->toPosition(sr.getBegin(), *src);
-        auto [eline, ecol] = cvtr->toPosition(sr.getEnd(), *src);
+        auto [sline, scol] = cvtr.toPosition(sr.getBegin(), src);
+        auto [eline, ecol] = cvtr.toPosition(sr.getEnd(), src);
 
         proto::FoldingRange Range = {
             .startLine = sline,
@@ -66,7 +65,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
     }
 
     bool VisitNamespaceDecl(const clang::NamespaceDecl* decl) {
-        auto tks = tkbuf->expandedTokens(decl->getSourceRange());
+        auto tks = tkbuf.expandedTokens(decl->getSourceRange());
 
         // Find first '{' in namespace declaration.
         auto shrink = tks.drop_until([](const clang::syntax::Token& tk) -> bool {
@@ -79,7 +78,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
     /// Collect lambda capture list "[ ... ]".
     void collectLambdaCapture(const clang::CXXRecordDecl* decl) {
-        auto tks = tkbuf->expandedTokens(decl->getSourceRange());
+        auto tks = tkbuf.expandedTokens(decl->getSourceRange());
 
         auto shrink = tks.drop_until([](const clang::syntax::Token& tk) -> bool {
             return tk.kind() == clang::tok::TokenKind::l_square;
@@ -119,11 +118,11 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
             }
         };
 
-        auto tks = tkbuf->expandedTokens(decl->getSourceRange());
+        auto tks = tkbuf.expandedTokens(decl->getSourceRange());
 
         auto tryCollectRegion = [this](clang::SourceLocation ll, clang::SourceLocation lr) {
             // Skip continous access control keywords.
-            if(src->getPresumedLineNumber(ll) == src->getPresumedLineNumber(lr))
+            if(src.getPresumedLineNumber(ll) == src.getPresumedLineNumber(lr))
                 return;
             collect({ll, prevLineLastColOf(lr)});
         };
@@ -170,7 +169,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
     /// Collect function parameter list between '(' and ')'.
     void collectParameterList(clang::SourceLocation left, clang::SourceLocation right) {
-        auto tks = tkbuf->expandedTokens({left, right});
+        auto tks = tkbuf.expandedTokens({left, right});
 
         tks = tks.drop_until([](const auto& tk) { return tk.kind() == clang::tok::l_paren; });
         if(tks.empty())
@@ -248,7 +247,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
     }
 
     bool VisitCallExpr(const clang::CallExpr* expr) {
-        auto tks = tkbuf->expandedTokens(expr->getSourceRange());
+        auto tks = tkbuf.expandedTokens(expr->getSourceRange());
         if(tks.back().kind() != clang::tok::r_paren)
             return true;
 
@@ -300,7 +299,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
     void collectDrectives(const ASTDirectives& direcs) {
         for(auto& [fileid, dirc]: direcs) {
-            if(fileid != src->getMainFileID())
+            if(fileid != src.getMainFileID())
                 continue;
 
             collectConditionMacro(dirc.conditions);
@@ -362,17 +361,17 @@ json::Value foldingRangeCapability(json::Value foldingRangeClientCapabilities) {
     return {};
 }
 
-proto::FoldingRangeResult foldingRange(FoldingRangeParams& _, ASTInfo& ast,
+proto::FoldingRangeResult foldingRange(FoldingRangeParams& _, ASTInfo& info,
                                        const SourceConverter& converter) {
 
     FoldingRangeCollector collector{
-        .cvtr = &converter,
-        .src = &ast.srcMgr(),
-        .tkbuf = &ast.tokBuf(),
+        .cvtr = converter,
+        .src = info.srcMgr(),
+        .tkbuf = info.tokBuf(),
     };
 
-    collector.collectDrectives(ast.directives());
-    collector.TraverseTranslationUnitDecl(ast.tu());
+    collector.collectDrectives(info.directives());
+    collector.TraverseTranslationUnitDecl(info.tu());
 
     return std::move(collector.result);
 }
