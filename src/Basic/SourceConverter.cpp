@@ -159,4 +159,20 @@ std::size_t SourceConverter::toOffset(llvm::StringRef content, proto::Position p
     std::unreachable();
 }
 
+URI SourceConverter::toUri(llvm::StringRef fspath) const {
+    llvm::SmallString<128> path;
+
+    /// TODO:
+    /// use `sourceMap` to replace prefix.
+
+    // for(const auto& [prefix, newPrefix]: sourceMap) {
+    //     if(fspath.starts_with(prefix)) {
+    //         path.append(newPrefix); // todo: newPrefix.end_with('/') ???
+    //         path.append(fspath.substr(prefix.size()));
+    //         break;
+    //     }
+    // }
+
+    return URI::from(path.empty() ? fspath : path.str());
+};
 }  // namespace clice

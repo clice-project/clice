@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Basic/URI.h>
 #include <Basic/Location.h>
 #include <clang/Basic/SourceLocation.h>
 
@@ -9,8 +10,14 @@ namespace clice {
 /// LSP.
 class SourceConverter {
 public:
-    /// Construct a `SourceConverter` with the specified encoding kind.
-    explicit SourceConverter(proto::PositionEncodingKind kind) : kind(kind) {}
+    /// [(origin, new)],  map origin header directory to another source directory.
+    using SourceDirMapping = std::vector<std::pair<std::string, std::string>>;
+
+    /// Construct a `SourceConverter` with the specified encoding kind and empty source map.
+    explicit SourceConverter(proto::PositionEncodingKind kind) : kind(kind), sourceMap() {}
+
+    SourceConverter(proto::PositionEncodingKind kind, SourceDirMapping sourceMap) :
+        kind(kind), sourceMap(std::move(sourceMap)) {}
 
     /// Measure the length of the content with the specified encoding kind.
     static std::size_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kind);
@@ -39,6 +46,19 @@ public:
     /// encoding kind.
     std::size_t toOffset(llvm::StringRef content, proto::Position position) const;
 
+    /// Convert a file path to URI.
+    URI toUri(llvm::StringRef fspath) const;
+
+    /// Convert a file path to URI in string representation.
+    std::string toUriAsString(llvm::StringRef fspath) const {
+        return toUri(fspath).toString();
+    }
+
+    /// Convert a file path to proto::DocumentUri.
+    proto::DocumentUri toDocumentUri(llvm::StringRef fspath) const {
+        return toUriAsString(fspath);
+    };
+
     /// Get the encoding kind of the content in LSP protocol.
     proto::PositionEncodingKind encodingKind() const {
         return kind;
@@ -47,6 +67,9 @@ public:
 private:
     /// The encoding kind of the content in LSP protocol.
     proto::PositionEncodingKind kind;
+
+    /// A user-defined map from header file to its source directory.
+    SourceDirMapping sourceMap;
 };
 
 }  // namespace clice
