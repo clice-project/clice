@@ -19,10 +19,14 @@ public:
     SourceConverter(proto::PositionEncodingKind kind, SourceDirMapping sourceMap) :
         kind(kind), sourceMap(std::move(sourceMap)) {}
 
-    /// Measure the length of the content with the specified encoding kind.
+    SourceConverter(const SourceConverter&) = delete;
+
+    SourceConverter(SourceConverter&&) = default;
+
+    /// Measure the length (character count) of the content with the specified encoding kind.
     static std::size_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kind);
 
-    /// Measure the length of the content with the specified encoding kind.
+    /// Measure the length (character count) of the content with the specified encoding kind.
     std::size_t remeasure(llvm::StringRef content) const {
         return remeasure(content, kind);
     }
