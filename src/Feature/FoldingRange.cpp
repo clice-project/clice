@@ -37,7 +37,8 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
     }
 
     /// Collect source range as a folding range.
-    void collect(const clang::SourceRange sr) {
+    void collect(const clang::SourceRange sr,
+                 proto::FoldingRangeKind kind = proto::FoldingRangeKind::Region) {
         auto startLine = src.getPresumedLineNumber(sr.getBegin()) - 1;
         auto endLine = src.getPresumedLineNumber(sr.getEnd()) - 1;
 
@@ -45,16 +46,14 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
         if(startLine >= endLine)
             return;
 
-        auto [sline, scol] = cvtr.toPosition(sr.getBegin(), src);
-        auto [eline, ecol] = cvtr.toPosition(sr.getEnd(), src);
-
-        proto::FoldingRange Range = {
-            .startLine = sline,
-            .endLine = eline,
-            .startCharacter = scol,
-            .endCharacter = ecol,
-        };
-        result.push_back(Range);
+        auto range = cvtr.toRange(sr, src);
+        result.push_back({
+            .startLine = range.start.line,
+            .endLine = range.end.line,
+            .startCharacter = range.start.character,
+            .endCharacter = range.end.character,
+            .kind = kind,
+        });
     }
 
     bool TraverseNamespaceDecl(clang::NamespaceDecl* decl) {

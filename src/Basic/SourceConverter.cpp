@@ -1,4 +1,5 @@
-#include "Basic/SourceCode.h"
+#include "Basic/SourceConverter.h"
+#include "Basic/Location.h"
 
 namespace clice {
 
@@ -60,7 +61,7 @@ static bool iterateCodepoints(llvm::StringRef content, const Callback& callback)
     return false;
 }
 
-std::size_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kind) {
+std::size_t SourceConverter::remeasure(llvm::StringRef content, proto::PositionEncodingKind kind) {
     if(kind == proto::PositionEncodingKind::UTF8) {
         return content.size();
     }
@@ -86,8 +87,8 @@ std::size_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kind)
     std::unreachable();
 }
 
-proto::Position toPosition(llvm::StringRef content, clang::SourceLocation location,
-                           proto::PositionEncodingKind kind, const clang::SourceManager& SM) {
+proto::Position SourceConverter::toPosition(llvm::StringRef content, clang::SourceLocation location,
+                                            const clang::SourceManager& SM) const {
     assert(location.isValid() && location.isFileID() &&
            "SourceLocation must be valid and not a macro location");
     auto [fileID, offset] = SM.getDecomposedSpellingLoc(location);
@@ -102,22 +103,21 @@ proto::Position toPosition(llvm::StringRef content, clang::SourceLocation locati
 
     /// Column needs to be adjusted based on the encoding.
     if(auto word = content.substr(offset - column, column); !word.empty())
-        position.character = remeasure(word, kind);
+        position.character = remeasure(word);
     else
         position.character = column;  // word is the last column of that line.
     return position;
 }
 
-proto::Position toPosition(clang::SourceLocation location, proto::PositionEncodingKind kind,
-                           const clang::SourceManager& SM) {
+proto::Position SourceConverter::toPosition(clang::SourceLocation location,
+                                            const clang::SourceManager& SM) const {
     bool isInvalid = false;
     llvm::StringRef content = SM.getCharacterData(location, &isInvalid);
     assert(!isInvalid && "Invalid SourceLocation");
-    return toPosition(content, location, kind, SM);
+    return toPosition(content, location, SM);
 }
 
-std::size_t toOffset(llvm::StringRef content, proto::Position position,
-                     proto::PositionEncodingKind kind) {
+std::size_t SourceConverter::toOffset(llvm::StringRef content, proto::Position position) const {
     std::size_t offset = 0;
     for(auto i = 0; i < position.line; i++) {
         auto pos = content.find('\n');

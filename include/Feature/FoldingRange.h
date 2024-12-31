@@ -1,5 +1,5 @@
 #include "Basic/Document.h"
-#include "Basic/SourceCode.h"
+#include "Basic/SourceConverter.h"
 #include "Compiler/Compiler.h"
 
 namespace clice {
@@ -22,7 +22,6 @@ struct FoldingRangeClientCapabilities {};
 /// ```
 
 struct FoldingRangeParams {
-
     /// The text document.
     TextDocumentIdentifier textDocument;
 };
