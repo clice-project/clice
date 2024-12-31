@@ -7,6 +7,20 @@ namespace clice {
 
 struct TranslationUnit;
 
+struct SourceLocation {
+    /// The line number (1-based).
+    uint32_t line;
+
+    /// The column number (1-based).
+    uint32_t column;
+
+    /// The file name.
+    std::string filename;
+
+    /// The include file of this location.
+    uint32_t includeFile;
+};
+
 /// Describes the context of a header file to uniquely identify its AST.
 /// A header file may generate different ASTs depending on the inclusion context.
 /// Even within the same source file, the AST may vary at different locations due
@@ -23,7 +37,7 @@ struct Header {
         std::string indexPath;
 
         /// The include chain that introduces this context.
-        IncludeChain chain;
+        uint32_t index;
     };
 
     /// All header contexts.
@@ -40,8 +54,10 @@ struct TranslationUnit {
     /// All headers included by this translation unit.
     std::vector<Header*> headers;
 
-    /// All include chains are introduced by this translation unit.
-    std::vector<IncludeChain> chains;
+    /// All include locations introduced by this translation unit.
+    /// Note that if a file has guard macro or pragma once, we will
+    /// record it at most once.
+    std::vector<SourceLocation> locations;
 };
 
 /// Responsible for index all files, distinguish active and inactive files.

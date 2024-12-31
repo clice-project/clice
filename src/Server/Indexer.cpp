@@ -12,6 +12,14 @@ void Indexer::index(llvm::StringRef file, class ASTInfo& info) {
 
     auto& srcMgr = info.srcMgr();
 
+    /// FIXME: currently, if one include file generates empty symbol index,
+    /// The output fileid will not contain it. But we need it for header context.
+    /// imagine that user create a new empty file and wait for editing it. But
+    /// we cannot find header context for it. This is really a problem.
+    /// The resolution is using diretives in ASTInfo to gather all include files.
+
+    /// FIXME: has include(...) need to be recorded in the header context.
+
     /// There are several include chains in source file.
     /// Along with the include chain, we can find all include files.
     /// So our basic idea is traverse all `FileID` emitted by `index`,
@@ -23,35 +31,14 @@ void Indexer::index(llvm::StringRef file, class ASTInfo& info) {
     /// consider index for PCH. determine main file.
     /// e.g. non self contain file.
 
-    for(auto& [fid, index]: indices) {
-        auto iter = chainLocs.find(fid);
-
-        if(iter == chainLocs.end()) {
-            auto current = fid;
-            /// If we cannot find the file id, it means we need to create a new chain.
-            uint32_t rows = chains.size();
-            chains.emplace_back();
-            auto& chain = chains.back();
-
-            uint32_t cols = 0;
-
-            auto includeLoc = srcMgr.getIncludeLoc(fid);
-
-            while(includeLoc.isValid()) {
-                auto loc = srcMgr.getPresumedLoc(includeLoc);
-                chain.emplace_back(
-                    SourceLocation{loc.getLine(), loc.getColumn(), loc.getFilename()});
-                chainLocs[fid] = {rows, cols};
-                cols += 1;
-                current = loc.getFileID();
-                includeLoc = loc.getIncludeLoc();
-            }
+    for(auto& [fid, diretive]: info.directives()) {
+        for(auto& include: diretive.includes) {
+            
         }
     }
 
     auto tu = new TranslationUnit();
     tu->srcPath = file.str();
-    tu->chains = std::move(chains);
 
     for(auto& [fid, index]: indices) {
         auto srcPath = srcMgr.getFileEntryRefForID(fid)->getName();
@@ -59,16 +46,8 @@ void Indexer::index(llvm::StringRef file, class ASTInfo& info) {
         if(iter == headers.end()) {
             auto header = new Header();
             header->srcPath = srcPath;
-            header->contexts[tu] = {
-                file.str(),
-                llvm::ArrayRef(tu->chains[chainLocs[fid].first]).slice(chainLocs[fid].second)};
-            headers[srcPath] = header;
-            tu->headers.push_back(header);
+
         } else {
-            iter->second->contexts[tu] = {
-                file.str(),
-                llvm::ArrayRef(tu->chains[chainLocs[fid].first]).slice(chainLocs[fid].second)};
-            tu->headers.push_back(iter->second);
         }
     }
 }
