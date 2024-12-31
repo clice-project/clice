@@ -18,6 +18,7 @@ TEST(Server, Indexer) {
     assert(bool(info));
 
     Indexer indexer;
+    indexer.index("main.cpp", *info);
 }
 
 }  // namespace

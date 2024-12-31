@@ -3,14 +3,53 @@
 
 namespace clice {
 
+static uint32_t addIncludeChain(std::vector<SourceLocation>& locations,
+                                llvm::DenseMap<clang::FileID, uint32_t>& cache,
+                                clang::SourceManager& srcMgr,
+                                clang::SourceLocation includeLoc) {
+    if(includeLoc.isInvalid()) {
+        return std::numeric_limits<uint32_t>::max();
+    }
+
+    assert(includeLoc.isFileID() && "Invalid include location");
+
+    /// Should we use consider `line diretive`?
+    auto presumed = srcMgr.getPresumedLoc(includeLoc, false);
+    auto [iter, success] = cache.try_emplace(presumed.getFileID(), locations.size());
+    auto index = iter->second;
+    if(success) {
+        locations.emplace_back(SourceLocation{
+            .line = presumed.getLine(),
+            .column = presumed.getColumn(),
+            .filename = presumed.getFilename(),
+        });
+
+        /// Recursively add include chain. Note that `addIncludeChain` may resize
+        /// the `locations`, so we use index instead of iterator.
+        auto includeFile = addIncludeChain(locations, cache, srcMgr, presumed.getIncludeLoc());
+        locations[index].includeFile = includeFile;
+    }
+
+    return index;
+}
+
 void Indexer::index(llvm::StringRef file, class ASTInfo& info) {
     auto indices = index::test(info);
 
-    std::vector<IncludeChain> chains;
-
-    llvm::DenseMap<clang::FileID, std::pair<uint32_t, uint32_t>> chainLocs;
-
     auto& srcMgr = info.srcMgr();
+
+    std::vector<SourceLocation> locations;
+    llvm::DenseMap<clang::FileID, uint32_t> cache;
+
+    for(auto& [fid, diretive]: info.directives()) {
+        for(auto& include: diretive.includes) {
+            if(include.fid.isInvalid()) {
+                continue;
+            }
+
+            addIncludeChain(locations, cache, srcMgr, srcMgr.getIncludeLoc(include.fid));
+        }
+    }
 
     /// FIXME: currently, if one include file generates empty symbol index,
     /// The output fileid will not contain it. But we need it for header context.
@@ -31,25 +70,7 @@ void Indexer::index(llvm::StringRef file, class ASTInfo& info) {
     /// consider index for PCH. determine main file.
     /// e.g. non self contain file.
 
-    for(auto& [fid, diretive]: info.directives()) {
-        for(auto& include: diretive.includes) {
-            
-        }
-    }
-
-    auto tu = new TranslationUnit();
-    tu->srcPath = file.str();
-
-    for(auto& [fid, index]: indices) {
-        auto srcPath = srcMgr.getFileEntryRefForID(fid)->getName();
-        auto iter = headers.find(srcPath);
-        if(iter == headers.end()) {
-            auto header = new Header();
-            header->srcPath = srcPath;
-
-        } else {
-        }
-    }
+    print("{}", json::serialize(locations));
 }
 
 }  // namespace clice
