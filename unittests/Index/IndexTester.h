@@ -1,6 +1,6 @@
 #include "../Test.h"
 #include "Index/SymbolIndex.h"
-#include "Basic/SourceCode.h"
+#include "Basic/SourceConverter.h"
 
 namespace clice {
 
