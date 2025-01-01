@@ -28,12 +28,12 @@ TEST(Directive, Include) {
     auto& includes = info.directive(info.srcMgr().getMainFileID()).includes;
 
     tester.equal(includes.size(), 3)
-        .expect("0", includes[0].loc)
-        .equal("test.h", includes[0].path)
-        .expect("1", includes[1].loc)
-        .equal("test2.h", includes[1].path)
-        .expect("2", includes[2].loc)
-        .equal("test3.h", includes[2].path);
+        .expect("0", includes[0].include)
+        .equal("./test.h", includes[0].path)
+        .expect("1", includes[1].include)
+        .equal("./test2.h", includes[1].path)
+        .expect("2", includes[2].include)
+        .equal("./test3.h", includes[2].path);
 }
 
 TEST(Directive, Condition) {

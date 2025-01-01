@@ -13,11 +13,6 @@ public:
         pp(pp), directives(directives) {}
 
 private:
-    void addInclude(llvm::StringRef path, clang::SourceLocation loc, clang::SourceRange range) {
-        auto& directive = directives[pp.getSourceManager().getFileID(loc)];
-        directive.includes.emplace_back(Include{path, loc, range});
-    }
-
     void addCondition(clang::SourceLocation loc,
                       Condition::BranchKind kind,
                       Condition::ConditionValue value,
@@ -71,14 +66,28 @@ private:
     }
 
 private:
-    void FileChanged(clang::SourceLocation loc,
-                     clang::PPCallbacks::FileChangeReason reason,
-                     clang::SrcMgr::CharacteristicKind fileType,
-                     clang::FileID) override {}
+    void LexedFileChanged(clang::FileID currID,
+                          LexedFileChangeReason reason,
+                          clang::SrcMgr::CharacteristicKind kind,
+                          clang::FileID prevID,
+                          clang::SourceLocation location) override {
+        /// If prevID is invalid, it means we are entering main file
+        /// or builtin files. Skip it.
+        if(this->prevID.isInvalid() || prevID.isInvalid()) {
+            return;
+        }
+
+        if(reason == LexedFileChangeReason::EnterFile) {
+            assert(this->prevID == prevID && "Unexpected file change");
+            assert(directives.contains(prevID) && "Unexpected file change");
+            assert(directives[prevID].includes.back().fid.isInvalid() && "Unexpected filechange");
+            directives[prevID].includes.back().fid = currID;
+        }
+    }
 
     void InclusionDirective(clang::SourceLocation hashLoc,
                             const clang::Token& includeTok,
-                            llvm::StringRef filename,
+                            llvm::StringRef spellingFilename,
                             bool isAngled,
                             clang::CharSourceRange filenameRange,
                             clang::OptionalFileEntryRef file,
@@ -87,7 +96,17 @@ private:
                             const clang::Module* suggestedModule,
                             bool moduleImported,
                             clang::SrcMgr::CharacteristicKind fileType) override {
-        addInclude(filename, includeTok.getLocation(), filenameRange.getAsRange());
+        /// When see a `#include` directive, we are going to change file.
+        prevID = pp.getSourceManager().getFileID(hashLoc);
+        directives[prevID].includes.emplace_back(Include{
+            .include = includeTok.getLocation(),
+            /// `fid` is assigned in `LexedFileChanged`. Note that if the file is skipped
+            /// because of header guard optimization, the `LexedFileChanged` will not called
+            /// after `InclusionDirective`. Then `fid` will be invalid.
+            .fid = {},
+            .path = file->getName(),
+            .range = filenameRange.getAsRange(),
+        });
     }
 
     void PragmaDirective(clang::SourceLocation Loc,
@@ -180,6 +199,7 @@ private:
     }
 
 private:
+    clang::FileID prevID;
     clang::Preprocessor& pp;
     llvm::DenseMap<clang::FileID, Directive>& directives;
     llvm::DenseMap<clang::MacroInfo*, std::size_t> macroCache;

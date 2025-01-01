@@ -5,14 +5,22 @@
 namespace clice {
 
 struct Include {
+    /// Location of the `include` token.
+    clang::SourceLocation include;
+
+    /// The file id of the included file. If empty, it means the file
+    /// is skipped because of header guard optimization.
+    clang::FileID fid;
+
     /// The path of the included file.
     llvm::StringRef path;
 
-    /// Location of the directive identifier.
-    clang::SourceLocation loc;
-
     /// Range of the filename.
     clang::SourceRange range;
+
+    bool isSkipped() const {
+        return fid.isInvalid();
+    }
 };
 
 struct Condition {

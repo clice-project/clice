@@ -293,7 +293,7 @@ async::promise<> Scheduler::updateAST(llvm::StringRef filename,
     log::info("AST for {0} is up-to-date, elapsed {1}", filename, tracer.duration());
 }
 
-void Scheduler::loadCache() {
+void Scheduler::load() {
     llvm::SmallString<128> fileName;
     path::append(fileName, config::cache.dir, "cache.json");
 
@@ -332,7 +332,7 @@ void Scheduler::loadCache() {
     log::info("Cache loaded from {0}", fileName);
 }
 
-void Scheduler::saveCache() const {
+void Scheduler::save() const {
     json::Object result;
 
     json::Array pchArray;
