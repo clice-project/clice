@@ -37,11 +37,11 @@ struct Header {
         std::string indexPath;
 
         /// The include chain that introduces this context.
-        uint32_t index;
+        uint32_t includeLoc;
     };
 
     /// All header contexts.
-    llvm::DenseMap<TranslationUnit*, Context> contexts;
+    llvm::DenseMap<TranslationUnit*, std::vector<Context>> contexts;
 };
 
 struct TranslationUnit {
@@ -73,6 +73,8 @@ public:
     void load();
 
     void save();
+
+    ~Indexer();
 
 private:
     llvm::StringMap<Header*> headers;
