@@ -42,6 +42,18 @@ llvm::Error mangleCommand(llvm::StringRef command,
     buffer.append(current);
     buffer.push_back('\0');
 
+    /// FIXME Don't append another '-isysroot' if '-isysroot' or '--sysroot' is
+    /// already set.
+    if(!fs::sysroot.empty()) {
+        indices.push_back(buffer.size());
+        buffer.append("-isysroot", (const char*)"-isysroot" + 9);
+        buffer.push_back('\0');
+
+        indices.push_back(buffer.size());
+        buffer.append(fs::sysroot.begin(), fs::sysroot.end());
+        buffer.push_back('\0');
+    }
+
     /// FIXME: use better way to remove args.
     for(size_t i = 0; i < indices.size(); ++i) {
         llvm::StringRef arg(buffer.data() + indices[i]);

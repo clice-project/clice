@@ -3,6 +3,7 @@
 
 #include <clang/Lex/PreprocessorOptions.h>
 #include <clang/Frontend/TextDiagnosticPrinter.h>
+#include <exception>
 
 namespace clice {
 

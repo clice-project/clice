@@ -1,6 +1,7 @@
 
 
 #include <stack>
+#include <exception>
 
 #include <Compiler/Selection.h>
 

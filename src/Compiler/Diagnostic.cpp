@@ -3,6 +3,7 @@
 
 #include <clang/Basic/DiagnosticIDs.h>
 #include <clang/Basic/AllDiagnostics.h>
+#include <exception>
 
 // #include <spdlog/fmt/bundled/color.h>
 

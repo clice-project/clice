@@ -1,6 +1,7 @@
 // #include "Compiler/ParsedAST.h"
 #include "Feature/SemanticTokens.h"
 #include "Compiler/Semantic.h"
+#include <exception>
 
 namespace clice::feature {
 

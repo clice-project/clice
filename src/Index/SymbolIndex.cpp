@@ -4,6 +4,9 @@
 #include "Compiler/Semantic.h"
 
 #include "clang/Index/USRGeneration.h"
+#include <numeric>
+#include <ranges>
+#include <exception>
 
 namespace clice::index {
 
@@ -82,7 +85,7 @@ public:
     void sort(File& file) {
         /// new(index) -> old(value)
         std::vector<uint32_t> new2old(file.symbols.size());
-        std::ranges::iota(new2old, 0u);
+        std::iota(new2old.begin(), new2old.end(), 0u);
 
         /// Sort the symbols by `Symbol::id`.
         std::ranges::sort(std::ranges::views::zip(file.symbols, new2old),

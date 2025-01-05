@@ -4,6 +4,7 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/VirtualFileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
+#include "Support/QueryXcrun.h"
 
 namespace clice {
 
@@ -14,6 +15,7 @@ namespace fs {
 using namespace llvm::sys::fs;
 
 inline std::string resource_dir = "";
+inline std::string sysroot = "";
 
 inline llvm::Error init_resource_dir(llvm::StringRef execute) {
     llvm::SmallString<128> path;
@@ -25,6 +27,23 @@ inline llvm::Error init_resource_dir(llvm::StringRef execute) {
     }
 
     resource_dir = path.str();
+    return llvm::Error::success();
+}
+
+inline llvm::Error init_sysroot() {
+#ifndef __APPLE__
+    return llvm::Error::success();
+#endif
+
+    // SDKROOT overridden in environment, respect it. Driver will set isysroot.
+    if(::getenv("SDKROOT"))
+        return llvm::Error::success();
+
+    auto root = queryXcrun({"xcrun", "--show-sdk-path"});
+    if(auto err = root.takeError())
+        return err;
+
+    sysroot = *root;
     return llvm::Error::success();
 }
 

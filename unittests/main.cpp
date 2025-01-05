@@ -36,9 +36,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    if(auto error = fs::init_sysroot()) {
+        llvm::outs() << std::format("Failed to get sysroot directory, because {}\n", error);
+        return 1;
+    }
+
     testing::InitGoogleTest(&argc, argv);
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
 
     return RUN_ALL_TESTS();
 }
-

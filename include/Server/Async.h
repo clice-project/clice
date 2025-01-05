@@ -201,8 +201,8 @@ struct fs_awaiter {
 
             uv_timespec_t& mtime = req->statbuf.st_mtim;
             using namespace std::chrono;
-            awaiter.modified =
-                system_clock::time_point(seconds(mtime.tv_sec) + nanoseconds(mtime.tv_nsec));
+            awaiter.modified = system_clock::time_point(duration_cast<system_clock::duration>(
+                seconds(mtime.tv_sec) + nanoseconds(mtime.tv_nsec)));
             awaiter.caller.resume();
             delete req;
         };
@@ -355,4 +355,3 @@ auto suspend(Callback&& callback) {
 }
 
 }  // namespace clice::async
-

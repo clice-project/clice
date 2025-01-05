@@ -4,6 +4,7 @@
 #include <clang/Sema/TreeTransform.h>
 #include <clang/Sema/TemplateDeduction.h>
 #include <ranges>
+#include <exception>
 
 namespace clice {
 

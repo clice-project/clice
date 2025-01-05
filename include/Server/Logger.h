@@ -2,6 +2,10 @@
 
 #include <Support/Format.h>
 #include <Support/FileSystem.h>
+#include <ctime>
+#include <exception>
+#include <iomanip>
+#include <chrono>
 #include <source_location>
 
 namespace clice::log {
@@ -18,7 +22,14 @@ template <typename... Args>
 void log(Level level, std::string_view fmt, Args&&... args) {
     namespace chrono = std::chrono;
     auto now = chrono::floor<chrono::milliseconds>(chrono::system_clock::now());
-    auto time = chrono::zoned_time(chrono::current_zone(), now);
+
+    auto nowInSec = std::chrono::system_clock::to_time_t(now);
+    std::tm timeInfo{};
+    std::stringstream ss{};
+    ss << std::put_time(localtime_r(&nowInSec, &timeInfo), "[%Y-%m-%d %H:%M:%S.");
+    ss << std::setfill('0') << std::setw(3) << now.time_since_epoch().count() % 1000 << ']';
+    llvm::errs() << ss.str();
+
     auto tag = [&] {
         switch(level) {
             case Level::INFO: return "\033[32mINFO\033[0m";          // Green
@@ -28,8 +39,8 @@ void log(Level level, std::string_view fmt, Args&&... args) {
             case Level::FATAL: return "\033[31mFATAL ERROR\033[0m";  // Red
         }
     }();
-    llvm::errs() << std::format("[{0:%Y-%m-%d %H:%M:%S}] [{1}] ", time, tag)
-                 << std::vformat(fmt, std::make_format_args(args...)) << "\n";
+    llvm::errs() << std::format(" [{}] ", tag);
+    llvm::errs() << std::vformat(fmt, std::make_format_args(args...)) << "\n";
 }
 
 template <typename... Args>

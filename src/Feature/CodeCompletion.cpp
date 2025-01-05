@@ -2,6 +2,7 @@
 #include <Basic/SourceCode.h>
 #include <Compiler/Semantic.h>
 #include <Feature/CodeCompletion.h>
+#include <exception>
 
 namespace clice::feature {
 

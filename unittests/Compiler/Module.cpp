@@ -2,6 +2,7 @@
 #include "Compiler/Compiler.h"
 
 #include "llvm/Support/ToolOutputFile.h"
+#include <exception>
 
 namespace clice {
 

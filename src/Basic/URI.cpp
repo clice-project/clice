@@ -2,6 +2,7 @@
 
 #include <Support/ADT.h>
 #include <Support/FileSystem.h>
+#include <exception>
 
 namespace clice {
 

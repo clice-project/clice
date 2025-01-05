@@ -28,6 +28,12 @@ int Server::run(int argc, const char** argv) {
         return 1;
     }
 
+    /// Get the sysroot
+    if(auto error = fs::init_sysroot()) {
+        log::fatal("Failed to get sysroot, because {0}", error);
+        return 1;
+    }
+
     auto dispatch = [this](json::Value value) -> async::promise<void> {
         assert(value.kind() == json::Value::Object);
         auto object = value.getAsObject();

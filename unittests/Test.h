@@ -4,6 +4,7 @@
 #include <Basic/Location.h>
 #include <Compiler/Compiler.h>
 #include <Support/Support.h>
+#include <exception>
 
 namespace clice {
 
