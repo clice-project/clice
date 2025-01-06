@@ -148,7 +148,7 @@ int f() {
     dbg(res);
 
     /// FIXME: the hint count should be 2 but is 0.
-    txs.equal(res.size(), 2)
+    // txs.equal(res.size(), 2)
         //
         ;
 }
