@@ -93,8 +93,8 @@ namespace feature {
 json::Value inlayHintCapability(json::Value InlayHintClientCapabilities);
 
 /// Compute inlay hints for a document in given range and config.
-proto::InlayHintsResult inlayHints(proto::Range range, ASTInfo& ast,
-                                   const config::InlayHintConfig* config);
+proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& ast,
+                                   const config::InlayHintConfig& config);
 
 }  // namespace feature
 
