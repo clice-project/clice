@@ -101,7 +101,69 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         result.push_back(std::move(hint));
     }
 
-    void collectArgNameHint() {}
+    // If `expr` spells a single unqualified identifier, return that name, otherwise, return an
+    // empty string.
+    static llvm::StringRef takeExprIdentifier(const clang::Expr* expr) {
+        auto spelled = expr->IgnoreUnlessSpelledInSource();
+        if(auto* declRef = llvm::dyn_cast<clang::DeclRefExpr>(spelled))
+            if(!declRef->getQualifier())
+                return declRef->getDecl()->getName();
+        if(auto* member = llvm::dyn_cast<clang::MemberExpr>(spelled))
+            if(!member->getQualifier() && member->isImplicitAccess())
+                return member->getMemberDecl()->getName();
+        return {};
+    }
+
+    bool needHintArgument(const clang::ParmVarDecl* param, const clang::Expr* arg) {
+        if(param->getName().empty())
+            return false;
+
+        // Skip if the argument is a single name and it matches the parameter exactly
+        if(param->getName().equals_insensitive(takeExprIdentifier(arg)))
+            return false;
+
+        // Skip if the argument is preceded by any hand-written hint /*paramName*/
+        auto range = arg->getSourceRange();
+        auto firstChar = src->getCharacterData(range.getBegin());
+        auto length = static_cast<size_t>(src->getCharacterData(range.getEnd()) - firstChar);
+        if(auto text = llvm::StringRef{firstChar, length};
+           text.contains("/*") && text.contains("*/"))
+            return false;
+
+        return true;
+    }
+
+    bool isPassedAsMutableLValueRef(const clang::ParmVarDecl* param) {
+        auto qual = param->getType();
+        return qual->isLValueReferenceType() && !qual.getNonReferenceType().isConstQualified();
+    }
+
+    void collectArgumentHint(llvm::ArrayRef<clang::ParmVarDecl*> params,
+                             llvm::ArrayRef<clang::Expr*> args) {
+        for(size_t i = 0; i < params.size() && i < args.size(); ++i) {
+            if(llvm::isa<clang::PackExpansionExpr>(args[i]) ||
+               llvm::isa<clang::CXXDefaultArgExpr>(args[i]))
+                break;
+
+            if(!needHintArgument(params[i], args[i]))
+                continue;
+
+            const bool hintRef = isPassedAsMutableLValueRef(params[i]);
+            proto::InlayHintLablePart lable{
+                .value = std::format("{}{}:", params[i]->getName(), hintRef ? "&" : ""),
+                .tooltip = blank(),
+                .Location = proto::Location{.uri = docuri,
+                                            .range = toLspRange(params[i]->getSourceRange())}
+            };
+            proto::InlayHint hint{
+                .position = toLspPosition(args[i]->getSourceRange().getBegin()),
+                .lable = {std::move(lable)},
+                .kind = proto::InlayHintKind::Parameter,
+            };
+
+            result.push_back(std::move(hint));
+        }
+    }
 
     bool TraverseDecl(clang::Decl* decl) {
         if(!decl || needFilter(decl->getSourceRange()))
@@ -145,40 +207,122 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         }
     }
 
-    bool TraverseCallExpr(clang::CallExpr* expr) {
+    /// Try find the FunctionProtoType of a CallExpr which callee is a function pointer.
+    static auto detectCallViaFnPointer(const clang::Expr* call)
+        -> std::optional<clang::FunctionProtoTypeLoc> {
+
+        auto nake = call->IgnoreParenCasts();
+        clang::TypeLoc target;
+
+        if(auto* tydef = nake->getType().getTypePtr()->getAs<clang::TypedefType>())
+            target = tydef->getDecl()->getTypeSourceInfo()->getTypeLoc();
+        else if(auto* declRef = llvm::dyn_cast<clang::DeclRefExpr>(nake))
+            if(auto* varDecl = llvm::dyn_cast<clang::VarDecl>(declRef->getDecl()))
+                target = varDecl->getTypeSourceInfo()->getTypeLoc();
+
+        if(!target)
+            return std::nullopt;
+
+        // Unwrap types that may be wrapping the function type.
+        while(true) {
+            if(auto P = target.getAs<clang::PointerTypeLoc>())
+                target = P.getPointeeLoc();
+            else if(auto A = target.getAs<clang::AttributedTypeLoc>())
+                target = A.getModifiedLoc();
+            else if(auto P = target.getAs<clang::ParenTypeLoc>())
+                target = P.getInnerLoc();
+            else
+                break;
+        }
+
+        if(auto proto = target.getAs<clang::FunctionProtoTypeLoc>())
+            return proto;
+
+        return std::nullopt;
+    }
+
+    bool TraverseCallExpr(clang::CallExpr* call) {
+        // For a CallExpr, there are 2 case of Callee:
+        //     1. An object which has coresponding FunctionDecl, free function or method.
+        //     2. A function pointer, which has no FunctionDecl but FunctionProtoTypeLoc.
+
         // Do not show hint for user defined literals operator like ` operaotr ""_str , and builtin
         // funtion call.
-        if(!expr || llvm::isa<clang::UserDefinedLiteral>(expr) || isBuiltinFnCall(expr))
+        if(!call || llvm::isa<clang::UserDefinedLiteral>(call) || isBuiltinFnCall(call))
             return true;
 
-        if(auto mc = llvm::dyn_cast<clang::CXXMemberCallExpr>(expr))
-            return TraverseCXXMemberCallExpr(mc);
+        // Do not hint paramters for operator overload except `operator()`.
+        if(auto opcall = llvm::dyn_cast<clang::CXXOperatorCallExpr>(call))
+            if(auto op = opcall->getOperator(); op != clang::OO_Call && op != clang::OO_Subscript)
+                return true;
 
-        return Base::TraverseCallExpr(expr);
+        // Use FunctionDecl if callee is a free function or method.
+        const clang::FunctionDecl* fndecl = nullptr;
+        const clang::Decl* calleeDecl = call->getCalleeDecl();
+        if(auto decl = llvm::dyn_cast<clang::FunctionDecl>(calleeDecl))
+            fndecl = decl;
+        else if(auto tfndecl = llvm::dyn_cast<clang::FunctionTemplateDecl>(calleeDecl))
+            fndecl = tfndecl->getTemplatedDecl();
+
+        if(fndecl && !llvm::isa<clang::CXXMemberCallExpr>(call))
+            // free function
+            collectArgumentHint(fndecl->parameters(), {call->getArgs(), call->getNumArgs()});
+        else if(auto proto = detectCallViaFnPointer(call->getCallee()); proto.has_value())
+            // function pointer
+            collectArgumentHint(proto->getParams(), {call->getArgs(), call->getNumArgs()});
+        else
+            // CXXMemberCallExpr
+            return Base::TraverseCallExpr(call);
+
+        return true;
+    }
+
+    static bool isSimpleSetter(const clang::CXXMethodDecl* md) {
+        if(md->getNumParams() != 1)
+            return false;
+
+        auto name = md->getName();
+        if(!name.starts_with_insensitive("set"))
+            return false;
+
+        // Check that the part after "set" matches the name of the parameter (ignoring case). The
+        // idea here is that if the parameter name differs, it may contain extra information that
+        // may be useful to show in a hint, as in:
+        //   void setTimeout(int timeoutMillis);
+        // The underscores in FunctionName and Parameter will be ignored.
+        llvm::SmallString<32> param, fnname;
+        for(auto c: name.drop_front(3))
+            if(c != '_')
+                fnname.push_back(c);
+
+        for(auto c: md->getParamDecl(0)->getName())
+            if(c != '_')
+                param.push_back(c);
+
+        return fnname.equals_insensitive(param);
     }
 
     bool TraverseCXXMemberCallExpr(clang::CXXMemberCallExpr* expr) {
-        // Do not hint paramters for operator overload except ` operator() `.
-        if(auto opcall = llvm::dyn_cast<clang::CXXOperatorCallExpr>(expr))
-            if(opcall->getOperator() != clang::OO_Call)
-                return true;
+        auto callee = llvm::dyn_cast<clang::FunctionDecl>(expr->getCalleeDecl());
 
         // Do not hint move / copy constructor call.
-        if(auto ctor = llvm::dyn_cast<clang::CXXConstructorDecl>(expr->getCalleeDecl()))
+        if(auto ctor = llvm::dyn_cast<clang::CXXConstructorDecl>(callee))
             if(ctor->isCopyOrMoveConstructor())
                 return true;
 
-        /// TODO:
-        /// Do not hint for simple setter function call. e.g. `setX(1)`.
-        // if (isSimpleSetter(expr->getCalleeDecl()->getAsFunction()->getNameAsString()))
-        //     ...
+        // Do not hint simple setter function call. e.g. `setX(1)`.
+        if(auto md = llvm::dyn_cast<clang::CXXMethodDecl>(callee))
+            if(isSimpleSetter(md))
+                return true;
 
-        llvm::ArrayRef<const clang::Expr*> args{expr->getArgs(), expr->getNumArgs()};
+        llvm::ArrayRef<clang::ParmVarDecl*> params{callee->parameters()};
+        llvm::ArrayRef<clang::Expr*> args{expr->getArgs(), expr->getNumArgs()};
 
-        // Skip `this` parameter declaration.
-        if(auto md = llvm::dyn_cast<clang::CXXMethodDecl>(expr->getCalleeDecl()))
+        // Skip `this` parameter declaration if callee is CXXMethodDecl.
+        if(auto md = llvm::dyn_cast<clang::CXXMethodDecl>(callee))
             if(md->hasCXXExplicitFunctionObjectParameter())
-                args = args.drop_front();
+                params = params.drop_front();
+        collectArgumentHint(params, args);
 
         return Base::TraverseCXXMemberCallExpr(expr);
     }
@@ -186,6 +330,10 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
     bool VisitFunctionDecl(clang::FunctionDecl* decl) {
         /// TODO:
         /// Hint return type for function declaration.
+        // if(auto retty = decl->getReturnType();
+        //    !retty->isDecltypeType() || !retty->isUndeducedAutoType())
+        //     return true;
+
         return Base::VisitFunctionDecl(decl);
     }
 };

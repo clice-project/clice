@@ -54,5 +54,134 @@ void t() {
         ;
 }
 
+TEST(InlayHint, FreeFnArguments) {
+    const char* main = R"cpp(
+void f(int a, int b) {}
+
+void g(int a = 1) {}
+
+void h() {
+f($(1)1, $(2)2);
+g();
+}
+
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {});
+
+    dbg(res);
+
+    txs.equal(res.size(), 2)
+        //
+        ;
+}
+
+TEST(InlayHint, FnArgPassedAsLValueRef) {
+    const char* main = R"cpp(
+void f(int& a, int& b) { }
+void g() {
+int x = 1;
+f($(1)x, $(2)x);
+}
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {});
+
+    dbg(res);
+
+    txs.equal(res.size(), 2)
+        //
+        ;
+}
+
+TEST(InlayHint, MethodArguments) {
+    const char* main = R"cpp(
+struct A {
+    void f(int a, int b) {}
+};
+
+void f() {
+    A a;
+    a.f($(1)1, $(2)2);
+}
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {});
+
+    dbg(res);
+
+    txs.equal(res.size(), 2)
+        //
+        ;
+}
+
+TEST(InlayHint, OperatorCall) {
+    const char* main = R"cpp(
+struct A {
+    int operator()(int a, int b) { return a + b; }
+};
+
+int f() {
+    A a;
+    return a(1, 2);
+}
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {});
+
+    dbg(res);
+
+    /// FIXME: the hint count should be 2 but is 0.
+    txs.equal(res.size(), 2)
+        //
+        ;
+}
+
+TEST(InlayHint, IgnoreSimpleSetter) {
+    const char* main = R"cpp(
+struct A { 
+    void setPara(int Para); 
+    void set_para(int para); 
+    void set_para_meter(int para_meter); 
+};
+
+void f() { 
+    A a; 
+    a.setPara(1); 
+    a.set_para(1); 
+    a.set_para_meter(1);
+}
+
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {});
+
+    dbg(res);
+
+    txs.equal(res.size(), 0)
+        //
+        ;
+}
+
 }  // namespace
 }  // namespace clice
