@@ -61,7 +61,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
     proto::DocumentUri docuri;
 
     /// The printing policy of clang.
-    clang::PrintingPolicy policy;
+    const clang::PrintingPolicy policy;
 
     /// Do not produce inlay hints if either range ends is not within the main file.
     bool needFilter(clang::SourceRange range) {
@@ -327,14 +327,56 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         return Base::TraverseCXXMemberCallExpr(expr);
     }
 
-    bool VisitFunctionDecl(clang::FunctionDecl* decl) {
-        /// TODO:
-        /// Hint return type for function declaration.
-        // if(auto retty = decl->getReturnType();
-        //    !retty->isDecltypeType() || !retty->isUndeducedAutoType())
-        //     return true;
+    void collectReturnTypeHint(clang::SourceLocation hintLoc, clang::QualType retType,
+                               clang::SourceRange retTypeDeclRange) {
+        proto::InlayHintLablePart lable{
+            .value = std::format("-> {}", retType.getAsString(policy)),
+            .tooltip = blank(),
+            .Location = proto::Location{.uri = docuri, .range = toLspRange(retTypeDeclRange)}
+        };
 
-        return Base::VisitFunctionDecl(decl);
+        proto::InlayHint hint{
+            .position = toLspPosition(hintLoc),
+            .lable = {std::move(lable)},
+            .kind = proto::InlayHintKind::Parameter,
+        };
+
+        result.push_back(std::move(hint));
+    }
+
+    bool VisitFunctionDecl(clang::FunctionDecl* decl) {
+        // Hint return type for function declaration.
+        if(auto proto = llvm::dyn_cast<clang::FunctionProtoType>(decl->getType().getTypePtr()))
+            if(proto->hasTrailingReturn())
+                return true;
+
+        if(auto fnTypeLoc = decl->getFunctionTypeLoc())
+            // Hint for function declaration with `auto` or `decltype(...)` return type.
+            if(fnTypeLoc.getReturnLoc().getContainedAutoTypeLoc())
+                // Right side of ')' in parameter list
+                collectReturnTypeHint(fnTypeLoc.getRParenLoc().getLocWithOffset(1),
+                                      decl->getReturnType(),
+                                      decl->getSourceRange());
+
+        return true;
+    }
+
+    bool VisitLambdaExpr(clang::LambdaExpr* expr) {
+        clang::FunctionDecl* decl = expr->getCallOperator();
+        if(expr->hasExplicitResultType())
+            return true;
+
+        // where to place the hint position, in default it is an invalid value.
+        clang::SourceLocation hintLoc = {};
+        if(!expr->hasExplicitParameters())
+            hintLoc = expr->getCompoundStmtBody()->getLBracLoc();
+        else if(auto fnTypeLoc = decl->getFunctionTypeLoc())
+            hintLoc = fnTypeLoc.getRParenLoc().getLocWithOffset(1);
+
+        if(hintLoc.isValid())
+            collectReturnTypeHint(hintLoc, decl->getReturnType(), decl->getSourceRange());
+
+        return true;
     }
 };
 

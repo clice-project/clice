@@ -149,6 +149,37 @@ int f() {
 
     /// FIXME: the hint count should be 2 but is 0.
     // txs.equal(res.size(), 2)
+    //
+    ;
+}
+
+TEST(InlayHint, ReturnTypeHint) {
+    const char* main = R"cpp(
+auto f()$(1) {
+    return 1;
+}
+
+void g() {
+    []()$(2) {
+        return 1;
+    }();
+
+    [] $(3){
+        return 1;
+    }();
+}
+
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {});
+
+    dbg(res);
+
+    txs.equal(res.size(), 3)
         //
         ;
 }
