@@ -203,6 +203,74 @@ int f() {
         ;
 }
 
+TEST(InlayHint, Constructor) {
+    const char* main = R"cpp(
+struct A {
+    int x;
+    int y;
+
+    A(int a, int b):x(a), y(b) {}
+};
+
+void f() {
+    A a$(1){1, 2};
+    A b$(2)(1, 2);
+    A c$(3) = {1, 2};
+}
+
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {});
+
+    dbg(res);
+
+    txs.equal(res.size(), 6)
+        //
+        ;
+}
+
+TEST(InlayHint, InitializeList) {
+    const char* main = R"cpp(
+    int a[3] = {1, 2, 3};
+    int b[2][3] = {{1, 2, 3}, {4, 5, 6}};
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {});
+
+    dbg(res);
+
+    txs.equal(res.size(), 3 + (3 * 2 + 2))
+        //
+        ;
+}
+
+TEST(InlayHint, Designators) {
+    const char* main = R"cpp(
+struct A{ int x; int y;};
+A a = {.x = 1, .y = 2};
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {});
+
+    dbg(res);
+
+    txs.equal(res.size(), 0)
+        //
+        ;
+}
+
 TEST(InlayHint, IgnoreSimpleSetter) {
     const char* main = R"cpp(
 struct A { 

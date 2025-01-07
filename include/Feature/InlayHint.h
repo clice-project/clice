@@ -78,12 +78,36 @@ using InlayHintsResult = std::vector<InlayHint>;
 namespace config {
 
 /// Configuration options for inlay hints, from table `inlay-hint` in `clice.toml`.
-struct InlayHintConfig {
-    uint32_t maxLength = 20;
+struct InlayHintOption {
+    // Max length of hint string, the extra part will be replaced with `...`
+    uint16_t maxLength = 30;
 
-    uint32_t maxArrayElements = 3;
+    // How many elements to show in array/initializer-list.
+    uint16_t maxArrayElements = 3;
 
-    bool implicitCast = true;
+    // Hint for `auto` declaration, structure binding, if/for statement with initializer.
+    bool dedcucedType : 1 = true;
+
+    // Hint for  function / lambda return type.
+    bool returnType : 1 = true;
+
+    // Hint after '}', including if/switch/while/for/namespace/class/function end.
+    bool blockEnd : 1 = false;
+
+    // Hint for function arguments.
+    bool argumentName : 1 = true;
+
+    /// TODO:
+    /// Hint for implicit cast like `1 |as int|`.
+    bool implicitCast : 1 = false;
+
+    /// TODO:
+    /// Hint for function return type in multiline chaind-call. e.g.
+    ///     a()
+    ///     .to_b() |ClassB|
+    ///     .to_c() |ClassC|
+    ///     .to_d() |ClassD|
+    bool chainCall : 1 = false;
 };
 
 }  // namespace config
@@ -94,7 +118,7 @@ json::Value inlayHintCapability(json::Value InlayHintClientCapabilities);
 
 /// Compute inlay hints for a document in given range and config.
 proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& ast,
-                                   const config::InlayHintConfig& config);
+                                   const config::InlayHintOption& config);
 
 }  // namespace feature
 

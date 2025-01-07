@@ -49,16 +49,16 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
     using Base = clang::RecursiveASTVisitor<InlayHintCollector>;
 
     /// The config of inlay hints collector.
-    const config::InlayHintConfig& config;
+    const config::InlayHintOption& config;
 
     /// The restrict range of request.
-    clang::SourceRange limit;
+    const clang::SourceRange limit;
 
     /// The result of inlay hints.
     proto::InlayHintsResult result;
 
     /// Current file's uri.
-    proto::DocumentUri docuri;
+    const proto::DocumentUri docuri;
 
     /// The printing policy of clang.
     const clang::PrintingPolicy policy;
@@ -114,6 +114,15 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         return {};
     }
 
+    /// Check if there is any comment like /*paramName*/ in given range.
+    bool hasHandWriteComment(clang::SourceRange range) {
+        auto firstChar = src->getCharacterData(range.getBegin());
+        auto length = static_cast<size_t>(src->getCharacterData(range.getEnd()) - firstChar);
+
+        llvm::StringRef text{firstChar, length};
+        return text.contains("/*") && text.contains("*/");
+    }
+
     bool needHintArgument(const clang::ParmVarDecl* param, const clang::Expr* arg) {
         // Skip anonymous parameters.
         if(param->getName().empty())
@@ -124,11 +133,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
             return false;
 
         // Skip if the argument is preceded by any hand-written hint /*paramName*/.
-        auto range = arg->getSourceRange();
-        auto firstChar = src->getCharacterData(range.getBegin());
-        auto length = static_cast<size_t>(src->getCharacterData(range.getEnd()) - firstChar);
-        if(auto text = llvm::StringRef{firstChar, length};
-           text.contains("/*") && text.contains("*/"))
+        if(hasHandWriteComment(arg->getSourceRange()))
             return false;
 
         return true;
@@ -262,7 +267,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         if(!call || llvm::isa<clang::UserDefinedLiteral>(call) || isBuiltinFnCall(call))
             return true;
 
-        // They were handled in  `VisitCXXMemberCallExpr`. `VisitCXXOperatorCallExpr`.
+        // They were handled in  `VisitCXXMemberCallExpr`, `VisitCXXOperatorCallExpr`.
         if(llvm::isa<clang::CXXMemberCallExpr>(call) || llvm::isa<clang::CXXOperatorCallExpr>(call))
             return true;
 
@@ -358,6 +363,18 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         return true;
     }
 
+    bool VisitCXXConstructExpr(const clang::CXXConstructExpr* ctor) {
+        // Skip constructor call without an argument list, by checking the validity of
+        // getParenOrBraceRange(). Also skip std::initializer_list constructors.
+        if(!ctor->getParenOrBraceRange().isValid() || ctor->isStdInitListInitialization())
+            return true;
+
+        if(const auto decl = ctor->getConstructor())
+            collectArgumentHint(decl->parameters(), {ctor->getArgs(), ctor->getNumArgs()});
+
+        return true;
+    }
+
     void collectReturnTypeHint(clang::SourceLocation hintLoc, clang::QualType retType,
                                clang::SourceRange retTypeDeclRange) {
         proto::InlayHintLablePart lable{
@@ -374,6 +391,10 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
 
         result.push_back(std::move(hint));
     }
+
+    // bool TraverseFunctionDecl(clang::FunctionDecl* decl) {
+    //     return config.returnType ? Base::TraverseFunctionDecl(decl) : true;
+    // }
 
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
         // Hint return type for function declaration.
@@ -411,6 +432,36 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
 
         return true;
     }
+
+    void collectArrayElemIndexHint(int index, clang::SourceLocation location) {
+        proto::InlayHintLablePart lable{
+            .value = std::format("[{}]=", index),
+            .tooltip = blank(),
+        };
+
+        proto::InlayHint hint{
+            .position = toLspPosition(location),
+            .lable = {std::move(lable)},
+            .kind = proto::InlayHintKind::Parameter,
+        };
+
+        result.push_back(std::move(hint));
+    }
+
+    bool VisitInitListExpr(const clang::InitListExpr* Syn) {
+        int count = 0;
+        for(auto init: Syn->inits()) {
+            if(llvm::isa<clang::DesignatedInitExpr>(init) ||
+               hasHandWriteComment(init->getSourceRange()))
+                continue;
+
+            collectArrayElemIndexHint(count, init->getBeginLoc());
+            // Only hint for the first config.maxArrayElements elements.
+            if(++count >= config.maxArrayElements)
+                break;
+        }
+        return true;
+    }
 };
 
 }  // namespace
@@ -423,7 +474,7 @@ json::Value inlayHintCapability(json::Value InlayHintClientCapabilities) {
 
 /// Compute inlay hints for a document in given range and config.
 proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& ast,
-                                   const config::InlayHintConfig& config) {
+                                   const config::InlayHintOption& config) {
     clang::SourceManager* src = &ast.srcMgr();
 
     /// FIXME:
