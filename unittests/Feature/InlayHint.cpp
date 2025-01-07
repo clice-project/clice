@@ -57,9 +57,7 @@ void t() {
 TEST(InlayHint, FreeFnArguments) {
     const char* main = R"cpp(
 void f(int a, int b) {}
-
 void g(int a = 1) {}
-
 void h() {
 f($(1)1, $(2)2);
 g();
@@ -105,12 +103,12 @@ f($(1)x, $(2)x);
 TEST(InlayHint, MethodArguments) {
     const char* main = R"cpp(
 struct A {
-    void f(int a, int b) {}
+    void f(int a, int b, int d) {}
 };
 
 void f() {
     A a;
-    a.f($(1)1, $(2)2);
+    a.f($(1)1, $(2)2, $(3)3);
 }
 )cpp";
 
@@ -122,7 +120,7 @@ void f() {
 
     dbg(res);
 
-    txs.equal(res.size(), 2)
+    txs.equal(res.size(), 3)
         //
         ;
 }
@@ -147,10 +145,9 @@ int f() {
 
     dbg(res);
 
-    /// FIXME: the hint count should be 2 but is 0.
-    // txs.equal(res.size(), 2)
-    //
-    ;
+    txs.equal(res.size(), 2)
+        //
+        ;
 }
 
 TEST(InlayHint, ReturnTypeHint) {
@@ -180,6 +177,28 @@ void g() {
     dbg(res);
 
     txs.equal(res.size(), 3)
+        //
+        ;
+}
+
+TEST(InlayHint, StructureBinding) {
+    const char* main = R"cpp(
+int f() {
+    int a[2];
+    auto [x$(1), y$(2)] = a;
+    return x + y; // use x and y to avoid warning.
+}
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {});
+
+    dbg(res);
+
+    txs.equal(res.size(), 2)
         //
         ;
 }

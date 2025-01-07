@@ -115,14 +115,15 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
     }
 
     bool needHintArgument(const clang::ParmVarDecl* param, const clang::Expr* arg) {
+        // Skip anonymous parameters.
         if(param->getName().empty())
             return false;
 
-        // Skip if the argument is a single name and it matches the parameter exactly
+        // Skip if the argument is a single name and it matches the parameter exactly.
         if(param->getName().equals_insensitive(takeExprIdentifier(arg)))
             return false;
 
-        // Skip if the argument is preceded by any hand-written hint /*paramName*/
+        // Skip if the argument is preceded by any hand-written hint /*paramName*/.
         auto range = arg->getSourceRange();
         auto firstChar = src->getCharacterData(range.getBegin());
         auto length = static_cast<size_t>(src->getCharacterData(range.getEnd()) - firstChar);
@@ -138,9 +139,10 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         return qual->isLValueReferenceType() && !qual.getNonReferenceType().isConstQualified();
     }
 
-    void collectArgumentHint(llvm::ArrayRef<clang::ParmVarDecl*> params,
-                             llvm::ArrayRef<clang::Expr*> args) {
+    void collectArgumentHint(llvm::ArrayRef<const clang::ParmVarDecl*> params,
+                             llvm::ArrayRef<const clang::Expr*> args) {
         for(size_t i = 0; i < params.size() && i < args.size(); ++i) {
+            // Pack expansion and default argument is always the tail of arguments.
             if(llvm::isa<clang::PackExpansionExpr>(args[i]) ||
                llvm::isa<clang::CXXDefaultArgExpr>(args[i]))
                 break;
@@ -148,6 +150,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
             if(!needHintArgument(params[i], args[i]))
                 continue;
 
+            // Only hint reference for mutable lvalue reference.
             const bool hintRef = isPassedAsMutableLValueRef(params[i]);
             proto::InlayHintLablePart lable{
                 .value = std::format("{}{}:", params[i]->getName(), hintRef ? "&" : ""),
@@ -155,6 +158,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
                 .Location = proto::Location{.uri = docuri,
                                             .range = toLspRange(params[i]->getSourceRange())}
             };
+
             proto::InlayHint hint{
                 .position = toLspPosition(args[i]->getSourceRange().getBegin()),
                 .lable = {std::move(lable)},
@@ -172,10 +176,24 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         return Base::TraverseDecl(decl);
     }
 
-    bool TraverseVarDecl(clang::VarDecl* decl) {
-        clang::QualType qty = decl->getType();
+    bool VisitVarDecl(const clang::VarDecl* decl) {
+        // Hint for indivadual element of structure binding.
+        if(auto bind = llvm::dyn_cast<clang::DecompositionDecl>(decl)) {
+            for(auto* binding: bind->bindings()) {
+                // Hint for used variable only.
+                if(auto type = binding->getType(); !type.isNull() && !type->isDependentType()) {
+                    // Hint at the end position of identifier.
+                    auto name = binding->getName();
+                    collectAutoDeclHint(type.getCanonicalType(),
+                                        binding->getBeginLoc().getLocWithOffset(name.size()),
+                                        decl->getSourceRange());
+                }
+            }
+            return true;
+        }
 
         /// skip dependent type.
+        clang::QualType qty = decl->getType();
         if(qty.isNull() || qty->isDependentType())
             return true;
 
@@ -189,10 +207,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
 
             auto tailOfIdentifier = decl->getLocation().getLocWithOffset(decl->getName().size());
             collectAutoDeclHint(qty, tailOfIdentifier, originDeclRange);
-            return true;
         }
-
-        return Base::TraverseVarDecl(decl);
+        return true;
     }
 
     static bool isBuiltinFnCall(const clang::CallExpr* expr) {
@@ -241,20 +257,18 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         return std::nullopt;
     }
 
-    bool TraverseCallExpr(clang::CallExpr* call) {
-        // For a CallExpr, there are 2 case of Callee:
-        //     1. An object which has coresponding FunctionDecl, free function or method.
-        //     2. A function pointer, which has no FunctionDecl but FunctionProtoTypeLoc.
-
-        // Do not show hint for user defined literals operator like ` operaotr ""_str , and builtin
-        // funtion call.
+    bool VisitCallExpr(const clang::CallExpr* call) {
+        // Don't hint for UDL operator like `operaotr ""_str` , and builtin funtion.
         if(!call || llvm::isa<clang::UserDefinedLiteral>(call) || isBuiltinFnCall(call))
             return true;
 
-        // Do not hint paramters for operator overload except `operator()`.
-        if(auto opcall = llvm::dyn_cast<clang::CXXOperatorCallExpr>(call))
-            if(auto op = opcall->getOperator(); op != clang::OO_Call && op != clang::OO_Subscript)
-                return true;
+        // They were handled in  `VisitCXXMemberCallExpr`. `VisitCXXOperatorCallExpr`.
+        if(llvm::isa<clang::CXXMemberCallExpr>(call) || llvm::isa<clang::CXXOperatorCallExpr>(call))
+            return true;
+
+        // For a CallExpr, there are 2 case of Callee:
+        //     1. An object which has coresponding FunctionDecl, free function or method.
+        //     2. A function pointer, which has no FunctionDecl but FunctionProtoTypeLoc.
 
         // Use FunctionDecl if callee is a free function or method.
         const clang::FunctionDecl* fndecl = nullptr;
@@ -264,15 +278,32 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         else if(auto tfndecl = llvm::dyn_cast<clang::FunctionTemplateDecl>(calleeDecl))
             fndecl = tfndecl->getTemplatedDecl();
 
-        if(fndecl && !llvm::isa<clang::CXXMemberCallExpr>(call))
+        if(fndecl)
             // free function
             collectArgumentHint(fndecl->parameters(), {call->getArgs(), call->getNumArgs()});
         else if(auto proto = detectCallViaFnPointer(call->getCallee()); proto.has_value())
             // function pointer
             collectArgumentHint(proto->getParams(), {call->getArgs(), call->getNumArgs()});
-        else
-            // CXXMemberCallExpr
-            return Base::TraverseCallExpr(call);
+
+        return true;
+    }
+
+    bool VisitCXXOperatorCallExpr(const clang::CXXOperatorCallExpr* call) {
+        // Do not hint paramters for operator overload except `operator()`, and `operator[]` with
+        // only one parameter.
+        auto opkind = call->getOperator();
+        if(opkind == clang::OO_Call || opkind == clang::OO_Subscript && call->getNumArgs() != 1) {
+            auto method = llvm::dyn_cast<clang::CXXMethodDecl>(call->getCalleeDecl());
+
+            llvm::ArrayRef<const clang::ParmVarDecl*> params{method->parameters()};
+            llvm::ArrayRef<const clang::Expr*> args{call->getArgs(), call->getNumArgs()};
+
+            // Skip `this` parameter declaration if callee is CXXMethodDecl.
+            if(!method->hasCXXExplicitFunctionObjectParameter())
+                args = args.drop_front();
+
+            collectArgumentHint(params, args);
+        }
 
         return true;
     }
@@ -302,8 +333,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         return fnname.equals_insensitive(param);
     }
 
-    bool TraverseCXXMemberCallExpr(clang::CXXMemberCallExpr* expr) {
-        auto callee = llvm::dyn_cast<clang::FunctionDecl>(expr->getCalleeDecl());
+    bool VisitCXXMemberCallExpr(const clang::CXXMemberCallExpr* call) {
+        auto callee = llvm::dyn_cast<clang::FunctionDecl>(call->getCalleeDecl());
 
         // Do not hint move / copy constructor call.
         if(auto ctor = llvm::dyn_cast<clang::CXXConstructorDecl>(callee))
@@ -315,16 +346,16 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
             if(isSimpleSetter(md))
                 return true;
 
-        llvm::ArrayRef<clang::ParmVarDecl*> params{callee->parameters()};
-        llvm::ArrayRef<clang::Expr*> args{expr->getArgs(), expr->getNumArgs()};
+        llvm::ArrayRef<const clang::ParmVarDecl*> params{callee->parameters()};
+        llvm::ArrayRef<const clang::Expr*> args{call->getArgs(), call->getNumArgs()};
 
         // Skip `this` parameter declaration if callee is CXXMethodDecl.
         if(auto md = llvm::dyn_cast<clang::CXXMethodDecl>(callee))
             if(md->hasCXXExplicitFunctionObjectParameter())
-                params = params.drop_front();
-        collectArgumentHint(params, args);
+                args = args.drop_front();
 
-        return Base::TraverseCXXMemberCallExpr(expr);
+        collectArgumentHint(params, args);
+        return true;
     }
 
     void collectReturnTypeHint(clang::SourceLocation hintLoc, clang::QualType retType,
@@ -344,7 +375,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         result.push_back(std::move(hint));
     }
 
-    bool VisitFunctionDecl(clang::FunctionDecl* decl) {
+    bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
         // Hint return type for function declaration.
         if(auto proto = llvm::dyn_cast<clang::FunctionProtoType>(decl->getType().getTypePtr()))
             if(proto->hasTrailingReturn())
@@ -353,7 +384,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         if(auto fnTypeLoc = decl->getFunctionTypeLoc())
             // Hint for function declaration with `auto` or `decltype(...)` return type.
             if(fnTypeLoc.getReturnLoc().getContainedAutoTypeLoc())
-                // Right side of ')' in parameter list
+                // Right side of ')' in parameter list.
                 collectReturnTypeHint(fnTypeLoc.getRParenLoc().getLocWithOffset(1),
                                       decl->getReturnType(),
                                       decl->getSourceRange());
@@ -361,7 +392,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         return true;
     }
 
-    bool VisitLambdaExpr(clang::LambdaExpr* expr) {
+    bool VisitLambdaExpr(const clang::LambdaExpr* expr) {
         clang::FunctionDecl* decl = expr->getCallOperator();
         if(expr->hasExplicitResultType())
             return true;
@@ -369,8 +400,10 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         // where to place the hint position, in default it is an invalid value.
         clang::SourceLocation hintLoc = {};
         if(!expr->hasExplicitParameters())
+            // left side of '{' before the lambda body.
             hintLoc = expr->getCompoundStmtBody()->getLBracLoc();
         else if(auto fnTypeLoc = decl->getFunctionTypeLoc())
+            // right side of ')'.
             hintLoc = fnTypeLoc.getRParenLoc().getLocWithOffset(1);
 
         if(hintLoc.isValid())
