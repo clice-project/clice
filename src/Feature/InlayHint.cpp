@@ -49,7 +49,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
     using Base = clang::RecursiveASTVisitor<InlayHintCollector>;
 
     /// The config of inlay hints collector.
-    const config::InlayHintOption& config;
+    const config::InlayHintOption config;
 
     /// The restrict range of request.
     const clang::SourceRange limit;
@@ -62,6 +62,9 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
 
     /// The printing policy of clang.
     const clang::PrintingPolicy policy;
+
+    /// Whole source text in main file.
+    llvm::StringRef source;
 
     /// Do not produce inlay hints if either range ends is not within the main file.
     bool needFilter(clang::SourceRange range) {
@@ -386,7 +389,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         proto::InlayHint hint{
             .position = toLspPosition(hintLoc),
             .lable = {std::move(lable)},
-            .kind = proto::InlayHintKind::Parameter,
+            .kind = proto::InlayHintKind::Type,
         };
 
         result.push_back(std::move(hint));
@@ -397,7 +400,21 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
     // }
 
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
-        // Hint return type for function declaration.
+        // 1. Hint block end.
+        if(config.blockEnd && decl->isThisDeclarationADefinition()) {
+            /// FIXME:
+            /// Use a proper name such as simplified signature of funtion.
+            auto typeLoc = decl->getTypeSourceInfo()->getTypeLoc().getSourceRange();
+            auto begin = src->getCharacterData(typeLoc.getBegin());
+            auto end = src->getCharacterData(typeLoc.getEnd());
+            llvm::StringRef piece{begin, static_cast<size_t>(end - begin) + 1};
+            collectBlockEndHint(decl->getBodyRBrace().getLocWithOffset(1),
+                                std::format("// {}", piece),
+                                decl->getSourceRange(),
+                                /*checkDuplicatedHint=*/true);
+        }
+
+        // 2. Hint return type.
         if(auto proto = llvm::dyn_cast<clang::FunctionProtoType>(decl->getType().getTypePtr()))
             if(proto->hasTrailingReturn())
                 return true;
@@ -462,6 +479,99 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         }
         return true;
     }
+
+    bool isMultiLineRange(const clang::SourceRange range) {
+        return range.isValid() && src->getPresumedLineNumber(range.getBegin()) <
+                                      src->getPresumedLineNumber(range.getEnd());
+    }
+
+    llvm::StringRef remainTextOfThatLine(clang::SourceLocation location) {
+        auto [_, offset] = src->getDecomposedLoc(location);
+        auto remain = source.substr(offset).split('\n').first;
+        return remain.ltrim();
+    }
+
+    void collectBlockEndHint(clang::SourceLocation location, std::string text,
+                             clang::SourceRange linkRange, bool checkDuplicatedHint) {
+        // Already has a comment in that line.
+        if(auto remain = remainTextOfThatLine(location);
+           remain.starts_with("/*") || remain.starts_with("//"))
+            return;
+
+        // Already has a duplicated hint in that line, use the newer hint instead.
+        const auto lspPosition = toLspPosition(location);
+        if(checkDuplicatedHint && !result.empty())
+            if(result.back().position.line == lspPosition.line)
+                result.pop_back();  // drop old hint.
+
+        proto::InlayHintLablePart lable{
+            .value = std::move(text),
+            .tooltip = blank(),
+            .Location = {.uri = docuri, .range = toLspRange(linkRange)},
+        };
+
+        proto::InlayHint hint{
+            .position = lspPosition,
+            .lable = {std::move(lable)},
+            .kind = proto::InlayHintKind::Parameter,
+        };
+
+        result.push_back(std::move(hint));
+    }
+
+    bool VisitNamespaceDecl(const clang::NamespaceDecl* decl) {
+        if(!config.blockEnd)
+            return true;
+
+        auto range = decl->getSourceRange();
+        if(decl->isAnonymousNamespace() || !isMultiLineRange(range))
+            return true;
+
+        // checkDuplicatedHint: Drop outer hint for nested namspace declaration. e.g.
+        //      namespace out::in {}
+        collectBlockEndHint(decl->getRBraceLoc().getLocWithOffset(1),
+                            std::format("// namespace {}", decl->getName()),
+                            range,
+                            /*checkDuplicatedHint=*/true);
+        return true;
+    }
+
+    bool VisitTagDecl(const clang::TagDecl* decl) {
+        if(config.blockEnd && decl->isThisDeclarationADefinition()) {
+            std::string text = std::format("// {}", decl->getKindName().str());
+            // Add a tail flag for enum declaration as clangd's do.
+            if(const auto* enumDecl = llvm::dyn_cast<clang::EnumDecl>(decl);
+               enumDecl && enumDecl->isScoped())
+                text += enumDecl->isScopedUsingClassTag() ? " class" : " struct";
+
+            // Format text to 'struct Example' or `class Example` or `enum class Example`
+            text.append(" ").append(decl->getName());
+            collectBlockEndHint(decl->getBraceRange().getEnd().getLocWithOffset(1),
+                                std::move(text),
+                                decl->getSourceRange(),
+                                /*checkDuplicatedHint=*/false);
+        }
+        return true;
+    }
+
+    // bool VisitIfStmt(const clang::IfStmt* stmt) {
+    //     if(config.blockEnd) {
+    //         // If there is an else if statement, record it.
+    //         std::set<const clang::IfStmt*> ElseIfs;
+    //         if(auto ElseIf = llvm::dyn_cast_or_null<clang::IfStmt>(stmt->getElse()))
+    //             ElseIfs.insert(ElseIf);
+
+    //         // The relevant range is [then.begin, else.end].
+    //         auto EndCS = llvm::dyn_cast<clang::CompoundStmt>(stmt->getElse() ? stmt->getElse()
+    //                                                                          : stmt->getThen());
+    //         if(EndCS)
+    //             addBlockEndHint({stmt->getThen()->getBeginLoc(), EndCS->getRBracLoc()},
+    //                             "if",
+    //                             ElseIfs.contains(stmt) ? "" : summarizeExpr(stmt->getCond()),
+    //                             "");
+    //     }
+    //     return true;
+    // }
 };
 
 }  // namespace
@@ -494,6 +604,7 @@ proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& ast,
         .docuri = std::move(param.textDocument.uri),
         .policy = ast.context().getPrintingPolicy(),
     };
+    collector.source = src->getBufferData(src->getMainFileID());
     collector.src = src;
 
     collector.TraverseTranslationUnitDecl(ast.tu());

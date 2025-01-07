@@ -301,5 +301,40 @@ void f() {
         ;
 }
 
+TEST(InlayHint, BlockEnd) {
+    const char* main = R"cpp(
+struct A { 
+    int x;
+}$(1);
+
+void g() {
+}$(2)
+
+namespace no {} // there is no block end hint in a one line defination. 
+
+namespace yes {
+}$(3)
+
+namespace yes::nested {
+}$(4)
+
+namespace skip {
+} // some text here, no hint generated.
+
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {.blockEnd = true});
+
+    dbg(res);
+
+    txs.equal(res.size(), 4)
+        //
+        ;
+}
+
 }  // namespace
 }  // namespace clice

@@ -77,7 +77,7 @@ using InlayHintsResult = std::vector<InlayHint>;
 
 namespace config {
 
-/// Configuration options for inlay hints, from table `inlay-hint` in `clice.toml`.
+/// Options for inlay hints, from table `inlay-hint` in `clice.toml`.
 struct InlayHintOption {
     // Max length of hint string, the extra part will be replaced with `...`
     uint16_t maxLength = 30;
