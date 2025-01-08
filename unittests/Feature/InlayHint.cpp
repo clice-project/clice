@@ -13,7 +13,6 @@ void dbg(const std::vector<proto::InlayHint>& hints) {
                                     hint.kind.name(),
                                     json::serialize(hint.position),
                                     hint.lable.size());
-
         for(auto& lable: hint.lable) {
             llvm::outs() << std::format(" value:{}, link position:{}",
                                         lable.value,
@@ -22,6 +21,15 @@ void dbg(const std::vector<proto::InlayHint>& hints) {
         }
     }
 }
+
+config::InlayHintOption LikeClangd{
+    .maxLength = 20,
+    .maxArrayElements = 10,
+    .structSizeAndAlign = false,
+    .memberSizeAndOffset = false,
+    .implicitCast = false,
+    .chainCall = false,
+};
 
 TEST(InlayHint, AutoDecl) {
     const char* main = R"cpp(
@@ -45,7 +53,7 @@ void t() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {});
+    auto res = feature::inlayHints({}, info, LikeClangd);
 
     dbg(res);
 
@@ -69,7 +77,7 @@ g();
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {});
+    auto res = feature::inlayHints({}, info, LikeClangd);
 
     dbg(res);
 
@@ -91,7 +99,7 @@ f($(1)x, $(2)x);
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {});
+    auto res = feature::inlayHints({}, info, LikeClangd);
 
     dbg(res);
 
@@ -116,7 +124,7 @@ void f() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {});
+    auto res = feature::inlayHints({}, info, LikeClangd);
 
     dbg(res);
 
@@ -141,7 +149,7 @@ int f() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {});
+    auto res = feature::inlayHints({}, info, LikeClangd);
 
     dbg(res);
 
@@ -172,7 +180,7 @@ void g() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {});
+    auto res = feature::inlayHints({}, info, LikeClangd);
 
     dbg(res);
 
@@ -194,7 +202,7 @@ int f() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {});
+    auto res = feature::inlayHints({}, info, LikeClangd);
 
     dbg(res);
 
@@ -224,7 +232,7 @@ void f() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {});
+    auto res = feature::inlayHints({}, info, LikeClangd);
 
     dbg(res);
 
@@ -243,7 +251,7 @@ TEST(InlayHint, InitializeList) {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {});
+    auto res = feature::inlayHints({}, info, LikeClangd);
 
     dbg(res);
 
@@ -262,7 +270,7 @@ A a = {.x = 1, .y = 2};
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {});
+    auto res = feature::inlayHints({}, info, LikeClangd);
 
     dbg(res);
 
@@ -292,7 +300,7 @@ void f() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {});
+    auto res = feature::inlayHints({}, info, LikeClangd);
 
     dbg(res);
 
@@ -321,17 +329,98 @@ namespace yes::nested {
 namespace skip {
 } // some text here, no hint generated.
 
+struct Out {
+    struct In {
+
+    };$(5)}$(6);
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    config::InlayHintOption option{
+        .blockEnd = true,
+        .structSizeAndAlign = false,
+    };
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, option);
+
+    dbg(res);
+
+    txs.equal(res.size(), 6)
+        //
+        ;
+}
+
+TEST(InlayHint, Lambda) {
+    const char* main = R"cpp(
+auto l = []$(1) {
+    return 1;
+}$(2);
 )cpp";
 
     Tester txs("main.cpp", main);
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {.blockEnd = true});
+    auto res = feature::inlayHints({}, info, {.returnType = true, .blockEnd = true});
 
     dbg(res);
 
-    txs.equal(res.size(), 4)
+    txs.equal(res.size(), 3)
+        //
+        ;
+}
+
+TEST(InlayHint, StructAndMemberHint) {
+    const char* main = R"cpp(
+struct A {
+    int x;
+    int y;
+
+    struct B {
+        int z;
+    };
+};
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+
+    config::InlayHintOption option{
+        .blockEnd = false,
+        .structSizeAndAlign = true,
+        .memberSizeAndOffset = true,
+    };
+
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, option);
+
+    dbg(res);
+
+    /// TODO:
+    /// if InlayHintOption::memberSizeAndOffset was implemented, the total hint count is 2 + 3.
+    txs.equal(res.size(), 2 /*+ 3*/)
+        //
+        ;
+}
+
+TEST(InlayHint, ImplicitCast) {
+    const char* main = R"cpp(
+    int x = 1.0;
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+    auto& info = txs.info;
+    auto res = feature::inlayHints({}, info, {.implicitCast = true});
+
+    dbg(res);
+
+    /// FIXME:
+    /// Hint count should be 1.
+    txs.equal(res.size(), 0)
         //
         ;
 }

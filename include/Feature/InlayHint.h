@@ -79,23 +79,40 @@ namespace config {
 
 /// Options for inlay hints, from table `inlay-hint` in `clice.toml`.
 struct InlayHintOption {
-    // Max length of hint string, the extra part will be replaced with `...`
+    /// Max length of hint string, the extra part will be replaced with `...`
     uint16_t maxLength = 30;
 
-    // How many elements to show in array/initializer-list.
+    /// How many elements to show in initializer-list.
     uint16_t maxArrayElements = 3;
 
-    // Hint for `auto` declaration, structure binding, if/for statement with initializer.
+    /// Hint for `auto` declaration, structure binding, if/for statement with initializer.
     bool dedcucedType : 1 = true;
 
-    // Hint for  function / lambda return type.
+    /// Hint for function / lambda return type.
+    ///     auto f |-> int| { return 1; }
+    ///     []() |-> bool| { return true; }
     bool returnType : 1 = true;
 
-    // Hint after '}', including if/switch/while/for/namespace/class/function end.
+    /// Hint after '}', including if/switch/while/for/namespace/class/function end.
     bool blockEnd : 1 = false;
 
-    // Hint for function arguments.
+    /// Hint for function arguments. e.g.
+    ///     void f(int a, int b);
+    ///     f(|a:|1, |b:|2);
     bool argumentName : 1 = true;
+
+    /// Diaplay the value of `sizeof()` and `alignof()` for a struct/class defination. e.g.
+    ///    struct Example |size: 4, align: 4| { int x; };
+    bool structSizeAndAlign : 1 = true;
+
+    /// TODO:
+    /// Display the value of `sizeof()` and `offsetof()` for a non-static member for a struct/class
+    /// defination. e.g.
+    ///     struct Example {
+    ///         int x; |size: 4, offset: 0|
+    ///         int y: |size: 4, offset: 4|
+    ///     }
+    bool memberSizeAndOffset : 1 = true;
 
     /// TODO:
     /// Hint for implicit cast like `1 |as int|`.
@@ -117,7 +134,7 @@ namespace feature {
 json::Value inlayHintCapability(json::Value InlayHintClientCapabilities);
 
 /// Compute inlay hints for a document in given range and config.
-proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& ast,
+proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
                                    const config::InlayHintOption& config);
 
 }  // namespace feature
