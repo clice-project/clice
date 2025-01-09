@@ -57,6 +57,39 @@ TEST(SourceConverter, Position) {
     }
 }
 
+TEST(SourceConverter, UriAndFsPath) {
+    using SC = SourceConverter;
+
+    // It must be a existed file.
+#ifdef unix
+    const char* fspath[] = {"/dev/null"};
+    const char* uri[] = {"file:///dev/null"};
+#else
+    const char* fspath[] = {};
+    const char* uri[] = {};
+#endif
+    EXPECT_EQ(std::size(fspath), std::size(uri));
+
+    for(int i = 0; i < std::size(fspath); ++i) {
+        auto fspath_ = fspath[i];
+        auto uri_ = uri[i];
+
+        auto uri1 = SC::toUri(fspath_);
+        EXPECT_TRUE(bool(uri1));
+        EXPECT_EQ(*uri1, uri_);
+
+        auto uri2 = SC::toUriUnchecked(fspath_);
+        EXPECT_EQ(uri2, uri_);
+
+        auto fspath1 = SC::toRealPathUnchecked(uri_);
+        EXPECT_EQ(fspath1, fspath_);
+
+        auto fspath2 = SC::toRealPath(uri_);
+        EXPECT_TRUE(bool(fspath2));
+        EXPECT_EQ(*fspath2, fspath_);
+    }
+}
+
 }  // namespace
 
 }  // namespace clice

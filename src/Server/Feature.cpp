@@ -1,3 +1,4 @@
+#include "Basic/SourceConverter.h"
 #include "Server/Server.h"
 
 namespace clice {
@@ -27,9 +28,8 @@ async::promise<void> Server::onFindReferences(json::Value id,
     co_return;
 }
 
-async::promise<void>
-    Server::onPrepareCallHierarchy(json::Value id,
-                                   const proto::CallHierarchyPrepareParams& params) {
+async::promise<void> Server::onPrepareCallHierarchy(
+    json::Value id, const proto::CallHierarchyPrepareParams& params) {
     co_return;
 }
 
@@ -43,9 +43,8 @@ async::promise<void> Server::onOutgoingCall(json::Value id,
     co_return;
 }
 
-async::promise<void>
-    Server::onPrepareTypeHierarchy(json::Value id,
-                                   const proto::TypeHierarchyPrepareParams& params) {
+async::promise<void> Server::onPrepareTypeHierarchy(
+    json::Value id, const proto::TypeHierarchyPrepareParams& params) {
     co_return;
 }
 
@@ -89,7 +88,7 @@ async::promise<void> Server::onDocumentSymbol(json::Value id,
 
 async::promise<void> Server::onSemanticTokens(json::Value id,
                                               const proto::SemanticTokensParams& params) {
-    auto path = URI::resolve(params.textDocument.uri);
+    auto path = SourceConverter::toRealPathUnchecked(params.textDocument.uri);
     proto::SemanticTokens result;
     co_await scheduler.execute(path, [&id, &path, &result](ASTInfo& info) {
         result = feature::semanticTokens(info, path);

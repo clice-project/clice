@@ -1,9 +1,10 @@
+#include "Basic/SourceConverter.h"
 #include "Server/Server.h"
 
 namespace clice {
 
 async::promise<void> Server::onInitialize(json::Value id, const proto::InitializeParams& params) {
-    auto workplace = URI::resolve(params.workspaceFolders[0].uri);
+    auto workplace = SourceConverter::toRealPathUnchecked(params.workspaceFolders[0].uri);
     config::init(workplace);
 
     if(!params.capabilities.workspace.didChangeWatchedFiles.dynamicRegistration) {

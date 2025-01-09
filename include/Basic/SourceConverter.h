@@ -1,13 +1,14 @@
 #pragma once
 
-#include <Basic/URI.h>
+#include "llvm/Support/Error.h"
+
 #include <Basic/Location.h>
 #include <clang/Basic/SourceLocation.h>
 
 namespace clice {
 
-/// A helper class to convert `Position, Range, Location` between 1-1 based clang and 0-0 based
-/// LSP.
+/// A helper class to convert `Position, Range, Location` between 1-1 encoding based clang and 0-0
+/// encoding based LSP. The conversion of DocumentUri is also supported.
 class SourceConverter {
 public:
     /// [(origin, new)],  map origin header directory to another source directory.
@@ -50,23 +51,22 @@ public:
     /// encoding kind.
     std::size_t toOffset(llvm::StringRef content, proto::Position position) const;
 
-    /// Convert a file path to URI.
-    URI toUri(llvm::StringRef fspath) const;
-
-    /// Convert a file path to URI in string representation.
-    std::string toUriAsString(llvm::StringRef fspath) const {
-        return toUri(fspath).toString();
-    }
-
-    /// Convert a file path to proto::DocumentUri.
-    proto::DocumentUri toDocumentUri(llvm::StringRef fspath) const {
-        return toUriAsString(fspath);
-    };
-
     /// Get the encoding kind of the content in LSP protocol.
     proto::PositionEncodingKind encodingKind() const {
         return kind;
     }
+
+    /// Convert a real path of a file to URI.
+    static llvm::Expected<proto::DocumentUri> toUri(llvm::StringRef fspath);
+
+    /// Same with `toUri`, but unchecked.
+    static proto::DocumentUri toUriUnchecked(llvm::StringRef fspath);
+
+    /// Convert a file URI to real path with `clice::fs::real_path`.
+    static llvm::Expected<std::string> toRealPath(llvm::StringRef uri);
+
+    /// Same with `toRealPath`, but will crash if failed.
+    static std::string toRealPathUnchecked(llvm::StringRef uri);
 
 private:
     /// The encoding kind of the content in LSP protocol.

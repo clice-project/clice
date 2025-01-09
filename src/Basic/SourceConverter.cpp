@@ -159,12 +159,70 @@ std::size_t SourceConverter::toOffset(llvm::StringRef content, proto::Position p
     std::unreachable();
 }
 
-URI SourceConverter::toUri(llvm::StringRef fspath) const {
-    llvm::SmallString<128> path;
+namespace {
+
+/// returns true if the scheme is valid according to RFC 3986.
+bool isValidScheme(llvm::StringRef scheme) {
+    if(scheme.empty()) {
+        return false;
+    }
+
+    if(!llvm::isAlpha(scheme[0])) {
+        return false;
+    }
+
+    return llvm::all_of(llvm::drop_begin(scheme), [](char C) {
+        return llvm::isAlnum(C) || C == '+' || C == '.' || C == '-';
+    });
+}
+
+/// decodes a string according to percent-encoding, e.g., "a%20b" -> "a b".
+static std::string decodePercent(llvm::StringRef content) {
+    std::string result;
+    result.reserve(content.size());
+
+    for(auto iter = content.begin(), send = content.end(); iter != send; ++iter) {
+        auto c = *iter;
+        if(c == '%' && iter + 2 < send) {
+            auto m = *(iter + 1);
+            auto n = *(iter + 2);
+            if(llvm::isHexDigit(m) && llvm::isHexDigit(n)) {
+                result += llvm::hexFromNibbles(m, n);
+                iter += 2;
+                continue;
+            }
+        }
+        result += c;
+    }
+    return result;
+}
+
+}  // namespace
+
+llvm::Expected<proto::DocumentUri> SourceConverter::toUri(llvm::StringRef fspath) {
+    if(!path::is_absolute(fspath))
+        return error("file path must be absolute: \"{}\"", fspath);
+
+    return toUriUnchecked(fspath);
+};
+
+proto::DocumentUri SourceConverter::toUriUnchecked(llvm::StringRef fspath) {
+    llvm::SmallString<128> path("file://");
+
+    for(auto c: fspath) {
+        if(c == '\\') {
+            path.push_back('/');
+        } else if(std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '/') {
+            path.push_back(c);
+        } else {
+            path.push_back('%');
+            path.push_back(llvm::hexdigit(c >> 4));
+            path.push_back(llvm::hexdigit(c & 0xF));
+        }
+    }
 
     /// TODO:
-    /// use `sourceMap` to replace prefix.
-
+    /// use `sourceMap` to replace prefix with mapped path.
     // for(const auto& [prefix, newPrefix]: sourceMap) {
     //     if(fspath.starts_with(prefix)) {
     //         path.append(newPrefix); // todo: newPrefix.end_with('/') ???
@@ -173,6 +231,53 @@ URI SourceConverter::toUri(llvm::StringRef fspath) const {
     //     }
     // }
 
-    return URI::from(path.empty() ? fspath : path.str());
+    return path.str().str();
 };
+
+llvm::Expected<std::string> SourceConverter::toRealPath(llvm::StringRef uri) {
+    llvm::StringRef cloned = uri;
+
+    auto pos = cloned.find(':');
+    if(pos == llvm::StringRef::npos)
+        return error("scheme is missing in URI: {}", cloned);
+
+    auto scheme = cloned.substr(0, pos);
+    if(!isValidScheme(scheme)) {
+        return error("invalid scheme in URI: {}", cloned);
+    }
+    cloned = cloned.substr(pos + 1);
+
+    if(cloned.consume_front("//"))
+        cloned = cloned.substr(cloned.find('/'));
+
+    auto decoded = decodePercent(cloned);
+    llvm::SmallString<128> result;
+    if(auto err = fs::real_path(decoded, result))
+        return error("failed to resolve URI: {}", uri);
+
+    return result.str().str();
+}
+
+std::string SourceConverter::toRealPathUnchecked(llvm::StringRef uri) {
+    llvm::StringRef cloned = uri;
+
+    auto pos = cloned.find(':');
+    if(pos == llvm::StringRef::npos)
+        std::terminate();
+
+    auto scheme = cloned.substr(0, pos);
+    cloned = cloned.substr(pos + 1);
+
+    if(cloned.consume_front("//")) {
+        cloned = cloned.substr(cloned.find('/'));
+    }
+
+    auto decoded = decodePercent(cloned);
+    llvm::SmallString<128> result;
+    if(auto err = fs::real_path(decoded, result))
+        std::terminate();
+
+    return result.str().str();
+}
+
 }  // namespace clice
