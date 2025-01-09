@@ -199,7 +199,7 @@ struct DocumentSymbolCollector :
         return true;
     }
 
-    std::string composeFuncSignature(const clang::FunctionDecl* decl) {
+    static std::string composeFuncSignature(const clang::FunctionDecl* decl) {
         std::string signature = decl->getReturnType().getAsString();
 
         signature += " (";
@@ -290,11 +290,11 @@ json::Value documentSymbolCapability(json::Value clientCapabilities) {
     };
 }
 
-proto::DocumentSymbolResult documentSymbol(ASTInfo& ast) {
+proto::DocumentSymbolResult documentSymbol(ASTInfo& info) {
     DocumentSymbolCollector collector;
-    collector.src = &ast.srcMgr();
+    collector.src = &info.srcMgr();
 
-    collector.TraverseTranslationUnitDecl(ast.tu());
+    collector.TraverseTranslationUnitDecl(info.tu());
     return std::move(collector.result);
 }
 

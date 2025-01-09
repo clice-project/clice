@@ -103,7 +103,7 @@ namespace feature {
 json::Value documentSymbolCapability(json::Value clientCapabilities);
 
 /// Run document symbol in given file.
-proto::DocumentSymbolResult documentSymbol(ASTInfo& ast);
+proto::DocumentSymbolResult documentSymbol(ASTInfo& info);
 
 }  // namespace feature
 
