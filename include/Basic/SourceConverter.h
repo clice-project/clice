@@ -25,12 +25,7 @@ public:
     SourceConverter(SourceConverter&&) = default;
 
     /// Measure the length (character count) of the content with the specified encoding kind.
-    static std::size_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kind);
-
-    /// Measure the length (character count) of the content with the specified encoding kind.
-    std::size_t remeasure(llvm::StringRef content) const {
-        return remeasure(content, kind);
-    }
+    std::size_t remeasure(llvm::StringRef content) const;
 
     /// Convert a clang::SourceLocation to a proto::Position according to the
     /// specified encoding kind. Note that `SourceLocation` in clang is 1-based and
@@ -56,17 +51,11 @@ public:
         return kind;
     }
 
-    /// Convert a real path of a file to URI.
-    static llvm::Expected<proto::DocumentUri> toUri(llvm::StringRef fspath);
+    /// Convert a real path of a file to URI. Crash if failed.
+    static proto::DocumentUri toURI(llvm::StringRef fspath);
 
-    /// Same with `toUri`, but unchecked.
-    static proto::DocumentUri toUriUnchecked(llvm::StringRef fspath);
-
-    /// Convert a file URI to real path with `clice::fs::real_path`.
-    static llvm::Expected<std::string> toRealPath(llvm::StringRef uri);
-
-    /// Same with `toRealPath`, but will crash if failed.
-    static std::string toRealPathUnchecked(llvm::StringRef uri);
+    /// Convert a file URI to real path with `clice::fs::real_path`. Crash if failed. 
+    static std::string toPath(llvm::StringRef uri);
 
 private:
     /// The encoding kind of the content in LSP protocol.

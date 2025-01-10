@@ -11,7 +11,7 @@ async::promise<> Server::onDidChangeWatchedFiles(const proto::DidChangeWatchedFi
             }
 
             case proto::FileChangeType::Changed: {
-                auto path = SourceConverter::toRealPathUnchecked(event.uri);
+                auto path = SourceConverter::toPath(event.uri);
                 synchronizer.sync(path);
                 break;
             }

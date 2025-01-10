@@ -4,7 +4,7 @@
 namespace clice {
 
 async::promise<void> Server::onInitialize(json::Value id, const proto::InitializeParams& params) {
-    auto workplace = SourceConverter::toRealPathUnchecked(params.workspaceFolders[0].uri);
+    auto workplace = SourceConverter::toPath(params.workspaceFolders[0].uri);
     config::init(workplace);
 
     if(!params.capabilities.workspace.didChangeWatchedFiles.dynamicRegistration) {

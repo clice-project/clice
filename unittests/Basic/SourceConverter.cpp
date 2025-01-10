@@ -8,15 +8,20 @@ namespace {
 TEST(SourceConverter, Remeasure) {
     using SC = SourceConverter;
 
-    EXPECT_EQ(SC::remeasure("", proto::PositionEncodingKind::UTF8), 0);
-    EXPECT_EQ(SC::remeasure("ascii", proto::PositionEncodingKind::UTF8), 5);
+    SourceConverter utf8{proto::PositionEncodingKind::UTF8};
 
-    EXPECT_EQ(SC::remeasure("↓", proto::PositionEncodingKind::UTF16), 1);
-    EXPECT_EQ(SC::remeasure("¥", proto::PositionEncodingKind::UTF16), 1);
+    EXPECT_EQ(utf8.remeasure(""), 0);
+    EXPECT_EQ(utf8.remeasure("ascii"), 5);
 
-    EXPECT_EQ(SC::remeasure("😂", proto::PositionEncodingKind::UTF8), 4);
-    EXPECT_EQ(SC::remeasure("😂", proto::PositionEncodingKind::UTF16), 2);
-    EXPECT_EQ(SC::remeasure("😂", proto::PositionEncodingKind::UTF32), 1);
+    SourceConverter utf16{proto::PositionEncodingKind::UTF16};
+
+    EXPECT_EQ(utf16.remeasure("↓"), 1);
+    EXPECT_EQ(utf16.remeasure("¥"), 1);
+
+    SourceConverter utf32{proto::PositionEncodingKind::UTF32};
+    EXPECT_EQ(utf8.remeasure("😂"), 4);
+    EXPECT_EQ(utf16.remeasure("😂"), 2);
+    EXPECT_EQ(utf32.remeasure("😂"), 1);
 }
 
 TEST(SourceConverter, Position) {
@@ -74,19 +79,11 @@ TEST(SourceConverter, UriAndFsPath) {
         auto fspath_ = fspath[i];
         auto uri_ = uri[i];
 
-        auto uri1 = SC::toUri(fspath_);
-        EXPECT_TRUE(bool(uri1));
-        EXPECT_EQ(*uri1, uri_);
+        auto uri1 = SC::toURI(fspath_);
+        EXPECT_EQ(uri1, uri_);
 
-        auto uri2 = SC::toUriUnchecked(fspath_);
-        EXPECT_EQ(uri2, uri_);
-
-        auto fspath1 = SC::toRealPathUnchecked(uri_);
-        EXPECT_EQ(fspath1, fspath_);
-
-        auto fspath2 = SC::toRealPath(uri_);
-        EXPECT_TRUE(bool(fspath2));
-        EXPECT_EQ(*fspath2, fspath_);
+        auto fspath2 = SC::toPath(uri_);
+        EXPECT_EQ(fspath2, fspath_);
     }
 }
 

@@ -61,7 +61,7 @@ static bool iterateCodepoints(llvm::StringRef content, const Callback& callback)
     return false;
 }
 
-std::size_t SourceConverter::remeasure(llvm::StringRef content, proto::PositionEncodingKind kind) {
+std::size_t SourceConverter::remeasure(llvm::StringRef content) const {
     if(kind == proto::PositionEncodingKind::UTF8) {
         return content.size();
     }
@@ -161,21 +161,6 @@ std::size_t SourceConverter::toOffset(llvm::StringRef content, proto::Position p
 
 namespace {
 
-/// returns true if the scheme is valid according to RFC 3986.
-bool isValidScheme(llvm::StringRef scheme) {
-    if(scheme.empty()) {
-        return false;
-    }
-
-    if(!llvm::isAlpha(scheme[0])) {
-        return false;
-    }
-
-    return llvm::all_of(llvm::drop_begin(scheme), [](char C) {
-        return llvm::isAlnum(C) || C == '+' || C == '.' || C == '-';
-    });
-}
-
 /// decodes a string according to percent-encoding, e.g., "a%20b" -> "a b".
 static std::string decodePercent(llvm::StringRef content) {
     std::string result;
@@ -199,14 +184,10 @@ static std::string decodePercent(llvm::StringRef content) {
 
 }  // namespace
 
-llvm::Expected<proto::DocumentUri> SourceConverter::toUri(llvm::StringRef fspath) {
+proto::DocumentUri SourceConverter::toURI(llvm::StringRef fspath) {
     if(!path::is_absolute(fspath))
-        return error("file path must be absolute: \"{}\"", fspath);
+        std::terminate();
 
-    return toUriUnchecked(fspath);
-};
-
-proto::DocumentUri SourceConverter::toUriUnchecked(llvm::StringRef fspath) {
     llvm::SmallString<128> path("file://");
 
     for(auto c: fspath) {
@@ -234,31 +215,7 @@ proto::DocumentUri SourceConverter::toUriUnchecked(llvm::StringRef fspath) {
     return path.str().str();
 };
 
-llvm::Expected<std::string> SourceConverter::toRealPath(llvm::StringRef uri) {
-    llvm::StringRef cloned = uri;
-
-    auto pos = cloned.find(':');
-    if(pos == llvm::StringRef::npos)
-        return error("scheme is missing in URI: {}", cloned);
-
-    auto scheme = cloned.substr(0, pos);
-    if(!isValidScheme(scheme)) {
-        return error("invalid scheme in URI: {}", cloned);
-    }
-    cloned = cloned.substr(pos + 1);
-
-    if(cloned.consume_front("//"))
-        cloned = cloned.substr(cloned.find('/'));
-
-    auto decoded = decodePercent(cloned);
-    llvm::SmallString<128> result;
-    if(auto err = fs::real_path(decoded, result))
-        return error("failed to resolve URI: {}", uri);
-
-    return result.str().str();
-}
-
-std::string SourceConverter::toRealPathUnchecked(llvm::StringRef uri) {
+std::string SourceConverter::toPath(llvm::StringRef uri) {
     llvm::StringRef cloned = uri;
 
     auto pos = cloned.find(':');
@@ -268,9 +225,8 @@ std::string SourceConverter::toRealPathUnchecked(llvm::StringRef uri) {
     auto scheme = cloned.substr(0, pos);
     cloned = cloned.substr(pos + 1);
 
-    if(cloned.consume_front("//")) {
+    if(cloned.consume_front("//"))
         cloned = cloned.substr(cloned.find('/'));
-    }
 
     auto decoded = decodePercent(cloned);
     llvm::SmallString<128> result;

@@ -88,7 +88,7 @@ async::promise<void> Server::onDocumentSymbol(json::Value id,
 
 async::promise<void> Server::onSemanticTokens(json::Value id,
                                               const proto::SemanticTokensParams& params) {
-    auto path = SourceConverter::toRealPathUnchecked(params.textDocument.uri);
+    auto path = SourceConverter::toPath(params.textDocument.uri);
     proto::SemanticTokens result;
     co_await scheduler.execute(path, [&id, &path, &result](ASTInfo& info) {
         result = feature::semanticTokens(info, path);
