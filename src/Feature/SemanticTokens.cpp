@@ -61,17 +61,13 @@ public:
         }
     }
 
-    void handleOccurrence(const clang::BuiltinType* type,
-                          clang::SourceRange range,
-                          OccurrenceKind kind = OccurrenceKind::Source) {
+    void handleOccurrence(const clang::BuiltinType* type, clang::SourceRange range) {
         // llvm::outs() << type->getName(clang::PrintingPolicy({})) << "\n";
         // dump(range.getBegin());
         // dump(range.getEnd());
     }
 
-    void handleOccurrence(const clang::Attr* attr,
-                          clang::SourceRange range,
-                          OccurrenceKind kind = OccurrenceKind::Source) {
+    void handleOccurrence(const clang::Attr* attr, clang::SourceRange range) {
         auto tokens = tokBuf.expandedTokens(range);
         if(auto first = tokens.begin()) {
             auto second = first + 1;

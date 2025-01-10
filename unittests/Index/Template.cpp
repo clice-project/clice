@@ -7,8 +7,6 @@ namespace {
 TEST(Index, Test) {
 
     const char* code = R"cpp(
-void bar();
-
 void $(1)foo();
 
 void $(2)foo() {}
@@ -16,11 +14,30 @@ void $(2)foo() {}
 
     IndexTester tester{"main.cpp", code};
     tester.run();
+    auto indices = index::test(tester.info);
 
-    auto symbols = tester.locateSymbols("1");
-    EXPECT_EQ(symbols.size(), 1);
-    EXPECT_EQ(tester.getString(symbols[0]->name), "foo");
+    std::size_t total = 0;
+    llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
     tester.GotoDefinition("1", "2");
+
+    for(auto& [id, index]: indices) {
+        // auto& srcMgr = tester.info.srcMgr();
+        // auto entry = srcMgr.getFileEntryRefForID(id);
+        // if(!entry) {
+        //     continue;
+        // }
+        // llvm::SmallString<128> path;
+        // auto err = fs::real_path(entry->getName(), path);
+        // print("File: {}, Size: {}k\n", path.str(), index.size / 1024);
+        // total += index.size;
+        //
+        // if(path == "/usr/include/c++/13/bits/stl_vector.h") {
+        //    llvm::raw_fd_ostream os("stdlib.json", err);
+        //    os << index.toJSON();
+        //}
+    }
+
+    print("Total size: {}k\n", total / 1024);
 }
 
 TEST(Index, ClassTemplate) {

@@ -141,16 +141,16 @@ const clang::NamedDecl* declForType(clang::QualType type) {
         return nullptr;
     }
 
-    if(auto RT = llvm::dyn_cast<clang::TagType>(type)) {
+    if(auto RT = type->getAs<clang::TagType>()) {
         return RT->getDecl();
     }
 
-    if(auto TT = llvm::dyn_cast<clang::TypedefType>(type)) {
+    if(auto TT = type->getAs<clang::TagType>()) {
         return TT->getDecl();
     }
 
     /// FIXME:
-    if(auto TST = llvm::dyn_cast<clang::TemplateSpecializationType>(type)) {
+    if(auto TST = type->getAs<clang::TemplateSpecializationType>()) {
         auto decl = TST->getTemplateName().getAsTemplateDecl();
         if(type->isDependentType()) {
             return decl;

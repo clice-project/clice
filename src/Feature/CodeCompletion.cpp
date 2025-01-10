@@ -1,5 +1,4 @@
-#include <Basic/URI.h>
-#include <Basic/SourceCode.h>
+#include <Basic/SourceConverter.h>
 #include <Compiler/Semantic.h>
 #include <Feature/CodeCompletion.h>
 

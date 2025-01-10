@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Basic/URI.h"
-
 #include "Feature/Lookup.h"
 #include "Feature/DocumentHighlight.h"
 #include "Feature/DocumentLink.h"

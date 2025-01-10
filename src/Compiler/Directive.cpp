@@ -67,7 +67,7 @@ private:
         }
 
         auto& directive = directives[pp.getSourceManager().getFileID(loc)];
-        directive.macros.emplace_back(MacroRef{kind, loc, def});
+        directive.macros.emplace_back(MacroRef{def, kind, loc});
     }
 
 private:

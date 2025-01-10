@@ -1,4 +1,3 @@
-#include <Basic/SourceCode.h>
 #include <Compiler/Compiler.h>
 #include <Feature/SignatureHelp.h>
 

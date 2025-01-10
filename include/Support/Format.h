@@ -12,6 +12,30 @@ void print(std::format_string<Args...> fmt, Args&&... args) {
     llvm::outs() << std::vformat(fmt.get(), std::make_format_args(args...));
 }
 
+template <typename... Ts>
+constexpr inline bool is_formattable_v = false;
+
+template <typename T, typename... Args>
+constexpr inline bool is_formattable_v<T, Args...> =
+    std::is_convertible_v<T, std::format_string<Args...>>;
+
+template <typename... Args>
+    requires (!is_formattable_v<Args...>)
+void print(Args&&... args) {
+    ((llvm::outs() << std::format("{}", std::make_format_args(args)) << " "), ...);
+}
+
+template <typename... Args>
+void println(std::format_string<Args...> fmt, Args&&... args) {
+    llvm::outs() << std::vformat(fmt.get(), std::make_format_args(args...)) << '\n';
+}
+
+template <typename... Args>
+    requires (!is_formattable_v<Args...>)
+void println(Args&&... args) {
+    ((llvm::outs() << std::format("{}", std::make_format_args(args)) << " "), ...) << '\n';
+}
+
 }  // namespace clice
 
 template <>
