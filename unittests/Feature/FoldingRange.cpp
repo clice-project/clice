@@ -56,8 +56,9 @@ namespace ugly
 
     auto& info = txs.info;
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -105,8 +106,9 @@ enum class _2 {$(3)
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -161,8 +163,9 @@ void f() {$(9)
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -222,8 +225,9 @@ struct _4;
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -270,8 +274,9 @@ auto s = [$(5)
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -324,8 +329,9 @@ auto _3 = []($(5)
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -379,8 +385,9 @@ void d($(5)
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -428,8 +435,9 @@ void n() {$(5)
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -474,8 +482,9 @@ int main() {$(1)
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -526,8 +535,9 @@ int main () {$(1)
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -575,8 +585,9 @@ L l2 = {$(3)
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -628,8 +639,9 @@ public:$(12)
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 
@@ -679,8 +691,9 @@ $(2)
         return fromLspLocation(src, fr);
     };
 
+    SourceConverter converter{proto::PositionEncodingKind::UTF8};
     FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info);
+    auto res = feature::foldingRange(param, info, converter);
 
     // dbg(res);
 

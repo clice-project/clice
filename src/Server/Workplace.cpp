@@ -1,3 +1,4 @@
+#include "Basic/SourceConverter.h"
 #include "Server/Server.h"
 
 namespace clice {
@@ -10,7 +11,7 @@ async::promise<> Server::onDidChangeWatchedFiles(const proto::DidChangeWatchedFi
             }
 
             case proto::FileChangeType::Changed: {
-                auto path = URI::resolve(event.uri);
+                auto path = SourceConverter::toPath(event.uri);
                 synchronizer.sync(path);
                 break;
             }

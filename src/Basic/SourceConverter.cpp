@@ -1,4 +1,5 @@
-#include "Basic/SourceCode.h"
+#include "Basic/SourceConverter.h"
+#include "Basic/Location.h"
 
 namespace clice {
 
@@ -60,7 +61,7 @@ static bool iterateCodepoints(llvm::StringRef content, const Callback& callback)
     return false;
 }
 
-std::size_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kind) {
+std::size_t SourceConverter::remeasure(llvm::StringRef content) const {
     if(kind == proto::PositionEncodingKind::UTF8) {
         return content.size();
     }
@@ -86,10 +87,8 @@ std::size_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kind)
     std::unreachable();
 }
 
-proto::Position toPosition(llvm::StringRef content,
-                           clang::SourceLocation location,
-                           proto::PositionEncodingKind kind,
-                           const clang::SourceManager& SM) {
+proto::Position SourceConverter::toPosition(llvm::StringRef content, clang::SourceLocation location,
+                                            const clang::SourceManager& SM) const {
     assert(location.isValid() && location.isFileID() &&
            "SourceLocation must be valid and not a macro location");
     auto [fileID, offset] = SM.getDecomposedSpellingLoc(location);
@@ -101,23 +100,24 @@ proto::Position toPosition(llvm::StringRef content,
     proto::Position position;
     /// Line doesn't need to be adjusted. It is encoding-dependent.
     position.line = line;
+
     /// Column needs to be adjusted based on the encoding.
-    position.character = remeasure(content.substr(offset - column, column), kind);
+    if(auto word = content.substr(offset - column, column); !word.empty())
+        position.character = remeasure(word);
+    else
+        position.character = column;  // word is the last column of that line.
     return position;
 }
 
-proto::Position toPosition(clang::SourceLocation location,
-                           proto::PositionEncodingKind kind,
-                           const clang::SourceManager& SM) {
+proto::Position SourceConverter::toPosition(clang::SourceLocation location,
+                                            const clang::SourceManager& SM) const {
     bool isInvalid = false;
     llvm::StringRef content = SM.getCharacterData(location, &isInvalid);
     assert(!isInvalid && "Invalid SourceLocation");
-    return toPosition(content, location, kind, SM);
+    return toPosition(content, location, SM);
 }
 
-std::size_t toOffset(llvm::StringRef content,
-                     proto::Position position,
-                     proto::PositionEncodingKind kind) {
+std::size_t SourceConverter::toOffset(llvm::StringRef content, proto::Position position) const {
     std::size_t offset = 0;
     for(auto i = 0; i < position.line; i++) {
         auto pos = content.find('\n');
@@ -157,6 +157,83 @@ std::size_t toOffset(llvm::StringRef content,
     }
 
     std::unreachable();
+}
+
+namespace {
+
+/// decodes a string according to percent-encoding, e.g., "a%20b" -> "a b".
+static std::string decodePercent(llvm::StringRef content) {
+    std::string result;
+    result.reserve(content.size());
+
+    for(auto iter = content.begin(), send = content.end(); iter != send; ++iter) {
+        auto c = *iter;
+        if(c == '%' && iter + 2 < send) {
+            auto m = *(iter + 1);
+            auto n = *(iter + 2);
+            if(llvm::isHexDigit(m) && llvm::isHexDigit(n)) {
+                result += llvm::hexFromNibbles(m, n);
+                iter += 2;
+                continue;
+            }
+        }
+        result += c;
+    }
+    return result;
+}
+
+}  // namespace
+
+proto::DocumentUri SourceConverter::toURI(llvm::StringRef fspath) {
+    if(!path::is_absolute(fspath))
+        std::terminate();
+
+    llvm::SmallString<128> path("file://");
+
+    for(auto c: fspath) {
+        if(c == '\\') {
+            path.push_back('/');
+        } else if(std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '/') {
+            path.push_back(c);
+        } else {
+            path.push_back('%');
+            path.push_back(llvm::hexdigit(c >> 4));
+            path.push_back(llvm::hexdigit(c & 0xF));
+        }
+    }
+
+    /// TODO:
+    /// use `sourceMap` to replace prefix with mapped path.
+    // for(const auto& [prefix, newPrefix]: sourceMap) {
+    //     if(fspath.starts_with(prefix)) {
+    //         path.append(newPrefix); // todo: newPrefix.end_with('/') ???
+    //         path.append(fspath.substr(prefix.size()));
+    //         break;
+    //     }
+    // }
+
+    return path.str().str();
+};
+
+std::string SourceConverter::toPath(llvm::StringRef uri) {
+    llvm::StringRef cloned = uri;
+
+    auto pos = cloned.find(':');
+    if(pos == llvm::StringRef::npos)
+        std::terminate();
+
+    auto scheme = cloned.substr(0, pos);
+    cloned = cloned.substr(pos + 1);
+
+    if(cloned.consume_front("//"))
+        cloned = cloned.substr(cloned.find('/'));
+
+    auto decoded = decodePercent(cloned);
+    llvm::SmallString<128> result;
+    if(auto err = fs::real_path(decoded, result))
+        std::terminate();
+
+    return result.str().str();
 }
 
 }  // namespace clice
