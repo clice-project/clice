@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <Feature/DocumentSymbol.h>
+#include <Basic/SourceConverter.h>
 
 #include "../Test.h"
 
@@ -39,6 +40,8 @@ size_t total_size(const proto::DocumentSymbolResult& result) {
     return size;
 }
 
+const SourceConverter Converter{proto::PositionEncodingKind::UTF8};
+
 TEST(DocumentSymbol, Namespace) {
     const char* main = R"cpp(
 namespace _1 {
@@ -64,7 +67,7 @@ namespace _1::_2{
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info);
+    auto res = feature::documentSymbol(txs.info, Converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 8);
 }
@@ -93,7 +96,7 @@ int main(int argc, char* argv[]) {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info);
+    auto res = feature::documentSymbol(txs.info, Converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 9);
 }
@@ -118,7 +121,7 @@ struct x {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info);
+    auto res = feature::documentSymbol(txs.info, Converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 7);
 }
@@ -138,7 +141,7 @@ struct S {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info);
+    auto res = feature::documentSymbol(txs.info, Converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 6);
 }
@@ -160,7 +163,7 @@ struct _0 {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info);
+    auto res = feature::documentSymbol(txs.info, Converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 7);
 }
@@ -185,7 +188,7 @@ enum B {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info);
+    auto res = feature::documentSymbol(txs.info, Converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 8);
 }
@@ -199,10 +202,19 @@ int y = 2;
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info);
+    auto res = feature::documentSymbol(txs.info, Converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 2);
 }
+
+#define CLASS(X) class X
+
+CLASS(test) {
+    int x = 1;
+};
+
+#define VAR(X) int X = 1;
+VAR(test)
 
 TEST(DocumentSymbol, Macro) {
     const char* main = R"cpp(
@@ -212,8 +224,7 @@ CLASS(test) {
     int x = 1;
 };
 
-#define VAR(X) int X = 1;
-
+#define VAR(X) int X = 1; 
 VAR(test)
 
 )cpp";
@@ -221,8 +232,19 @@ VAR(test)
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info);
+    auto res = feature::documentSymbol(txs.info, Converter);
     // dbg(res);
+
+    // clang-format off
+    
+/// FIXME:
+/// Fix range for macro expansion.  Current out put is:
+// kind: Class, name:test, detail:, deprecated:false, range: {"end":{"character":0,"line":5},"start":{"character":0,"line":3}}, children_num:1
+//  kind: Field, name:x, detail:int, deprecated:false, range: {"end":{"character":3,"line":4},"start":{"character":4,"line":4}}, children_num:0
+// kind: Variable, name:test, detail:int, deprecated:false, range: {"end":{"character":0,"line":8},"start":{"character":0,"line":8}}, children_num:0
+
+    // clang-format on
+
     ASSERT_EQ(total_size(res), 3);
 }
 

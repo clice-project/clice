@@ -98,12 +98,14 @@ using DocumentSymbolResult = std::vector<DocumentSymbol>;
 
 }  // namespace proto
 
+class SourceConverter;
+
 namespace feature {
 
 json::Value documentSymbolCapability(json::Value clientCapabilities);
 
 /// Run document symbol in given file.
-proto::DocumentSymbolResult documentSymbol(ASTInfo& info);
+proto::DocumentSymbolResult documentSymbol(ASTInfo& info, const SourceConverter& converter);
 
 }  // namespace feature
 

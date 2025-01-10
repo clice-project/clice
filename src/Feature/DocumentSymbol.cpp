@@ -1,46 +1,21 @@
+#include "Basic/SourceConverter.h"
 #include "Feature/DocumentSymbol.h"
 
 namespace clice {
 
 namespace {
 
-struct LspProtoAdaptor {
-
-    clang::SourceManager* src;
-
-    bool isInMainFile(clang::SourceLocation loc) {
-        return loc.isValid() && src->isInMainFile(loc);
-    }
-
-    bool notInMainFile(clang::SourceLocation loc) {
-        return !isInMainFile(loc);
-    }
-
-    proto::Position toLspPosition(clang::SourceLocation loc) {
-        auto presumed = src->getPresumedLoc(loc);
-        return {
-            .line = presumed.getLine() - 1,
-            .character = presumed.getColumn() - 1,
-        };
-    }
-
-    proto::Range toLspRange(clang::SourceRange sr) {
-        return {
-            .start = toLspPosition(sr.getBegin()),
-            .end = toLspPosition(sr.getEnd()),
-        };
-    }
-};
-
 /// Clangd's DocumentSymbol Implementation:
 /// https://github.com/llvm/llvm-project/blob/main/clang-tools-extra/clangd/FindSymbols.cpp#L286
 
 /// Use DFS to traverse the AST and collect document symbols.
-struct DocumentSymbolCollector :
-    clang::RecursiveASTVisitor<DocumentSymbolCollector>,
-    LspProtoAdaptor {
+struct DocumentSymbolCollector : clang::RecursiveASTVisitor<DocumentSymbolCollector> {
 
     using Base = clang::RecursiveASTVisitor<DocumentSymbolCollector>;
+
+    const clang::SourceManager& src;
+
+    const SourceConverter& cvtr;
 
     /// DFS state stack.
     std::vector<proto::DocumentSymbol> stack;
@@ -74,6 +49,22 @@ struct DocumentSymbolCollector :
         symbol.deprecated = true;
     }
 
+    bool isInMainFile(clang::SourceLocation loc) {
+        return loc.isValid() && src.isInMainFile(loc);
+    }
+
+    /// For a given location, it could be one of SpellingLoc or ExpansionLoc (from macro expansion).
+    /// So take literal location as the result for macro.
+    clang::SourceRange toLiteralRange(clang::SourceRange range) {
+        auto [begin, end] = range;
+
+        auto takeLocation = [this](clang::SourceLocation loc) {
+            return !loc.isMacroID() ? loc : src.getExpansionLoc(loc);
+        };
+
+        return {takeLocation(begin), takeLocation(end)};
+    }
+
     bool TraverseDecl(clang::Decl* decl) {
         if(!decl)
             return true;
@@ -81,7 +72,7 @@ struct DocumentSymbolCollector :
         if(!llvm::isa<clang::NamedDecl>(decl))
             return true;
 
-        if(notInMainFile(decl->getLocation()) || decl->isImplicit())
+        if(!isInMainFile(decl->getLocation()) || decl->isImplicit())
             return true;
 
         if(auto* ctsd = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(decl)) {
@@ -100,7 +91,7 @@ struct DocumentSymbolCollector :
     bool TraverseNamespaceDecl(clang::NamespaceDecl* decl) {
         constexpr auto Default = "<anonymous namespace>";
 
-        auto range = toLspRange(decl->getSourceRange());
+        auto range = cvtr.toRange(toLiteralRange(decl->getSourceRange()), src);
         proto::DocumentSymbol symbol{
             .name = decl->isAnonymousNamespace() ? Default : decl->getNameAsString(),
             .kind = proto::SymbolKind::Namespace,
@@ -116,7 +107,7 @@ struct DocumentSymbolCollector :
     }
 
     bool TraverseEnumDecl(clang::EnumDecl* decl) {
-        auto range = toLspRange(decl->getSourceRange());
+        auto range = cvtr.toRange(toLiteralRange(decl->getSourceRange()), src);
         proto::DocumentSymbol symbol{
             .name = decl->getNameAsString(),
             .kind = proto::SymbolKind::Enum,
@@ -132,10 +123,10 @@ struct DocumentSymbolCollector :
     }
 
     bool VisitEnumDecl(const clang::EnumDecl* decl) {
-        for(auto* enumerator: decl->enumerators()) {
-            auto range = toLspRange(enumerator->getSourceRange());
+        for(auto* etor: decl->enumerators()) {
+            auto range = cvtr.toRange(toLiteralRange(etor->getSourceRange()), src);
             proto::DocumentSymbol symbol{
-                .name = enumerator->getNameAsString(),
+                .name = etor->getNameAsString(),
                 .kind = proto::SymbolKind::EnumMember,
                 .range = range,
                 .selectionRange = range,
@@ -144,13 +135,13 @@ struct DocumentSymbolCollector :
             // Show the initializer value as the detail.
             llvm::SmallString<32> sstr;
             sstr.append("= ");
-            enumerator->getInitVal().toString(sstr);
+            etor->getInitVal().toString(sstr);
             if(sstr.size() > 10)
                 symbol.detail = "<initializer>";
             else
                 symbol.detail = sstr.str().slice(0, sstr.size());
 
-            if(enumerator->isDeprecated())
+            if(etor->isDeprecated())
                 markDeprecated(symbol);
 
             collect(std::move(symbol));
@@ -162,7 +153,7 @@ struct DocumentSymbolCollector :
     bool TraverseCXXRecordDecl(clang::CXXRecordDecl* decl) {
         constexpr auto Default = "<anonymous struct>";
 
-        auto range = toLspRange(decl->getSourceRange());
+        auto range = cvtr.toRange(toLiteralRange(decl->getSourceRange()), src);
         proto::DocumentSymbol symbol{
             .range = range,
             .selectionRange = range,
@@ -183,7 +174,7 @@ struct DocumentSymbolCollector :
     }
 
     bool VisitFieldDecl(const clang::FieldDecl* decl) {
-        auto range = toLspRange(decl->getSourceRange());
+        auto range = cvtr.toRange(decl->getSourceRange(), src);
         proto::DocumentSymbol symbol{
             .name = decl->getNameAsString(),
             .kind = proto::SymbolKind::Field,
@@ -227,7 +218,7 @@ struct DocumentSymbolCollector :
     }
 
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
-        auto range = toLspRange(decl->getSourceRange());
+        auto range = cvtr.toRange(toLiteralRange(decl->getSourceRange()), src);
         proto::DocumentSymbol symbol{
             .name = decl->getNameAsString(),
             .kind = proto::SymbolKind::Function,
@@ -255,7 +246,7 @@ struct DocumentSymbolCollector :
     }
 
     bool VisitVarDecl(const clang::VarDecl* decl) {
-        auto range = toLspRange(decl->getSourceRange());
+        auto range = cvtr.toRange(toLiteralRange(decl->getSourceRange()), src);
         proto::DocumentSymbol symbol{
             .name = decl->getNameAsString(),
             .detail = decl->getType().getAsString(),
@@ -290,9 +281,11 @@ json::Value documentSymbolCapability(json::Value clientCapabilities) {
     };
 }
 
-proto::DocumentSymbolResult documentSymbol(ASTInfo& info) {
-    DocumentSymbolCollector collector;
-    collector.src = &info.srcMgr();
+proto::DocumentSymbolResult documentSymbol(ASTInfo& info, const SourceConverter& converter) {
+    DocumentSymbolCollector collector{
+        .src = info.srcMgr(),
+        .cvtr = converter,
+    };
 
     collector.TraverseTranslationUnitDecl(info.tu());
     return std::move(collector.result);
