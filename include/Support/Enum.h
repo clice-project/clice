@@ -4,6 +4,7 @@
 #include <array>
 #include <string>
 #include <cstdint>
+#include <algorithm>
 #include <string_view>
 #include <source_location>
 
@@ -70,8 +71,7 @@ public:
     explicit constexpr Enum(underlying value) : m_Value(value) {}
 
     /// Allow the enum to be constructed from the enum value.
-    template <typename Kind>
-        requires std::is_same_v<Kind, typename Derived::Kind>
+    template <std::same_as<typename Derived::Kind> Kind>
     constexpr Enum(Kind kind) : m_Value(kind) {
         static_assert(sizeof(underlying) >= sizeof(typename Derived::Kind),
                       "Underlying type is too small to hold all enum values.");
@@ -144,8 +144,7 @@ public:
     explicit constexpr Enum(underlying value) : m_Value(value) {}
 
     /// Allow the enum to be constructed from the enum value.
-    template <typename... Kinds>
-        requires (std::is_same_v<Kinds, typename Derived::Kind> && ...)
+    template <std::same_as<typename Derived::Kind>... Kinds>
     constexpr Enum(Kinds... kind) : m_Value(((1 << underlying_value(kind)) | ...)) {
         static_assert(sizeof(underlying) * 8 >= end(),
                       "Underlying type is too small to hold all enum values.");
@@ -193,30 +192,31 @@ public:
 
     constexpr friend bool operator== (Enum lhs, Enum rhs) = default;
 
-    template <typename Kind>
-        requires std::is_same_v<Kind, typename Derived::Kind>
+    template <std::same_as<typename Derived::Kind> Kind>
     constexpr Enum operator| (Kind kind) const {
         return Enum(m_Value | (1 << underlying_value(kind)));
     }
 
-    template <typename Kind>
-        requires std::is_same_v<Kind, typename Derived::Kind>
+    template <std::same_as<typename Derived::Kind> Kind>
     constexpr Enum operator& (Kind kind) const {
         return Enum(m_Value & (1 << underlying_value(kind)));
     }
 
-    template <typename Kind>
-        requires std::is_same_v<Kind, typename Derived::Kind>
+    template <std::same_as<typename Derived::Kind> Kind>
     constexpr Enum& operator|= (Kind kind) {
         m_Value |= (1 << underlying_value(kind));
         return *this;
     }
 
-    template <typename Kind>
-        requires std::is_same_v<Kind, typename Derived::Kind>
+    template <std::same_as<typename Derived::Kind> Kind>
     constexpr Enum& operator&= (Kind kind) {
         m_Value &= (1 << underlying_value(kind));
         return *this;
+    }
+
+    template <std::same_as<typename Derived::Kind>... Kinds>
+    bool is_one_of(Kinds... kinds) const {
+        return (operator& (kinds) || ...);
     }
 
 private:
@@ -234,6 +234,31 @@ private:
         } else {
             return refl::enum_max<typename Derived::Kind, begin()>();
         }
+    }
+
+private:
+    underlying m_Value;
+};
+
+template <typename Derived, typename underlying>
+    requires (!integral<underlying>)
+class Enum<Derived, false, underlying> {
+public:
+    constexpr Enum(underlying value) : m_Value(value) {
+        static_assert(
+            requires { Derived::All; },
+            "Derived enum must define all possible enum values.");
+
+        assert(std::ranges::any_of(Derived::All, [&](auto v) { return v == value; }) &&
+               "Invalid enum value.");
+    }
+
+    constexpr Enum(const Enum&) = default;
+
+    constexpr friend bool operator== (Enum lhs, Enum rhs) = default;
+
+    constexpr underlying value() const {
+        return m_Value;
     }
 
 private:

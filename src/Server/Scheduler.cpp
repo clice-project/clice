@@ -6,7 +6,7 @@ namespace clice {
 
 static std::string getPCHOutPath(llvm::StringRef srcPath) {
     llvm::SmallString<128> outPath = srcPath;
-    path::replace_path_prefix(outPath, config::workplace(), config::frontend().cache_directory);
+    path::replace_path_prefix(outPath, config::workspace, config::cache.dir);
     path::replace_extension(outPath, ".pch");
 
     if(auto dir = path::parent_path(outPath); !fs::exists(dir)) {
@@ -20,7 +20,7 @@ static std::string getPCHOutPath(llvm::StringRef srcPath) {
 
 static std::string getPCMOutPath(llvm::StringRef srcPath) {
     llvm::SmallString<128> outPath = srcPath;
-    path::replace_path_prefix(outPath, config::workplace(), config::frontend().cache_directory);
+    path::replace_path_prefix(outPath, config::workspace, config::cache.dir);
     path::replace_extension(outPath, ".pcm");
 
     if(auto dir = path::parent_path(outPath); !fs::exists(dir)) {
@@ -295,7 +295,7 @@ async::promise<> Scheduler::updateAST(llvm::StringRef filename,
 
 void Scheduler::loadCache() {
     llvm::SmallString<128> fileName;
-    path::append(fileName, config::frontend().cache_directory, "cache.json");
+    path::append(fileName, config::cache.dir, "cache.json");
 
     auto buffer = llvm::MemoryBuffer::getFile(fileName);
     if(!buffer) {
@@ -348,7 +348,7 @@ void Scheduler::saveCache() const {
     result.try_emplace("PCM", std::move(pcmArray));
 
     llvm::SmallString<128> fileName;
-    path::append(fileName, config::frontend().cache_directory, "cache.json");
+    path::append(fileName, config::cache.dir, "cache.json");
 
     std::error_code EC;
     llvm::raw_fd_ostream stream(fileName, EC, llvm::sys::fs::OF_Text);

@@ -4,106 +4,11 @@
 #include "Resolver.h"
 #include "Utility.h"
 
+#include "Basic/RelationKind.h"
+#include "Basic/SymbolKind.h"
 #include "Support/Support.h"
 
 namespace clice {
-
-/// In the LSP, there are several different kinds, such as `SemanticTokenType`,
-/// `CompletionItemKind`, and `SymbolKind`. Unfortunately, these kinds do not cover all the semantic
-/// information we need. It's also inconsistent that some kinds exist in one category but not in
-/// another, for example, `Namespace` is present in `SemanticTokenType` but not in
-/// `CompletionItemKind`. To address this, we define our own `SymbolKind`, which will be used
-/// consistently across our responses to the client and in the index. Users who prefer to stick to
-/// standard LSP kinds can map our `SymbolKind` to the corresponding LSP kinds through
-/// configuration.
-struct SymbolKind : refl::Enum<SymbolKind, false, uint8_t> {
-    enum Kind : uint8_t {
-        Comment = 0,     ///< C/C++ comments.
-        Number,          ///< C/C++ number literal.
-        Character,       ///< C/C++ character literal.
-        String,          ///< C/C++ string literal.
-        Keyword,         ///< C/C++ keyword.
-        Directive,       ///< C/C++ preprocessor directive, e.g. `#include`.
-        Header,          ///< C/C++ header name, e.g. `<iostream>` and `"foo.h"`.
-        Module,          ///< C++20 module name.
-        Macro,           ///< C/C++ macro.
-        MacroParameter,  ///< C/C++ macro parameter.
-        Namespace,       ///> C++ namespace.
-        Class,           ///> C/C++ class.
-        Struct,          ///> C/C++ struct.
-        Union,           ///> C/C++ union.
-        Enum,            ///> C/C++ enum.
-        Type,            ///> C/C++ type alias and C++ template type parameter.
-        Field,           ///> C/C++ field.
-        EnumMember,      ///> C/C++ enum member.
-        Function,        ///> C/C++ function.
-        Method,          ///> C++ method.
-        Variable,        ///> C/C++ variable, includes C++17 structured bindings.
-        Parameter,       ///> C/C++ parameter.
-        Label,           ///> C/C++ label.
-        Concept,         ///> C++20 concept.
-        Attribute,       ///> GNU/MSVC/C++11/C23 attribute.
-        Operator,        ///> C/C++ operator.
-        Paren,           ///> `(` and `)`.
-        Bracket,         ///> `[` and `]`.
-        Brace,           ///> `{` and `}`.
-        Angle,           ///> `<` and `>`.
-        Invalid,
-    };
-
-    using Enum::Enum;
-
-    constexpr inline static auto InvalidEnum = Kind::Invalid;
-
-    static SymbolKind from(const clang::Decl* decl);
-
-    static SymbolKind from(const clang::tok::TokenKind kind);
-};
-
-/// A bit field enum to describe the kind of relation between two symbols.
-struct RelationKind : refl::Enum<RelationKind, true, uint32_t> {
-    enum Kind : uint32_t {
-        Invalid,
-        Declaration,
-        Definition,
-        Reference,
-        // Write Relation.
-        Read,
-        Write,
-        Interface,
-        Implementation,
-        /// When target is a type definition of source, source is possible type or constructor.
-        TypeDefinition,
-
-        /// When target is a base class of source.
-        Base,
-        /// When target is a derived class of source.
-        Derived,
-
-        /// When target is a constructor of source.
-        Constructor,
-        /// When target is a destructor of source.
-        Destructor,
-
-        // When target is a caller of source.
-        Caller,
-        // When target is a callee of source.
-        Callee,
-    };
-
-    using Enum::Enum;
-};
-
-enum class OccurrenceKind {
-    /// This occurrence directly corresponds to a unique source symbol.
-    Source,
-    /// This occurrence is a macro expansion.
-    MacroExpansion,
-    /// This occurrence is from `PseudoInstantiation` and may be not correct.
-    PseudoInstantiation,
-    /// This occurrence is from `ImplicitInstantiation` or `ExplicitInstantiation` of a template.
-    Instantiation,
-};
 
 template <typename Derived>
 class SemanticVisitor : public clang::RecursiveASTVisitor<SemanticVisitor<Derived>> {
@@ -112,7 +17,7 @@ public:
 
     SemanticVisitor(ASTInfo& info, bool mainFileOnly = false) :
         sema(info.sema()), pp(info.pp()), resolver(info.resolver()), srcMgr(info.srcMgr()),
-        tokBuf(info.tokBuf()), mainFileOnly(mainFileOnly) {}
+        tokBuf(info.tokBuf()), info(info), mainFileOnly(mainFileOnly) {}
 
 public:
 
@@ -136,23 +41,135 @@ public:
         llvm::outs() << path << ":" << location.getLine() << ":" << location.getColumn() << "\n";
     }
 
-    /// An occurrence directly corresponding to a symbol in source code.
-    /// In most cases, a location just correspondings to unique decl.
-    /// So a location will be just visited once. But in some other cases,
-    /// a location may correspond to multiple decls. Note that we already
-    /// filter some nodes with invalid location.
-    ///
-    /// Always uses spelling location if the original location is a macro location.
-    void handleOccurrence(const clang::Decl* decl, clang::SourceRange range, RelationKind kind) {}
+    /// Invoked when a declaration occur is seen in source code.
+    /// @param decl The decl corresponding to the symbol.
+    /// @param kind The kind of the occurrence, such as declaration, definition, reference.
+    /// @param location The location of the occurrence. Note that declaration name must be one
+    /// token, so just one source location is enough.
+    void handleDeclOccurrence(const clang::NamedDecl* decl,
+                              RelationKind kind,
+                              clang::SourceLocation location) {
+        assert(decl && "Invalid decl");
+        assert(kind.is_one_of(RelationKind::Declaration,
+                              RelationKind::Definition,
+                              RelationKind::Reference,
+                              RelationKind::WeakReference) &&
+               "Invalid kind");
+        assert(location.isValid() && "Invalid location");
 
-    /// Builtin type doesn't have corresponding decl. So we handle it separately.
-    /// And it is possible that a builtin type is composed of multiple tokens.
-    /// e.g. `unsigned long long`.
-    void handleOccurrence(const clang::BuiltinType* type,
-                          clang::SourceRange range,
-                          OccurrenceKind kind = OccurrenceKind::Source) {}
+        /// Forwards to the derived class. Check whether the derived class has
+        /// its own implementation to avoid infinite recursion.
+        if constexpr(!std::same_as<decltype(&SemanticVisitor::handleDeclOccurrence),
+                                   decltype(&Derived::handleDeclOccurrence)>) {
+            getDerived().handleDeclOccurrence(decl, location, kind);
+        }
+    }
 
-    void handleOccurrence(const clang::Attr* attr, clang::SourceRange range) {}
+    /// Invoked when a macro occurrence is seen in source code.
+    void handleMacroOccurrence(const clang::MacroInfo* def,
+                               RelationKind kind,
+                               clang::SourceLocation location) {
+        assert(def && "Invalid macro");
+        assert(kind.is_one_of(RelationKind::Definition, RelationKind::Reference) && "Invalid kind");
+        assert(location.isValid() && "Invalid location");
+
+        if constexpr(!std::same_as<decltype(&SemanticVisitor::handleMacroOccurrence),
+                                   decltype(&Derived::handleMacroOccurrence)>) {
+            getDerived().handleMacroOccurrence(def, location, kind);
+        }
+    }
+
+    /// Invoked when a module occurrence is seen in source code.
+    /// @param keyword The location of the `module` or `import` keyword.
+    /// @param identifiers Tokens that make up the module name.
+    void handleModuleOccurrence(clang::SourceLocation keyword,
+                                llvm::ArrayRef<clang::syntax::Token> identifiers) {
+        assert(keyword.isValid() && keyword.isFileID() && "Invalid keyword location");
+
+        /// FIXME: Check whether identifiers are valid.
+
+        if constexpr(!std::same_as<decltype(&SemanticVisitor::handleModuleOccurrence),
+                                   decltype(&Derived::handleModuleOccurrence)>) {
+            getDerived().handleModuleOccurrence(keyword, identifiers);
+        }
+    }
+
+    /// Invoked when a relation between two decls is seen in source code.
+    /// @param decl The source decl.
+    /// @param kind The kind of the relation.
+    /// @param target The target decl, may same as the source decl.
+    /// @param range The source range of the relation, may be invalid.
+    void handleRelation(const clang::NamedDecl* decl,
+                        RelationKind kind,
+                        const clang::NamedDecl* target,
+                        clang::SourceRange range) {
+        assert(decl && "Invalid decl");
+        assert(target && "Invalid target");
+
+        if constexpr(!std::same_as<decltype(&SemanticVisitor::handleRelation),
+                                   decltype(&Derived::handleRelation)>) {
+            getDerived().handleRelation(decl, kind, target, range);
+        }
+    }
+
+    void handleOccurrence(const clang::BuiltinType* type, clang::SourceRange range) {
+        /// FIXME:
+        /// Builtin type doesn't have corresponding decl. So we handle it separately.
+        /// And it is possible that a builtin type is composed of multiple tokens.
+        /// e.g. `unsigned long long`.
+    }
+
+    void handleOccurrence(const clang::Attr* attr, clang::SourceRange range) {
+        /// FIXME:
+    }
+
+    void run() {
+        Base::TraverseAST(sema.getASTContext());
+
+        for(auto directive: info.directives()) {
+            for(auto macro: directive.second.macros) {
+                switch(macro.kind) {
+                    case MacroRef::Kind::Def: {
+                        handleMacroOccurrence(macro.macro, RelationKind::Definition, macro.loc);
+                        break;
+                    }
+
+                    case MacroRef::Kind::Ref:
+                    case MacroRef::Kind::Undef: {
+                        handleMacroOccurrence(macro.macro, RelationKind::Reference, macro.loc);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if(auto module = sema.getASTContext().getCurrentNamedModule()) {
+            auto keyword = module->DefinitionLoc;
+            auto begin = tokBuf.spelledTokenContaining(keyword);
+            assert(begin->kind() == clang::tok::identifier && begin->text(srcMgr) == "module" &&
+                   "Invalid module declaration");
+
+            begin += 1;
+            auto end = tokBuf.spelledTokens(srcMgr.getFileID(keyword)).end();
+
+            for(auto iter = begin; iter != end; ++iter) {
+                if(iter->kind() == clang::tok::identifier) {
+                    if(auto next = iter + 1; next != end && (next->kind() == clang::tok::period ||
+                                                             next->kind() == clang::tok::colon)) {
+                        iter += 1;
+                        continue;
+                    }
+
+                    end = iter + 1;
+                    break;
+                }
+
+                std::unreachable();
+            }
+
+            handleModuleOccurrence(keyword, llvm::ArrayRef<clang::syntax::Token>(begin, end));
+        }
+    }
 
 public:
     /// ============================================================================
@@ -174,243 +191,337 @@ public:
         return result;
     }
 
+    VISIT_DECL(ImportDecl) {
+        auto tokens = tokBuf.expandedTokens(decl->getSourceRange());
+
+        assert(tokens.size() >= 2 && tokens[0].kind() == clang::tok::identifier &&
+               tokens[0].text(srcMgr) == "import" && "Invalid import declaration");
+        assert([&]() {
+            auto range = tokens.drop_front(1);
+            for(auto iter = range.begin(); iter != range.end(); ++iter) {
+                if(iter->kind() == clang::tok::identifier) {
+                    if(auto next = iter + 1;
+                       next != range.end() && (next->kind() == clang::tok::coloncolon ||
+                                               next->kind() == clang::tok::period)) {
+                        continue;
+                    }
+                    break;
+                } else {
+                    return false;
+                }
+            }
+            return true;
+        }() && "Invalid import declaration");
+
+        handleModuleOccurrence(tokens[0].location(), tokens.drop_front(1));
+
+        return true;
+    }
+
+    /// namespace Foo { }
+    ///            ^~~~ definition
     VISIT_DECL(NamespaceDecl) {
-        /// `namespace Foo { }`
-        ///             ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
+        handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
+        handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
         return true;
     }
 
+    /// namespace Foo = Bar
+    ///            ^     ^~~~ reference
+    ///            ^~~~ definition
     VISIT_DECL(NamespaceAliasDecl) {
-        /// `namespace Foo = Bar`
-        ///             ^     ^~~~ reference
-        ///             ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
-        getDerived().handleOccurrence(decl->getNamespace(),
-                                      decl->getTargetNameLoc(),
-                                      RelationKind::Reference);
+        handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
+        handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
+        handleDeclOccurrence(decl->getNamespace(),
+                             RelationKind::Reference,
+                             decl->getTargetNameLoc());
+        handleRelation(decl->getNamespace(),
+                       RelationKind::Reference,
+                       decl->getNamespace(),
+                       decl->getTargetNameLoc());
         return true;
     }
 
+    /// using namespace Foo
+    ///                  ^~~~~~~ reference
     VISIT_DECL(UsingDirectiveDecl) {
-        /// `using namespace Foo`
-        ///                   ^~~~~~~ reference
-        getDerived().handleOccurrence(decl->getNominatedNamespace(),
-                                      decl->getLocation(),
-                                      RelationKind::Reference);
+        handleDeclOccurrence(decl->getNominatedNamespace(),
+                             RelationKind::Reference,
+                             decl->getLocation());
+        handleRelation(decl,
+                       RelationKind::Reference,
+                       decl->getNominatedNamespace(),
+                       decl->getLocation());
         return true;
     }
 
+    /// label:
+    ///   ^~~~ definition
     VISIT_DECL(LabelDecl) {
-        /// `label:`
-        ///    ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
+        handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
+        handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
         return true;
     }
 
+    /// struct X { int foo; };
+    ///                 ^~~~ definition
     VISIT_DECL(FieldDecl) {
-        /// `int foo;`
-        ///       ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
-        /// FIXME: add Type Definition
+        handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
+        handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
+
+        if(auto target = declForType(decl->getType())) {
+            handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
+        }
+
         return true;
     }
 
+    /// enum Foo { bar };
+    ///             ^~~~ definition
     VISIT_DECL(EnumConstantDecl) {
-        /// `enum Foo { bar };`
-        ///              ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
-        /// FIXME: add Type Definition
+        handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
+        handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
+        handleRelation(decl,
+                       RelationKind::TypeDefinition,
+                       declForType(decl->getType()),
+                       decl->getLocation());
         return true;
     }
 
+    /// using Foo::bar;
+    ///             ^~~~ reference
     VISIT_DECL(UsingDecl) {
-        /// `using Foo::bar;`
-        ///              ^~~~ reference
         for(auto shadow: decl->shadows()) {
-            getDerived().handleOccurrence(shadow, decl->getLocation(), RelationKind::Reference);
+            handleDeclOccurrence(shadow, RelationKind::WeakReference, decl->getLocation());
+            handleRelation(decl, RelationKind::WeakReference, decl, decl->getLocation());
         }
         return true;
     }
 
+    /// auto [a, b] = std::make_tuple(1, 2);
+    ///       ^~~~ definition
     VISIT_DECL(BindingDecl) {
-        /// `auto [a, b] = std::make_tuple(1, 2);`
-        ///        ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
-        /// FIXME: add Type Definition
+        handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
+        handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
+
+        if(auto target = declForType(decl->getType())) {
+            handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
+        }
+
         return true;
     }
 
+    /// template <typename T>
+    ///                    ^~~~ definition
     VISIT_DECL(TemplateTypeParmDecl) {
-        /// `template <typename T>`
-        ///                     ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
+        handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
+        handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
         return true;
     }
 
+    /// template <template <typename> class T>
+    ///                                     ^~~~ definition
     VISIT_DECL(TemplateTemplateParmDecl) {
-        /// `template <template <typename> class T>`
-        ///                                      ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
+        handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
+        handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
         return true;
     }
 
+    /// template <int N>
+    ///               ^~~~ definition
     VISIT_DECL(NonTypeTemplateParmDecl) {
-        /// `template <int N>`
-        ///                ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
+        handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
+        handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
+
+        if(auto target = declForType(decl->getType())) {
+            handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
+        }
+
         return true;
     }
 
+    /// struct/class/union/enum Foo { ... };
+    ///                          ^~~~ declaration/definition
     VISIT_DECL(TagDecl) {
-        /// FIXME:
-        /// It's possible that a class template specialization is a full specialization or a
-        /// explicit instantiation. And `ClassTemplatePartialSpecializationDecl` is the subclass of
-        /// `ClassTemplateSpecializationDecl`, it is also handled here.
-        ///
-        /// For full specialization:
-        /// `template <> class Foo<int> { };`
-        ///                     ^~~~ declaration/definition
-        ///
-        /// For explicit instantiation:
-        /// `template class Foo<int>;`
-        ///                  ^~~~ reference
-        // if(decl->getDescribedTemplate() ||
-        //    llvm::isa<clang::ClassTemplateSpecializationDecl,
-        //              clang::ClassTemplatePartialSpecializationDecl>(decl)) {
-        //     return true;
-        // }
+        if(auto CTSD = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(decl)) {
+            switch(CTSD->getSpecializationKind()) {
+                case clang::TSK_Undeclared:
+                case clang::TSK_ImplicitInstantiation: {
+                    std::unreachable();
+                }
 
-        /// `struct/class/union/enum Foo { };`
-        ///                           ^~~~ declaration/definition
-        getDerived().handleOccurrence(decl,
-                                      decl->getLocation(),
-                                      decl->isThisDeclarationADefinition()
-                                          ? RelationKind::Definition
-                                          : RelationKind::Declaration);
+                case clang::TSK_ExplicitSpecialization: {
+                    break;
+                }
+
+                case clang::TSK_ExplicitInstantiationDeclaration:
+                case clang::TSK_ExplicitInstantiationDefinition: {
+                    auto decl = instantiatedFrom(CTSD);
+                    handleDeclOccurrence(decl, RelationKind::Reference, CTSD->getLocation());
+                    handleRelation(decl, RelationKind::Reference, decl, CTSD->getLocation());
+                    return true;
+                }
+            }
+        }
+
+        RelationKind kind = decl->isThisDeclarationADefinition() ? RelationKind::Definition
+                                                                 : RelationKind::Declaration;
+        handleDeclOccurrence(decl, kind, decl->getLocation());
+        handleRelation(decl, kind, decl, decl->getLocation());
+
+        if(auto CRD = llvm::dyn_cast<clang::CXXRecordDecl>(decl)) {
+            if(auto def = CRD->getDefinition()) {
+                for(auto base: CRD->bases()) {
+                    /// FIXME: Handle dependent base class.
+                    if(auto target = declForType(base.getType())) {
+                        handleRelation(def, RelationKind::Base, target, base.getSourceRange());
+                        handleRelation(target, RelationKind::Derived, def, base.getSourceRange());
+                    }
+                }
+            }
+        }
+
         return true;
     }
 
+    /// void foo() { ... }
+    ///       ^~~~ declaration/definition
     VISIT_DECL(FunctionDecl) {
-        /// FIXME:
-        /// Because `TraverseFunctionTemplateDecl` will also traverse it's templated function. We
-        /// already handled the template function in `VisitFunctionTemplateDecl`. So we skip them
-        /// here.
-        // if(decl->getDescribedFunctionTemplate()) {
-        //     return true;
-        // }
+        switch(decl->getTemplateSpecializationKind()) {
+            case clang::TSK_ImplicitInstantiation: {
+                std::unreachable();
+            }
 
-        /// `void foo();`
-        ///         ^~~~ declaration/definition
-        getDerived().handleOccurrence(decl,
-                                      decl->getLocation(),
-                                      decl->isThisDeclarationADefinition()
-                                          ? RelationKind::Definition
-                                          : RelationKind::Declaration);
+            /// FIXME: Clang currently doesn't record source location of explicit
+            /// instantiation of function template correctly. Skip it temporarily.
+            case clang::TSK_ExplicitInstantiationDeclaration:
+            case clang::TSK_ExplicitInstantiationDefinition: {
+                return true;
+            }
+
+            case clang::TSK_Undeclared:
+            case clang::TSK_ExplicitSpecialization: {
+                break;
+            }
+        }
+
+        RelationKind kind = decl->isThisDeclarationADefinition() ? RelationKind::Definition
+                                                                 : RelationKind::Declaration;
+        handleDeclOccurrence(decl, kind, decl->getLocation());
+        handleRelation(decl, kind, decl, decl->getLocation());
+
+        /// FIXME: Handle `CXXConversionDecl` and `CXXDeductionGuide`.
+
+        if(auto method = llvm::dyn_cast<clang::CXXMethodDecl>(decl)) {
+            for(auto override: method->overridden_methods()) {
+                handleRelation(method, RelationKind::Interface, override, decl->getLocation());
+                handleRelation(override, RelationKind::Implementation, method, decl->getLocation());
+            }
+
+            if(auto ctor = llvm::dyn_cast<clang::CXXConstructorDecl>(method)) {
+                handleRelation(ctor,
+                               RelationKind::TypeDefinition,
+                               ctor->getParent(),
+                               decl->getLocation());
+                handleRelation(ctor->getParent(),
+                               RelationKind::Constructor,
+                               ctor,
+                               decl->getLocation());
+            }
+
+            if(auto dtor = llvm::dyn_cast<clang::CXXDestructorDecl>(method)) {
+                handleRelation(dtor,
+                               RelationKind::TypeDefinition,
+                               dtor->getParent(),
+                               decl->getLocation());
+                handleRelation(dtor->getParent(),
+                               RelationKind::Destructor,
+                               dtor,
+                               decl->getLocation());
+            }
+        }
+
+        return true;
+    }
+
+    /// using Foo = int;
+    ///            ^~~~ definition
+    VISIT_DECL(TypedefNameDecl) {
+        handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
+        handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
+
+        if(auto target = declForType(decl->getUnderlyingType())) {
+            handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
+        }
+
+        return true;
+    }
+
+    /// int foo = 2;
+    ///      ^~~~ declaration/definition
+    VISIT_DECL(VarDecl) {
+        if(auto TD = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl)) {
+            switch(TD->getSpecializationKind()) {
+                /// FIXME: Implicit instantiation should not occur in the lexical context. But
+                /// clang currently wrongly adds it to the lexical context. Skip it here.
+                case clang::TSK_ImplicitInstantiation:
+
+                /// FIXME: Clang currently doesn't record source location of explicit
+                /// instantiation of variable template correctly. Skip it temporarily.
+                case clang::TSK_ExplicitInstantiationDeclaration:
+                case clang::TSK_ExplicitInstantiationDefinition: {
+                    return true;
+                }
+
+                case clang::TSK_Undeclared:
+                case clang::TSK_ExplicitSpecialization: {
+                    break;
+                }
+            }
+        }
+
+        RelationKind kind = decl->isThisDeclarationADefinition() ? RelationKind::Definition
+                                                                 : RelationKind::Declaration;
+        handleDeclOccurrence(decl, kind, decl->getLocation());
+        handleRelation(decl, kind, decl, decl->getLocation());
+
+        if(auto target = declForType(decl->getType())) {
+            handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
+        }
+
+        return true;
+    }
+
+    /// TODO: Traverse explicit and implicit instantiations to add occurrence
+    /// to replacement template arguments.
+
+    VISIT_DECL(ClassTemplateDecl) {
         return true;
     }
 
     VISIT_DECL(FunctionTemplateDecl) {
-        /// `template void foo<int>();`
-        ///                  ^~~~ reference
-
-        /// FIXME: Clang currently doesn't record the information of explicit instantiation
-        /// correctly. See https://github.com/llvm/llvm-project/issues/115418. And it is not added
-        /// to its lexical context. So here we use a workaround to handle explicit instantiation of
-        /// function template.
-
-        // for(auto spec: decl->specializations()) {
-        //     auto kind = spec->getTemplateSpecializationKind();
-        //     if(kind == clang::TSK_ExplicitInstantiationDeclaration ||
-        //        kind == clang::TSK_ExplicitInstantiationDefinition) {
-        //         /// WORKAROUND: Clang currently doesn't record the location of explicit
-        //         /// instantiation. Use the location of the point of instantiation instead.
-        //         if(auto location = builder.addLocation(spec->getPointOfInstantiation())) {
-        //             auto symbol = builder.addSymbol(decl);
-        //             symbol.addOccurrence(location);
-        //             symbol.addReference(location);
-        //         }
-        //     }
-        // }
-
         return true;
     }
 
-    VISIT_DECL(TypedefNameDecl) {
-        /// FIXME: the location of type alias template is not recorded correctly, actually
-        /// it is the location of using keyword. But location its templated type is correct.
-        /// Temporarily use the location of the templated type.
-
-        /// `using Foo = int;`
-        ///             ^~~~ declaration/definition
-        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
-        /// FIXME: add type definition
+    VISIT_DECL(VarTemplateDecl) {
         return true;
     }
 
-    VISIT_DECL(VarDecl) {
-        /// FIXME: Implicit instantiation of should occur in the lexical context. But clang
-        /// currently doesn't record the information of explicit instantiation correctly.
-        if(auto VTSD = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl)) {
-            if(VTSD->getSpecializationKind() == clang::TSK_ImplicitInstantiation ||
-               VTSD->getSpecializationKind() == clang::TSK_ExplicitInstantiationDeclaration ||
-               VTSD->getSpecializationKind() == clang::TSK_ExplicitInstantiationDefinition) {
-                return true;
-            }
-        }
-
-        /// `int foo;`
-        ///       ^~~~ declaration/definition
-        getDerived().handleOccurrence(decl,
-                                      decl->getLocation(),
-                                      decl->isThisDeclarationADefinition()
-                                          ? RelationKind::Definition
-                                          : RelationKind::Declaration);
-        return true;
-    }
-
-    VISIT_DECL(VarTemplateSpecializationDecl) {
-        /// FIXME: it's strange that `VarTemplateSpecializationDecl` occurs in the lexical context.
-        /// This should be a bug of clang. Skip it here. And clang also doesn't record the
-        /// information about explicit instantiation of var template correctly. Skip them
-        /// temporarily.
-        auto kind = decl->getSpecializationKind();
-        if(kind == clang::TSK_ImplicitInstantiation ||
-           kind == clang::TSK_ExplicitInstantiationDeclaration ||
-           kind == clang::TSK_ExplicitInstantiationDefinition) {
-            return true;
-        }
-
-        /// FIXME:
-        /// It's possible that a var template specialization is a full specialization or a explicit
-        /// instantiation. And `VarTemplatePartialSpecializationDecl` is the subclass of
-        /// `VarTemplateSpecializationDecl`, it is also handled here.
-        ///
-        /// For full specialization:
-        /// `template <> int foo<int>;`
-        ///                    ^~~~ declaration/definition
-        ///
-        /// For explicit instantiation:
-        /// `template int foo<int>;`
-        ///                ^~~~ reference
-        /// getDerived().handleOccurrence(decl, decl->getLocation());
-        return true;
-    }
-
+    /// template <typename T> concept Foo = ...;
+    ///                                ^~~~ definition
     VISIT_DECL(ConceptDecl) {
-        /// `template <typename T> concept Foo = ...;`
-        ///                                 ^~~~ definition
-        getDerived().handleOccurrence(decl, decl->getLocation(), RelationKind::Definition);
+        handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
+        handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
         return true;
     }
 
+    /// requires Foo<T>;
+    ///            ^~~~ reference
     bool TraverseConceptReference(clang::ConceptReference* reference) {
-        /// `requires Foo<T>;`
-        ///            ^~~~ reference
-        getDerived().handleOccurrence(reference->getNamedConcept(),
-                                      reference->getConceptNameLoc(),
-                                      RelationKind::Reference);
-
+        auto decl = reference->getNamedConcept();
+        auto location = reference->getConceptNameLoc();
+        handleDeclOccurrence(decl, RelationKind::Reference, location);
+        handleRelation(decl, RelationKind::Reference, decl, location);
         return Base::TraverseConceptReference(reference);
     }
 
@@ -436,59 +547,78 @@ public:
         return Base::TraverseTypeLoc(loc);
     }
 
+    /// unsigned int foo = 2;
+    ///   ^~~~~~~~^~~~~~~~ reference
     VISIT_TYPELOC(BuiltinTypeLoc) {
-        /// `int foo`
-        ///    ^~~~ reference
-        getDerived().handleOccurrence(loc.getTypePtr(), loc.getLocalSourceRange());
+        /// Should we handle builtin type separately? Note that it may
+        /// be composed of multiple tokens.
         return true;
     }
 
+    /// struct Foo foo;
+    ///         ^~~~ reference
     VISIT_TYPELOC(TagTypeLoc) {
-        /// `struct Foo { }; Foo foo`
-        ///                   ^~~~ reference
-        getDerived().handleOccurrence(loc.getDecl(), loc.getNameLoc(), RelationKind::Reference);
+        auto decl = loc.getDecl();
+        auto location = loc.getNameLoc();
+        handleDeclOccurrence(decl, RelationKind::Reference, location);
+        handleRelation(decl, RelationKind::Reference, decl, location);
         return true;
     }
 
+    /// using Foo = int; Foo foo;
+    ///                   ^~~~ reference
     VISIT_TYPELOC(TypedefTypeLoc) {
-        /// `using Foo = int; Foo foo`
-        ///                    ^~~~ reference
-        getDerived().handleOccurrence(loc.getTypedefNameDecl(),
-                                      loc.getNameLoc(),
-                                      RelationKind::Reference);
+        auto decl = loc.getTypedefNameDecl();
+        auto location = loc.getNameLoc();
+        handleDeclOccurrence(decl, RelationKind::Reference, location);
+        handleRelation(decl, RelationKind::Reference, decl, location);
         return true;
     }
 
+    /// template <typename T> void foo(T t)
+    ///                                ^~~~ reference
     VISIT_TYPELOC(TemplateTypeParmTypeLoc) {
-        /// `template <typename T> void foo(T t)`
-        ///                                 ^~~~ reference
-        getDerived().handleOccurrence(loc.getDecl(), loc.getNameLoc(), RelationKind::Reference);
+        auto decl = loc.getDecl();
+        auto location = loc.getNameLoc();
+        handleDeclOccurrence(decl, RelationKind::Reference, location);
+        handleRelation(decl, RelationKind::Reference, decl, location);
         return true;
     }
 
+    /// std::vector<int>
+    ///        ^~~~ reference
     VISIT_TYPELOC(TemplateSpecializationTypeLoc) {
-        /// `std::vector<int>`
-        ///        ^~~~ reference
-        getDerived().handleOccurrence(declForType(loc.getType()),
-                                      loc.getTemplateNameLoc(),
-                                      RelationKind::Reference);
+        if(auto type = loc.getTypePtr(); type->isDependentType()) {
+            /// FIXME: for dependent type, we always use the template resolver to
+            /// resolve the template decl.
+            return true;
+        }
+
+        auto decl = declForType(loc.getType());
+        auto location = loc.getTemplateNameLoc();
+        handleDeclOccurrence(decl, RelationKind::Reference, location);
+        handleRelation(decl, RelationKind::Reference, decl, location);
         return true;
     }
 
+    /// std::vector<T>::value_type
+    ///                      ^~~~ reference
     VISIT_TYPELOC(DependentNameTypeLoc) {
-        /// `std::vector<T>::value_type`
-        ///                      ^~~~ reference
+        auto location = loc.getNameLoc();
         for(auto decl: resolver.lookup(loc.getTypePtr())) {
-            getDerived().handleOccurrence(decl, loc.getNameLoc(), RelationKind::Reference);
+            handleDeclOccurrence(decl, RelationKind::WeakReference, location);
+            handleRelation(decl, RelationKind::WeakReference, decl, location);
         }
         return true;
     }
 
+    /// std::allocator<T>::rebind<U>
+    ///                       ^~~~ reference
     VISIT_TYPELOC(DependentTemplateSpecializationTypeLoc) {
-        /// `std::allocator<T>::rebind<U>`
-        ///                       ^~~~ reference
+        auto location = loc.getTemplateNameLoc();
         for(auto decl: resolver.lookup(loc.getTypePtr())) {
-            getDerived().handleOccurrence(decl, loc.getTemplateNameLoc(), RelationKind::Reference);
+            handleDeclOccurrence(decl, RelationKind::WeakReference, location);
+            handleRelation(decl, RelationKind::WeakReference, decl, location);
         }
         return true;
     }
@@ -521,10 +651,6 @@ public:
         return Base::TraverseAttributedStmt(stmt);
     }
 
-    bool TraverseCXXBaseSpecifier(const clang::CXXBaseSpecifier& base) {
-        return Base::TraverseCXXBaseSpecifier(base);
-    }
-
     /// We don't care about name specifier without location information.
     constexpr bool TraverseNestedNameSpecifier [[gnu::const]] (clang::NestedNameSpecifier*) {
         return true;
@@ -538,22 +664,27 @@ public:
         auto NNS = loc.getNestedNameSpecifier();
         switch(NNS->getKind()) {
             case clang::NestedNameSpecifier::Namespace: {
-                getDerived().handleOccurrence(NNS->getAsNamespace(),
-                                              loc.getLocalBeginLoc(),
-                                              RelationKind::Reference);
+                auto decl = NNS->getAsNamespace();
+                auto location = loc.getLocalBeginLoc();
+                handleDeclOccurrence(decl, RelationKind::Reference, location);
+                handleRelation(decl, RelationKind::Reference, decl, location);
                 break;
             }
+
             case clang::NestedNameSpecifier::NamespaceAlias: {
-                getDerived().handleOccurrence(NNS->getAsNamespaceAlias(),
-                                              loc.getLocalBeginLoc(),
-                                              RelationKind::Reference);
+                auto decl = NNS->getAsNamespaceAlias();
+                auto location = loc.getLocalBeginLoc();
+                handleDeclOccurrence(decl, RelationKind::Reference, location);
+                handleRelation(decl, RelationKind::Reference, decl, location);
                 break;
             }
+
             case clang::NestedNameSpecifier::Identifier: {
                 assert(NNS->isDependent() && "Identifier NNS should be dependent");
                 // FIXME: use TemplateResolver here.
                 break;
             }
+
             case clang::NestedNameSpecifier::TypeSpec:
             case clang::NestedNameSpecifier::TypeSpecWithTemplate:
             case clang::NestedNameSpecifier::Global:
@@ -563,10 +694,6 @@ public:
         }
 
         return Base::TraverseNestedNameSpecifierLoc(loc);
-    }
-
-    bool TraverseConstructorInitializer(clang::CXXCtorInitializer* init) {
-        return Base::TraverseConstructorInitializer(init);
     }
 
     /// ============================================================================
@@ -581,71 +708,71 @@ public:
         return Base::TraverseStmt(stmt);
     }
 
-    VISIT_EXPR(CallExpr) {
-        // TODO: consider lambda expression.
-        auto caller = decls.back();
-        if(llvm::isa<clang::StaticAssertDecl>(caller)) {
-            caller = llvm::cast<clang::NamedDecl>(caller->getDeclContext());
-        }
-
-        auto callee = expr->getCalleeDecl();
-        if(callee && caller) {
-            getDerived().handleOccurrence(caller, expr->getSourceRange(), RelationKind::Caller);
-            getDerived().handleOccurrence(callee, expr->getSourceRange(), RelationKind::Callee);
-        }
-        return true;
-    }
-
+    /// foo = 1
+    ///  ^~~~ reference
     VISIT_EXPR(DeclRefExpr) {
-        /// `foo = 1`
-        ///   ^~~~ reference
-        getDerived().handleOccurrence(expr->getDecl(),
-                                      expr->getLocation(),
-                                      RelationKind::Reference);
+        auto decl = expr->getDecl();
+        auto location = expr->getLocation();
+        handleDeclOccurrence(decl, RelationKind::Reference, location);
+        handleRelation(decl, RelationKind::Reference, decl, location);
         return true;
     }
 
+    /// foo.bar
+    ///      ^~~~ reference
     VISIT_EXPR(MemberExpr) {
-        /// `foo.bar`
-        ///       ^~~~ reference
-        if(expr->getMemberLoc().isValid()) {
+        auto decl = expr->getMemberDecl();
+        auto location = expr->getMemberLoc();
+        if(location.isInvalid()) {
             /// FIXME: if the location of member loc is invalid, this represents it is a
             /// implicit member expr, e.g. `if(x)`, implicit `if(x.operator bool())`. Try to
-            /// use parens around the member loc.
-            getDerived().handleOccurrence(expr->getMemberDecl(),
-                                          expr->getMemberLoc(),
-                                          RelationKind::Reference);
+            /// use parens around the member loc for occurrence.
+            ///
+            /// Known implicit member expr:
+            ///  - implicit constructor
+            ///  - implicit conversion operator
+
+            assert((llvm::isa<clang::CXXConstructorDecl, clang::CXXConversionDecl>(decl)) &&
+                   "Invalid member location");
+
+            return true;
         }
+
+        handleDeclOccurrence(decl, RelationKind::Reference, location);
+        handleRelation(decl, RelationKind::Reference, decl, location);
         return true;
     }
 
+    /// std::is_same<T, U>::value
+    ///           ^~~~ reference
     VISIT_EXPR(UnresolvedLookupExpr) {
-        /// `std::is_same<T, U>::value`
-        ///           ^~~~ reference
-        for(auto decl: resolver.lookup(expr)) {
-            getDerived().handleOccurrence(decl, expr->getNameLoc(), RelationKind::Reference);
-        }
         return true;
     }
 
+    /// std::is_same<T, U>::value
+    ///                       ^~~~ reference
     VISIT_EXPR(DependentScopeDeclRefExpr) {
-        /// `std::is_same<T, U>::value`
-        ///                        ^~~~ reference
-        /// dump(expr->getLocation());
-        /// FIXME:
-        /// TemplateResolver::debug = true;
-        // for(auto decl: resolver.lookup(expr)) {
-        //     getDerived().handleOccurrence(decl,
-        //                                   expr->getNameInfo().getLoc(),
-        //                                   RelationKind::Reference);
-        // }
         return true;
     }
 
+    /// foo.T::value
+    ///          ^~~~ reference
     VISIT_EXPR(CXXDependentScopeMemberExpr) {
-        /// `std::is_same<T, U>::value.T::value`
-        ///                                 ^~~~ reference
+        return true;
+    }
 
+    VISIT_EXPR(CallExpr) {
+        // FIXME: consider lambda expression.
+        auto back = decls.back();
+        clang::NamedDecl* caller = llvm::isa<clang::StaticAssertDecl>(back)
+                                       ? llvm::cast<clang::NamedDecl>(back->getDeclContext())
+                                       : llvm::cast<clang::NamedDecl>(back);
+        auto callee =
+            expr->getCalleeDecl() ? llvm::cast<clang::NamedDecl>(expr->getCalleeDecl()) : nullptr;
+        if(callee && caller) {
+            handleRelation(caller, RelationKind::Caller, callee, expr->getSourceRange());
+            handleRelation(callee, RelationKind::Callee, caller, expr->getSourceRange());
+        }
         return true;
     }
 
@@ -656,6 +783,7 @@ protected:
     TemplateResolver& resolver;
     clang::SourceManager& srcMgr;
     clang::syntax::TokenBuffer& tokBuf;
+    ASTInfo& info;
     llvm::SmallVector<clang::Decl*> decls;
 };
 
