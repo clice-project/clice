@@ -129,12 +129,15 @@ struct InlayHintOption {
 
 }  // namespace config
 
+class SourceConverter;
+
 namespace feature {
 
 json::Value inlayHintCapability(json::Value InlayHintClientCapabilities);
 
 /// Compute inlay hints for a document in given range and config.
 proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
+                                   const SourceConverter& converter,
                                    const config::InlayHintOption& config);
 
 }  // namespace feature

@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <Feature/InlayHint.h>
+#include <Basic/SourceConverter.h>
 
 #include "../Test.h"
 
@@ -22,7 +23,9 @@ void dbg(const std::vector<proto::InlayHint>& hints) {
     // }
 }
 
-config::InlayHintOption LikeClangd{
+const SourceConverter Converter{proto::PositionEncodingKind::UTF8};
+
+const config::InlayHintOption LikeClangd{
     .maxLength = 20,
     .maxArrayElements = 10,
     .structSizeAndAlign = false,
@@ -53,7 +56,7 @@ void t() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, LikeClangd);
+    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
     dbg(res);
 
@@ -77,7 +80,7 @@ g();
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, LikeClangd);
+    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
     dbg(res);
 
@@ -99,7 +102,7 @@ f($(1)x, $(2)x);
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, LikeClangd);
+    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
     dbg(res);
 
@@ -124,7 +127,7 @@ void f() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, LikeClangd);
+    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
     dbg(res);
 
@@ -149,7 +152,7 @@ int f() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, LikeClangd);
+    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
     dbg(res);
 
@@ -180,7 +183,7 @@ void g() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, LikeClangd);
+    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
     dbg(res);
 
@@ -202,7 +205,7 @@ int f() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, LikeClangd);
+    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
     dbg(res);
 
@@ -232,7 +235,7 @@ void f() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, LikeClangd);
+    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
     dbg(res);
 
@@ -251,7 +254,7 @@ TEST(InlayHint, InitializeList) {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, LikeClangd);
+    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
     dbg(res);
 
@@ -270,7 +273,7 @@ A a = {.x = 1, .y = 2};
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, LikeClangd);
+    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
     dbg(res);
 
@@ -300,7 +303,7 @@ void f() {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, LikeClangd);
+    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
     dbg(res);
 
@@ -344,7 +347,7 @@ struct Out {
     };
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, option);
+    auto res = feature::inlayHints({}, info, Converter, option);
 
     dbg(res);
 
@@ -364,7 +367,7 @@ auto l = []$(1) {
     txs.run();
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {.returnType = true, .blockEnd = true});
+    auto res = feature::inlayHints({}, info, Converter, {.returnType = true, .blockEnd = true});
 
     dbg(res);
 
@@ -395,7 +398,7 @@ struct A {
     };
 
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, option);
+    auto res = feature::inlayHints({}, info, Converter, option);
 
     dbg(res);
 
@@ -414,7 +417,7 @@ TEST(InlayHint, ImplicitCast) {
     Tester txs("main.cpp", main);
     txs.run();
     auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, {.implicitCast = true});
+    auto res = feature::inlayHints({}, info, Converter, {.implicitCast = true});
 
     dbg(res);
 

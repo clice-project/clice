@@ -1,36 +1,9 @@
+#include "Basic/SourceConverter.h"
 #include "Feature/InlayHint.h"
 
 namespace clice {
 
 namespace {
-
-struct LspProtoAdaptor {
-
-    const clang::SourceManager* src;
-
-    bool isInMainFile(clang::SourceLocation loc) {
-        return loc.isValid() && src->isInMainFile(loc);
-    }
-
-    bool notInMainFile(clang::SourceLocation loc) {
-        return !isInMainFile(loc);
-    }
-
-    proto::Position toLspPosition(clang::SourceLocation loc) {
-        auto presumed = src->getPresumedLoc(loc);
-        return {
-            .line = presumed.getLine() - 1,
-            .character = presumed.getColumn() - 1,
-        };
-    }
-
-    proto::Range toLspRange(clang::SourceRange sr) {
-        return {
-            .start = toLspPosition(sr.getBegin()),
-            .end = toLspPosition(sr.getEnd()),
-        };
-    }
-};
 
 /// TODO:
 /// Replace blank tooltip to something useful.
@@ -44,9 +17,13 @@ proto::MarkupContent blank() {
 }
 
 /// Compute inlay hints for a document in given range and config.
-struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspProtoAdaptor {
+struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
 
     using Base = clang::RecursiveASTVisitor<InlayHintCollector>;
+
+    const clang::SourceManager& src;
+
+    const SourceConverter& cvtr;
 
     /// The config of inlay hints collector.
     const config::InlayHintOption config;
@@ -63,8 +40,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
     /// The printing policy of clang.
     const clang::PrintingPolicy policy;
 
-    /// Whole source text in main file.
-    const llvm::StringRef source;
+    /// Whole source code text in main file.
+    const llvm::StringRef code;
 
     /// Do not produce inlay hints if either range ends is not within the main file.
     bool needFilter(clang::SourceRange range) {
@@ -72,7 +49,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         if(range.isInvalid())
             return true;
 
-        if(!src->isInMainFile(range.getBegin()) || !src->isInMainFile(range.getEnd()))
+        if(!src.isInMainFile(range.getBegin()) || !src.isInMainFile(range.getEnd()))
             return true;
 
         // not involved in restrict range
@@ -108,10 +85,10 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         };
 
         if(linkDeclRange.has_value())
-            lable.Location = {.uri = docuri, .range = toLspRange(*linkDeclRange)};
+            lable.Location = {.uri = docuri, .range = cvtr.toRange(*linkDeclRange, src)};
 
         proto::InlayHint hint{
-            .position = toLspPosition(identRange.getEnd()),
+            .position = cvtr.toPosition(identRange.getEnd(), src),
             .lable = {std::move(lable)},
             .kind = proto::InlayHintKind::Type,
         };
@@ -134,8 +111,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
 
     /// Check if there is any comment like /*paramName*/ in given range.
     bool hasHandWriteComment(clang::SourceRange range) {
-        auto firstChar = src->getCharacterData(range.getBegin());
-        auto length = static_cast<size_t>(src->getCharacterData(range.getEnd()) - firstChar);
+        auto firstChar = src.getCharacterData(range.getBegin());
+        auto length = static_cast<size_t>(src.getCharacterData(range.getEnd()) - firstChar);
 
         llvm::StringRef text{firstChar, length};
         return text.contains("/*") && text.contains("*/");
@@ -178,12 +155,13 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
             proto::InlayHintLablePart lable{
                 .value = shrinkText(std::format("{}{}:", params[i]->getName(), hintRef ? "&" : "")),
                 .tooltip = blank(),
-                .Location = proto::Location{.uri = docuri,
-                                            .range = toLspRange(params[i]->getSourceRange())}
+                .Location =
+                    proto::Location{.uri = docuri,
+                                    .range = cvtr.toRange(params[i]->getSourceRange(), src)}
             };
 
             proto::InlayHint hint{
-                .position = toLspPosition(args[i]->getSourceRange().getBegin()),
+                .position = cvtr.toPosition(args[i]->getSourceRange().getBegin(), src),
                 .lable = {std::move(lable)},
                 .kind = proto::InlayHintKind::Parameter,
             };
@@ -417,11 +395,12 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         proto::InlayHintLablePart lable{
             .value = shrinkText(std::format("-> {}", retType.getAsString(policy))),
             .tooltip = blank(),
-            .Location = proto::Location{.uri = docuri, .range = toLspRange(retTypeDeclRange)}
+            .Location =
+                proto::Location{.uri = docuri, .range = cvtr.toRange(retTypeDeclRange, src)}
         };
 
         proto::InlayHint hint{
-            .position = toLspPosition(hintLoc),
+            .position = cvtr.toPosition(hintLoc, src),
             .lable = {std::move(lable)},
             .kind = proto::InlayHintKind::Type,
         };
@@ -439,8 +418,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
             /// FIXME:
             /// Use a proper name such as simplified signature of funtion.
             auto typeLoc = decl->getTypeSourceInfo()->getTypeLoc().getSourceRange();
-            auto begin = src->getCharacterData(typeLoc.getBegin());
-            auto end = src->getCharacterData(typeLoc.getEnd());
+            auto begin = src.getCharacterData(typeLoc.getBegin());
+            auto end = src.getCharacterData(typeLoc.getEnd());
             llvm::StringRef piece{begin, static_cast<size_t>(end - begin) + 1};
             collectBlockEndHint(decl->getBodyRBrace().getLocWithOffset(1),
                                 std::format("// {}", piece),
@@ -506,7 +485,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         };
 
         proto::InlayHint hint{
-            .position = toLspPosition(location),
+            .position = cvtr.toPosition(location, src),
             .lable = {std::move(lable)},
             .kind = proto::InlayHintKind::Parameter,
         };
@@ -531,13 +510,13 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
     }
 
     bool isMultiLineRange(const clang::SourceRange range) {
-        return range.isValid() && src->getPresumedLineNumber(range.getBegin()) <
-                                      src->getPresumedLineNumber(range.getEnd());
+        return range.isValid() && src.getPresumedLineNumber(range.getBegin()) <
+                                      src.getPresumedLineNumber(range.getEnd());
     }
 
     llvm::StringRef remainTextOfThatLine(clang::SourceLocation location) {
-        auto [_, offset] = src->getDecomposedLoc(location);
-        auto remain = source.substr(offset).split('\n').first;
+        auto [_, offset] = src.getDecomposedLoc(location);
+        auto remain = code.substr(offset).split('\n').first;
         return remain.ltrim();
     }
 
@@ -551,7 +530,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         // Already has a duplicated hint in that location, use the newer hint instead.
         // e.g. Drop outer hint for nested namspace declaration.
         //      namespace out::in {}
-        const auto lspPosition = toLspPosition(location);
+        const auto lspPosition = cvtr.toPosition(location, src);
         if(checkDuplicatedHint && !result.empty())
             if(const auto& last = result.back().position;
                last.line == lspPosition.line && last.character == lspPosition.character)
@@ -560,7 +539,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         proto::InlayHintLablePart lable{
             .value = shrinkText(std::move(text)),
             .tooltip = blank(),
-            .Location = {.uri = docuri, .range = toLspRange(linkRange)},
+            .Location = {.uri = docuri, .range = cvtr.toRange(linkRange, src)},
         };
 
         proto::InlayHint hint{
@@ -600,13 +579,13 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
         proto::InlayHintLablePart lable{
             .value = shrinkText(std::format("size: {}, align: {}", size, align)),
             .tooltip = blank(),
-            .Location = {.uri = docuri, .range = toLspRange(decl->getSourceRange())},
+            .Location = {.uri = docuri, .range = cvtr.toRange(decl->getSourceRange(), src)},
         };
 
         // right side of identifier.
         auto tail = decl->getLocation().getLocWithOffset(decl->getName().size());
         proto::InlayHint hint{
-            .position = toLspPosition(tail),
+            .position = cvtr.toPosition(tail, src),
             .lable = {std::move(lable)},
             .kind = proto::InlayHintKind::Parameter,
         };
@@ -651,7 +630,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector>, LspP
     //         };
     //         // right side of that expr.
     //         proto::InlayHint hint{
-    //             .position = toLspPosition(stmt->getEndLoc()),
+    //             .position = cvtr.toPosition(stmt->getEndLoc()),
     //             .lable = {std::move(lable)},
     //             .kind = proto::InlayHintKind::Parameter,
     //         };
@@ -671,8 +650,9 @@ json::Value inlayHintCapability(json::Value InlayHintClientCapabilities) {
 
 /// Compute inlay hints for a document in given range and config.
 proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
+                                   const SourceConverter& converter,
                                    const config::InlayHintOption& config) {
-    clang::SourceManager* src = &info.srcMgr();
+    const clang::SourceManager& src = info.srcMgr();
 
     /// FIXME:
     /// Take 0-0 based Lsp Location from `param.range` and convert it to clang 1-1 based
@@ -681,20 +661,21 @@ proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
 
     // In default, use the whole main file as the restrict range.
     if(fixedRange.isInvalid()) {
-        clang::FileID main = src->getMainFileID();
-        fixedRange = {src->getLocForStartOfFile(main), src->getLocForEndOfFile(main)};
+        clang::FileID main = src.getMainFileID();
+        fixedRange = {src.getLocForStartOfFile(main), src.getLocForEndOfFile(main)};
     }
 
     /// TODO:
     /// Check and fix invalid options before collect hints.
     InlayHintCollector collector{
+        .src = src,
+        .cvtr = converter,
         .config = config,
         .limit = fixedRange,
         .docuri = std::move(param.textDocument.uri),
         .policy = info.context().getPrintingPolicy(),
-        .source = src->getBufferData(src->getMainFileID()),
+        .code = src.getBufferData(src.getMainFileID()),
     };
-    collector.src = src;
 
     collector.TraverseTranslationUnitDecl(info.tu());
 
