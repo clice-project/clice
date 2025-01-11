@@ -1,6 +1,9 @@
 #pragma once
 
 #include <string>
+#include <vector>
+
+#include "Support/Error.h"
 
 namespace clice {
 

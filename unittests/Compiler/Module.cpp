@@ -108,6 +108,51 @@ export module A;
     // ASSERT_EQ(pcm.mods.size(), 0);
 }
 
+TEST(Module, ScanModuleName) {
+    CompilationParams params;
+
+    /// Test module name not in condition directive.
+    params.content = "export module A;";
+    ASSERT_EQ(scanModuleName(params), "A");
+
+    params.content = "export module A.B.C.D;";
+    ASSERT_EQ(scanModuleName(params), "A.B.C.D");
+
+    params.content = "export module A:B;";
+    ASSERT_EQ(scanModuleName(params), "A:B");
+
+    params.content = R"(
+module;
+#ifdef TEST
+#include <iostream>
+#endif
+export module A;
+)";
+    ASSERT_EQ(scanModuleName(params), "A");
+
+    /// Test non-module interface unit.
+    params.content = "module A;";
+    ASSERT_EQ(scanModuleName(params), "");
+
+    params.content = "";
+    ASSERT_EQ(scanModuleName(params), "");
+
+    /// Test module name in condition directive.
+    params.content = R"(
+#ifdef TEST
+export module A;
+#else
+export module B;
+#endif
+)";
+    params.srcPath = "main.cppm";
+    params.command = "clang++ -std=c++20 -x c++ main.cppm -DTEST";
+    ASSERT_EQ(scanModuleName(params), "A");
+
+    params.command = "clang++ -std=c++20 -x c++ main.cppm";
+    ASSERT_EQ(scanModuleName(params), "B");
+}
+
 }  // namespace
 
 }  // namespace clice
