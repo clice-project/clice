@@ -365,7 +365,6 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
     }
 
     out.path = params.outPath.str();
-    out.srcPath = params.srcPath.str();
 
     auto& bounds = *params.bounds;
     out.preamble = params.content.substr(0, bounds.Size).str();

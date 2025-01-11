@@ -318,7 +318,7 @@ void Scheduler::loadCache() {
     if(auto pchArray = object->getArray("PCH")) {
         for(auto& value: *pchArray) {
             auto pch = json::deserialize<PCHInfo>(value);
-            pchs[pch.srcPath] = std::move(pch);
+            /// pchs[pch.srcPath] = std::move(pch);
         }
     }
 

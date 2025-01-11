@@ -1,11 +1,14 @@
 #pragma once
 
-#include <Compiler/Clang.h>
-#include <Compiler/Directive.h>
-#include <Compiler/Resolver.h>
+#include "Clang.h"
+#include "Module.h"
+#include "Preamble.h"
+#include "Resolver.h"
+#include "Directive.h"
 
-#include <Support/Error.h>
+#include "Support/Error.h"
 #include "Basic/Location.h"
+
 #include "llvm/ADT/StringSet.h"
 
 namespace clice {
@@ -113,60 +116,6 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params);
 
 /// Run code completion at the given location.
 llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteConsumer* consumer);
-
-struct PCHInfo {
-    /// PCM file path.
-    std::string path;
-
-    /// Source file path.
-    std::string srcPath;
-
-    /// The content of source file used to build this PCM.
-    std::string preamble;
-
-    /// Files involved in building this PCM.
-    std::vector<std::string> deps;
-
-    clang::PreambleBounds bounds() const {
-        /// We use '@' to mark the end of the preamble.
-        bool endAtStart = preamble.ends_with('@');
-        unsigned int size = preamble.size() - endAtStart;
-        return {size, endAtStart};
-    }
-};
-
-/// Build PCH from given file path and content.
-llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out);
-
-struct ModuleInfo {
-    /// Whether this module is an interface unit.
-    /// i.e. has export module declaration.
-    bool isInterfaceUnit = false;
-
-    /// Module name.
-    std::string name;
-
-    /// Dependent modules of this module.
-    std::vector<std::string> mods;
-};
-
-/// Run the preprocessor to scan the given module unit to
-/// collect its module name and dependencies.
-llvm::Expected<ModuleInfo> scanModule(CompilationParams& params);
-
-inherited_struct(PCMInfo, ModuleInfo) {
-    /// PCM file path.
-    std::string path;
-
-    /// Source file path.
-    std::string srcPath;
-
-    /// Files involved in building this PCM(not include module).
-    std::vector<std::string> deps;
-};
-
-/// Build PCM from given file path and content.
-llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out);
 
 struct CompilationParams {
     /// Source file content.
