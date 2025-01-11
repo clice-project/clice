@@ -10,28 +10,30 @@ namespace {
 
 class SelectionBuilder {
 public:
-    SelectionBuilder(std::uint32_t begin,
-                     std::uint32_t end,
-                     clang::ASTContext& context,
+    SelectionBuilder(std::uint32_t begin, std::uint32_t end, clang::ASTContext& context,
                      clang::syntax::TokenBuffer& buffer) : context(context), buffer(buffer) {
         // The location in clang AST is token-based, of course. Because the parser
         // processes tokens from the lexer. So we need to find boundary tokens at first.
         auto& sm = context.getSourceManager();  // FIXME: support other file.
         auto tokens = buffer.spelledTokens(sm.getMainFileID());
 
-        left = std::to_address(std::partition_point(tokens.begin(), tokens.end(), [&](const auto& token) {
-            // int       xxxx = 3;
-            //       ^^^^^^
-            // expect to find the first token whose end location is greater than or equal to `begin`.
-            return sm.getFileOffset(token.endLocation()) < begin;
-        }));
+        left = std::to_address(
+            std::partition_point(tokens.begin(), tokens.end(), [&](const auto& token) {
+                // int       xxxx = 3;
+                //       ^^^^^^
+                // expect to find the first token whose end location is greater than or equal to
+                // `begin`.
+                return sm.getFileOffset(token.endLocation()) < begin;
+            }));
 
-        rigth = std::to_address(std::partition_point(tokens.rbegin(), tokens.rend(), [&](const auto& token) {
-            // int xxxx        = 3;
-            //      ^^^^^^
-            // expect to find the first token whose start location is less than or equal to `end`.
-            return sm.getFileOffset(token.location()) > end;
-        }));
+        rigth = std::to_address(
+            std::partition_point(tokens.rbegin(), tokens.rend(), [&](const auto& token) {
+                // int xxxx        = 3;
+                //      ^^^^^^
+                // expect to find the first token whose start location is less than or equal to
+                // `end`.
+                return sm.getFileOffset(token.location()) > end;
+            }));
 
         if(left == tokens.end() || rigth == tokens.end()) {
             std::terminate();
@@ -140,9 +142,6 @@ private:
     std::deque<Node> storage;
 };
 
-/*/
-
-/*/
 class SelectionCollector : public clang::RecursiveASTVisitor<SelectionCollector> {
 public:
     SelectionCollector(SelectionBuilder& builder) : builder(builder) {}
@@ -156,21 +155,15 @@ public:
             return Base::TraverseDecl(decl);
         }
 
-        return builder.hook(decl, [&] {
-            return Base::TraverseDecl(decl);
-        });
+        return builder.hook(decl, [&] { return Base::TraverseDecl(decl); });
     }
 
     bool TraverseStmt(clang::Stmt* stmt) {
-        return builder.hook(stmt, [&] {
-            return Base::TraverseStmt(stmt);
-        });
+        return builder.hook(stmt, [&] { return Base::TraverseStmt(stmt); });
     }
 
     bool TraverseAttr(clang::Attr* attr) {
-        return builder.hook(attr, [&] {
-            return Base::TraverseAttr(attr);
-        });
+        return builder.hook(attr, [&] { return Base::TraverseAttr(attr); });
     }
 
     /// we don't care about the node without location information, so skip them.
@@ -193,33 +186,23 @@ public:
             return TraverseTypeLoc(QTL.getUnqualifiedLoc());
         }
 
-        return builder.hook(&loc, [&] {
-            return Base::TraverseTypeLoc(loc);
-        });
+        return builder.hook(&loc, [&] { return Base::TraverseTypeLoc(loc); });
     }
 
     bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc NNS) {
-        return builder.hook(&NNS, [&] {
-            return Base::TraverseNestedNameSpecifierLoc(NNS);
-        });
+        return builder.hook(&NNS, [&] { return Base::TraverseNestedNameSpecifierLoc(NNS); });
     }
 
     bool TraverseTemplateArgumentLoc(const clang::TemplateArgumentLoc& argument) {
-        return builder.hook(&argument, [&] {
-            return Base::TraverseTemplateArgumentLoc(argument);
-        });
+        return builder.hook(&argument, [&] { return Base::TraverseTemplateArgumentLoc(argument); });
     }
 
     bool TraverseCXXBaseSpecifier(const clang::CXXBaseSpecifier& base) {
-        return builder.hook(&base, [&] {
-            return Base::TraverseCXXBaseSpecifier(base);
-        });
+        return builder.hook(&base, [&] { return Base::TraverseCXXBaseSpecifier(base); });
     }
 
     bool TraverseConstructorInitializer(clang::CXXCtorInitializer* init) {
-        return builder.hook(init, [&] {
-            return Base::TraverseConstructorInitializer(init);
-        });
+        return builder.hook(init, [&] { return Base::TraverseConstructorInitializer(init); });
     }
 
     // bool TraverseDeclarationNameInfo(clang::DeclarationNameInfo info) {
@@ -242,8 +225,8 @@ SelectionTree SelectionBuilder::build() {
     collector.TraverseAST(context);
 
     SelectionTree tree;
-    tree.root = stack.empty() ? nullptr : stack.top();
     tree.storage = std::move(storage);
+    tree.root = &tree.storage.front();
     return tree;
 }
 
@@ -258,16 +241,16 @@ void dump(const SelectionTree::Node* node, clang::ASTContext& context) {
 
 }  // namespace
 
-SelectionTree::SelectionTree(std::uint32_t begin,
-                             std::uint32_t end,
-                             clang::ASTContext& context,
-                             clang::syntax::TokenBuffer& tokens) {
+// SelectionTree::SelectionTree(std::uint32_t begin,
+//                              std::uint32_t end,
+//                              clang::ASTContext& context,
+//                              clang::syntax::TokenBuffer& tokens) {
 
-    SelectionBuilder builder(begin, end, context, tokens);
-    auto tree = builder.build();
-    root = tree.root;
-    llvm::outs() << "----------------------------------------\n";
-    dump(root, context);
-}
+//     SelectionBuilder builder(begin, end, context, tokens);
+//     auto tree = builder.build();
+//     root = tree.root;
+//     llvm::outs() << "----------------------------------------\n";
+//     dump(root, context);
+// }
 
 }  // namespace clice

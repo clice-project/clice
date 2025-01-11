@@ -84,6 +84,7 @@ if(CLICE_ENABLE_TEST)
     add_executable(clice-tests ${CLICE_TEST_SOURCES} ${SRC_FILES})
     target_include_directories(clice-tests PRIVATE
         "${CMAKE_SOURCE_DIR}/deps/googletest/googletest/include"
+        "${CMAKE_SOURCE_DIR}/"
     )
     target_link_libraries(clice-tests PRIVATE 
         clice-core
