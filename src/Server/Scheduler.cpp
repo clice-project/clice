@@ -60,7 +60,7 @@ async::promise<> Scheduler::updatePCH(llvm::StringRef srcPath, llvm::StringRef c
             }
 
             /// Check whether the content of the PCH is consistent with the source file.
-            auto size = info.bounds().Size;
+            auto size = 0;
             if(content.substr(0, size) != info.preamble.substr(0, size)) {
                 needUpdate = true;
             }

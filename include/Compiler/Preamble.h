@@ -9,24 +9,21 @@ class ASTInfo;
 struct CompilationParams;
 
 struct PCHInfo {
-    /// PCM file path.
-    std::string path;
-
-    std::string command;
-
-    /// The content of source file used to build this PCM.
+    /// The content used to build this PCH.
     std::string preamble;
 
-    /// Files involved in building this PCM.
-    std::vector<std::string> deps;
+    /// The command used to build this PCH.
+    std::string command;
 
-    clang::PreambleBounds bounds() const {
-        /// We use '@' to mark the end of the preamble.
-        bool endAtStart = preamble.ends_with('@');
-        unsigned int size = preamble.size() - endAtStart;
-        return {size, endAtStart};
-    }
+    /// The path of the output PCH file.
+    std::string path;
+
+    /// All files involved in building this PCH.
+    std::vector<std::string> deps;
 };
+
+/// Compute the preamble to build PCH with the given content.
+std::string computePreamble(CompilationParams& params);
 
 /// Build PCH from given file path and content.
 llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out);

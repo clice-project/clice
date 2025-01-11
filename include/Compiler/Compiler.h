@@ -162,7 +162,7 @@ struct CompilationParams {
 
     void addPCH(const PCHInfo& info) {
         pch = info.path;
-        pchBounds = info.bounds();
+        /// pchBounds = info.bounds();
     }
 
     void addPCM(const PCMInfo& info) {
