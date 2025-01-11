@@ -13,7 +13,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/SmallVector.h"
 
-namespace clice::async2 {
+namespace clice::async {
 
 #define uv_check_call(func, ...)                                                                   \
     if(int error = func(__VA_ARGS__); error < 0) {                                                 \
@@ -82,7 +82,7 @@ struct promise_type : promise_base<T> {
                 /// In the final suspend point, this coroutine is already done.
                 /// So try to resume the waiting coroutine if it exists.
                 if(waiting) {
-                    async2::schedule(waiting);
+                    async::schedule(waiting);
                 }
             }
 
@@ -144,7 +144,7 @@ public:
 
         /// Schedule the task to run. Note that the waiting coroutine is scheduled
         /// in final_suspend. See `impl::promise_type::final_suspend`.
-        async2::schedule(core);
+        async::schedule(core);
     }
 
     T await_resume() noexcept {
@@ -190,13 +190,13 @@ auto gather(Tasks&&... tasks)
 
         if(!started) {
             for(auto handle: handles) {
-                async2::schedule(handle);
+                async::schedule(handle);
             }
             started = true;
         }
 
         while(!all_done) {
-            co_await async2::suspend([](core_handle handle) { async2::schedule(handle); });
+            co_await async::suspend([](core_handle handle) { async::schedule(handle); });
             all_done = (tasks.done() && ...);
         }
     }
@@ -210,7 +210,7 @@ template <typename... Tasks>
 auto run(Tasks&&... tasks) {
     auto core = gather(std::forward<Tasks>(tasks)...);
     schedule(core.handle());
-    async2::run();
+    async::run();
     assert(core.done() && "run: not done");
     return core.await_resume();
 }
@@ -227,7 +227,7 @@ public:
         if(!value.has_value()) {
             waiters.push_back(waiting);
         } else {
-            async2::schedule(waiting);
+            async::schedule(waiting);
         }
     }
 
@@ -240,7 +240,7 @@ public:
     void emplace(Args&&... args) {
         value.emplace(std::forward<Args>(args)...);
         for(auto waiter: waiters) {
-            async2::schedule(waiter);
+            async::schedule(waiter);
         }
     }
 
@@ -263,7 +263,7 @@ public:
 
     Task<void> operator co_await() {
         while(!ready) {
-            co_await suspend([](core_handle handle) { async2::schedule(handle); });
+            co_await suspend([](core_handle handle) { async::schedule(handle); });
         }
     }
 
@@ -315,7 +315,7 @@ struct thread_pool : thread_pool_base<Ret> {
         /// This callback is called in the event loop thread.
         auto after_work_cb = [](uv_work_t* work, int status) {
             auto& awaiter = *static_cast<thread_pool*>(work->data);
-            async2::schedule(awaiter.waiting);
+            async::schedule(awaiter.waiting);
         };
 
         uv_queue_work(uv_default_loop(), &work, work_cb, after_work_cb);
@@ -348,7 +348,7 @@ struct sleep {
 
         auto callback = [](uv_timer_t* timer) {
             auto& awaiter = *static_cast<sleep*>(timer->data);
-            async2::schedule(awaiter.waiting);
+            async::schedule(awaiter.waiting);
             uv_close(reinterpret_cast<uv_handle_t*>(timer), nullptr);
         };
 
@@ -398,7 +398,7 @@ struct stat {
             /// FIXME: handle error.
             awaiter.stats.mtime = transform(fs->statbuf.st_mtim);
 
-            async2::schedule(awaiter.waiting);
+            async::schedule(awaiter.waiting);
         };
 
         uv_fs_stat(uv_default_loop(), &fs, path.c_str(), callback);
@@ -416,4 +416,4 @@ inline auto stat(llvm::StringRef path) {
     return awaiter::stat{{}, path.str(), {}, {}};
 }
 
-}  // namespace clice::async2
+}  // namespace clice::async

@@ -2,7 +2,7 @@
 
 #include "Server/Async.h"
 
-namespace clice::async2 {
+namespace clice::async {
 
 namespace {
 
@@ -42,4 +42,4 @@ void run() {
     uv_run(loop, UV_RUN_DEFAULT);
 }
 
-}  // namespace clice::async2
+}  // namespace clice::async

@@ -27,11 +27,11 @@ public:
     FileController(CompilationDatabase& database, llvm::ArrayRef<Rule> rules) :
         database(database), rules(rules) {}
 
-    async2::Task<> open(llvm::StringRef path);
+    async::Task<> open(llvm::StringRef path);
 
-    async2::Task<> update(llvm::StringRef path);
+    async::Task<> update(llvm::StringRef path);
 
-    async2::Task<> close(llvm::StringRef path);
+    async::Task<> close(llvm::StringRef path);
 
 private:
     CompilationDatabase& database;

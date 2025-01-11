@@ -29,9 +29,9 @@ public:
 
     /// Complete the PCH or PCM information required for the compilation arguments.
     /// If no suitable PCH or PCM is available, a build will be triggered.
-    async2::Task<> prepare(CompilationParams& params);
+    async::Task<> prepare(CompilationParams& params);
 
-    async2::Task<> updatePCH();
+    async::Task<> updatePCH();
 
 private:
     const CacheOption& option;

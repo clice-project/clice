@@ -10,7 +10,7 @@ void CacheController::saveToDisk() {
 
 }
 
-async2::Task<> CacheController::prepare(CompilationParams& params) {
+async::Task<> CacheController::prepare(CompilationParams& params) {
     /// 首先要区分这个文件是不是 module file.
     bool isModule = false;
 
