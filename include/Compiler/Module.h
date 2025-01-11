@@ -35,8 +35,8 @@ inherited_struct(PCMInfo, ModuleInfo) {
     std::vector<std::string> deps;
 };
 
-/// If input file is module interface unit, return its module name. Otherwise,
-/// return an empty string.
+/// If input file is module interface unit, return its module name.
+/// Otherwise, return an empty string.
 std::string scanModuleName(CompilationParams& params);
 
 /// Run the preprocessor to scan the given module unit to
