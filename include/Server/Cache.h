@@ -2,7 +2,7 @@
 
 #include <deque>
 
-#include "Async2.h"
+#include "Async.h"
 #include "Compiler/Module.h"
 #include "Compiler/Preamble.h"
 #include "Server/Database.h"
@@ -32,8 +32,6 @@ public:
     async2::Task<> prepare(CompilationParams& params);
 
     async2::Task<> updatePCH();
-
-    
 
 private:
     const CacheOption& option;
