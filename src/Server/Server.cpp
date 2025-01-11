@@ -1,3 +1,4 @@
+#include "Server/Logger.h"
 #include "Server/Server.h"
 #include "llvm/Support/CommandLine.h"
 
@@ -18,7 +19,7 @@ int Server::run(int argc, const char** argv) {
     if(cl::config.empty()) {
         log::warn("No config file specified; using default configuration.");
     } else {
-        config::load(argv[0], cl::config.getValue());
+        /// config::load(argv[0], cl::config.getValue());
         log::info("Successfully loaded configuration file from {0}.", cl::config.getValue());
     }
 
@@ -28,7 +29,7 @@ int Server::run(int argc, const char** argv) {
         return 1;
     }
 
-    auto dispatch = [this](json::Value value) -> async::promise<void> {
+    auto dispatch = [this](json::Value value) -> async::Task<> {
         assert(value.kind() == json::Value::Object);
         auto object = value.getAsObject();
         assert(object && "value is not an object");
@@ -37,11 +38,11 @@ int Server::run(int argc, const char** argv) {
             auto params = object->get("params");
             if(auto id = object->get("id")) {
                 if(auto iter = requests.find(name); iter != requests.end()) {
-                    auto tracer = Tracer();
+                    /// auto tracer = Tracer();
                     log::info("Receive request: {0}", name);
                     co_await iter->second(std::move(*id),
                                           params ? std::move(*params) : json::Value(nullptr));
-                    log::info("Request {0} is done, elapsed {1}", name, tracer.duration());
+                    log::info("Request {0} is done, elapsed {1}", name, 0);
 
                 } else {
                     log::warn("Unknown request: {0}", name);
@@ -59,7 +60,7 @@ int Server::run(int argc, const char** argv) {
         co_return;
     };
 
-    async::start_server(dispatch, "127.0.0.1", 50051);
+    async::listen(dispatch, "127.0.0.1", 50051);
 
     return 0;
 }

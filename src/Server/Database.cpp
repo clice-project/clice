@@ -1,10 +1,12 @@
-#include "Compiler/Compiler.h"
 #include "Server/Logger.h"
-#include "Server/Synchronizer.h"
+#include "Server/Database.h"
+#include "Support/Support.h"
+#include "Compiler/Compiler.h"
 
 namespace clice {
 
-void Synchronizer::sync(llvm::StringRef filename) {
+/// Update the compile commands with the given file.
+void CompilationDatabase::update(llvm::StringRef filename) {
     /// Read the compile commands from the file.
     json::Value json = nullptr;
 
@@ -95,11 +97,13 @@ void Synchronizer::sync(llvm::StringRef filename) {
     log::info("Successfully built module map, total {0} modules", moduleMap.size());
 }
 
-void Synchronizer::sync(llvm::StringRef name, llvm::StringRef path) {
-    moduleMap[name] = path;
+/// Update the module map with the given file and module name.
+void CompilationDatabase::update(llvm::StringRef file, llvm::StringRef name) {
+    moduleMap[name] = file;
 }
 
-llvm::StringRef Synchronizer::lookup(llvm::StringRef file) const {
+/// Lookup the compile commands of the given file.
+llvm::StringRef CompilationDatabase::getCommand(llvm::StringRef file) {
     auto iter = commands.find(file);
     if(iter == commands.end()) {
         return "";
@@ -107,7 +111,8 @@ llvm::StringRef Synchronizer::lookup(llvm::StringRef file) const {
     return iter->second;
 }
 
-llvm::StringRef Synchronizer::map(llvm::StringRef name) const {
+/// Lookup the module interface unit file path of the given module name.
+llvm::StringRef CompilationDatabase::getModuleFile(llvm::StringRef name) {
     auto iter = moduleMap.find(name);
     if(iter == moduleMap.end()) {
         return "";
