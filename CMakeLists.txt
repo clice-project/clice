@@ -61,7 +61,7 @@ target_link_libraries(clice-core PUBLIC
 # clice executable
 add_subdirectory(${CMAKE_SOURCE_DIR}/deps/libuv)
 
-set(CLICE_SERVER_SOURCES ${CMAKE_SOURCE_DIR}/src/main.cpp)
+set(CLICE_SERVER_SOURCES ${CMAKE_SOURCE_DIR}/src/Driver/clice.cpp)
 file(GLOB_RECURSE SRC_FILES "${CMAKE_SOURCE_DIR}/src/Server/*.cpp")
 list(APPEND CLICE_SERVER_SOURCES ${SRC_FILES})
 add_executable(clice ${CLICE_SERVER_SOURCES})
