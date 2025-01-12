@@ -37,7 +37,7 @@ private:
 
 private:
     /// ============================================================================
-    ///                            Lifestyle Message
+    ///                            Lifecycle Message
     /// ============================================================================
 
     async::Task<> onInitialize(json::Value id, const proto::InitializeParams& params);

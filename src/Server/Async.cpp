@@ -17,6 +17,12 @@ Callback callback = {};
 
 uv_stream_t* writer = {};
 
+/// Whether the server is listening.
+bool listened = false;
+
+/// Whether the server is recording(for debugging).
+bool isRecording = false;
+
 }  // namespace
 
 /// This function is called by the event loop to resume the tasks.
@@ -29,7 +35,7 @@ static void event_loop(uv_idle_t* handle) {
     tasks.pop_front();
     task.resume();
 
-    if(tasks.empty()) {
+    if(tasks.empty() && !listened) {
         uv_stop(loop);
     }
 }
@@ -134,7 +140,8 @@ void listen(Callback callback) {
     uv_check_call(uv_read_start, (uv_stream_t*)&in, async::on_alloc, async::on_read);
 
     log::info("Server started in pipe mode");
-    uv_check_call(uv_run, async::loop, UV_RUN_DEFAULT);
+    async::listened = true;
+    run();
 }
 
 void listen(Callback callback, const char* ip, unsigned int port) {
@@ -164,7 +171,8 @@ void listen(Callback callback, const char* ip, unsigned int port) {
     uv_check_call(uv_listen, (uv_stream_t*)&server, 128, on_connection);
 
     log::info("Server started in socket mode at {0}:{1}", ip, port);
-    uv_check_call(uv_run, async::loop, UV_RUN_DEFAULT);
+    async::listened = true;
+    run();
 }
 
 /// Write a JSON value to the client.

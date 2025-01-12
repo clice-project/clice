@@ -4,6 +4,49 @@
 
 namespace clice {
 
+Server::Server() {
+    addMethod("initialize", &Server::onInitialize);
+    addMethod("initialized", &Server::onInitialized);
+    addMethod("shutdown", &Server::onShutdown);
+    addMethod("exit", &Server::onExit);
+
+    addMethod("textDocument/didOpen", &Server::onDidOpen);
+    addMethod("textDocument/didChange", &Server::onDidChange);
+    addMethod("textDocument/didSave", &Server::onDidSave);
+    addMethod("textDocument/didClose", &Server::onDidClose);
+
+    addMethod("textDocument/declaration", &Server::onGotoDeclaration);
+    addMethod("textDocument/definition", &Server::onGotoDefinition);
+    addMethod("textDocument/typeDefinition", &Server::onGotoTypeDefinition);
+    addMethod("textDocument/implementation", &Server::onGotoImplementation);
+    addMethod("textDocument/references", &Server::onFindReferences);
+    addMethod("textDocument/callHierarchy/prepare", &Server::onPrepareCallHierarchy);
+    addMethod("textDocument/callHierarchy/incomingCalls", &Server::onIncomingCall);
+    addMethod("textDocument/callHierarchy/outgoingCalls", &Server::onOutgoingCall);
+    addMethod("textDocument/typeHierarchy/prepare", &Server::onPrepareTypeHierarchy);
+    addMethod("textDocument/typeHierarchy/supertypes", &Server::onSupertypes);
+    addMethod("textDocument/typeHierarchy/subtypes", &Server::onSubtypes);
+    addMethod("textDocument/documentHighlight", &Server::onDocumentHighlight);
+    addMethod("textDocument/documentLink", &Server::onDocumentLink);
+    addMethod("textDocument/hover", &Server::onHover);
+    addMethod("textDocument/codeLens", &Server::onCodeLens);
+    addMethod("textDocument/foldingRange", &Server::onFoldingRange);
+    addMethod("textDocument/documentSymbol", &Server::onDocumentSymbol);
+    addMethod("textDocument/semanticTokens/full", &Server::onSemanticTokens);
+    addMethod("textDocument/inlayHint", &Server::onInlayHint);
+    addMethod("textDocument/completion", &Server::onCodeCompletion);
+    addMethod("textDocument/signatureHelp", &Server::onSignatureHelp);
+    addMethod("textDocument/codeAction", &Server::onCodeAction);
+    addMethod("textDocument/formatting", &Server::onFormatting);
+    addMethod("textDocument/rangeFormatting", &Server::onRangeFormatting);
+
+    addMethod("workspace/didChangeWatchedFiles", &Server::onDidChangeWatchedFiles);
+
+    addMethod("context/current", &Server::onContextCurrent);
+    addMethod("context/switch", &Server::onContextSwitch);
+    addMethod("context/all", &Server::onContextAll);
+}
+
 namespace cl {
 
 llvm::cl::opt<std::string> config("config",
@@ -63,49 +106,6 @@ int Server::run(int argc, const char** argv) {
     async::listen(dispatch, "127.0.0.1", 50051);
 
     return 0;
-}
-
-Server::Server() {
-    addMethod("initialize", &Server::onInitialize);
-    addMethod("initialized", &Server::onInitialized);
-    addMethod("shutdown", &Server::onShutdown);
-    addMethod("exit", &Server::onExit);
-
-    addMethod("textDocument/didOpen", &Server::onDidOpen);
-    addMethod("textDocument/didChange", &Server::onDidChange);
-    addMethod("textDocument/didSave", &Server::onDidSave);
-    addMethod("textDocument/didClose", &Server::onDidClose);
-
-    addMethod("textDocument/declaration", &Server::onGotoDeclaration);
-    addMethod("textDocument/definition", &Server::onGotoDefinition);
-    addMethod("textDocument/typeDefinition", &Server::onGotoTypeDefinition);
-    addMethod("textDocument/implementation", &Server::onGotoImplementation);
-    addMethod("textDocument/references", &Server::onFindReferences);
-    addMethod("textDocument/callHierarchy/prepare", &Server::onPrepareCallHierarchy);
-    addMethod("textDocument/callHierarchy/incomingCalls", &Server::onIncomingCall);
-    addMethod("textDocument/callHierarchy/outgoingCalls", &Server::onOutgoingCall);
-    addMethod("textDocument/typeHierarchy/prepare", &Server::onPrepareTypeHierarchy);
-    addMethod("textDocument/typeHierarchy/supertypes", &Server::onSupertypes);
-    addMethod("textDocument/typeHierarchy/subtypes", &Server::onSubtypes);
-    addMethod("textDocument/documentHighlight", &Server::onDocumentHighlight);
-    addMethod("textDocument/documentLink", &Server::onDocumentLink);
-    addMethod("textDocument/hover", &Server::onHover);
-    addMethod("textDocument/codeLens", &Server::onCodeLens);
-    addMethod("textDocument/foldingRange", &Server::onFoldingRange);
-    addMethod("textDocument/documentSymbol", &Server::onDocumentSymbol);
-    addMethod("textDocument/semanticTokens/full", &Server::onSemanticTokens);
-    addMethod("textDocument/inlayHint", &Server::onInlayHint);
-    addMethod("textDocument/completion", &Server::onCodeCompletion);
-    addMethod("textDocument/signatureHelp", &Server::onSignatureHelp);
-    addMethod("textDocument/codeAction", &Server::onCodeAction);
-    addMethod("textDocument/formatting", &Server::onFormatting);
-    addMethod("textDocument/rangeFormatting", &Server::onRangeFormatting);
-
-    addMethod("workspace/didChangeWatchedFiles", &Server::onDidChangeWatchedFiles);
-
-    addMethod("context/current", &Server::onContextCurrent);
-    addMethod("context/switch", &Server::onContextSwitch);
-    addMethod("context/all", &Server::onContextAll);
 }
 
 }  // namespace clice
