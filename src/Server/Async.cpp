@@ -20,9 +20,6 @@ uv_stream_t* writer = {};
 /// Whether the server is listening.
 bool listened = false;
 
-/// Whether the server is recording(for debugging).
-bool isRecording = false;
-
 }  // namespace
 
 /// This function is called by the event loop to resume the tasks.
@@ -141,7 +138,6 @@ void listen(Callback callback) {
 
     log::info("Server started in pipe mode");
     async::listened = true;
-    run();
 }
 
 void listen(Callback callback, const char* ip, unsigned int port) {
@@ -172,11 +168,57 @@ void listen(Callback callback, const char* ip, unsigned int port) {
 
     log::info("Server started in socket mode at {0}:{1}", ip, port);
     async::listened = true;
-    run();
+}
+
+void spawn(Callback callback, llvm::StringRef path, llvm::ArrayRef<std::string> args) {
+    static uv_pipe_t in;
+    static uv_pipe_t out;
+
+    async::callback = std::move(callback);
+    writer = reinterpret_cast<uv_stream_t*>(&out);
+
+    uv_check_call(uv_pipe_init, async::loop, &in, 0);
+    uv_check_call(uv_pipe_init, async::loop, &out, 0);
+
+    static uv_process_t process;
+    static uv_process_options_t options;
+
+    static uv_stdio_container_t stdio[3];
+    stdio[0].flags = (uv_stdio_flags)(UV_CREATE_PIPE | UV_READABLE_PIPE);
+    stdio[0].data.stream = (uv_stream_t*)&in;
+
+    stdio[1].flags = (uv_stdio_flags)(UV_CREATE_PIPE | UV_WRITABLE_PIPE);
+    stdio[1].data.stream = (uv_stream_t*)&out;
+
+    stdio[2].flags = UV_IGNORE;
+
+    options = {0};
+    options.stdio = stdio;
+    options.stdio_count = 3;
+
+    static llvm::SmallString<128> file = path;
+    options.file = file.c_str();
+
+    static llvm::SmallString<128> buffer;
+    static llvm::SmallVector<char*> argv;
+    std::size_t size = 0;
+    for(auto& arg: args) {
+        size += arg.size() + 1;
+    }
+    buffer.resize_for_overwrite(size);
+    for(auto& arg: args) {
+        buffer = arg;
+        argv.push_back(buffer.data());
+    }
+    options.args = argv.data();
+
+    uv_check_call(uv_spawn, async::loop, &process, &options);
+    log::info("Process spawned: {0}", path);
+    async::listened = true;
 }
 
 /// Write a JSON value to the client.
-static auto write(json::Value value) {
+Task<> write(json::Value value) {
     struct awaiter {
         uv_write_t write;
         uv_buf_t buf[2];
@@ -212,45 +254,7 @@ static auto write(json::Value value) {
     llvm::raw_svector_ostream(awaiter.header)
         << "Content-Length: " << awaiter.message.size() << "\r\n\r\n";
 
-    return awaiter;
-}
-
-Task<> request(llvm::StringRef method, json::Value params) {
-    static std::uint32_t id = 0;
-    co_await write(json::Object{
-        {"jsonrpc", "2.0"            },
-        {"id",      id += 1          },
-        {"method",  method           },
-        {"params",  std::move(params)},
-    });
-}
-
-Task<> notify(llvm::StringRef method, json::Value params) {
-    co_await write(json::Object{
-        {"jsonrpc", "2.0"            },
-        {"method",  method           },
-        {"params",  std::move(params)},
-    });
-}
-
-Task<> response(json::Value id, json::Value result) {
-    co_await write(json::Object{
-        {"jsonrpc", "2.0"            },
-        {"id",      id               },
-        {"result",  std::move(result)},
-    });
-}
-
-Task<> registerCapacity(llvm::StringRef id, llvm::StringRef method, json::Value registerOptions) {
-    co_await request("client/registerCapability",
-                     json::Object{
-                         {"registrations",
-                          json::Array{json::Object{
-                              {"id", id},
-                              {"method", method},
-                              {"registerOptions", std::move(registerOptions)},
-                          }}},
-    });
+    co_await awaiter;
 }
 
 }  // namespace clice::async

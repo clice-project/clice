@@ -1,6 +1,5 @@
 #include "Server/Logger.h"
 #include "Server/Server.h"
-#include "llvm/Support/CommandLine.h"
 
 namespace clice {
 
@@ -47,63 +46,76 @@ Server::Server() {
     addMethod("context/all", &Server::onContextAll);
 }
 
-namespace cl {
+async::Task<> Server::request(llvm::StringRef method, json::Value params) {
+    co_await async::write(json::Object{
+        {"jsonrpc", "2.0"            },
+        {"id",      id += 1          },
+        {"method",  method           },
+        {"params",  std::move(params)},
+    });
+}
 
-llvm::cl::opt<std::string> config("config",
-                                  llvm::cl::desc("The path of the config file"),
-                                  llvm::cl::value_desc("path"));
+async::Task<> Server::notify(llvm::StringRef method, json::Value params) {
+    co_await async::write(json::Object{
+        {"jsonrpc", "2.0"            },
+        {"method",  method           },
+        {"params",  std::move(params)},
+    });
+}
 
-}  // namespace cl
+async::Task<> Server::response(json::Value id, json::Value result) {
+    co_await async::write(json::Object{
+        {"jsonrpc", "2.0"            },
+        {"id",      id               },
+        {"result",  std::move(result)},
+    });
+}
 
-int Server::run(int argc, const char** argv) {
-    llvm::cl::SetVersionPrinter([](llvm::raw_ostream& os) { os << "clice version: 0.0.1\n"; });
-    llvm::cl::ParseCommandLineOptions(argc, argv, "clice language server");
+async::Task<> Server::registerCapacity(llvm::StringRef id,
+                                       llvm::StringRef method,
+                                       json::Value registerOptions) {
+    co_await request("client/registerCapability",
+                     json::Object{
+                         {"registrations",
+                          json::Array{json::Object{
+                              {"id", id},
+                              {"method", method},
+                              {"registerOptions", std::move(registerOptions)},
+                          }}},
+    });
+}
 
-    if(cl::config.empty()) {
-        log::warn("No config file specified; using default configuration.");
-    } else {
-        /// config::load(argv[0], cl::config.getValue());
-        log::info("Successfully loaded configuration file from {0}.", cl::config.getValue());
-    }
+async::Task<> Server::onReceive(json::Value value) {
+    assert(value.kind() == json::Value::Object);
+    auto object = value.getAsObject();
+    assert(object && "value is not an object");
+    if(auto method = object->get("method")) {
+        auto name = *method->getAsString();
+        auto params = object->get("params");
+        if(auto id = object->get("id")) {
+            if(auto iter = requests.find(name); iter != requests.end()) {
+                /// auto tracer = Tracer();
+                log::info("Receive request: {0}", name);
+                co_await iter->second(std::move(*id),
+                                      params ? std::move(*params) : json::Value(nullptr));
+                log::info("Request {0} is done, elapsed {1}", name, 0);
 
-    /// Get the resource directory.
-    if(auto error = fs::init_resource_dir(argv[0])) {
-        log::fatal("Failed to get resource directory, because {0}", error);
-        return 1;
-    }
-
-    auto dispatch = [this](json::Value value) -> async::Task<> {
-        assert(value.kind() == json::Value::Object);
-        auto object = value.getAsObject();
-        assert(object && "value is not an object");
-        if(auto method = object->get("method")) {
-            auto name = *method->getAsString();
-            auto params = object->get("params");
-            if(auto id = object->get("id")) {
-                if(auto iter = requests.find(name); iter != requests.end()) {
-                    /// auto tracer = Tracer();
-                    log::info("Receive request: {0}", name);
-                    co_await iter->second(std::move(*id),
-                                          params ? std::move(*params) : json::Value(nullptr));
-                    log::info("Request {0} is done, elapsed {1}", name, 0);
-
-                } else {
-                    log::warn("Unknown request: {0}", name);
-                }
             } else {
-                if(auto iter = notifications.find(name); iter != notifications.end()) {
-                    log::info("Notification: {0}", name);
-                    co_await iter->second(params ? std::move(*params) : json::Value(nullptr));
-                } else {
-                    log::warn("Unknown notification: {0}", name);
-                }
+                log::warn("Unknown request: {0}", name);
+            }
+        } else {
+            if(auto iter = notifications.find(name); iter != notifications.end()) {
+                log::info("Notification: {0}", name);
+                co_await iter->second(params ? std::move(*params) : json::Value(nullptr));
+            } else {
+                log::warn("Unknown notification: {0}", name);
             }
         }
+    }
+    co_return;
+}
 
-        co_return;
-    };
-
-    async::listen(dispatch, "127.0.0.1", 50051);
+int Server::run(int argc, const char** argv) {
 
     return 0;
 }

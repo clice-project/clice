@@ -438,16 +438,10 @@ void listen(Callback callback);
 /// Listen on the given ip and port, callback is called when there is a LSP message available.
 void listen(Callback callback, const char* ip, unsigned int port);
 
-/// Send a request to the client.
-Task<> request(llvm::StringRef method, json::Value params);
+/// Spawn a new process and listen on its stdin/stdout.
+void spawn(Callback callback, llvm::StringRef path, llvm::ArrayRef<std::string> args);
 
-/// Send a notification to the client.
-Task<> notify(llvm::StringRef method, json::Value params);
-
-/// Send a response to the client.
-Task<> response(json::Value id, json::Value result);
-
-/// Send an register capability to the client.
-Task<> registerCapacity(llvm::StringRef id, llvm::StringRef method, json::Value registerOptions);
+/// Write a JSON value to the client.
+Task<> write(json::Value value);
 
 }  // namespace clice::async
