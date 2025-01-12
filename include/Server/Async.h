@@ -11,7 +11,16 @@
 
 #include "Support/JSON.h"
 
+#ifdef _WIN32
+#define NOMINMAX
+#endif
+
 #include "uv.h"
+
+#ifdef _WIN32
+#undef THIS
+#endif
+
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/FunctionExtras.h"
@@ -404,7 +413,8 @@ struct stat {
         auto callback = [](uv_fs_t* fs) {
             auto transform = [](uv_timespec_t& mtime) {
                 using namespace std::chrono;
-                return system_clock::time_point(seconds(mtime.tv_sec) + nanoseconds(mtime.tv_nsec));
+                return system_clock::time_point(duration_cast<system_clock::duration>(
+                    seconds(mtime.tv_sec) + nanoseconds(mtime.tv_nsec)));
             };
 
             auto& awaiter = *static_cast<stat*>(fs->data);
