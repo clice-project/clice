@@ -62,8 +62,8 @@ target_link_libraries(clice-core PUBLIC
 # clice executable
 add_subdirectory(${CMAKE_SOURCE_DIR}/deps/libuv)
 
-add_executable(clice ${SRC_FILES} ${CMAKE_SOURCE_DIR}/src/Driver/clice.cpp)
-add_executable(tester ${SRC_FILES} ${CMAKE_SOURCE_DIR}/src/Driver/tester.cpp)
+add_executable(clice ${SRC_FILES} ${CMAKE_SOURCE_DIR}/src/Driver/clice.cc)
+add_executable(integration_tests ${SRC_FILES} ${CMAKE_SOURCE_DIR}/src/Driver/integration_tests.cc)
 
 include_directories(
     "${CMAKE_SOURCE_DIR}/deps/toml/include"
@@ -71,20 +71,20 @@ include_directories(
 )
 
 target_link_libraries(clice PRIVATE clice-core uv)
-target_link_libraries(tester PRIVATE clice-core uv)
+target_link_libraries(integration_tests PRIVATE clice-core uv)
 
 # clice tests
 if(CLICE_ENABLE_TEST)
     add_subdirectory("${CMAKE_SOURCE_DIR}/deps/googletest")
-    set(CLICE_TEST_SOURCES ${CMAKE_SOURCE_DIR}/unittests/main.cpp)
+    set(CLICE_TEST_SOURCES ${CMAKE_SOURCE_DIR}/src/Driver/unit_tests.cc)
     file(GLOB_RECURSE TEST_SRC_FILES "${CMAKE_SOURCE_DIR}/unittests/*/*.cpp")
     list(APPEND CLICE_TEST_SOURCES ${TEST_SRC_FILES})
 
-    add_executable(clice-tests ${CLICE_TEST_SOURCES} ${SRC_FILES})
-    target_include_directories(clice-tests PRIVATE
+    add_executable(unit_tests ${CLICE_TEST_SOURCES} ${SRC_FILES})
+    target_include_directories(unit_tests PRIVATE
         "${CMAKE_SOURCE_DIR}/deps/googletest/googletest/include"
     )
-    target_link_libraries(clice-tests PRIVATE 
+    target_link_libraries(unit_tests PRIVATE 
         clice-core
         gtest_main
         uv

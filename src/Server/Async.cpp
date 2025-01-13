@@ -242,6 +242,30 @@ void spawn(Callback callback, llvm::StringRef path, llvm::ArrayRef<std::string> 
 
     log::info("Process spawned: {0}", path);
     async::listened = true;
+
+    auto on_signal = +[](uv_signal_t* handle, int signum) {
+        fprintf(stderr, "Signal received: %d, killing child process\n", signum);
+        uv_process_kill(&process, SIGKILL);
+        uv_signal_stop(handle);
+        uv_close((uv_handle_t*)handle, NULL);
+        uv_stop(loop);
+    };
+
+    static uv_signal_t signal;
+    uv_signal_init(loop, &signal);
+    uv_signal_start(&signal, on_signal, SIGINT);
+
+    static uv_signal_t signal2;
+    uv_signal_init(loop, &signal2);
+    uv_signal_start(&signal2, on_signal, SIGTERM);
+
+    static uv_signal_t signal3;
+    uv_signal_init(loop, &signal3);
+    uv_signal_start(&signal3, on_signal, SIGQUIT);
+
+    static uv_signal_t signal4;
+    uv_signal_init(loop, &signal4);
+    uv_signal_start(&signal4, on_signal, SIGKILL);
 }
 
 /// Write a JSON value to the client.
