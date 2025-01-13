@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <tuple>
 #include <array>
 #include <string>
