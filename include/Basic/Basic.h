@@ -21,4 +21,8 @@ using array = std::vector<T>;
 
 using DocumentUri = std::string;
 
+using URI = std::string;
+
+struct None {};
+
 }  // namespace clice::proto

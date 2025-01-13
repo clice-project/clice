@@ -6,111 +6,12 @@ namespace clice::feature {
 
 namespace {
 
-struct SemanticToken {
-    std::uint32_t line;
-    std::uint32_t column;
-    std::uint32_t length;
-    proto::SemanticTokenType type;
-    std::uint32_t modifiers = 0;
-
-    SemanticToken& addModifier(proto::SemanticTokenModifier modifier) {
-        modifiers |= 1 << static_cast<std::uint32_t>(modifier);
-        return *this;
-    }
-};
-
 class HighlightBuilder : public SemanticVisitor<HighlightBuilder> {
 public:
     HighlightBuilder(ASTInfo& compiler) : SemanticVisitor<HighlightBuilder>(compiler, true) {}
 
-    void handleOccurrence(const clang::Decl* decl, clang::SourceRange range, RelationKind kind) {
-        proto::SemanticTokenType type = proto::SemanticTokenType::Invalid;
-        if(llvm::isa<clang::NamespaceDecl, clang::NamespaceAliasDecl>(decl)) {
-            type = proto::SemanticTokenType::Namespace;
-        } else if(llvm::isa<clang::TypedefNameDecl,
-                            clang::TemplateTypeParmDecl,
-                            clang::TemplateTemplateParmDecl>(decl)) {
-            type = proto::SemanticTokenType::Type;
-        } else if(llvm::isa<clang::EnumDecl>(decl)) {
-            type = proto::SemanticTokenType::Enum;
-        } else if(llvm::isa<clang::EnumConstantDecl>(decl)) {
-            type = proto::SemanticTokenType::EnumMember;
-        } else if(auto TD = llvm::dyn_cast<clang::TagDecl>(decl)) {
-            type = TD->isStruct()  ? proto::SemanticTokenType::Struct
-                   : TD->isUnion() ? proto::SemanticTokenType::Union
-                                   : proto::SemanticTokenType::Class;
-        } else if(llvm::isa<clang::FieldDecl>(decl)) {
-            type = proto::SemanticTokenType::Field;
-        } else if(llvm::isa<clang::ParmVarDecl>(decl)) {
-            type = proto::SemanticTokenType::Parameter;
-        } else if(llvm::isa<clang::VarDecl, clang::BindingDecl, clang::NonTypeTemplateParmDecl>(
-                      decl)) {
-            type = proto::SemanticTokenType::Variable;
-        } else if(llvm::isa<clang::CXXMethodDecl>(decl)) {
-            type = proto::SemanticTokenType::Method;
-        } else if(llvm::isa<clang::FunctionDecl>(decl)) {
-            type = proto::SemanticTokenType::Function;
-        } else if(llvm::isa<clang::LabelDecl>(decl)) {
-            type = proto::SemanticTokenType::Label;
-        } else if(llvm::isa<clang::ConceptDecl>(decl)) {
-            type = proto::SemanticTokenType::Concept;
-        }
-
-        if(type != proto::SemanticTokenType::Invalid) {
-            addToken(range.getBegin(), type);
-        }
-    }
-
-    void handleOccurrence(const clang::BuiltinType* type, clang::SourceRange range) {
-        // llvm::outs() << type->getName(clang::PrintingPolicy({})) << "\n";
-        // dump(range.getBegin());
-        // dump(range.getEnd());
-    }
-
-    void handleOccurrence(const clang::Attr* attr, clang::SourceRange range) {
-        auto tokens = tokBuf.expandedTokens(range);
-        if(auto first = tokens.begin()) {
-            auto second = first + 1;
-            switch(first->kind()) {
-                case clang::tok::identifier: {
-                    bool isFirstTokenNamespace = second && second->kind() == clang::tok::coloncolon;
-                    if(isFirstTokenNamespace) {
-                        addToken(first->location(), proto::SemanticTokenType::Namespace);
-                        first += 2;
-                    }
-
-                    assert(first && first->kind() == clang::tok::identifier &&
-                           "Expecting an identifier token");
-                    addToken(first->location(), proto::SemanticTokenType::Attribute);
-                    break;
-                }
-                /// [[using CC: opt(1), debug]]
-                case clang::tok::kw_using: {
-                    assert(second && second->kind() == clang::tok::identifier);
-                    addToken(second->location(), proto::SemanticTokenType::Namespace);
-                    break;
-                }
-                default: {
-                    std::terminate();
-                }
-            }
-        }
-    }
-
     void run() {
         TraverseAST(sema.getASTContext());
-    }
-
-    HighlightBuilder& addToken(clang::SourceLocation location, proto::SemanticTokenType type) {
-        auto loc = srcMgr.getPresumedLoc(location);
-        tokens.emplace_back(SemanticToken{
-            .line = loc.getLine() - 1,
-            .column = loc.getColumn() - 1,
-            .length = clang::Lexer::MeasureTokenLength(location, srcMgr, sema.getLangOpts()),
-            .type = type,
-            .modifiers = 0,
-        });
-        return *this;
     }
 
     proto::SemanticTokens build() {
@@ -118,7 +19,7 @@ public:
         auto mainFileID = srcMgr.getMainFileID();
         auto spelledTokens = tokBuf.spelledTokens(mainFileID);
         for(auto& token: spelledTokens) {
-            proto::SemanticTokenType type = proto::SemanticTokenType::Invalid;
+            SymbolKind type = SymbolKind::Invalid;
             // llvm::outs() << clang::tok::getTokenName(token.kind()) << " "
             //              << pp.getIdentifierInfo(token.text(srcMgr))->isKeyword(pp.getLangOpts())
             //              << "\n";
@@ -126,7 +27,7 @@ public:
             auto kind = token.kind();
             switch(kind) {
                 case clang::tok::numeric_constant: {
-                    type = proto::SemanticTokenType::Number;
+                    type = SymbolKind::Number;
                     break;
                 }
 
@@ -135,7 +36,7 @@ public:
                 case clang::tok::utf8_char_constant:
                 case clang::tok::utf16_char_constant:
                 case clang::tok::utf32_char_constant: {
-                    type = proto::SemanticTokenType::Character;
+                    type = SymbolKind::Character;
                     break;
                 }
 
@@ -144,7 +45,7 @@ public:
                 case clang::tok::utf8_string_literal:
                 case clang::tok::utf16_string_literal:
                 case clang::tok::utf32_string_literal: {
-                    type = proto::SemanticTokenType::String;
+                    type = SymbolKind::String;
                     break;
                 }
 
@@ -163,21 +64,19 @@ public:
                     /// highlight them as keywords. So check whether their text is same as the
                     /// operator spelling. If not, it indicates that they are keywords.
                     if(token.text(srcMgr) != clang::tok::getPunctuatorSpelling(kind)) {
-                        type = proto::SemanticTokenType::Operator;
+                        type = SymbolKind::Operator;
                     }
                 }
 
                 default: {
                     if(pp.getIdentifierInfo(token.text(srcMgr))->isKeyword(pp.getLangOpts())) {
-                        type = proto::SemanticTokenType::Keyword;
+                        type = SymbolKind::Keyword;
                         break;
                     }
                 }
             }
 
-            if(type != proto::SemanticTokenType::Invalid) {
-                addToken(token.location(), type);
-            }
+            if(type != SymbolKind::Invalid) {}
         }
 
         /// Collect semantic tokens from AST.
@@ -196,8 +95,8 @@ public:
             result.data.push_back(token.line == lastLine ? token.column - lastColumn
                                                          : token.column);
             result.data.push_back(token.length);
-            result.data.push_back(llvm::to_underlying(token.type));
-            result.data.push_back(token.modifiers);
+            // result.data.push_back(llvm::to_underlying(token.column));
+            // result.data.push_back(0);
 
             lastLine = token.line;
             lastColumn = token.column;
@@ -211,9 +110,17 @@ public:
 
 }  // namespace
 
-proto::SemanticTokens semanticTokens(ASTInfo& info, llvm::StringRef filename) {
-    HighlightBuilder builder(info);
-    return builder.build();
+index::SharedIndex<std::vector<SemanticToken>> semanticTokens(ASTInfo& info) {
+    return index::SharedIndex<std::vector<SemanticToken>>{};
+}
+
+proto::SemanticTokens toSemanticTokens(llvm::ArrayRef<SemanticToken> tokens,
+                                       const config::SemanticTokensOption& option) {
+    return {};
+}
+
+proto::SemanticTokens semanticTokens(ASTInfo& info, const config::SemanticTokensOption& option) {
+    return {};
 }
 
 }  // namespace clice::feature

@@ -1,6 +1,6 @@
 #include "Compiler/Semantic.h"
 
-#include "../Test.h"
+#include "Test/Test.h"
 
 namespace clice {
 
