@@ -1,16 +1,53 @@
-#include "Server/Async.h"
+#include <deque>
 
-#include "llvm/ADT/SmallString.h"
+#include "Server/Async.h"
+#include "Server/Logger.h"
 
 namespace clice::async {
 
-using Callback = llvm::unique_function<promise<void>(json::Value)>;
-uv_loop_t* loop = uv_default_loop();
-
 namespace {
 
+/// The default event loop.
+uv_loop_t* loop = uv_default_loop();
+
+/// The task queue waiting for resuming.
+std::deque<std::coroutine_handle<>> tasks;
+
 Callback callback = {};
+
 uv_stream_t* writer = {};
+
+}  // namespace
+
+/// This function is called by the event loop to resume the tasks.
+static void event_loop(uv_idle_t* handle) {
+    if(tasks.empty()) {
+        return;
+    }
+
+    auto task = tasks.front();
+    tasks.pop_front();
+    task.resume();
+
+    if(tasks.empty()) {
+        uv_stop(loop);
+    }
+}
+
+void schedule(std::coroutine_handle<> core) {
+    assert(core && !core.done() && "schedule: invalid coroutine handle");
+    tasks.emplace_back(core);
+}
+
+void run() {
+    uv_idle_t idle;
+    uv_idle_init(loop, &idle);
+    uv_idle_start(&idle, event_loop);
+
+    uv_run(loop, UV_RUN_DEFAULT);
+}
+
+namespace {
 
 void on_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
     /// This function is called synchronously before `on_read`. See the implementation of
@@ -61,7 +98,11 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
         buffer.append({buf->base, static_cast<std::size_t>(nread)});
         if(auto message = buffer.peek(); !message.empty()) {
             if(auto json = json::parse(message)) {
-                async::schedule(callback(std::move(*json)));
+                /// This is a top-level coroutine.
+                auto core = callback(std::move(*json));
+                /// It will be destroyed in final suspend point.
+                /// So we release it here.
+                async::schedule(core.release());
                 buffer.consume();
             } else {
                 log::fatal("An error occurred while parsing JSON: {0}", json.takeError());
@@ -75,42 +116,9 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     }
 }
 
-/// Write a JSON value to the client.
-void write(json::Value value) {
-    struct Buffer {
-        uv_write_t req;
-        llvm::SmallString<128> header;
-        llvm::SmallString<4096> message;
-    };
-
-    Buffer* buffer = new Buffer();
-    buffer->req.data = buffer;
-
-    llvm::raw_svector_ostream os(buffer->message);
-    os << value;
-
-    llvm::raw_svector_ostream sos(buffer->header);
-    sos << "Content-Length: " << buffer->message.size() << "\r\n\r\n";
-
-    uv_buf_t bufs[2] = {
-        uv_buf_init(buffer->header.data(), buffer->header.size()),
-        uv_buf_init(buffer->message.data(), buffer->message.size()),
-    };
-
-    auto on_write = [](uv_write_t* req, int status) {
-        if(status < 0) {
-            log::fatal("An error occurred while writing: {0}", uv_strerror(status));
-        }
-
-        delete static_cast<Buffer*>(req->data);
-    };
-
-    uv_check_call(uv_write, &buffer->req, writer, bufs, 2, on_write);
-}
-
 }  // namespace
 
-void start_server(Callback callback) {
+void listen(Callback callback) {
     static uv_pipe_t in;
     static uv_pipe_t out;
 
@@ -129,7 +137,7 @@ void start_server(Callback callback) {
     uv_check_call(uv_run, async::loop, UV_RUN_DEFAULT);
 }
 
-void start_server(Callback callback, const char* ip, unsigned int port) {
+void listen(Callback callback, const char* ip, unsigned int port) {
     static uv_tcp_t server;
     static uv_tcp_t client;
 
@@ -159,10 +167,49 @@ void start_server(Callback callback, const char* ip, unsigned int port) {
     uv_check_call(uv_run, async::loop, UV_RUN_DEFAULT);
 }
 
-/// Send a request to the client.
-void request(llvm::StringRef method, json::Value params) {
+/// Write a JSON value to the client.
+static auto write(json::Value value) {
+    struct awaiter {
+        uv_write_t write;
+        uv_buf_t buf[2];
+        llvm::SmallString<128> header;
+        llvm::SmallString<4096> message;
+        core_handle waiting;
+
+        bool await_ready() const noexcept {
+            return false;
+        }
+
+        void await_suspend(core_handle waiting) noexcept {
+            write.data = this;
+
+            this->waiting = waiting;
+            buf[0] = uv_buf_init(header.data(), header.size());
+            buf[1] = uv_buf_init(message.data(), message.size());
+
+            uv_check_call(uv_write, &write, writer, buf, 2, [](uv_write_t* req, int status) {
+                if(status < 0) {
+                    log::fatal("An error occurred while writing: {0}", uv_strerror(status));
+                }
+
+                auto& awaiter = uv_cast<struct awaiter>(req);
+                async::schedule(awaiter.waiting);
+            });
+        }
+
+        void await_resume() noexcept {}
+    } awaiter;
+
+    llvm::raw_svector_ostream(awaiter.message) << value;
+    llvm::raw_svector_ostream(awaiter.header)
+        << "Content-Length: " << awaiter.message.size() << "\r\n\r\n";
+
+    return awaiter;
+}
+
+Task<> request(llvm::StringRef method, json::Value params) {
     static std::uint32_t id = 0;
-    write(json::Object{
+    co_await write(json::Object{
         {"jsonrpc", "2.0"            },
         {"id",      id += 1          },
         {"method",  method           },
@@ -170,33 +217,31 @@ void request(llvm::StringRef method, json::Value params) {
     });
 }
 
-/// Send a notification to the client.
-void notify(llvm::StringRef method, json::Value params) {
-    write(json::Object{
+Task<> notify(llvm::StringRef method, json::Value params) {
+    co_await write(json::Object{
         {"jsonrpc", "2.0"            },
         {"method",  method           },
         {"params",  std::move(params)},
     });
 }
 
-void response(json::Value id, json::Value result) {
-    write(json::Object{
+Task<> response(json::Value id, json::Value result) {
+    co_await write(json::Object{
         {"jsonrpc", "2.0"            },
         {"id",      id               },
         {"result",  std::move(result)},
     });
 }
 
-/// Send an register capability to the client.
-void registerCapacity(llvm::StringRef id, llvm::StringRef method, json::Value registerOptions) {
-    request("client/registerCapability",
-            json::Object{
-                {"registrations",
-                 json::Array{json::Object{
-                     {"id", id},
-                     {"method", method},
-                     {"registerOptions", std::move(registerOptions)},
-                 }}},
+Task<> registerCapacity(llvm::StringRef id, llvm::StringRef method, json::Value registerOptions) {
+    co_await request("client/registerCapability",
+                     json::Object{
+                         {"registrations",
+                          json::Array{json::Object{
+                              {"id", id},
+                              {"method", method},
+                              {"registerOptions", std::move(registerOptions)},
+                          }}},
     });
 }
 

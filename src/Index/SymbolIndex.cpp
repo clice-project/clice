@@ -1,3 +1,5 @@
+#include <numeric>
+
 #include "Index.h"
 
 #include "Index/SymbolIndex.h"
