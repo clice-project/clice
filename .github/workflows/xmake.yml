@@ -22,7 +22,6 @@ jobs:
 
     concurrency:
       group: ${{ github.ref }}-${{ github.base_ref }}-${{ github.head_ref }}-${{ matrix.os }}
-      cancel-in-progress: true
 
     steps:
       - name: Setup llvm
@@ -53,7 +52,7 @@ jobs:
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:
-            xmake-version: latest
+            xmake-version: '2.9.7'
 
       - name: Checkout repository
         uses: actions/checkout@v4
