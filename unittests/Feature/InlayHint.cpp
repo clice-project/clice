@@ -9,18 +9,18 @@ namespace clice {
 namespace {
 
 void dbg(const std::vector<proto::InlayHint>& hints) {
-    // for(auto& hint: hints) {
-    //     llvm::outs() << std::format("kind:{}, position:{}, value_size:{},",
-    //                                 hint.kind.name(),
-    //                                 json::serialize(hint.position),
-    //                                 hint.lable.size());
-    //     for(auto& lable: hint.lable) {
-    //         llvm::outs() << std::format(" value:{}, link position:{}",
-    //                                     lable.value,
-    //                                     json::serialize(lable.Location))
-    //                      << '\n';
-    //     }
-    // }
+    for(auto& hint: hints) {
+        llvm::outs() << std::format("kind:{}, position:{}, value_size:{},",
+                                    hint.kind.name(),
+                                    json::serialize(hint.position),
+                                    hint.lable.size());
+        for(auto& lable: hint.lable) {
+            llvm::outs() << std::format(" value:{}, link position:{}",
+                                        lable.value,
+                                        json::serialize(lable.Location))
+                         << '\n';
+        }
+    }
 }
 
 const SourceConverter Converter{proto::PositionEncodingKind::UTF8};
@@ -33,6 +33,32 @@ const config::InlayHintOption LikeClangd{
     .implicitCast = false,
     .chainCall = false,
 };
+
+TEST(InlayHint, RequestRange) {
+    const char* main = R"cpp(
+auto x1 = 1;$(request_range_start)
+auto x2 = 1;
+auto x3 = 1;
+auto x4 = 1;$(request_range_end)
+)cpp";
+
+    Tester txs("main.cpp", main);
+    txs.run();
+    auto& info = txs.info;
+
+    proto::Range request{
+        .start = {1, 12}, // $(request_range_start)
+        .end = {4, 12}, // $(request_range_end)
+    };
+    auto res = feature::inlayHints({.range = request}, info, Converter, {.implicitCast = true});
+
+    // dbg(res);
+
+    // 3: x2, x3, x4 is included in the request range.
+    txs.equal(res.size(), 3)
+        //
+        ;
+}
 
 TEST(InlayHint, AutoDecl) {
     const char* main = R"cpp(
@@ -58,7 +84,7 @@ void t() {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 4)
         //
@@ -82,7 +108,7 @@ g();
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 2)
         //
@@ -104,7 +130,7 @@ f($(1)x, $(2)x);
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 2)
         //
@@ -129,7 +155,7 @@ void f() {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 3)
         //
@@ -154,7 +180,7 @@ int f() {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 2)
         //
@@ -185,7 +211,7 @@ void g() {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 3)
         //
@@ -207,7 +233,7 @@ int f() {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 2)
         //
@@ -237,7 +263,7 @@ void f() {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 6)
         //
@@ -256,7 +282,7 @@ TEST(InlayHint, InitializeList) {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 3 + (3 * 2 + 2))
         //
@@ -275,7 +301,7 @@ A a = {.x = 1, .y = 2};
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 0)
         //
@@ -305,7 +331,7 @@ void f() {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, LikeClangd);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 0)
         //
@@ -349,7 +375,7 @@ struct Out {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, option);
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 6)
         //
@@ -369,7 +395,7 @@ auto l = []$(1) {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, {.returnType = true, .blockEnd = true});
 
-    dbg(res);
+    // dbg(res);
 
     txs.equal(res.size(), 3)
         //
@@ -400,7 +426,7 @@ struct A {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, option);
 
-    dbg(res);
+    // dbg(res);
 
     /// TODO:
     /// if InlayHintOption::memberSizeAndOffset was implemented, the total hint count is 2 + 3.
@@ -419,7 +445,7 @@ TEST(InlayHint, ImplicitCast) {
     auto& info = txs.info;
     auto res = feature::inlayHints({}, info, Converter, {.implicitCast = true});
 
-    dbg(res);
+    // dbg(res);
 
     /// FIXME:
     /// Hint count should be 1.

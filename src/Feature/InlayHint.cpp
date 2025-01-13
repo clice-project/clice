@@ -1,4 +1,5 @@
 #include "Basic/SourceConverter.h"
+#include "Compiler/Compiler.h"
 #include "Feature/InlayHint.h"
 
 namespace clice {
@@ -16,6 +17,17 @@ proto::MarkupContent blank() {
     };
 }
 
+/// Like clang::SourceRange but represents as a pair of offset (offset of the begin of main file).
+struct OffsetRange {
+    size_t begin;
+    size_t end;
+
+    /// Check if the range is not a `point` and end is after begin.
+    bool isValid() {
+        return end > begin;
+    }
+};
+
 /// Compute inlay hints for a document in given range and config.
 struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
 
@@ -29,7 +41,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     const config::InlayHintOption config;
 
     /// The restrict range of request.
-    const clang::SourceRange limit;
+    const OffsetRange limit;
 
     /// The result of inlay hints.
     proto::InlayHintsResult result;
@@ -53,7 +65,9 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             return true;
 
         // not involved in restrict range
-        if(range.getEnd() < limit.getBegin() || range.getBegin() > limit.getEnd())
+        auto begin = src.getDecomposedLoc(range.getBegin()).second;
+        auto end = src.getDecomposedLoc(range.getEnd()).second;
+        if(end < limit.begin || begin > limit.end)
             return true;
 
         return false;
@@ -654,15 +668,19 @@ proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
                                    const config::InlayHintOption& config) {
     const clang::SourceManager& src = info.srcMgr();
 
-    /// FIXME:
-    /// Take 0-0 based Lsp Location from `param.range` and convert it to clang 1-1 based
-    /// source location.
-    clang::SourceRange fixedRange;  // = range...
+    llvm::StringRef codeText = src.getBufferData(src.getMainFileID());
+
+    // Take 0-0 based Lsp Location from `param.range` and convert it to offset pair.
+    OffsetRange requestRange{
+        .begin = converter.toOffset(codeText, param.range.start),
+        .end = converter.toOffset(codeText, param.range.end),
+    };
 
     // In default, use the whole main file as the restrict range.
-    if(fixedRange.isInvalid()) {
+    if(!requestRange.isValid()) {
         clang::FileID main = src.getMainFileID();
-        fixedRange = {src.getLocForStartOfFile(main), src.getLocForEndOfFile(main)};
+        requestRange.begin = src.getDecomposedSpellingLoc(src.getLocForStartOfFile(main)).second;
+        requestRange.end = src.getDecomposedSpellingLoc(src.getLocForEndOfFile(main)).second;
     }
 
     /// TODO:
@@ -671,10 +689,10 @@ proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
         .src = src,
         .cvtr = converter,
         .config = config,
-        .limit = fixedRange,
+        .limit = requestRange,
         .docuri = std::move(param.textDocument.uri),
         .policy = info.context().getPrintingPolicy(),
-        .code = src.getBufferData(src.getMainFileID()),
+        .code = codeText,
     };
 
     collector.TraverseTranslationUnitDecl(info.tu());

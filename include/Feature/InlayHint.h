@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Basic/Document.h"
-#include "Compiler/Compiler.h"
+#include "Support/JSON.h"
 
 namespace clice {
 
@@ -129,6 +129,7 @@ struct InlayHintOption {
 
 }  // namespace config
 
+class ASTInfo;
 class SourceConverter;
 
 namespace feature {
