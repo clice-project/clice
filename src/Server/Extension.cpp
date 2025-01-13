@@ -2,15 +2,15 @@
 
 namespace clice {
 
-async::promise<void> Server::onContextCurrent(const proto::TextDocumentIdentifier& params) {
+async::Task<> Server::onContextCurrent(const proto::TextDocumentIdentifier& params) {
     co_return;
 }
 
-async::promise<void> Server::onContextAll(const proto::TextDocumentIdentifier& params) {
+async::Task<> Server::onContextAll(const proto::TextDocumentIdentifier& params) {
     co_return;
 }
 
-async::promise<void> Server::onContextSwitch(const proto::TextDocumentIdentifier& params) {
+async::Task<> Server::onContextSwitch(const proto::TextDocumentIdentifier& params) {
     co_return;
 }
 
