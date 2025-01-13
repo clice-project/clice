@@ -1,4 +1,5 @@
 #include "Basic/Document.h"
+#include "Support/JSON.h"
 
 namespace clice {
 
