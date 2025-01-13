@@ -27,6 +27,7 @@ file(GLOB_RECURSE CLICE_CORE_SOURCES
     "${CMAKE_SOURCE_DIR}/src/Index/*.cpp" 
     "${CMAKE_SOURCE_DIR}/src/Feature/*.cpp" 
     "${CMAKE_SOURCE_DIR}/src/Support/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Server/*.cpp"
 )
 add_library(clice-core ${CLICE_LIB_TYPE} ${CLICE_CORE_SOURCES})
 
@@ -61,10 +62,8 @@ target_link_libraries(clice-core PUBLIC
 # clice executable
 add_subdirectory(${CMAKE_SOURCE_DIR}/deps/libuv)
 
-set(CLICE_SERVER_SOURCES ${CMAKE_SOURCE_DIR}/src/Driver/clice.cpp)
-file(GLOB_RECURSE SRC_FILES "${CMAKE_SOURCE_DIR}/src/Server/*.cpp")
-list(APPEND CLICE_SERVER_SOURCES ${SRC_FILES})
-add_executable(clice ${CLICE_SERVER_SOURCES})
+add_executable(clice ${SRC_FILES} ${CMAKE_SOURCE_DIR}/src/Driver/clice.cpp)
+add_executable(tester ${SRC_FILES} ${CMAKE_SOURCE_DIR}/src/Driver/tester.cpp)
 
 include_directories(
     "${CMAKE_SOURCE_DIR}/deps/toml/include"
@@ -72,7 +71,7 @@ include_directories(
 )
 
 target_link_libraries(clice PRIVATE clice-core uv)
-
+target_link_libraries(tester PRIVATE clice-core uv)
 
 # clice tests
 if(CLICE_ENABLE_TEST)

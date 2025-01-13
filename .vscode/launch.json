@@ -27,6 +27,17 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Integration Test",
+            "program": "${workspaceFolder}/build/bin/tester",
+            "args": [
+                "--execute=${workspaceFolder}/build/bin/clice",
+                "--source=${workspaceFolder}/tests",
+            ],
+            "preLaunchTask": "Build Dev"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Test",
             "program": "${workspaceFolder}/build/bin/clice-tests",
             "args": [

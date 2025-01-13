@@ -95,11 +95,6 @@ struct promise_type : promise_base<T> {
                     /// In the final suspend point, this coroutine is already done.
                     /// So try to resume the waiting coroutine if it exists.
                     async::schedule(waiting);
-                } else {
-                    /// If waiting is empty, this is a top-level coroutine.
-                    /// We decide to destroy it here. For non-top-level coroutines,
-                    /// they are destroyed in the destructor of Task.
-                    core.destroy();
                 }
             }
 

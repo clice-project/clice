@@ -10,9 +10,15 @@ llvm::cl::opt<std::string> config("config",
                                   llvm::cl::desc("The path of the config file"),
                                   llvm::cl::value_desc("path"));
 
+llvm::cl::opt<bool> pipe("pipe", llvm::cl::desc("Use pipe mode"));
+
 }  // namespace cl
 
 int main(int argc, const char** argv) {
+    for(int i = 0; i < argc; ++i) {
+        log::warn("argv[{0}] = {1}", i, argv[i]);
+    }
+
     llvm::cl::SetVersionPrinter([](llvm::raw_ostream& os) { os << "clice version: 0.0.1\n"; });
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice language server");
 
@@ -33,7 +39,13 @@ int main(int argc, const char** argv) {
     auto loop = [](json::Value value) -> async::Task<> {
         co_await server.onReceive(value);
     };
-    async::listen(loop, "127.0.0.1", 50051);
+
+    if(cl::pipe && cl::pipe.getValue()) {
+        async::listen(loop);
+    } else {
+        async::listen(loop, "127.0.0.1", 50051);
+    }
+
     async::run();
 }
 
