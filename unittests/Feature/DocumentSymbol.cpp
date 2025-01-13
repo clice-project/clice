@@ -2,7 +2,7 @@
 #include <Feature/DocumentSymbol.h>
 #include <Basic/SourceConverter.h>
 
-#include "../Test.h"
+#include "Test/Test.h"
 
 namespace clice {
 
