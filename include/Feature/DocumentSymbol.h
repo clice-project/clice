@@ -1,5 +1,4 @@
 #include "Basic/Document.h"
-#include "Compiler/Compiler.h"
 
 namespace clice {
 
@@ -98,6 +97,7 @@ using DocumentSymbolResult = std::vector<DocumentSymbol>;
 
 }  // namespace proto
 
+class ASTInfo;
 class SourceConverter;
 
 namespace feature {
