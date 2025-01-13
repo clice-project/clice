@@ -53,9 +53,7 @@ jobs:
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:
-            xmake-version: '2.9.7'
-            actions-cache-folder: '.xmake-cache'
-            actions-cache-key: ${{ matrix.os }}
+            xmake-version: latest
 
       - name: Checkout repository
         uses: actions/checkout@v4
