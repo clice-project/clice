@@ -4,6 +4,7 @@
 
 #include <Basic/Location.h>
 #include <clang/Basic/SourceLocation.h>
+#include <cstdint>
 
 namespace clice {
 
@@ -44,7 +45,7 @@ public:
 
     /// Convert a proto::Position to a file offset in the content with the specified
     /// encoding kind.
-    std::size_t toOffset(llvm::StringRef content, proto::Position position) const;
+    std::uint32_t toOffset(llvm::StringRef content, proto::Position position) const;
 
     /// Get the encoding kind of the content in LSP protocol.
     proto::PositionEncodingKind encodingKind() const {

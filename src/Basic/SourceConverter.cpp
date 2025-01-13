@@ -1,5 +1,6 @@
 #include "Basic/SourceConverter.h"
 #include "Basic/Location.h"
+#include <cstdint>
 
 namespace clice {
 
@@ -117,8 +118,8 @@ proto::Position SourceConverter::toPosition(clang::SourceLocation location,
     return toPosition(content, location, SM);
 }
 
-std::size_t SourceConverter::toOffset(llvm::StringRef content, proto::Position position) const {
-    std::size_t offset = 0;
+std::uint32_t SourceConverter::toOffset(llvm::StringRef content, proto::Position position) const {
+    std::uint32_t offset = 0;
     for(auto i = 0; i < position.line; i++) {
         auto pos = content.find('\n');
         assert(pos != llvm::StringRef::npos && "Line value is out of range");
