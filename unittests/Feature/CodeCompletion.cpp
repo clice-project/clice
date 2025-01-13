@@ -1,4 +1,4 @@
-#include "../Test.h"
+#include "Test/Test.h"
 #include "Feature/CodeCompletion.h"
 
 namespace clice {

@@ -1,4 +1,4 @@
-#include "../Test.h"
+#include "Test/Test.h"
 #include "Index/SymbolIndex.h"
 #include "Basic/SourceConverter.h"
 

@@ -47,6 +47,7 @@ struct TextDocumentPositionParams {
     Position position;
 };
 
+
 struct MarkupKind {
     std::string_view m_value;
 
@@ -62,6 +63,35 @@ struct MarkupContent {
 
     /// The content itself.
     string value;
+ };
+
+struct DidOpenTextDocumentParams {
+    /// The document that was opened.
+    TextDocumentItem textDocument;
+};
+
+struct DidChangeTextDocumentParams {
+    /// The document that did change. The version number points
+    /// to the version after all provided content changes have
+    /// been applied.
+    VersionedTextDocumentIdentifier textDocument;
+
+    /// The actual content changes.
+    std::vector<TextDocumentContentChangeEvent> contentChanges;
+};
+
+struct DidSaveTextDocumentParams {
+    /// The document that was saved.
+    TextDocumentIdentifier textDocument;
+
+    /// Optional the content when saved. Depends on the includeText value
+    /// when the save notifcation was requested.
+    string text;
+};
+
+struct DidCloseTextDocumentParams {
+    /// The document that was closed.
+    TextDocumentIdentifier textDocument;
 };
 
 }  // namespace clice::proto
