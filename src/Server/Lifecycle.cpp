@@ -4,7 +4,11 @@
 namespace clice {
 
 async::Task<> Server::onInitialize(json::Value id, const proto::InitializeParams& params) {
-    co_return;
+    proto::InitializeResult result = {};
+    result.serverInfo.name = "clice";
+    result.serverInfo.version = "0.0.1";
+
+    co_await response(std::move(id), json::serialize(result));
 }
 
 async::Task<> Server::onInitialized(const proto::InitializedParams& params) {

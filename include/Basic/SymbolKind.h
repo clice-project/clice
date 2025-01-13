@@ -56,5 +56,7 @@ struct SymbolKind : refl::Enum<SymbolKind, false, uint8_t> {
     static SymbolKind from(const clang::tok::TokenKind kind);
 };
 
+struct SymbolModifiers : refl::Enum<SymbolModifiers, true, uint32_t> {};
+
 }  // namespace clice
 

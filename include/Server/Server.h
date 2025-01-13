@@ -9,10 +9,6 @@ class Server {
 public:
     Server();
 
-    int run(int argc, const char** argv);
-
-    int run();
-
     async::Task<> onReceive(json::Value value);
 
     /// Send a request to the client.

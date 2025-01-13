@@ -46,6 +46,36 @@ Server::Server() {
     addMethod("context/all", &Server::onContextAll);
 }
 
+async::Task<> Server::onReceive(json::Value value) {
+    assert(value.kind() == json::Value::Object);
+    auto object = value.getAsObject();
+    assert(object && "value is not an object");
+    if(auto method = object->get("method")) {
+        auto name = *method->getAsString();
+        auto params = object->get("params");
+        if(auto id = object->get("id")) {
+            if(auto iter = requests.find(name); iter != requests.end()) {
+                /// auto tracer = Tracer();
+                log::info("Receive request: {0}", name);
+                co_await iter->second(std::move(*id),
+                                      params ? std::move(*params) : json::Value(nullptr));
+                log::info("Request {0} is done, elapsed {1}", name, 0);
+
+            } else {
+                log::warn("Unknown request: {0}", name);
+            }
+        } else {
+            if(auto iter = notifications.find(name); iter != notifications.end()) {
+                log::info("Notification: {0}", name);
+                co_await iter->second(params ? std::move(*params) : json::Value(nullptr));
+            } else {
+                log::warn("Unknown notification: {0}", name);
+            }
+        }
+    }
+    co_return;
+}
+
 async::Task<> Server::request(llvm::StringRef method, json::Value params) {
     co_await async::write(json::Object{
         {"jsonrpc", "2.0"            },
@@ -83,41 +113,6 @@ async::Task<> Server::registerCapacity(llvm::StringRef id,
                               {"registerOptions", std::move(registerOptions)},
                           }}},
     });
-}
-
-async::Task<> Server::onReceive(json::Value value) {
-    assert(value.kind() == json::Value::Object);
-    auto object = value.getAsObject();
-    assert(object && "value is not an object");
-    if(auto method = object->get("method")) {
-        auto name = *method->getAsString();
-        auto params = object->get("params");
-        if(auto id = object->get("id")) {
-            if(auto iter = requests.find(name); iter != requests.end()) {
-                /// auto tracer = Tracer();
-                log::info("Receive request: {0}", name);
-                co_await iter->second(std::move(*id),
-                                      params ? std::move(*params) : json::Value(nullptr));
-                log::info("Request {0} is done, elapsed {1}", name, 0);
-
-            } else {
-                log::warn("Unknown request: {0}", name);
-            }
-        } else {
-            if(auto iter = notifications.find(name); iter != notifications.end()) {
-                log::info("Notification: {0}", name);
-                co_await iter->second(params ? std::move(*params) : json::Value(nullptr));
-            } else {
-                log::warn("Unknown notification: {0}", name);
-            }
-        }
-    }
-    co_return;
-}
-
-int Server::run(int argc, const char** argv) {
-
-    return 0;
 }
 
 }  // namespace clice

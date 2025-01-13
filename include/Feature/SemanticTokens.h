@@ -1,46 +1,37 @@
 #pragma once
 
-#include <Basic/Document.h>
+#include "Basic/Document.h"
+#include "Basic/SymbolKind.h"
+#include "Index/FeatureIndex.h"
 
-namespace clice::proto {
+namespace clice {
 
-// clang-format off
-enum class SemanticTokenType : uint8_t {
-    #define SEMANTIC_TOKEN_TYPE(name, ...) name,
-    #include "SemanticTokens.def"
-    #undef SEMANTIC_TOKEN_TYPE
-    Invalid,
-    LAST_TYPE
-};
+class ASTInfo;
 
-enum class SemanticTokenModifier : uint8_t {
-    #define SEMANTIC_TOKEN_MODIFIER(name, ...) name,
-    #include "SemanticTokens.def"
-    #undef SEMANTIC_TOKEN_MODIFIER
-    LAST_MODIFIER
-};
+namespace config {
 
-struct SemanticTokensLegend {
-    std::array<std::string_view, static_cast<int>(SemanticTokenType::LAST_TYPE)> tokenTypes = {
-        #define SEMANTIC_TOKEN_TYPE(name, value) value,
-        #include "SemanticTokens.def"
-    };
+struct SemanticTokensOption {};
 
-    std::array<std::string_view, static_cast<int>(SemanticTokenModifier::LAST_MODIFIER)> tokenModifiers = {
-        #define SEMANTIC_TOKEN_MODIFIER(name, value) value,
-        #include "SemanticTokens.def"
-    };
-};  // clang-format on
+};  // namespace config
+
+namespace proto {
 
 /// Server Capability.
 struct SemanticTokensOptions {
     /// The legend used by the server.
-    SemanticTokensLegend legend = {};
+    struct SemanticTokensLegend {
+        /// The token types a server uses.
+        std::vector<std::string> tokenTypes;
 
-    /// The grammar of C++ is highly context-sensitive, so we only provide semantic tokens for
-    /// the whole document.
+        /// The token modifiers a server uses.
+        std::vector<std::string> tokenModifiers;
+    } legend;
+
+    /// Server supports providing semantic tokens for a specific range
+    /// of a document.
     bool range = false;
 
+    /// Server supports providing semantic tokens for a full document.
     bool full = true;
 };
 
@@ -54,18 +45,29 @@ struct SemanticTokens {
     std::vector<uinteger> data;
 };
 
-}  // namespace clice::proto
+}  // namespace proto
 
-namespace clice {
+namespace feature {
 
-class ASTInfo;
+struct SemanticToken {
+    uint32_t line;
+    uint32_t column;
+    uint32_t length;
+    SymbolKind kind;
+    SymbolModifiers modifiers;
+};
 
-}
+/// Generate semantic tokens for all files.
+index::SharedIndex<std::vector<SemanticToken>> semanticTokens(ASTInfo& info);
 
-namespace clice::feature {
+/// Translate semantic tokens to LSP format.
+proto::SemanticTokens toSemanticTokens(llvm::ArrayRef<SemanticToken> tokens,
+                                       const config::SemanticTokensOption& option);
 
-/// FIXME:
-proto::SemanticTokens semanticTokens(class ASTInfo& info, llvm::StringRef filename);
+/// Generate semantic tokens for main file and translate to LSP format.
+proto::SemanticTokens semanticTokens(ASTInfo& info, const config::SemanticTokensOption& option);
 
-}  // namespace clice::feature
+}  // namespace feature
+
+}  // namespace clice
 
