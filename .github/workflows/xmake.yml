@@ -22,6 +22,7 @@ jobs:
 
     concurrency:
       group: ${{ github.ref }}-${{ github.base_ref }}-${{ github.head_ref }}-${{ matrix.os }}
+      cancel-in-progress: false
 
     steps:
       - name: Setup llvm
@@ -31,7 +32,7 @@ jobs:
           buckets: main
           apps: llvm
 
-      - name: Setup llvm & libstdc++
+      - name: Setup llvm & libstdc++ & cmake & ninja
         if: matrix.os == 'ubuntu-24.04'
         run: |
           sudo apt update
@@ -48,6 +49,8 @@ jobs:
           sudo apt install -y llvm-18 llvm-18-tools clang-18 libclang-rt-18-dev lld-18
           sudo ln -s /usr/bin/llvm-ar-18 /usr/bin/llvm-ar
           sudo ln -s /usr/bin/llvm-ranlib-18 /usr/bin/llvm-ranlib
+
+          sudo apt install -y cmake ninja-build 
 
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
