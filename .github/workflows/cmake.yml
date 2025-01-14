@@ -72,5 +72,5 @@ jobs:
           cmake -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCLICE_ENABLE_TEST=ON -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DLLVM_INSTALL_PATH="./.llvm"
           cmake --build build-release
       
-      - name: Run tests
+      - name: Run tests 
         run: ./build-release/bin/unit_tests --test-dir="./tests" --resource-dir="./.llvm/lib/clang/20"
