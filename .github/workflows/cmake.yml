@@ -16,18 +16,11 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-24.04, windows-2022]
+        os: [ubuntu-24.04]
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Setup llvm & 7zip & ninja
-        if: matrix.os == 'windows-2022'
-        uses: MinoruSekine/setup-scoop@v4.0.1
-        with:
-          buckets: main
-          apps: llvm 7zip ninja
-
       - name: Setup llvm & libstdc++ & cmake & ninja
         if: matrix.os == 'ubuntu-24.04'
         run: |
@@ -49,17 +42,6 @@ jobs:
           sudo apt install -y cmake ninja-build
       
       - name: Setup llvm binary
-        if: matrix.os == 'windows-2022'
-        run: |
-          curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x64-windows-msvc-release.7z" -o llvm-binary.7z
-          7z x llvm-binary.7z -o".\.temp"
-          FOR /D %%i IN (".\.temp\*") DO (
-              MOVE "%%~i\*" ".\.llvm"
-          )
-          rmdir /S /Q ".\.temp"
-          del llvm-binary.7z
-
-      - name: Setup llvm binary
         if: matrix.os == 'ubuntu-24.04'
         run: |
           mkdir -p ./.llvm
@@ -74,5 +56,4 @@ jobs:
           cmake --build build
             
       - name: Run tests
-        if: matrix.os == 'ubuntu-24.04'
         run: ./build/bin/unit_tests --test-dir="./tests" --resource-dir="./.llvm/lib/clang/20"
