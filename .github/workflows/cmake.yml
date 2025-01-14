@@ -1,4 +1,4 @@
-name: xmake
+name: cmake
 
 on:
   push:
