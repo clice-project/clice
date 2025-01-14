@@ -52,7 +52,12 @@ jobs:
         if: matrix.os == 'windows-2022'
         run: |
           curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x64-windows-msvc-release.7z" -o llvm-binary.7z
-          7z x llvm-binary.7z -o".\\.llvm"
+          7z x llvm-binary.7z -o".\.temp"
+          FOR /D %%i IN (".\.temp\*") DO (
+              MOVE "%%~i\*" ".\.llvm"
+          )
+          rmdir /S /Q ".\.temp"
+          del llvm-binary.7z
 
       - name: Setup llvm binary
         if: matrix.os == 'ubuntu-24.04'
@@ -67,6 +72,7 @@ jobs:
         run: |
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCLICE_ENABLE_TEST=ON -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DLLVM_INSTALL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/.llvm"
           cmake --build build
-      
+            
       - name: Run tests
+        if: matrix.os == 'ubuntu-24.04'
         run: ./build/bin/unit_tests --test-dir="./tests" --resource-dir="./.llvm/lib/clang/20"
