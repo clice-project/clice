@@ -59,7 +59,13 @@ target("unit_tests")
     add_packages("gtest")
 
     add_tests("default")
-    set_runargs("--test-dir=" .. path.absolute("tests"))
+    
+    on_config(function (target)
+        target:set("runargs", 
+            "--test-dir=" .. path.absolute("tests"),
+            "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib", "clang", "20")
+        )
+    end)
 
 rule("clice_build_config")
     on_load(function (target)

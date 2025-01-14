@@ -33,6 +33,9 @@ llvm::StringRef resource_dir() {
 int main(int argc, char** argv) {
     using namespace clice;
 
+    testing::InitGoogleTest(&argc, argv);
+    llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
+
     if(!cl::resource_dir.empty()) {
         fs::resource_dir = cl::resource_dir.getValue();
     } else {
@@ -41,9 +44,6 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
-
-    testing::InitGoogleTest(&argc, argv);
-    llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
 
     return RUN_ALL_TESTS();
 }
