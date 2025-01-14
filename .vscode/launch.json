@@ -42,6 +42,7 @@
             "program": "${workspaceFolder}/build/bin/unit_tests",
             "args": [
                 "--test-dir=${workspaceFolder}/tests",
+                "--resource-dir=${workspaceFolder}/.llvm/lib/clang/20",
                 "--gtest_filter=${input:filter}"
             ],
             "preLaunchTask": "Build Dev Test"
