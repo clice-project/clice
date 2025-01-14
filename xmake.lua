@@ -4,7 +4,7 @@ set_project("clice")
 set_allowedplats("windows", "linux")
 set_allowedmodes("debug", "release")
 
-option("enable_test", {default = false})
+option("enable_test", {default = true})
 option("dev", {default = true})
 
 if has_config("dev") then
@@ -29,25 +29,34 @@ add_rules("clice_build_config")
 
 target("clice-core")
     set_kind("$(kind)")
-    add_files("src/**.cpp|main.cpp|Server/*.cpp")
+    add_files("src/**.cpp|Driver/*.cpp")
     set_pcxxheader("include/Compiler/Clang.h")
     add_includedirs("include", {public = true})
-    add_packages("llvm", {public = true})
+
+    add_packages("llvm", "libuv", {public = true})
 
 target("clice")
     set_kind("binary")
-    add_files("src/Server/*.cpp", "src/main.cpp")
+    add_files("src/Driver/clice.cc")
 
     add_deps("clice-core")
-    add_packages("libuv", "toml++")
 
-target("test")
+target("integration_tests")
     set_default(false)
     set_kind("binary")
-    add_files("src/Server/*.cpp", "unittests/**.cpp")
+    add_files("src/Driver/integration_tests.cc")
 
     add_deps("clice-core")
-    add_packages("gtest", "libuv", "toml++")
+
+    add_tests("integration_tests")
+
+target("unit_tests")
+    set_default(false)
+    set_kind("binary")
+    add_files("src/Driver/unit_tests.cc", "unittests/**.cpp")
+
+    add_deps("clice-core")
+    add_packages("gtest")
 
     add_tests("default")
     set_runargs("--test-dir=" .. path.absolute("tests"))
@@ -59,6 +68,11 @@ rule("clice_build_config")
         target:add("cxflags", "-fno-rtti", {tools = {"clang", "gcc"}})
         target:add("cxflags", "/GR-", {tools = {"clang_cl", "cl"}})
         target:set("exceptions", "no-cxx")
+        if target:is_plat("windows") then
+            target:add("ldflags", "-fuse-ld=lld-link")
+        elseif target:is_plat("linux") then
+            target:add("ldflags", "-fuse-ld=lld")
+        end
     end)
 
 package("llvm")
