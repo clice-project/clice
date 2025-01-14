@@ -20,10 +20,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    concurrency:
-      group: ${{ github.ref }}-${{ github.base_ref }}-${{ github.head_ref }}-${{ matrix.os }}
-      cancel-in-progress: false
-
     steps:
       - name: Setup llvm & 7zip & ninja
         if: matrix.os == 'windows-2022'
@@ -61,6 +57,7 @@ jobs:
       - name: Setup llvm binary
         if: matrix.os == 'ubuntu-24.04'
         run: |
+          mkdir -p ./.llvm
           curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x86_64-linux-gnu-release.tar.xz" | tar -xJ -C ./.llvm
 
       - name: Checkout repository

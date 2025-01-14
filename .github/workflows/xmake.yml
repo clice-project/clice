@@ -20,10 +20,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    concurrency:
-      group: ${{ github.ref }}-${{ github.base_ref }}-${{ github.head_ref }}-${{ matrix.os }}
-      cancel-in-progress: false
-
     steps:
       - name: Setup llvm
         if: matrix.os == 'windows-2022'
