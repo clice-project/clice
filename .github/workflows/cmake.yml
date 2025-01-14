@@ -52,7 +52,7 @@ jobs:
 
       - name: Build clice
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCLICE_ENABLE_TEST=ON -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DLLVM_INSTALL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/.llvm"
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCLICE_ENABLE_TEST=ON -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DLLVM_INSTALL_PATH="./.llvm"
           cmake --build build
             
       - name: Run tests
