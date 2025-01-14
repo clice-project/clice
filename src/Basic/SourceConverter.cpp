@@ -1,6 +1,6 @@
 #include "Basic/SourceConverter.h"
-#include "Basic/Location.h"
-#include <cstdint>
+
+#include "clang/Lex/Lexer.h"
 
 namespace clice {
 
@@ -158,6 +158,22 @@ std::uint32_t SourceConverter::toOffset(llvm::StringRef content, proto::Position
     }
 
     std::unreachable();
+}
+
+proto::Range SourceConverter::toRange(clang::SourceRange range,
+                                      const clang::SourceManager& SM) const {
+    /// FIXME:
+    /// The language option should be a member of SourceConverter and be initialized by the
+    /// server for whole project? Or store the language option in the ASTInfo?.
+
+    // https://zh.cppreference.com/w/cpp/keyword
+    clang::LangOptions cxx20Option;
+    cxx20Option.CPlusPlus20 = 1;
+    auto len = clang::Lexer::MeasureTokenLength(range.getEnd(), SM, cxx20Option);
+    return {
+        .start = toPosition(range.getBegin(), SM),
+        .end = toPosition(range.getEnd().getLocWithOffset(len), SM),
+    };
 }
 
 namespace {

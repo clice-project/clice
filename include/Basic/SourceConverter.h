@@ -1,10 +1,8 @@
 #pragma once
 
-#include "llvm/Support/Error.h"
-
 #include <Basic/Location.h>
-#include <clang/Basic/SourceLocation.h>
-#include <cstdint>
+
+#include "clang/Basic/SourceLocation.h"
 
 namespace clice {
 
@@ -39,9 +37,7 @@ public:
                                const clang::SourceManager& SM) const;
 
     /// Convert a clang::SourceRange to a proto::Range according to the specified encoding kind.
-    proto::Range toRange(clang::SourceRange range, const clang::SourceManager& SM) const {
-        return {toPosition(range.getBegin(), SM), toPosition(range.getEnd(), SM)};
-    }
+    proto::Range toRange(clang::SourceRange range, const clang::SourceManager& SM) const;
 
     /// Convert a proto::Position to a file offset in the content with the specified
     /// encoding kind.
@@ -55,7 +51,7 @@ public:
     /// Convert a real path of a file to URI. Crash if failed.
     static proto::DocumentUri toURI(llvm::StringRef fspath);
 
-    /// Convert a file URI to real path with `clice::fs::real_path`. Crash if failed. 
+    /// Convert a file URI to real path with `clice::fs::real_path`. Crash if failed.
     static std::string toPath(llvm::StringRef uri);
 
 private:
