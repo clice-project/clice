@@ -1,106 +1,122 @@
-
+#include <Compiler/Selection.h>
 
 #include <stack>
-
-#include <Compiler/Selection.h>
 
 namespace clice {
 
 namespace {
 
-class SelectionBuilder {
-public:
+struct SelectionBuilder {
+    using Token = clang::syntax::Token;
+    using OffsetPair = std::pair<std::uint32_t, std::uint32_t>;
+
     SelectionBuilder(std::uint32_t begin, std::uint32_t end, clang::ASTContext& context,
                      clang::syntax::TokenBuffer& buffer) : context(context), buffer(buffer) {
+        assert(end >= begin && "End offset should be greater than or equal to begin offset.");
+
         // The location in clang AST is token-based, of course. Because the parser
         // processes tokens from the lexer. So we need to find boundary tokens at first.
-        auto& sm = context.getSourceManager();  // FIXME: support other file.
-        auto tokens = buffer.spelledTokens(sm.getMainFileID());
+        // FIXME: support other file.
+        auto& src = context.getSourceManager();
+        auto tokens = buffer.spelledTokens(src.getMainFileID());
+        auto bound = selectionBound(tokens, {begin, end}, src);
 
-        left = std::to_address(
-            std::partition_point(tokens.begin(), tokens.end(), [&](const auto& token) {
-                // int       xxxx = 3;
-                //       ^^^^^^
-                // expect to find the first token whose end location is greater than or equal to
-                // `begin`.
-                return sm.getFileOffset(token.endLocation()) < begin;
-            }));
+        left = bound.first;
+        right = bound.second;
 
-        rigth = std::to_address(
-            std::partition_point(tokens.rbegin(), tokens.rend(), [&](const auto& token) {
-                // int xxxx        = 3;
-                //      ^^^^^^
-                // expect to find the first token whose start location is less than or equal to
-                // `end`.
-                return sm.getFileOffset(token.location()) > end;
-            }));
+        /// FIXME: remove the assert statement.
+        assert(isValidOffsetRange());
+    }
 
-        if(left == tokens.end() || rigth == tokens.end()) {
-            std::terminate();
-            return;
-        }
+    /// Construct a selection builder from two boundary tokens. the `left` and `right` should come
+    /// from `fixSelectionBound`.
+    /// The constructor is used for unittest.
+    SelectionBuilder(const Token* left, const Token* right, clang::ASTContext& context,
+                     clang::syntax::TokenBuffer& buffer) :
+        left(left), right(right), context(context), buffer(buffer) {
+
+        auto l = left->location();
+        auto r = right->endLocation();
+
+        /// FIXME: remove the assert statement.
+        assert(isValidOffsetRange());
+    }
+
+    static auto selectionBound(llvm::ArrayRef<Token> tokens, OffsetPair offsets,
+                                      const clang::SourceManager& src)
+        -> std::pair<const Token*, const Token*> {
+
+        auto [begin, end] = offsets;
+
+        // int       xxxx = 3;
+        //       ^^^^^^
+        // expect to find the first token whose end location is greater than or equal to `begin`.
+        auto left = std::partition_point(tokens.begin(), tokens.end(), [&](const auto& token) {
+            return src.getFileOffset(token.endLocation()) < begin;
+        });
+
+        // int xxxx        = 3;
+        //      ^^^^^^
+        // expect to find the last token whose start location is less than or equal to `end`.
+        auto right = std::partition_point(left, tokens.end(), [&](const auto& token) {
+            return src.getFileOffset(token.location()) <= end;
+        });
+
+        // right - 1: the right is the first token whose start location is greater than `end`.
+        return {left, right - 1};
+    }
+
+    bool isValidOffsetRange() const {
+        const auto tokens = buffer.spelledTokens(context.getSourceManager().getMainFileID());
+        return left != tokens.end() && right != tokens.end();
     }
 
     template <typename Node>
-    auto getSourceRange(const Node* node) -> clang::SourceRange {
-        if constexpr(std::is_base_of_v<Node, clang::Attr>) {
+    clang::SourceRange getSourceRange(const Node* node) {
+        if constexpr(std::is_base_of_v<Node, clang::Attr>)
             return node->getRange();
-        } else {
+        else
             return node->getSourceRange();
-        }
-    }
-
-    template <typename Node>
-    bool isSkippable(const Node* node) {
-        if constexpr(requires { node->isImplicit(); }) {
-            if(node->isImplicit()) {
-                return true;
-            }
-        }
-
-        auto range = getSourceRange(node);
-        if(range.isInvalid()) {
-            return true;
-        }
-
-        // range.dump(context.getSourceManager());
-        // dump(node);
-
-        return false;
     }
 
     template <typename Node, typename Callback>
     bool hook(const Node* node, const Callback& callback) {
-        if(isSkippable(node)) {
+        if constexpr(requires { node->isImplicit(); })
+            if(node->isImplicit())
+                return true;
+
+        clang::SourceRange range = getSourceRange(node);
+        if(range.isInvalid())
             return true;
-        }
 
-        storage.emplace_back(SelectionTree::Node{nullptr, clang::DynTypedNode::create(*node)});
-        auto range = getSourceRange(node);
-
-        llvm::outs() << "-----------------------------------------\n";
-        range.dump(context.getSourceManager());
-        clang::SourceRange(left->location(), rigth->location()).dump(context.getSourceManager());
-
-        // FIXME: currently we only consider fully nested case.
-        // consider supporting partially nested case.
-
-        // if the boundary tokens contain the source range of node, it means
-        // the node is selected. store the father node and skip its children.
-        if(left->location() <= range.getBegin() && rigth->location() >= range.getEnd()) {
-            if(!stack.empty()) {
-                llvm::outs() << "selected\n";
-                stack.top()->children.push_back(&storage.back());
-            }
+        // No overlap, the node is not selected.
+        if(range.getEnd() <= left->location() || range.getBegin() >= right->endLocation())
             return true;
-        }
 
-        if(range.getBegin() <= left->location() && range.getEnd() >= rigth->location()) {
-            // if the source range of node contains the boundary tokens, its
-            // children may be selected. so traverse them recursively.
-            llvm::outs() << "select\n";
+        // There is overlap between source range of node and selection, by default it is partial.
+        auto coverage = SelectionTree::CoverageKind::Partial;
+
+        // The source range of current node contains the boundary tokens. it' a full coverage.
+        if(range.getBegin() <= left->location() && range.getEnd() >= right->endLocation())
+            coverage = SelectionTree::CoverageKind::Full;
+
+        SelectionTree::Node selected{
+            .dynNode = clang::DynTypedNode::create(*node),
+            .kind = coverage,
+            .parent = stack.empty() ? nullptr : stack.top(),
+        };
+
+        // Store the selected node and link it to its father node.
+        storage.push_back(std::move(selected));
+        if(!stack.empty())
+            stack.top()->children.push_back(&storage.back());
+
+        // For a full coverage case, node's children may also full coverage the selection range. so
+        // traverse them recursively until the node cover the selection range partially.
+        if(coverage == SelectionTree::CoverageKind::Full) {
             stack.emplace(&storage.back());
             bool ret = callback();
+            stack.pop();
             return ret;
         }
 
@@ -131,22 +147,24 @@ public:
 
     SelectionTree build();
 
-private:
     /// the two boundary tokens.
     const clang::syntax::Token* left;
-    const clang::syntax::Token* rigth;
+    const clang::syntax::Token* right;
+
     clang::ASTContext& context;
     clang::syntax::TokenBuffer& buffer;
+
     /// father nodes stack.
     std::stack<Node*> stack;
     std::deque<Node> storage;
 };
 
-class SelectionCollector : public clang::RecursiveASTVisitor<SelectionCollector> {
-public:
-    SelectionCollector(SelectionBuilder& builder) : builder(builder) {}
-
+struct SelectionCollector : public clang::RecursiveASTVisitor<SelectionCollector> {
     using Base = clang::RecursiveASTVisitor<SelectionCollector>;
+
+    SelectionBuilder& builder;
+
+    SelectionCollector(SelectionBuilder& builder) : builder(builder) {}
 
     bool TraverseDecl(clang::Decl* decl) {
         /// `TranslationUnitDecl` has invalid location information.
@@ -215,14 +233,15 @@ public:
     bool TraverseConceptReference(clang::ConceptReference* concept_) {
         return true;
     }
-
-private:
-    SelectionBuilder& builder;
 };
 
 SelectionTree SelectionBuilder::build() {
     SelectionCollector collector(*this);
-    collector.TraverseAST(context);
+
+    if(isValidOffsetRange())
+        collector.TraverseAST(context);
+
+    storage.shrink_to_fit();
 
     SelectionTree tree;
     tree.storage = std::move(storage);
@@ -230,27 +249,25 @@ SelectionTree SelectionBuilder::build() {
     return tree;
 }
 
-void dump(const SelectionTree::Node* node, clang::ASTContext& context) {
+void dumpImpl(llvm::raw_ostream& os, const SelectionTree::Node* node, clang::ASTContext& context) {
     if(node) {
-        node->node.dump(llvm::outs(), context);
-        for(auto child: node->children) {
-            dump(child, context);
-        }
+        node->dynNode.dump(os, context);
+        for(auto child: node->children)
+            dumpImpl(os, child, context);
     }
 }
 
 }  // namespace
 
-// SelectionTree::SelectionTree(std::uint32_t begin,
-//                              std::uint32_t end,
-//                              clang::ASTContext& context,
-//                              clang::syntax::TokenBuffer& tokens) {
+SelectionTree::SelectionTree(std::uint32_t begin, std::uint32_t end, clang::ASTContext& context,
+                             clang::syntax::TokenBuffer& tokens) {
+    SelectionBuilder builder(begin, end, context, tokens);
+    *this = builder.build();
+}
 
-//     SelectionBuilder builder(begin, end, context, tokens);
-//     auto tree = builder.build();
-//     root = tree.root;
-//     llvm::outs() << "----------------------------------------\n";
-//     dump(root, context);
-// }
+void SelectionTree::dump(llvm::raw_ostream& os, clang::ASTContext& context) const {
+    if(hasValue())
+        dumpImpl(os, root, context);
+}
 
 }  // namespace clice
