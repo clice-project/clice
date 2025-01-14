@@ -66,13 +66,16 @@ TEST(SourceConverter, UriAndFsPath) {
     using SC = SourceConverter;
 
     // It must be a existed file.
-#ifdef unix
+#if defined(__unix__)
     const char* fspath[] = {"/dev/null"};
     const char* uri[] = {"file:///dev/null"};
+#elif defined(_WIN32)
+    const char* fspath[] = {"C:\\Windows\\System32\\notepad.exe"};
+    const char* uri[] = {"file:///C:/Windows/System32/notepad.exe"};
 #else
-    const char* fspath[] = {};
-    const char* uri[] = {};
+#error "Unsupported platform"
 #endif
+
     EXPECT_EQ(std::size(fspath), std::size(uri));
 
     for(int i = 0; i < std::size(fspath); ++i) {
