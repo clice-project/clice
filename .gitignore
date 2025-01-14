@@ -38,5 +38,7 @@ temp*
 /build*
 notes
 temp/
+.llvm/
 .xmake/
+
 
