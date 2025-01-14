@@ -1,3 +1,4 @@
+#include "Basic/Location.h"
 #include "Basic/SourceConverter.h"
 
 #include "clang/Lex/Lexer.h"
@@ -206,6 +207,9 @@ proto::DocumentUri SourceConverter::toURI(llvm::StringRef fspath) {
         std::terminate();
 
     llvm::SmallString<128> path("file://");
+#if defined(_WIN32)
+    path.append("/");
+#endif
 
     for(auto c: fspath) {
         if(c == '\\') {
@@ -235,20 +239,29 @@ proto::DocumentUri SourceConverter::toURI(llvm::StringRef fspath) {
 std::string SourceConverter::toPath(llvm::StringRef uri) {
     llvm::StringRef cloned = uri;
 
-    auto pos = cloned.find(':');
-    if(pos == llvm::StringRef::npos)
-        std::terminate();
-
-    auto scheme = cloned.substr(0, pos);
-    cloned = cloned.substr(pos + 1);
-
-    if(cloned.consume_front("//"))
-        cloned = cloned.substr(cloned.find('/'));
+#if defined(_WIN32)
+    if (cloned.starts_with("file:///")) {
+      cloned = cloned.drop_front(8);
+    } else {
+      std::terminate();
+    }
+#elif defined(__unix__)
+    if (cloned.starts_with("file://")) {
+      cloned = cloned.drop_front(7);
+    } else {
+      std::terminate();
+    }
+#else
+#error "Unsupported platform"
+#endif
 
     auto decoded = decodePercent(cloned);
+
     llvm::SmallString<128> result;
-    if(auto err = fs::real_path(decoded, result))
+    if(auto err = fs::real_path(decoded, result)){
+        print("Failed to get real path: {}, Input is {}\n", err.message(), decoded);
         std::terminate();
+    }
 
     return result.str().str();
 }

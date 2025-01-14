@@ -2,7 +2,7 @@
 #include "Basic/SourceConverter.h"
 #include <gtest/gtest.h>
 
-#include "../Test.h"
+#include "Test/Test.h"
 
 namespace clice {
 

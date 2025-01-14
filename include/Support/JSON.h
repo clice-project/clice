@@ -286,8 +286,7 @@ struct Serde<E> {
     }
 
     static E deserialize(const json::Value& value) {
-        assert(value.kind() == json::Value::Number && "Expect a number");
-        return E(value.getAsNumber().value());
+        return E(json::deserialize<typename E::underlying_type>(value));
     }
 };
 
@@ -299,7 +298,7 @@ struct Serde<T> {
     template <typename... Serdes>
     static json::Value serialize(const T& t, Serdes&&... serdes) {
         json::Object object;
-        refl::foreach(t, [&](std::string_view name, auto&& member) {
+        refl::foreach(t, [&](std::string_view name, auto& member) {
             object.try_emplace(llvm::StringRef(name),
                                json::serialize(member, std::forward<Serdes>(serdes)...));
         });

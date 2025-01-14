@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <tuple>
 #include <array>
 #include <string>
@@ -64,6 +65,8 @@ class Enum {
 public:
     /// Tag to indicate this is a special enum.
     constexpr inline static bool is_special_enum_v = true;
+
+    using underlying_type = underlying;
 
     constexpr Enum() : m_Value(invalid()) {}
 
@@ -136,6 +139,8 @@ class Enum<Derived, true, underlying> {
 public:
     /// Tag to indicate this is a special enum.
     constexpr inline static bool is_special_enum_v = true;
+
+    using underlying_type = underlying;
 
     /// FIXME:
     Enum() = default;
@@ -244,6 +249,11 @@ template <typename Derived, typename underlying>
     requires (!integral<underlying>)
 class Enum<Derived, false, underlying> {
 public:
+    /// Tag to indicate this is a special enum.
+    constexpr inline static bool is_special_enum_v = true;
+
+    using underlying_type = underlying;
+
     constexpr Enum(underlying value) : m_Value(value) {
         static_assert(
             requires { Derived::All; },
