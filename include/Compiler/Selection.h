@@ -80,11 +80,7 @@ public:
         return root != nullptr;
     }
 
-    /// Get the root node of the selection tree. Return nullptr if there is no selection.
-    const clang::TranslationUnitDecl* getRootAsTUDecl() const {
-        return root ? root->dynNode.get<clang::TranslationUnitDecl>() : nullptr;
-    }
-
+    // Return nullptr if there is no selection.
     const Node* getRoot() const {
         return root;
     }
@@ -97,6 +93,18 @@ public:
         return storage;
     }
 
+    /// Get the farest node that fully covers the selection. Return nullptr if there is no
+    /// selection.
+    const Node* getFarestFullCoverageNode() const {
+        const Node* current = root;
+        while(current && current->kind == CoverageKind::Full) {
+            if(current->children.empty())
+                break;
+            current = current->children.front();
+        }
+        return current;
+    }
+
     explicit operator bool () const {
         return hasValue();
     }
@@ -104,8 +112,7 @@ public:
     void dump(llvm::raw_ostream& os, clang::ASTContext& context) const;
 
 private:
-    // The root node of selection tree. If there is any selection, the root is
-    // clang::TranslationUnitDecl* (also the first node in `storage`).
+    // The root node of selection tree.
     Node* root;
 
     // The AST nodes was stored in the order from root to leaf.

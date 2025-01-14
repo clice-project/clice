@@ -21,11 +21,7 @@ struct SelectionBuilder {
         auto tokens = buffer.spelledTokens(src.getMainFileID());
         auto bound = selectionBound(tokens, {begin, end}, src);
 
-        left = bound.first;
-        right = bound.second;
-
-        /// FIXME: remove the assert statement.
-        assert(isValidOffsetRange());
+        left = bound.first, right = bound.second;
     }
 
     /// Construct a selection builder from two boundary tokens. the `left` and `right` should come
@@ -33,33 +29,28 @@ struct SelectionBuilder {
     /// The constructor is used for unittest.
     SelectionBuilder(const Token* left, const Token* right, clang::ASTContext& context,
                      clang::syntax::TokenBuffer& buffer) :
-        left(left), right(right), context(context), buffer(buffer) {
+        left(left), right(right), context(context), buffer(buffer) {}
 
-        auto l = left->location();
-        auto r = right->endLocation();
-
-        /// FIXME: remove the assert statement.
-        assert(isValidOffsetRange());
-    }
-
-    static auto selectionBound(llvm::ArrayRef<Token> tokens, OffsetPair offsets,
-                                      const clang::SourceManager& src)
-        -> std::pair<const Token*, const Token*> {
-
+    /// Compute 2 boundary tokens by given pair of offset as the selection range, the `end` of
+    /// pair should be greater than `begin`.
+    static auto
+        selectionBound(llvm::ArrayRef<Token> tokens, OffsetPair offsets,
+                       const clang::SourceManager& src) -> std::pair<const Token*, const Token*> {
         auto [begin, end] = offsets;
+        assert(end >= begin && "Can not build a selection range for a invalid OffsetPair");
 
         // int       xxxx = 3;
         //       ^^^^^^
-        // expect to find the first token whose end location is greater than or equal to `begin`.
+        // expect to find the first token whose end location is greater than `begin`.
         auto left = std::partition_point(tokens.begin(), tokens.end(), [&](const auto& token) {
-            return src.getFileOffset(token.endLocation()) < begin;
+            return src.getFileOffset(token.endLocation()) <= begin;
         });
 
         // int xxxx        = 3;
         //      ^^^^^^
-        // expect to find the last token whose start location is less than or equal to `end`.
+        // expect to find the last token whose start location is less than to `end`.
         auto right = std::partition_point(left, tokens.end(), [&](const auto& token) {
-            return src.getFileOffset(token.location()) <= end;
+            return src.getFileOffset(token.location()) < end;
         });
 
         // right - 1: the right is the first token whose start location is greater than `end`.
@@ -90,14 +81,14 @@ struct SelectionBuilder {
             return true;
 
         // No overlap, the node is not selected.
-        if(range.getEnd() <= left->location() || range.getBegin() >= right->endLocation())
+        if(range.getEnd() < left->location() || range.getBegin() > right->endLocation())
             return true;
 
         // There is overlap between source range of node and selection, by default it is partial.
         auto coverage = SelectionTree::CoverageKind::Partial;
 
         // The source range of current node contains the boundary tokens. it' a full coverage.
-        if(range.getBegin() <= left->location() && range.getEnd() >= right->endLocation())
+        if(range.getBegin() <= left->location() && range.getEnd() >= right->location())
             coverage = SelectionTree::CoverageKind::Full;
 
         SelectionTree::Node selected{
@@ -111,6 +102,8 @@ struct SelectionBuilder {
         if(!stack.empty())
             stack.top()->children.push_back(&storage.back());
 
+        SelectionTree::Node& current = storage.back();
+
         // For a full coverage case, node's children may also full coverage the selection range. so
         // traverse them recursively until the node cover the selection range partially.
         if(coverage == SelectionTree::CoverageKind::Full) {
@@ -118,6 +111,17 @@ struct SelectionBuilder {
             bool ret = callback();
             stack.pop();
             return ret;
+        }
+
+        /// For the given selection of a clang::TagDecl:
+        ///     class X {/* something */};
+        ///     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+        /// we correct the selection to full source range of class X without semi:
+        ///     class X {/* something */};
+        ///     ^^^^^^^^^^^^^^^^^^^^^^^^^
+        if constexpr(std::derived_from<clang::Decl, Node>) {
+            if(right->kind() == clang::tok::semi)
+                current.kind = SelectionTree::CoverageKind::Full;
         }
 
         return true;
@@ -223,13 +227,7 @@ struct SelectionCollector : public clang::RecursiveASTVisitor<SelectionCollector
         return builder.hook(init, [&] { return Base::TraverseConstructorInitializer(init); });
     }
 
-    // bool TraverseDeclarationNameInfo(clang::DeclarationNameInfo info) {
-    //     return builder.hook(&info, [&] {
-    //         return Base::TraverseDeclarationNameInfo(info);
-    //     });
-    // }
-
-    // FIXME: figure out concept in clang AST.
+    /// FIXME: figure out concept in clang AST.
     bool TraverseConceptReference(clang::ConceptReference* concept_) {
         return true;
     }
