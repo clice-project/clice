@@ -79,8 +79,8 @@ TEST(SourceConverter, UriAndFsPath) {
   EXPECT_EQ(std::size(paths), std::size(uris));
 
   for (int i = 0; i < std::size(paths); ++i) {
-    llvm::outs() << ": " << SC::toURI(paths[i])<< "\n";
-    llvm::outs() << ": " << SC::toPath(uris[i])<< "\n";
+    // llvm::outs() << ": " << SC::toURI(paths[i])<< "\n";
+    // llvm::outs() << ": " << SC::toPath(uris[i])<< "\n";
     EXPECT_EQ(SC::toURI(paths[i]), uris[i]);
     EXPECT_EQ(paths[i], SC::toPath(uris[i]));
   }

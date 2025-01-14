@@ -83,6 +83,7 @@ if(CLICE_ENABLE_TEST)
     add_executable(unit_tests ${CLICE_TEST_SOURCES} ${SRC_FILES})
     target_include_directories(unit_tests PRIVATE
         "${CMAKE_SOURCE_DIR}/deps/googletest/googletest/include"
+        "${CMAKE_SOURCE_DIR}/"
     )
     target_link_libraries(unit_tests PRIVATE 
         clice-core

@@ -1,7 +1,7 @@
 #include "Basic/Location.h"
 #include "Basic/SourceConverter.h"
-#include "Support/Support.h"
-#include "clang/Basic/SourceManager.h"
+
+#include "clang/Lex/Lexer.h"
 
 namespace clice {
 
@@ -119,8 +119,8 @@ proto::Position SourceConverter::toPosition(clang::SourceLocation location,
     return toPosition(content, location, SM);
 }
 
-std::size_t SourceConverter::toOffset(llvm::StringRef content, proto::Position position) const {
-    std::size_t offset = 0;
+std::uint32_t SourceConverter::toOffset(llvm::StringRef content, proto::Position position) const {
+    std::uint32_t offset = 0;
     for(auto i = 0; i < position.line; i++) {
         auto pos = content.find('\n');
         assert(pos != llvm::StringRef::npos && "Line value is out of range");
@@ -159,6 +159,22 @@ std::size_t SourceConverter::toOffset(llvm::StringRef content, proto::Position p
     }
 
     std::unreachable();
+}
+
+proto::Range SourceConverter::toRange(clang::SourceRange range,
+                                      const clang::SourceManager& SM) const {
+    /// FIXME:
+    /// The language option should be a member of SourceConverter and be initialized by the
+    /// server for whole project? Or store the language option in the ASTInfo?.
+
+    // https://zh.cppreference.com/w/cpp/keyword
+    clang::LangOptions cxx20Option;
+    cxx20Option.CPlusPlus20 = 1;
+    auto len = clang::Lexer::MeasureTokenLength(range.getEnd(), SM, cxx20Option);
+    return {
+        .start = toPosition(range.getBegin(), SM),
+        .end = toPosition(range.getEnd().getLocWithOffset(len), SM),
+    };
 }
 
 namespace {
