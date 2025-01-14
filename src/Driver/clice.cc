@@ -12,6 +12,8 @@ llvm::cl::opt<std::string> config("config",
 
 llvm::cl::opt<bool> pipe("pipe", llvm::cl::desc("Use pipe mode"));
 
+llvm::cl::opt<std::string> resource_dir("resource-dir", llvm::cl::desc("Resource dir path"));
+
 }  // namespace cl
 
 int main(int argc, const char** argv) {
@@ -30,9 +32,13 @@ int main(int argc, const char** argv) {
     }
 
     /// Get the resource directory.
-    if(auto error = fs::init_resource_dir(argv[0])) {
-        log::fatal("Failed to get resource directory, because {0}", error);
-        return 1;
+    if(!cl::resource_dir.empty()) {
+        fs::resource_dir = cl::resource_dir.getValue();
+    } else {
+        if(auto error = fs::init_resource_dir(argv[0])) {
+            log::fatal("Failed to get resource directory, because {0}", error);
+            return 1;
+        }
     }
 
     static Server server;

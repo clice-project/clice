@@ -12,7 +12,7 @@ llvm::cl::opt<std::string> test_dir("test-dir",
                                     llvm::cl::value_desc("path"),
                                     llvm::cl::Required);
 
-llvm::SmallString<128> resource_dir;
+llvm::cl::opt<std::string> resource_dir("resource-dir", llvm::cl::desc("Resource dir path"));
 
 }  // namespace cl
 
@@ -33,13 +33,17 @@ llvm::StringRef resource_dir() {
 int main(int argc, char** argv) {
     using namespace clice;
 
-    if(auto error = fs::init_resource_dir(argv[0])) {
-        llvm::outs() << std::format("Failed to get resource directory, because {}\n", error);
-        return 1;
-    }
-
     testing::InitGoogleTest(&argc, argv);
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
+
+    if(!cl::resource_dir.empty()) {
+        fs::resource_dir = cl::resource_dir.getValue();
+    } else {
+        if(auto error = fs::init_resource_dir(argv[0])) {
+            llvm::outs() << std::format("Failed to get resource directory, because {}\n", error);
+            return 1;
+        }
+    }
 
     return RUN_ALL_TESTS();
 }

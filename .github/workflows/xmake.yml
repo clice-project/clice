@@ -1,0 +1,68 @@
+name: xmake
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+          - '.clang-format'
+          - '.clangd'
+          - '.gitignore'
+          - 'LICENSE'
+          - 'README.md'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+
+    runs-on: ${{ matrix.os }}
+
+    concurrency:
+      group: ${{ github.ref }}-${{ github.base_ref }}-${{ github.head_ref }}-${{ matrix.os }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Setup llvm
+        if: matrix.os == 'windows-2022'
+        uses: MinoruSekine/setup-scoop@v4.0.1
+        with:
+          buckets: main
+          apps: llvm
+
+      - name: Setup llvm & libstdc++ & cmake & ninja
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          sudo apt update
+          sudo apt install -y software-properties-common
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y gcc-14 g++-14 libstdc++-14-dev
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo update-alternatives --set gcc /usr/bin/gcc-14
+          sudo update-alternatives --set g++ /usr/bin/g++-14
+
+          wget -O - https://apt.llvm.org/llvm.sh | sudo bash
+          sudo apt install -y llvm-18 llvm-18-tools clang-18 libclang-rt-18-dev lld-18
+          sudo ln -s /usr/bin/llvm-ar-18 /usr/bin/llvm-ar
+          sudo ln -s /usr/bin/llvm-ranlib-18 /usr/bin/llvm-ranlib
+
+          sudo apt install -y cmake ninja-build 
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+            xmake-version: '2.9.7'
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build clice
+        run: |
+          xmake --yes --diagnosis
+      
+      - name: Run tests
+        run: xmake test --verbose
