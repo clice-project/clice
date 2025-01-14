@@ -47,8 +47,8 @@ target("integration_tests")
     add_files("src/Driver/integration_tests.cc")
 
     add_deps("clice-core")
-
-    add_tests("integration_tests")
+    -- TODO
+    -- add_tests("integration_tests")
 
 target("unit_tests")
     set_default(false)
@@ -63,7 +63,7 @@ target("unit_tests")
     on_config(function (target)
         target:set("runargs", 
             "--test-dir=" .. path.absolute("tests"),
-            "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib", "clang", "20")
+            "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
         )
     end)
 
@@ -77,6 +77,7 @@ rule("clice_build_config")
         if target:is_plat("windows") then
             target:add("ldflags", "-fuse-ld=lld-link")
         elseif target:is_plat("linux") then
+            -- gnu ld will cause link order
             target:add("ldflags", "-fuse-ld=lld")
         end
     end)

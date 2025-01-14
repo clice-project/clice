@@ -62,4 +62,7 @@ jobs:
 
       - name: Build clice
         run: |
-          xmake --yes --verbose
+          xmake --yes --diagnosis
+      
+      - name: Run tests
+        run: xmake test
