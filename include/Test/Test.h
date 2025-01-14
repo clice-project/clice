@@ -1,9 +1,9 @@
 #pragma once
 
-#include <gtest/gtest.h>
-#include <Basic/Location.h>
-#include <Compiler/Compiler.h>
-#include <Support/Support.h>
+#include "gtest/gtest.h"
+#include "Basic/Location.h"
+#include "Compiler/Compiler.h"
+#include "Support/Support.h"
 
 namespace clice {
 

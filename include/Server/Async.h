@@ -95,11 +95,6 @@ struct promise_type : promise_base<T> {
                     /// In the final suspend point, this coroutine is already done.
                     /// So try to resume the waiting coroutine if it exists.
                     async::schedule(waiting);
-                } else {
-                    /// If waiting is empty, this is a top-level coroutine.
-                    /// We decide to destroy it here. For non-top-level coroutines,
-                    /// they are destroyed in the destructor of Task.
-                    core.destroy();
                 }
             }
 
@@ -448,16 +443,10 @@ void listen(Callback callback);
 /// Listen on the given ip and port, callback is called when there is a LSP message available.
 void listen(Callback callback, const char* ip, unsigned int port);
 
-/// Send a request to the client.
-Task<> request(llvm::StringRef method, json::Value params);
+/// Spawn a new process and listen on its stdin/stdout.
+void spawn(Callback callback, llvm::StringRef path, llvm::ArrayRef<std::string> args);
 
-/// Send a notification to the client.
-Task<> notify(llvm::StringRef method, json::Value params);
-
-/// Send a response to the client.
-Task<> response(json::Value id, json::Value result);
-
-/// Send an register capability to the client.
-Task<> registerCapacity(llvm::StringRef id, llvm::StringRef method, json::Value registerOptions);
+/// Write a JSON value to the client.
+Task<> write(json::Value value);
 
 }  // namespace clice::async

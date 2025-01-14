@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <Feature/FoldingRange.h>
 
-#include "../Test.h"
+#include "Test/Test.h"
 
 namespace clice {
 

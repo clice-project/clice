@@ -9,7 +9,22 @@ class Server {
 public:
     Server();
 
-    int run(int argc, const char** argv);
+    async::Task<> onReceive(json::Value value);
+
+    /// Send a request to the client.
+    async::Task<> request(llvm::StringRef method, json::Value params);
+
+    /// Send a notification to the client.
+    async::Task<> notify(llvm::StringRef method, json::Value params);
+
+    /// Send a response to the client.
+    async::Task<> response(json::Value id, json::Value result);
+
+    /// Send an register capability to the client.
+    async::Task<> registerCapacity(llvm::StringRef id,
+                                   llvm::StringRef method,
+                                   json::Value registerOptions);
+    std::uint32_t id = 0;
 
 private:
     using onRequest = llvm::unique_function<async::Task<>(json::Value, json::Value)>;
@@ -37,7 +52,7 @@ private:
 
 private:
     /// ============================================================================
-    ///                            Lifestyle Message
+    ///                            Lifecycle Message
     /// ============================================================================
 
     async::Task<> onInitialize(json::Value id, const proto::InitializeParams& params);

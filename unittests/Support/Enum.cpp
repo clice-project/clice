@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include "Support/Enum.h"
+#include "Support/JSON.h"
 
 namespace clice {
 
@@ -38,6 +39,16 @@ TEST(Support, NormalEnum) {
 
     constexpr Color red2 = Color(0);
     static_assert(red == red2);
+
+    EXPECT_EQ(json::serialize(red), json::Value(0));
+    EXPECT_EQ(json::serialize(green), json::Value(1));
+    EXPECT_EQ(json::serialize(blue), json::Value(2));
+    EXPECT_EQ(json::serialize(yellow), json::Value(3));
+
+    EXPECT_EQ(json::deserialize<Color>(json::Value(0)), red);
+    EXPECT_EQ(json::deserialize<Color>(json::Value(1)), green);
+    EXPECT_EQ(json::deserialize<Color>(json::Value(2)), blue);
+    EXPECT_EQ(json::deserialize<Color>(json::Value(3)), yellow);
 }
 
 struct Mask : refl::Enum<Mask, true, uint32_t> {
@@ -82,6 +93,51 @@ TEST(Support, MaskEnum) {
     EXPECT_TRUE(bool(mask6 & Mask::A));
     EXPECT_TRUE(bool(mask6 & Mask::B));
     EXPECT_TRUE(bool(mask6 & Mask::C));
+
+    EXPECT_EQ(json::serialize(mask), json::Value(1));
+    EXPECT_EQ(json::serialize(mask2), json::Value(2));
+    EXPECT_EQ(json::serialize(mask3), json::Value(4));
+    EXPECT_EQ(json::serialize(mask4), json::Value(8));
+
+    EXPECT_EQ(json::deserialize<Mask>(json::Value(1)), mask);
+    EXPECT_EQ(json::deserialize<Mask>(json::Value(2)), mask2);
+    EXPECT_EQ(json::deserialize<Mask>(json::Value(4)), mask3);
+    EXPECT_EQ(json::deserialize<Mask>(json::Value(8)), mask4);
+}
+
+struct StringEnum : refl::Enum<StringEnum, false, std::string_view> {
+    using Enum::Enum;
+
+    constexpr inline static std::string_view A = "A";
+    constexpr inline static std::string_view B = "B";
+    constexpr inline static std::string_view C = "C";
+    constexpr inline static std::string_view D = "D";
+
+    constexpr inline static std::array All = {A, B, C, D};
+};
+
+TEST(Support, StringEnum) {
+    constexpr StringEnum a = StringEnum::A;
+    constexpr StringEnum b = StringEnum::B;
+    constexpr StringEnum c = StringEnum::C;
+    constexpr StringEnum d = StringEnum::D;
+
+    static_assert(a.value() == "A");
+    static_assert(b.value() == "B");
+    static_assert(c.value() == "C");
+    static_assert(d.value() == "D");
+
+    static_assert(a != b && a != c && a != d);
+
+    EXPECT_EQ(json::serialize(a), json::Value("A"));
+    EXPECT_EQ(json::serialize(b), json::Value("B"));
+    EXPECT_EQ(json::serialize(c), json::Value("C"));
+    EXPECT_EQ(json::serialize(d), json::Value("D"));
+
+    EXPECT_EQ(json::deserialize<StringEnum>(json::Value("A")), a);
+    EXPECT_EQ(json::deserialize<StringEnum>(json::Value("B")), b);
+    EXPECT_EQ(json::deserialize<StringEnum>(json::Value("C")), c);
+    EXPECT_EQ(json::deserialize<StringEnum>(json::Value("D")), d);
 }
 
 }  // namespace

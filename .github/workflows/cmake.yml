@@ -79,4 +79,4 @@ jobs:
           bash ./scripts/build-dev-test.sh && cmake --build build
       
       - name: Run tests
-        run: ./build/bin/clice-tests --test-dir=./tests
+        run: ./build/bin/unit_tests --test-dir=./tests
