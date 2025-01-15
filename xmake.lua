@@ -85,11 +85,11 @@ package("llvm")
     if is_plat("windows") then
         add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
 
-        add_versions("20.0.0", "6dc78ca012fa5cc365394b72371b7aaff24a5b1a92fc204ea634f9d360bef694")
+        add_versions("20.0.0", "ba3fcd482340b8f892f02b9fc2a233a3ba0e0931fdf4e84a3e2a2ec47283d096")
     elseif is_plat("linux") then
         add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
 
-        add_versions("20.0.0", "4c8a52ee3ac8ae34e4fa4ae49a6488f6ff8454386ef0e5617dc90a09e8032f74")
+        add_versions("20.0.0", "76de8585494955090c79976d8e71bd719f68fc6dc8d06687284cff19266e4c11")
     end
 
     if is_plat("windows") then
