@@ -61,7 +61,7 @@ jobs:
         if: matrix.os == 'windows-2022'
         run: |
           curl -O -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x64-windows-msvc-release.7z"
-          7z x x64-windows-msvc-release.7z -o.llvm
+          7z x x64-windows-msvc-release.7z "-o.llvm"
 
       - name: Setup msvc sysroot for cmake
         if: matrix.os == 'windows-2022'
