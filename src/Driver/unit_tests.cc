@@ -33,7 +33,7 @@ llvm::StringRef resource_dir() {
 int main(int argc, char** argv) {
     using namespace clice;
 
-    testing::InitGoogleTest(&argc, argv);
+    ::testing::InitGoogleTest(&argc, argv);
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
 
     if(!cl::resource_dir.empty()) {

@@ -32,10 +32,8 @@ TEST(Directive, Include) {
                               llvm::StringRef path,
                               std::source_location current = std::source_location::current()) {
         auto& include = includes[index];
-        EXPECT_EQ(SourceConverter().toPosition(include.loc, info.srcMgr()),
-                  tester.pos(position),
-                  current);
-        EXPECT_EQ(include.path, path, current);
+        EXPECT_EQ(SourceConverter().toPosition(include.loc, info.srcMgr()), tester.pos(position));
+        EXPECT_EQ(include.path, path);
     };
 
     EXPECT_EQ(includes.size(), 3);
