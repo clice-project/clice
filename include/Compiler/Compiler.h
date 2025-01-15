@@ -6,8 +6,8 @@
 #include "Resolver.h"
 #include "Directive.h"
 
-#include "Support/Error.h"
 #include "Basic/Location.h"
+#include "Support/Error.h"
 
 #include "llvm/ADT/StringSet.h"
 

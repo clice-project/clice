@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Support/ADT.h"
+#include "ADT.h"
 #include "Struct.h"
 
 namespace clice::refl {

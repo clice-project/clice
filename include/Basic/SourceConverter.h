@@ -1,9 +1,7 @@
 #pragma once
 
-#include "llvm/Support/Error.h"
-
-#include <Basic/Location.h>
-#include <clang/Basic/SourceLocation.h>
+#include "Basic/Location.h"
+#include "clang/Basic/SourceLocation.h"
 
 namespace clice {
 
@@ -30,7 +28,8 @@ public:
     /// Convert a clang::SourceLocation to a proto::Position according to the
     /// specified encoding kind. Note that `SourceLocation` in clang is 1-based and
     /// is always encoded in UTF-8.
-    proto::Position toPosition(llvm::StringRef content, clang::SourceLocation location,
+    proto::Position toPosition(llvm::StringRef content,
+                               clang::SourceLocation location,
                                const clang::SourceManager& SM) const;
 
     /// Same as above, but content is retrieved from the `SourceManager`.
@@ -54,7 +53,7 @@ public:
     /// Convert a real path of a file to URI. Crash if failed.
     static proto::DocumentUri toURI(llvm::StringRef fspath);
 
-    /// Convert a file URI to real path with `clice::fs::real_path`. Crash if failed. 
+    /// Convert a file URI to real path with `clice::fs::real_path`. Crash if failed.
     static std::string toPath(llvm::StringRef uri);
 
 private:

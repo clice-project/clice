@@ -2,8 +2,8 @@
 
 #include <format>
 
-#include "Support/Error.h"
-#include "Support/JSON.h"
+#include "Error.h"
+#include "JSON.h"
 
 namespace clice {
 
