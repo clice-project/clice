@@ -20,8 +20,7 @@ if has_config("dev") then
     end
 end
 
-add_requires("toml++", "libuv")
-add_requires("llvm")
+add_requires("llvm", "libuv")
 
 add_rules("mode.release", "mode.debug")
 set_languages("c++23")
@@ -77,7 +76,7 @@ rule("clice_build_config")
         if target:is_plat("windows") then
             target:add("ldflags", "-fuse-ld=lld-link")
         elseif target:is_plat("linux") then
-            -- gnu ld will cause link order
+            -- gnu ld need to fix link order
             target:add("ldflags", "-fuse-ld=lld")
         end
     end)
