@@ -1,9 +1,7 @@
-#include <gtest/gtest.h>
-#include <Feature/FoldingRange.h>
+#include "Test/CTest.h"
+#include "Feature/FoldingRange.h"
 
-#include "Test/Test.h"
-
-namespace clice {
+namespace clice::testing {
 
 namespace {
 
@@ -722,4 +720,4 @@ $(2)
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing

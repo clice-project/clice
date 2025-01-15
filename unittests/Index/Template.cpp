@@ -1,6 +1,6 @@
-#include "IndexTester.h"
+#include "Test/IndexTester.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
 

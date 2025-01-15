@@ -1,10 +1,8 @@
-#include <gtest/gtest.h>
-#include <Feature/InlayHint.h>
-#include <Basic/SourceConverter.h>
+#include "Test/CTest.h"
+#include "Feature/InlayHint.h"
+#include "Basic/SourceConverter.h"
 
-#include "Test/Test.h"
-
-namespace clice {
+namespace clice::testing {
 
 namespace {
 
@@ -455,4 +453,4 @@ TEST(InlayHint, ImplicitCast) {
 }
 
 }  // namespace
-}  // namespace clice
+}  // namespace clice::testing

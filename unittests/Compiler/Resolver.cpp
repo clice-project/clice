@@ -1,8 +1,6 @@
-#include "Test/Test.h"
-#include <Compiler/Compiler.h>
-#include <Compiler/Resolver.h>
+#include "Test/CTest.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
 
@@ -470,5 +468,5 @@ struct test {
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing
 

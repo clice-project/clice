@@ -1,8 +1,7 @@
 #include "Test/Test.h"
-
 #include "Compiler/Command.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
 

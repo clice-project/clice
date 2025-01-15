@@ -1,7 +1,7 @@
 #include "Test/Test.h"
 #include "Server/Async.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {}  // namespace
 

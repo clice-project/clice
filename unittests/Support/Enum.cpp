@@ -1,8 +1,8 @@
-#include "gtest/gtest.h"
+#include "Test/Test.h"
 #include "Support/Enum.h"
 #include "Support/JSON.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
 

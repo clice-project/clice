@@ -1,10 +1,8 @@
-#include <gtest/gtest.h>
-#include <Feature/DocumentSymbol.h>
-#include <Basic/SourceConverter.h>
+#include "Test/CTest.h"
+#include "Basic/SourceConverter.h"
+#include "Feature/DocumentSymbol.h"
 
-#include "Test/Test.h"
-
-namespace clice {
+namespace clice::testing {
 
 namespace {
 
@@ -250,4 +248,4 @@ VAR(test)
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing

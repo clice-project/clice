@@ -1,16 +1,16 @@
-#include "gtest/gtest.h"
+#include "Test/Test.h"
 #include "Support/JSON.h"
 
-namespace clice {
-
 namespace {
+
 struct ValueRef {
     std::size_t index;
 };
+
 }  // namespace
 
 template <>
-struct json::Serde<ValueRef> {
+struct clice::json::Serde<ValueRef> {
     constexpr inline static bool stateful = true;
 
     std::vector<int>& encoder;
@@ -25,6 +25,8 @@ struct json::Serde<ValueRef> {
         return ValueRef{encoder.size() - 1};
     }
 };
+
+namespace clice::testing {
 
 namespace {
 
@@ -80,4 +82,4 @@ TEST(Support, StatefulSerde) {
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing

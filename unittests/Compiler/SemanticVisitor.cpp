@@ -1,10 +1,9 @@
+#include "Test/Test.h"
 #include "Compiler/Semantic.h"
 
-#include "Test/Test.h"
-
-namespace clice {
+namespace clice::testing {
 
 namespace {}  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing
 

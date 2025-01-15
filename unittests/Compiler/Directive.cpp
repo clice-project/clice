@@ -1,7 +1,6 @@
-#include "Test/Test.h"
-#include "Compiler/Compiler.h"
+#include "Test/CTest.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
 
@@ -127,4 +126,4 @@ int y = $(6)expr($(7)expr(1));
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing
