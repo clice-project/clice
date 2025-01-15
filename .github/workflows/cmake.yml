@@ -63,7 +63,7 @@ jobs:
           curl -O -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x64-windows-msvc-release.7z"
           7z x x64-windows-msvc-release.7z -o.llvm
 
-      - name: Setup msvc sysroot
+      - name: Setup msvc sysroot for cmake
         if: matrix.os == 'windows-2022'
         uses: ilammy/msvc-dev-cmd@v1
 
