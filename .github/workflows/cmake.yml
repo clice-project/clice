@@ -73,4 +73,5 @@ jobs:
           cmake --build --preset release
 
       - name: Run tests
-        run: "./build/bin/unit_tests" --test-dir="./tests" --resource-dir="./.llvm/lib/clang/20"
+        run: |
+          "./build/bin/unit_tests" --test-dir="./tests" --resource-dir="./.llvm/lib/clang/20"
