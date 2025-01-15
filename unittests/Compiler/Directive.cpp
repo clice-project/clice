@@ -1,4 +1,5 @@
 #include "Test/CTest.h"
+#include "Basic/SourceConverter.h"
 
 namespace clice::testing {
 
@@ -26,13 +27,21 @@ TEST(Directive, Include) {
     auto& info = tester.info;
     auto& includes = info.directive(info.srcMgr().getMainFileID()).includes;
 
-    tester.equal(includes.size(), 3)
-        .expect("0", includes[0].loc)
-        .equal("test.h", includes[0].path)
-        .expect("1", includes[1].loc)
-        .equal("test2.h", includes[1].path)
-        .expect("2", includes[2].loc)
-        .equal("test3.h", includes[2].path);
+    auto EXPECT_INCLUDE = [&](std::size_t index,
+                              llvm::StringRef position,
+                              llvm::StringRef path,
+                              std::source_location current = std::source_location::current()) {
+        auto& include = includes[index];
+        EXPECT_EQ(SourceConverter().toPosition(include.loc, info.srcMgr()),
+                  tester.pos(position),
+                  current);
+        EXPECT_EQ(include.path, path, current);
+    };
+
+    EXPECT_EQ(includes.size(), 3);
+    EXPECT_INCLUDE(0, "0", "test.h");
+    EXPECT_INCLUDE(1, "1", "test2.h");
+    EXPECT_INCLUDE(2, "2", "test3.h");
 }
 
 TEST(Directive, Condition) {
@@ -59,23 +68,26 @@ TEST(Directive, Condition) {
     auto& info = tester.info;
     auto& conditions = info.directive(info.srcMgr().getMainFileID()).conditions;
 
-    tester.equal(conditions.size(), 8)
-        .equal(conditions[0].kind, Condition::BranchKind::If)
-        .expect("0", conditions[0].loc)
-        .equal(conditions[1].kind, Condition::BranchKind::Elif)
-        .expect("1", conditions[1].loc)
-        .equal(conditions[2].kind, Condition::BranchKind::Else)
-        .expect("2", conditions[2].loc)
-        .equal(conditions[3].kind, Condition::BranchKind::EndIf)
-        .expect("3", conditions[3].loc)
-        .equal(conditions[4].kind, Condition::BranchKind::Ifdef)
-        .expect("4", conditions[4].loc)
-        .equal(conditions[5].kind, Condition::BranchKind::Elifdef)
-        .expect("5", conditions[5].loc)
-        .equal(conditions[6].kind, Condition::BranchKind::Else)
-        .expect("6", conditions[6].loc)
-        .equal(conditions[7].kind, Condition::BranchKind::EndIf)
-        .expect("7", conditions[7].loc);
+    auto EPXECT_CON = [&](std::size_t index,
+                          Condition::BranchKind kind,
+                          llvm::StringRef position,
+                          std::source_location current = std::source_location::current()) {
+        auto& condition = conditions[index];
+        EXPECT_EQ(condition.kind, kind, current);
+        EXPECT_EQ(SourceConverter().toPosition(condition.loc, info.srcMgr()),
+                  tester.pos(position),
+                  current);
+    };
+
+    EXPECT_EQ(conditions.size(), 8);
+    EPXECT_CON(0, Condition::BranchKind::If, "0");
+    EPXECT_CON(1, Condition::BranchKind::Elif, "1");
+    EPXECT_CON(2, Condition::BranchKind::Else, "2");
+    EPXECT_CON(3, Condition::BranchKind::EndIf, "3");
+    EPXECT_CON(4, Condition::BranchKind::Ifdef, "4");
+    EPXECT_CON(5, Condition::BranchKind::Elifdef, "5");
+    EPXECT_CON(6, Condition::BranchKind::Else, "6");
+    EPXECT_CON(7, Condition::BranchKind::EndIf, "7");
 }
 
 TEST(Directive, Macro) {
@@ -103,25 +115,27 @@ int y = $(6)expr($(7)expr(1));
     auto& info = tester.info;
     auto& macros = info.directive(info.srcMgr().getMainFileID()).macros;
 
-    tester.equal(macros.size(), 9)
-        .equal(macros[0].kind, MacroRef::Kind::Def)
-        .expect("0", macros[0].loc)
-        .equal(macros[1].kind, MacroRef::Kind::Ref)
-        .expect("1", macros[1].loc)
-        .equal(macros[2].kind, MacroRef::Kind::Ref)
-        .expect("2", macros[2].loc)
-        .equal(macros[3].kind, MacroRef::Kind::Undef)
-        .expect("3", macros[3].loc)
-        .equal(macros[4].kind, MacroRef::Kind::Def)
-        .expect("4", macros[4].loc)
-        .equal(macros[5].kind, MacroRef::Kind::Ref)
-        .expect("5", macros[5].loc)
-        .equal(macros[6].kind, MacroRef::Kind::Ref)
-        .expect("6", macros[6].loc)
-        .equal(macros[7].kind, MacroRef::Kind::Ref)
-        .expect("7", macros[7].loc)
-        .equal(macros[8].kind, MacroRef::Kind::Undef)
-        .expect("8", macros[8].loc);
+    auto EXPECT_MACRO = [&](std::size_t index,
+                            MacroRef::Kind kind,
+                            llvm::StringRef position,
+                            std::source_location current = std::source_location::current()) {
+        auto& macro = macros[index];
+        EXPECT_EQ(macro.kind, kind, current);
+        EXPECT_EQ(SourceConverter().toPosition(macro.loc, info.srcMgr()),
+                  tester.pos(position),
+                  current);
+    };
+
+    EXPECT_EQ(macros.size(), 9);
+    EXPECT_MACRO(0, MacroRef::Kind::Def, "0");
+    EXPECT_MACRO(1, MacroRef::Kind::Ref, "1");
+    EXPECT_MACRO(2, MacroRef::Kind::Ref, "2");
+    EXPECT_MACRO(3, MacroRef::Kind::Undef, "3");
+    EXPECT_MACRO(4, MacroRef::Kind::Def, "4");
+    EXPECT_MACRO(5, MacroRef::Kind::Ref, "5");
+    EXPECT_MACRO(6, MacroRef::Kind::Ref, "6");
+    EXPECT_MACRO(7, MacroRef::Kind::Ref, "7");
+    EXPECT_MACRO(8, MacroRef::Kind::Undef, "8");
 }
 
 }  // namespace

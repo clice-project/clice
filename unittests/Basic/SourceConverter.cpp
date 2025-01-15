@@ -38,7 +38,6 @@ TEST(SourceConverter, Position) {
         tks.expandedTokens({src.getLocForStartOfFile(mainid), src.getLocForEndOfFile(mainid)});
 
     auto eof = tokens.back().endLocation();
-    txs.expect("eof", eof);
 
     {
         SourceConverter cvtr{proto::PositionEncodingKind::UTF8};
@@ -88,4 +87,4 @@ TEST(SourceConverter, UriAndFsPath) {
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing

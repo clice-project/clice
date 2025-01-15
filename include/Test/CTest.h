@@ -154,33 +154,8 @@ public:
         return *this;
     }
 
-    Tester& fail(const auto& lhs, const auto& rhs, std::source_location loc) {
-        auto msg =
-            std::format("left : {}\nright: {}\n", json::serialize(lhs), json::serialize(rhs));
-        ::testing::internal::AssertHelper(::testing ::TestPartResult ::kFatalFailure,
-                                          loc.file_name(),
-                                          loc.line(),
-                                          msg.c_str()) = ::testing ::Message();
-        return *this;
-    }
-
-    Tester& equal(const auto& lhs,
-                  const auto& rhs,
-                  std::source_location loc = std::source_location::current()) {
-        if(!refl::equal(lhs, rhs)) {
-            return fail(lhs, rhs, loc);
-        }
-        return *this;
-    }
-
-    Tester& expect(llvm::StringRef name,
-                   clang::SourceLocation loc,
-                   std::source_location current = std::source_location::current()) {
-        auto pos = locations.lookup(name);
-        auto presumed = info.srcMgr().getPresumedLoc(loc);
-        /// FIXME:
-        equal(pos, proto::Position{presumed.getLine() - 1, presumed.getColumn() - 1}, current);
-        return *this;
+    proto::Position pos(llvm::StringRef key) const {
+        return locations.lookup(key);
     }
 };
 

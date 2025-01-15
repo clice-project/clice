@@ -5,6 +5,39 @@ namespace clice::testing {
 
 namespace {
 
+struct TestCase {
+    std::size_t index;
+    llvm::StringRef begin;
+    llvm::StringRef end;
+    std::source_location current;
+
+    TestCase(std::size_t index,
+             llvm::StringRef begin,
+             llvm::StringRef end,
+             std::source_location current = std::source_location::current()) :
+        index(index), begin(begin), end(end), current(current) {}
+};
+
+static int run(llvm::StringRef code, std::vector<TestCase> cases) {
+    Tester tester("main.cpp", code);
+    tester.run();
+    auto& info = tester.info;
+
+    FoldingRangeParams param;
+    SourceConverter converter;
+    auto result = feature::foldingRange(param, info, converter);
+
+    for(auto& [index, begin, end, current]: cases) {
+        auto& folding = result[index];
+        EXPECT_EQ(tester.pos(begin),
+                  proto::Position{folding.startLine, folding.startCharacter},
+                  current);
+        EXPECT_EQ(tester.pos(end), proto::Position{folding.endLine, folding.endCharacter}, current);
+    }
+
+    return 0;
+}
+
 void dbg(const proto::FoldingRangeResult& result) {
     for(auto& item: result) {
         llvm::outs()
@@ -19,16 +52,8 @@ void dbg(const proto::FoldingRangeResult& result) {
     }
 }
 
-// convert 0-0 based location in LSP to 1-1 based location in clang.
-auto fromLspLocation(const clang::SourceManager* src, proto::FoldingRange range)
-    -> std::pair<clang::SourceLocation, clang::SourceLocation> {
-    auto fileID = src->getMainFileID();
-    return {src->translateLineCol(fileID, range.startLine + 1, range.startCharacter + 1),
-            src->translateLineCol(fileID, range.endLine + 1, range.endCharacter + 1)};
-}
-
 TEST(FoldingRange, Namespace) {
-    const char* main = R"cpp(
+    run(R"cpp(
 namespace single_line {$(1)
 //$(2)
 }
@@ -47,39 +72,16 @@ namespace ugly
 //$(6)
 }
 
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    txs.equal(res.size(), 3)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        .expect("5", toLoc(res[2]).first)
-        .expect("6", toLoc(res[2]).second)
-        //
-        ;
+)cpp",
+        {
+            TestCase{0, "1", "2"},
+            TestCase{1, "3", "4"},
+            TestCase{2, "5", "6"},
+    });
 }
 
 TEST(FoldingRange, Enum) {
-    auto main = R"cpp(
+    run(R"cpp(
 enum _0 {$(1)
     A,
     B,
@@ -94,35 +96,15 @@ enum class _2 {$(3)
     C$(4)
 };
 
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 2)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        ;
+)cpp",
+        {
+            TestCase{0, "1", "2"},
+            TestCase{1, "3", "4"},
+    });
 }
 
 TEST(FoldingRange, RecordDecl) {
-    const char* main = R"cpp(
+    run(R"cpp(
 struct _2 {$(1)
     int x;
     float y;$(2)
@@ -151,47 +133,19 @@ void f() {$(9)
     };$(10)
 }
 
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 6)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        .expect("5", toLoc(res[2]).first)
-        .expect("6", toLoc(res[2]).second)
-        //
-        .expect("7", toLoc(res[3]).first)
-        .expect("8", toLoc(res[3]).second)
-        //
-        .expect("9", toLoc(res[4]).first)
-        .expect("10", toLoc(res[4]).second)
-        //
-        .expect("11", toLoc(res[5]).first)
-        .expect("12", toLoc(res[5]).second)
-        //
-        ;
+)cpp",
+        {
+            TestCase{0, "1",  "2" },
+            TestCase{1, "3",  "4" },
+            TestCase{2, "5",  "6" },
+            TestCase{3, "7",  "8" },
+            TestCase{4, "9",  "10"},
+            TestCase{5, "11", "12"},
+    });
 }
 
 TEST(FoldingRange, CXXRecordDeclAndMemberMethod) {
-    const char* main = R"cpp(
+    run(R"cpp(
 struct _2 {$(1)
     int x;
     float y;
@@ -213,44 +167,17 @@ $(4)
 };
 
 struct _4;
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 4)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        .expect("5", toLoc(res[2]).first)
-        .expect("6", toLoc(res[2]).second)
-        //
-        .expect("7", toLoc(res[3]).first)
-        .expect("8", toLoc(res[3]).second)
-        //
-        // .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
-        // .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
-        //
-        ;
+)cpp",
+        {
+            TestCase{0, "1", "2"},
+            TestCase{1, "3", "4"},
+            TestCase{2, "5", "6"},
+            TestCase{3, "7", "8"},
+    });
 }
 
 TEST(FoldingRange, LambdaCapture) {
-    const char* main = R"cpp(
+    run(R"cpp(
 auto z = [$(1)
     x = 0, y = 1$(2)
 ]() {$(3)
@@ -262,45 +189,16 @@ auto s = [$(5)
     y = 1$(6)
 ](){ return; };
 
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 3)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        .expect("5", toLoc(res[2]).first)
-        .expect("6", toLoc(res[2]).second)
-        //     //
-        //     .expect("7", toLoc(res[3]).first)
-        //     .expect("8", toLoc(res[3]).second)
-        //     //
-        //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
-        //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
-        //     //
-        ;
+)cpp",
+        {
+            TestCase{0, "1", "2"},
+            TestCase{1, "3", "4"},
+            TestCase{2, "5", "6"},
+    });
 }
 
 TEST(FoldingRange, LambdaExpression) {
-    const char* main = R"cpp(
-
+    run(R"cpp(
 auto _0 = [](int _) {};
 
 auto _1 = [](int _) {$(1)
@@ -317,44 +215,16 @@ auto _3 = []($(5)
         int _2$(6)
     ) {};
 
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 3)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        .expect("5", toLoc(res[2]).first)
-        .expect("6", toLoc(res[2]).second)
-        //
-        //     .expect("7", toLoc(res[3]).first)
-        //     .expect("8", toLoc(res[3]).second)
-        //     //
-        //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
-        //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
-        //     //
-        ;
+)cpp",
+        {
+            TestCase{0, "1", "2"},
+            TestCase{1, "3", "4"},
+            TestCase{2, "5", "6"},
+    });
 }
 
-TEST(FoldingRange, FnParas) {
-    const char* main = R"cpp(
+TEST(FoldingRange, FunctionParams) {
+    run(R"cpp(
 void e() {}
 
 void f($(1)
@@ -373,39 +243,16 @@ void d($(5)
     int _2,
     ...$(6)
 );
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 3)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        .expect("5", toLoc(res[2]).first)
-        .expect("6", toLoc(res[2]).second)
-        //
-        ;
+)cpp",
+        {
+            TestCase{0, "1", "2"},
+            TestCase{1, "3", "4"},
+            TestCase{2, "5", "6"},
+    });
 }
 
-TEST(FoldingRange, FnBody) {
-    const char* main = R"cpp(
-
+TEST(FoldingRange, FunctionBody) {
+    run(R"cpp(
 void f() {$(1)
 //
 //$(2)
@@ -423,42 +270,17 @@ void n() {$(5)
     }
     //$(6)
 }
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 4)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        .expect("5", toLoc(res[2]).first)
-        .expect("6", toLoc(res[2]).second)
-        //
-        .expect("7", toLoc(res[3]).first)
-        .expect("8", toLoc(res[3]).second)
-        //
-        ;
+)cpp",
+        {
+            TestCase{0, "1", "2"},
+            TestCase{1, "3", "4"},
+            TestCase{2, "5", "6"},
+            TestCase{3, "7", "8"},
+    });
 }
 
-TEST(FoldingRange, FnCall) {
-    const char* main = R"cpp(
-
+TEST(FoldingRange, FunctionCall) {
+    run(R"cpp(
 int f(int _1, int _2, int _3, int _4, int _5, int _6) { return _1 + _2; }
 
 int main() {$(1)
@@ -470,42 +292,15 @@ int main() {$(1)
         4, 5, 6$(4)
     );$(2)
 }
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 2)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        // .expect("5", toLoc(res[2]).first)
-        // .expect("6", toLoc(res[2]).second)
-        // //
-        // .expect("7", toLoc(res[3]).first)
-        // .expect("8", toLoc(res[3]).second)
-        // //
-        ;
+)cpp",
+        {
+            TestCase{0, "1", "2"},
+            TestCase{1, "3", "4"},
+    });
 }
 
 TEST(FoldingRange, CompoundStmt) {
-    const char* main = R"cpp(
-
+    run(R"cpp(
 int main () {$(1)
 
     {$(3)
@@ -523,45 +318,16 @@ int main () {$(1)
     return 0;$(2)
 }
 
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 4)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        .expect("5", toLoc(res[2]).first)
-        .expect("6", toLoc(res[2]).second)
-        //     //
-        //     .expect("7", toLoc(res[3]).first)
-        //     .expect("8", toLoc(res[3]).second)
-        //     //
-        //     .expect("9", toLoc(res[4].startLine, res[4].startCharacter))
-        //     .expect("10", toLoc(res[4].endLine, res[4].endCharacter))
-        //     //
-        ;
+)cpp",
+        {
+            TestCase{0, "1", "2"},
+            TestCase{1, "3", "4"},
+            TestCase{2, "5", "6"},
+    });
 }
 
 TEST(FoldingRange, InitializeList) {
-    const char* main = R"cpp(
-
+    run(R"cpp(
 struct L { int xs[4]; };
 
 L l1 = {$(1)
@@ -573,38 +339,15 @@ L l2 = {$(3)
 //$(4)
 };
 
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 2)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        // .expect("5", toLoc(res[2]).first)
-        // .expect("6", toLoc(res[2]).second)
-        //
-        ;
+)cpp",
+        {
+            TestCase{0, "1", "2"},
+            TestCase{1, "3", "4"},
+    });
 }
 
 TEST(FoldingRange, AccessControlBlock) {
-    const char* main = R"cpp(
+    run(R"cpp(
 struct empty { int x; };
 
 class _0 {$(1)
@@ -627,46 +370,19 @@ public:
 private:
 public:$(12)
 };
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 6)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("3", toLoc(res[1]).first)
-        .expect("4", toLoc(res[1]).second)
-        //
-        .expect("5", toLoc(res[2]).first)
-        .expect("6", toLoc(res[2]).second)
-        //
-        .expect("7", toLoc(res[3]).first)
-        .expect("8", toLoc(res[3]).second)
-        //
-        .expect("9", toLoc(res[4]).first)
-        .expect("10", toLoc(res[4]).second)
-        //
-        .expect("11", toLoc(res[5]).first)
-        .expect("12", toLoc(res[5]).second);
+)cpp",
+        {
+            TestCase{0, "1",  "2" },
+            TestCase{1, "3",  "4" },
+            TestCase{2, "5",  "6" },
+            TestCase{3, "7",  "8" },
+            TestCase{4, "9",  "10"},
+            TestCase{5, "11", "12"},
+    });
 }
 
 TEST(FoldingRange, Macro) {
-    const char* main = R"cpp(
-
+    run(R"cpp(
 #$(1)ifdef M1
 $(2)
 #$(3)else
@@ -678,44 +394,12 @@ $(2)
 
 //$(4)
 #endif
-
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto toLoc = [src = &info.srcMgr()](const proto::FoldingRange& fr) {
-        return fromLspLocation(src, fr);
-    };
-
-    SourceConverter converter{proto::PositionEncodingKind::UTF8};
-    FoldingRangeParams param;
-    auto res = feature::foldingRange(param, info, converter);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 3)
-        //
-        .expect("1", toLoc(res[0]).first)
-        .expect("2", toLoc(res[0]).second)
-        //
-        .expect("5", toLoc(res[1]).first)
-        .expect("6", toLoc(res[1]).second)
-        //
-        .expect("3", toLoc(res[2]).first)
-        .expect("4", toLoc(res[2]).second)
-        // //
-        // .expect("7", toLoc(res[3]).first)
-        // .expect("8", toLoc(res[3]).second)
-        // //
-        // .expect("9", toLoc(res[4]).first)
-        // .expect("10", toLoc(res[4]).second)
-        // //
-        // .expect("11", toLoc(res[5]).first)
-        // .expect("12", toLoc(res[5]).second)
-
-        ;
+)cpp",
+        {
+            TestCase{0, "1", "2"},
+            TestCase{1, "5", "6"},
+            TestCase{2, "3", "4"},
+    });
 }
 
 }  // namespace

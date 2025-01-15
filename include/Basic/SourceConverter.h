@@ -13,7 +13,8 @@ public:
     using SourceDirMapping = std::vector<std::pair<std::string, std::string>>;
 
     /// Construct a `SourceConverter` with the specified encoding kind and empty source map.
-    explicit SourceConverter(proto::PositionEncodingKind kind) : kind(kind), sourceMap() {}
+    explicit SourceConverter(proto::PositionEncodingKind kind = proto::PositionEncodingKind::UTF8) :
+        kind(kind), sourceMap() {}
 
     SourceConverter(proto::PositionEncodingKind kind, SourceDirMapping sourceMap) :
         kind(kind), sourceMap(std::move(sourceMap)) {}

@@ -53,9 +53,7 @@ auto x4 = 1;$(request_range_end)
     // dbg(res);
 
     // 3: x2, x3, x4 is included in the request range.
-    txs.equal(res.size(), 3)
-        //
-        ;
+    EXPECT_EQ(res.size(), 3);
 }
 
 TEST(InlayHint, AutoDecl) {
@@ -84,9 +82,7 @@ void t() {
 
     // dbg(res);
 
-    txs.equal(res.size(), 4)
-        //
-        ;
+    EXPECT_EQ(res.size(), 4);
 }
 
 TEST(InlayHint, FreeFnArguments) {
@@ -108,9 +104,7 @@ g();
 
     // dbg(res);
 
-    txs.equal(res.size(), 2)
-        //
-        ;
+    EXPECT_EQ(res.size(), 2);
 }
 
 TEST(InlayHint, FnArgPassedAsLValueRef) {
@@ -130,9 +124,7 @@ f($(1)x, $(2)x);
 
     // dbg(res);
 
-    txs.equal(res.size(), 2)
-        //
-        ;
+    EXPECT_EQ(res.size(), 2);
 }
 
 TEST(InlayHint, MethodArguments) {
@@ -155,9 +147,7 @@ void f() {
 
     // dbg(res);
 
-    txs.equal(res.size(), 3)
-        //
-        ;
+    EXPECT_EQ(res.size(), 3);
 }
 
 TEST(InlayHint, OperatorCall) {
@@ -180,9 +170,7 @@ int f() {
 
     // dbg(res);
 
-    txs.equal(res.size(), 2)
-        //
-        ;
+    EXPECT_EQ(res.size(), 2);
 }
 
 TEST(InlayHint, ReturnTypeHint) {
@@ -211,9 +199,7 @@ void g() {
 
     // dbg(res);
 
-    txs.equal(res.size(), 3)
-        //
-        ;
+    EXPECT_EQ(res.size(), 3);
 }
 
 TEST(InlayHint, StructureBinding) {
@@ -233,9 +219,7 @@ int f() {
 
     // dbg(res);
 
-    txs.equal(res.size(), 2)
-        //
-        ;
+    EXPECT_EQ(res.size(), 2);
 }
 
 TEST(InlayHint, Constructor) {
@@ -263,9 +247,7 @@ void f() {
 
     // dbg(res);
 
-    txs.equal(res.size(), 6)
-        //
-        ;
+    EXPECT_EQ(res.size(), 6);
 }
 
 TEST(InlayHint, InitializeList) {
@@ -282,9 +264,7 @@ TEST(InlayHint, InitializeList) {
 
     // dbg(res);
 
-    txs.equal(res.size(), 3 + (3 * 2 + 2))
-        //
-        ;
+    EXPECT_EQ(res.size(), 3 + (3 * 2 + 2));
 }
 
 TEST(InlayHint, Designators) {
@@ -301,9 +281,7 @@ A a = {.x = 1, .y = 2};
 
     // dbg(res);
 
-    txs.equal(res.size(), 0)
-        //
-        ;
+    EXPECT_EQ(res.size(), 0);
 }
 
 TEST(InlayHint, IgnoreSimpleSetter) {
@@ -331,9 +309,7 @@ void f() {
 
     // dbg(res);
 
-    txs.equal(res.size(), 0)
-        //
-        ;
+    EXPECT_EQ(res.size(), 0);
 }
 
 TEST(InlayHint, BlockEnd) {
@@ -375,9 +351,7 @@ struct Out {
 
     // dbg(res);
 
-    txs.equal(res.size(), 6)
-        //
-        ;
+    EXPECT_EQ(res.size(), 6);
 }
 
 TEST(InlayHint, Lambda) {
@@ -395,9 +369,7 @@ auto l = []$(1) {
 
     // dbg(res);
 
-    txs.equal(res.size(), 3)
-        //
-        ;
+    EXPECT_EQ(res.size(), 3);
 }
 
 TEST(InlayHint, StructAndMemberHint) {
@@ -428,9 +400,7 @@ struct A {
 
     /// TODO:
     /// if InlayHintOption::memberSizeAndOffset was implemented, the total hint count is 2 + 3.
-    txs.equal(res.size(), 2 /*+ 3*/)
-        //
-        ;
+    EXPECT_EQ(res.size(), 2 /*+ 3*/);
 }
 
 TEST(InlayHint, ImplicitCast) {
@@ -447,9 +417,7 @@ TEST(InlayHint, ImplicitCast) {
 
     /// FIXME:
     /// Hint count should be 1.
-    txs.equal(res.size(), 0)
-        //
-        ;
+    EXPECT_EQ(res.size(), 0);
 }
 
 }  // namespace
