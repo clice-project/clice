@@ -16,11 +16,18 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-24.04]
+        os: [ubuntu-24.04, windows-2022]
 
     runs-on: ${{ matrix.os }}
 
     steps:
+      - name: Setup llvm & ninja
+        if: matrix.os == 'windows-2022'
+        uses: MinoruSekine/setup-scoop@v4.0.1
+        with:
+          buckets: main
+          apps: llvm ninja
+
       - name: Setup llvm & libstdc++ & cmake & ninja
         if: matrix.os == 'ubuntu-24.04'
         run: |
@@ -40,7 +47,7 @@ jobs:
           sudo ln -s /usr/bin/llvm-ranlib-18 /usr/bin/llvm-ranlib
 
           sudo apt install -y cmake ninja-build
-      
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -50,10 +57,21 @@ jobs:
           mkdir -p ./.llvm
           curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x86_64-linux-gnu-release.tar.xz" | tar -xJ -C ./.llvm
 
+      - name: Setup llvm binary
+        if: matrix.os == 'windows-2022'
+        run: |
+          curl -O -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x64-windows-msvc-release.7z"
+          7z x x64-windows-msvc-release.7z "-o.llvm"
+
+      - name: Setup msvc sysroot for cmake
+        if: matrix.os == 'windows-2022'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build clice
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCLICE_ENABLE_TEST=ON -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DLLVM_INSTALL_PATH="./.llvm"
-          cmake --build build
-            
+          cmake --preset release
+          cmake --build --preset release
+
       - name: Run tests
-        run: ./build/bin/unit_tests --test-dir="./tests" --resource-dir="./.llvm/lib/clang/20"
+        run: |
+          ./build/bin/unit_tests --test-dir="./tests" --resource-dir="./.llvm/lib/clang/20"

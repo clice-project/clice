@@ -1,20 +1,43 @@
 cmake_minimum_required(VERSION 3.20)
 project(CLICE_PROJECT)
 
-include(FetchContent)
-
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 if(NOT DEFINED LLVM_INSTALL_PATH OR LLVM_INSTALL_PATH STREQUAL "")
-    message(FATAL_ERROR "Error: The variable LLVM_INSTALL_PATH is not set. Please specify it with -LLVM_INSTALL_PATH=<value>.")
+    message(FATAL_ERROR "Error: The variable LLVM_INSTALL_PATH is not set. Please specify it with -DLLVM_INSTALL_PATH=<value>.")
 endif()
 
 set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
-find_package(LLVM REQUIRED CONFIG)
-find_package(Clang REQUIRED CONFIG)
+# https://github.com/llvm/llvm-project/issues/86250
+if(NOT WIN32)
+    find_package(LLVM REQUIRED CONFIG)
+    find_package(Clang REQUIRED CONFIG)
+endif()
 message(STATUS "Found LLVM ${LLVM_INCLUDE_DIRS}")
+
+if(CLICE_DEV)
+    include(FetchContent)
+
+    FetchContent_Declare(
+        tomlplusplus   
+        GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    )
+    FetchContent_Declare(
+        libuv
+        GIT_REPOSITORY https://github.com/libuv/libuv.git
+        GIT_TAG v1.x
+    )
+    FetchContent_MakeAvailable(tomlplusplus libuv)
+
+    if(WIN32)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+    endif()
+else()
+    find_package(tomlplusplus REQUIRED CONFIG)
+    find_package(libuv REQUIRED CONFIG)
+endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -g -O0 -fsanitize=address -Wno-deprecated-declarations")
@@ -22,8 +45,13 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address")
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -O3 -Wno-deprecated-declarations")
-    set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_LINKER_FLAGS} -fuse-ld=lld")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld")
+    if(WIN32)
+        set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_LINKER_FLAGS} -fuse-ld=lld-link")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld-link")
+    else()
+        set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_LINKER_FLAGS} -fuse-ld=lld")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld")
+    endif()
 endif()
 
 if(WIN32)
@@ -50,36 +78,31 @@ target_precompile_headers(clice-core PRIVATE
 # set llvm include and lib path
 target_include_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/include")
 target_link_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/lib")
-target_link_libraries(clice-core PUBLIC
-    LLVMSupport
-    clangAST
-    clangASTMatchers
-    clangBasic
-    clangDependencyScanning
-    clangDriver
-    clangFormat
-    clangFrontend
-    clangIndex
-    clangLex
-    clangSema
-    clangSerialization
-    clangTooling
-    clangToolingCore
-    clangToolingInclusions
-    clangToolingInclusionsStdlib
-    clangToolingSyntax
-)
 
-FetchContent_Declare(
-    tomlplusplus   
-    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
-)
-FetchContent_Declare(
-    libuv
-    GIT_REPOSITORY https://github.com/libuv/libuv.git
-    GIT_TAG v1.x
-)
-FetchContent_MakeAvailable(tomlplusplus libuv)
+if(NOT WIN32)
+    target_link_libraries(clice-core PUBLIC
+        LLVMSupport
+        clangAST
+        clangASTMatchers
+        clangBasic
+        clangDependencyScanning
+        clangDriver
+        clangFormat
+        clangFrontend
+        clangIndex
+        clangLex
+        clangSema
+        clangSerialization
+        clangTooling
+        clangToolingCore
+        clangToolingInclusions
+        clangToolingInclusionsStdlib
+        clangToolingSyntax
+    )
+else()
+    file(GLOB LLVM_LIBRARIES "${LLVM_INSTALL_PATH}/lib/*.lib")
+    target_link_libraries(clice-core PUBLIC ${LLVM_LIBRARIES} version ntdll)
+endif()
 
 target_include_directories(clice-core PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(clice-core PUBLIC uv tomlplusplus::tomlplusplus)
@@ -106,5 +129,3 @@ if(CLICE_ENABLE_TEST)
 
     target_link_libraries(unit_tests PRIVATE  gtest_main clice-core)
 endif()
-
-
