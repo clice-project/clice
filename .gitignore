@@ -31,14 +31,11 @@
 *.out
 *.app
 
-.txt
-.cache/
-note.md
-temp*
-/build*
-notes
+build*
+notes/
 temp/
+.cache/
 .llvm/
 .xmake/
-
+.vscode/
 
