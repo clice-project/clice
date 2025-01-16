@@ -6,23 +6,6 @@ namespace clice::testing {
 
 namespace {
 
-void dbg(const std::vector<proto::InlayHint>& hints) {
-    for(auto& hint: hints) {
-        llvm::outs() << std::format("kind:{}, position:{}, value_size:{},",
-                                    hint.kind.name(),
-                                    json::serialize(hint.position),
-                                    hint.lable.size());
-        for(auto& lable: hint.lable) {
-            llvm::outs() << std::format(" value:{}, link position:{}",
-                                        lable.value,
-                                        json::serialize(lable.Location))
-                         << '\n';
-        }
-    }
-}
-
-const SourceConverter Converter{proto::PositionEncodingKind::UTF8};
-
 const config::InlayHintOption LikeClangd{
     .maxLength = 20,
     .maxArrayElements = 10,

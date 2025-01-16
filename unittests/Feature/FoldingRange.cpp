@@ -33,20 +33,6 @@ struct FoldingRange : public ::testing::Test {
     }
 };
 
-void dbg(const proto::FoldingRangeResult& result) {
-    for(auto& item: result) {
-        llvm::outs()
-            << std::format("begin/end line: {}/{},  begin/end character: {}/{}, kind: {}, text: {}",
-                           item.startLine,
-                           item.endLine,
-                           item.startCharacter,
-                           item.endCharacter,
-                           json::serialize(item.kind),
-                           item.collapsedText)
-            << "\n";
-    }
-}
-
 TEST_F(FoldingRange, Namespace) {
     run(R"cpp(
 namespace single_line {$(1)

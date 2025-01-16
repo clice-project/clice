@@ -88,6 +88,11 @@ T deserialize(const json::Value& value, Serdes&&... serdes) {
 }
 
 template <>
+struct Serde<json::Value> {
+    /// Never use json::Value as a serde.
+};
+
+template <>
 struct Serde<std::nullptr_t> {
     static json::Value serialize(std::nullptr_t) {
         return json::Value(nullptr);
@@ -108,20 +113,6 @@ struct Serde<std::nullopt_t> {
     static std::nullopt_t deserialize(const json::Value& value) {
         assert(value.kind() == json::Value::Null && "Expect null");
         return std::nullopt;
-    }
-};
-
-template <>
-struct Serde<std::string> {
-    using V = std::string;
-
-    static json::Value serialize(const V& v) {
-        return json::Value(v);
-    }
-
-    static V deserialize(const json::Value& value) {
-        assert(value.kind() == json::Value::String && "Expect a string");
-        return value.getAsString().value().str();
     }
 };
 
@@ -175,14 +166,9 @@ struct Serde<F> {
 };
 
 template <>
-struct Serde<double> {
-    static json::Value serialize(float v) {
-        return json::Value(v);
-    }
-
-    static float deserialize(const json::Value& value) {
-        assert(value.kind() == json::Value::Number && "Expect number");
-        return value.getAsNumber().value();
+struct Serde<const char*> {
+    static json::Value serialize(const char* v) {
+        return json::Value(llvm::StringRef(v));
     }
 };
 
@@ -190,6 +176,34 @@ template <std::size_t N>
 struct Serde<char[N]> {
     static json::Value serialize(const char (&v)[N]) {
         return json::Value(llvm::StringRef(v, N));
+    }
+};
+
+template <>
+struct Serde<std::string> {
+    using V = std::string;
+
+    static json::Value serialize(const V& v) {
+        return json::Value(v);
+    }
+
+    static V deserialize(const json::Value& value) {
+        assert(value.kind() == json::Value::String && "Expect a string");
+        return value.getAsString().value().str();
+    }
+};
+
+template <>
+struct Serde<std::string_view> {
+    using V = std::string_view;
+
+    static json::Value serialize(const V& v) {
+        return json::Value(llvm::StringRef(v.data(), v.size()));
+    }
+
+    static V deserialize(const json::Value& value) {
+        assert(value.kind() == json::Value::String && "Expect string");
+        return value.getAsString().value();
     }
 };
 
@@ -207,17 +221,17 @@ struct Serde<llvm::StringRef> {
     }
 };
 
-template <>
-struct Serde<std::string_view> {
-    using V = std::string_view;
+template <std::size_t N>
+struct Serde<llvm::SmallString<N>> {
+    using V = llvm::SmallString<N>;
 
     static json::Value serialize(const V& v) {
-        return json::Value(llvm::StringRef(v.data(), v.size()));
+        return json::Value(v.str());
     }
 
     static V deserialize(const json::Value& value) {
         assert(value.kind() == json::Value::String && "Expect string");
-        return value.getAsString().value();
+        return V{value.getAsString().value().str()};
     }
 };
 
@@ -318,8 +332,7 @@ struct Serde<Range> {
     }
 };
 
-template <typename E>
-    requires refl::reflectable_enum<E>
+template <refl::reflectable_enum E>
 struct Serde<E> {
     static json::Value serialize(const E& e) {
         return json::Value(e.value());

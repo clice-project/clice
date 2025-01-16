@@ -45,6 +45,26 @@ namespace clice::testing {
 
 namespace {
 
+TEST(JSON, String) {
+    json::Value expect = "hello";
+
+    std::string input = "hello";
+    EXPECT_EQ(json::serialize(input), expect);
+    EXPECT_EQ(json::deserialize<std::string>(expect), input);
+
+    std::string_view input2 = "hello";
+    EXPECT_EQ(json::serialize(input2), expect);
+    EXPECT_EQ(json::deserialize<std::string_view>(expect), input2);
+
+    llvm::StringRef input3 = "hello";
+    EXPECT_EQ(json::serialize(input3), expect);
+    EXPECT_EQ(json::deserialize<llvm::StringRef>(expect), input3);
+
+    llvm::SmallString<5> input4 = {"hello"};
+    EXPECT_EQ(json::serialize(input4), expect);
+    EXPECT_EQ(json::deserialize<llvm::SmallString<5>>(expect), input4);
+}
+
 TEST(JSON, MapRange) {
     json::Value expect = json::Object{
         {"1", 2},
@@ -111,6 +131,23 @@ TEST(JSON, Enum) {
     E input = E::B;
     EXPECT_EQ(json::serialize(input), expect);
     EXPECT_EQ(json::deserialize<E>(expect), input);
+
+    struct Color : refl::Enum<Color, false, int> {
+        enum Kind {
+            Red = 0,
+            Green,
+            Blue,
+            Yellow,
+        };
+
+        using Enum::Enum;
+    };
+
+    json::Value expect2 = json::Value(2);
+
+    Color input2 = Color::Blue;
+    EXPECT_EQ(json::serialize(input2), expect2);
+    EXPECT_EQ(json::deserialize<Color>(expect2), input2);
 }
 
 TEST(JSON, Struct) {
