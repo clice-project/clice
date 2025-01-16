@@ -64,6 +64,7 @@ target("unit_tests")
             "--test-dir=" .. path.absolute("tests"),
             "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
         )
+        target:add("rpathdirs", path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib"))
     end)
 
 rule("clice_build_config")
@@ -83,13 +84,21 @@ rule("clice_build_config")
 
 package("llvm")
     if is_plat("windows") then
-        add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
-
-        add_versions("20.0.0", "ba3fcd482340b8f892f02b9fc2a233a3ba0e0931fdf4e84a3e2a2ec47283d096")
+        if is_mode("release") then
+            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
+            add_versions("20.0.0", "ba3fcd482340b8f892f02b9fc2a233a3ba0e0931fdf4e84a3e2a2ec47283d096")
+        else 
+            os.raise("Clice does not support build in debug mode with pre-compiled llvm binary on windows.\n"
+                      .."See https://github.com/clice-project/clice/issues/42 for more information.")
+        end 
     elseif is_plat("linux") then
-        add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
-
-        add_versions("20.0.0", "76de8585494955090c79976d8e71bd719f68fc6dc8d06687284cff19266e4c11")
+        if is_mode("debug") then
+            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-debug.tar.xz")
+            add_versions("20.0.0", "7dc045424a9667f20845dec058d211476b84300ebcfc8c3a3aabf41bff37cfd9")
+        elseif is_mode("release") then
+            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
+            add_versions("20.0.0", "76de8585494955090c79976d8e71bd719f68fc6dc8d06687284cff19266e4c11")
+        end
     end
 
     if is_plat("windows") then
