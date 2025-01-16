@@ -35,7 +35,7 @@ build*
 notes/
 temp/
 .cache/
-.llvm/
+.llvm*/
 .xmake/
 .vscode/
 
