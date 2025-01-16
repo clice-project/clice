@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Support/ADT.h"
+#include "ADT.h"
 #include "Struct.h"
 
 namespace clice::refl {
@@ -38,7 +38,7 @@ struct Equal<std::vector<T>> {
     }
 };
 
-template <reflectable T>
+template <reflectable_struct T>
     requires (!requires(T lhs, T rhs) {
         { lhs == rhs } -> std::convertible_to<bool>;
     })
@@ -83,7 +83,7 @@ struct Less<std::vector<T>> {
     }
 };
 
-template <reflectable T>
+template <reflectable_struct T>
     requires (!requires(T lhs, T rhs) {
         { lhs < rhs } -> std::convertible_to<bool>;
     })

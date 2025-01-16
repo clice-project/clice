@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Basic/Document.h>
-#include <Support/JSON.h>
+#include "Basic/Document.h"
+#include "Support/JSON.h"
 
 namespace clice {
 struct CompilationParams;

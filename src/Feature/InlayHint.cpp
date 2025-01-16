@@ -12,7 +12,6 @@ namespace {
 /// Create a blank markup content as a place holder.
 proto::MarkupContent blank() {
     return {
-        .kind = proto::MarkupKind::PlainText,
         .value = "",
     };
 }
@@ -83,7 +82,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     /// Collect hint for variable declared with `auto` keywords.
     /// The hint string wiil be placed at the right side of identifier, starting with ':' character.
     /// The `originDeclRange` will be used as the link of hint string.
-    void collectAutoDeclHint(clang::QualType deduced, clang::SourceRange identRange,
+    void collectAutoDeclHint(clang::QualType deduced,
+                             clang::SourceRange identRange,
                              std::optional<clang::SourceRange> linkDeclRange) {
 
         // For lambda expression, `getAsString` return a text like `(lambda at main.cpp:2:10)`
@@ -404,7 +404,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         return true;
     }
 
-    void collectReturnTypeHint(clang::SourceLocation hintLoc, clang::QualType retType,
+    void collectReturnTypeHint(clang::SourceLocation hintLoc,
+                               clang::QualType retType,
                                clang::SourceRange retTypeDeclRange) {
         proto::InlayHintLablePart lable{
             .value = shrinkText(std::format("-> {}", retType.getAsString(policy))),
@@ -534,8 +535,10 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         return remain.ltrim();
     }
 
-    void collectBlockEndHint(clang::SourceLocation location, std::string text,
-                             clang::SourceRange linkRange, bool checkDuplicatedHint) {
+    void collectBlockEndHint(clang::SourceLocation location,
+                             std::string text,
+                             clang::SourceRange linkRange,
+                             bool checkDuplicatedHint) {
         // Already has a comment in that line.
         if(auto remain = remainTextOfThatLine(location);
            remain.starts_with("/*") || remain.starts_with("//"))
@@ -663,7 +666,8 @@ json::Value inlayHintCapability(json::Value InlayHintClientCapabilities) {
 }
 
 /// Compute inlay hints for a document in given range and config.
-proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
+proto::InlayHintsResult inlayHints(proto::InlayHintParams param,
+                                   ASTInfo& info,
                                    const SourceConverter& converter,
                                    const config::InlayHintOption& config) {
     const clang::SourceManager& src = info.srcMgr();

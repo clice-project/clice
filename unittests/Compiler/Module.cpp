@@ -1,9 +1,8 @@
-#include "gtest/gtest.h"
+#include "Test/Test.h"
 #include "Compiler/Compiler.h"
-
 #include "llvm/Support/ToolOutputFile.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
 

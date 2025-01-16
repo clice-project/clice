@@ -1,7 +1,7 @@
 #pragma once
 
-#include <llvm/Support/Error.h>
-#include <llvm/Support/FormatVariadic.h>
+#include "llvm/Support/Error.h"
+#include "llvm/Support/FormatVariadic.h"
 
 namespace clice {
 

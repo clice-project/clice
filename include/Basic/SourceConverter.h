@@ -1,9 +1,7 @@
 #pragma once
 
-#include "llvm/Support/Error.h"
-
-#include <Basic/Location.h>
-#include <clang/Basic/SourceLocation.h>
+#include "Basic/Location.h"
+#include "clang/Basic/SourceLocation.h"
 
 namespace clice {
 
@@ -15,7 +13,8 @@ public:
     using SourceDirMapping = std::vector<std::pair<std::string, std::string>>;
 
     /// Construct a `SourceConverter` with the specified encoding kind and empty source map.
-    explicit SourceConverter(proto::PositionEncodingKind kind) : kind(kind), sourceMap() {}
+    explicit SourceConverter(proto::PositionEncodingKind kind = proto::PositionEncodingKind::UTF8) :
+        kind(kind), sourceMap() {}
 
     SourceConverter(proto::PositionEncodingKind kind, SourceDirMapping sourceMap) :
         kind(kind), sourceMap(std::move(sourceMap)) {}
@@ -30,7 +29,8 @@ public:
     /// Convert a clang::SourceLocation to a proto::Position according to the
     /// specified encoding kind. Note that `SourceLocation` in clang is 1-based and
     /// is always encoded in UTF-8.
-    proto::Position toPosition(llvm::StringRef content, clang::SourceLocation location,
+    proto::Position toPosition(llvm::StringRef content,
+                               clang::SourceLocation location,
                                const clang::SourceManager& SM) const;
 
     /// Same as above, but content is retrieved from the `SourceManager`.
@@ -54,7 +54,7 @@ public:
     /// Convert a real path of a file to URI. Crash if failed.
     static proto::DocumentUri toURI(llvm::StringRef fspath);
 
-    /// Convert a file URI to real path with `clice::fs::real_path`. Crash if failed. 
+    /// Convert a file URI to real path with `clice::fs::real_path`. Crash if failed.
     static std::string toPath(llvm::StringRef uri);
 
 private:

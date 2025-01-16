@@ -1,8 +1,8 @@
-#include "Test/Test.h"
+#include "Test/CTest.h"
 #include "Index/SymbolIndex.h"
 #include "Basic/SourceConverter.h"
 
-namespace clice {
+namespace clice::testing {
 
 struct IndexTester : Tester {
     std::vector<char> binary;
@@ -37,4 +37,4 @@ struct IndexTester : Tester {
     }
 };
 
-}  // namespace clice
+}  // namespace clice::testing

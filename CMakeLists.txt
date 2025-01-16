@@ -82,6 +82,7 @@ target_link_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/lib")
 if(NOT WIN32)
     target_link_libraries(clice-core PUBLIC
         LLVMSupport
+        LLVMFrontendOpenMP
         clangAST
         clangASTMatchers
         clangBasic

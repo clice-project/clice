@@ -14,7 +14,6 @@
 #include "Feature/SignatureHelp.h"
 #include "Feature/CodeAction.h"
 #include "Feature/Formatting.h"
-#include "Support/Support.h"
 
 namespace clice::proto {
 

@@ -1,8 +1,6 @@
-#include "Test/Test.h"
-#include <Compiler/Compiler.h>
-#include <Compiler/Resolver.h>
+#include "Test/CTest.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
 
@@ -47,10 +45,10 @@ void run(llvm::StringRef code, std::source_location current = std::source_locati
     auto input = tester.info.resolver().resolve(run.input);
     auto expect = run.expect;
 
-    EXPECT_EQ(input.isNull(), false, current);
-    EXPECT_EQ(expect.isNull(), false, current);
+    EXPECT_EQ(input.isNull(), false);
+    EXPECT_EQ(expect.isNull(), false);
 
-    EXPECT_EQ(input.getCanonicalType(), expect.getCanonicalType(), current);
+    EXPECT_EQ(input.getCanonicalType(), expect.getCanonicalType());
 }
 
 TEST(TemplateResolver, TypeParameterType) {
@@ -470,5 +468,5 @@ struct test {
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing
 

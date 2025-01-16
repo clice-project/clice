@@ -1,8 +1,8 @@
 #include "Test/Test.h"
 #include "Compiler/Compiler.h"
-#include <Support/FileSystem.h>
+#include "Support/FileSystem.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
 
@@ -179,5 +179,5 @@ export int foo = 1;
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing
 

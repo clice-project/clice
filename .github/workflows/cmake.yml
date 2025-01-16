@@ -55,7 +55,7 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         run: |
           mkdir -p ./.llvm
-          curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x86_64-linux-gnu-release.tar.xz" | tar -xJ -C ./.llvm
+          curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x86_64-linux-gnu-debug.tar.xz" | tar -xJ -C ./.llvm
 
       - name: Setup llvm binary
         if: matrix.os == 'windows-2022'
@@ -66,8 +66,15 @@ jobs:
       - name: Setup msvc sysroot for cmake
         if: matrix.os == 'windows-2022'
         uses: ilammy/msvc-dev-cmd@v1
+      
+      - name: Build clice
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          cmake --preset debug
+          cmake --build --preset debug
 
       - name: Build clice
+        if: matrix.os == 'windows-2022'
         run: |
           cmake --preset release
           cmake --build --preset release

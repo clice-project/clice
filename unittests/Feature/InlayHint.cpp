@@ -1,29 +1,10 @@
-#include <gtest/gtest.h>
-#include <Feature/InlayHint.h>
-#include <Basic/SourceConverter.h>
+#include "Test/CTest.h"
+#include "Feature/InlayHint.h"
+#include "Basic/SourceConverter.h"
 
-#include "Test/Test.h"
-
-namespace clice {
+namespace clice::testing {
 
 namespace {
-
-void dbg(const std::vector<proto::InlayHint>& hints) {
-    for(auto& hint: hints) {
-        llvm::outs() << std::format("kind:{}, position:{}, value_size:{},",
-                                    hint.kind.name(),
-                                    json::serialize(hint.position),
-                                    hint.lable.size());
-        for(auto& lable: hint.lable) {
-            llvm::outs() << std::format(" value:{}, link position:{}",
-                                        lable.value,
-                                        json::serialize(lable.Location))
-                         << '\n';
-        }
-    }
-}
-
-const SourceConverter Converter{proto::PositionEncodingKind::UTF8};
 
 const config::InlayHintOption LikeClangd{
     .maxLength = 20,
@@ -34,34 +15,45 @@ const config::InlayHintOption LikeClangd{
     .chainCall = false,
 };
 
-TEST(InlayHint, RequestRange) {
-    const char* main = R"cpp(
+struct InlayHint : public ::testing::Test {
+protected:
+    void run(llvm::StringRef code,
+             proto::Range range = {},
+             const config::InlayHintOption& option = LikeClangd) {
+        tester.emplace("main.cpp", code);
+        tester->run();
+        auto& info = tester->info;
+        SourceConverter converter;
+        result = feature::inlayHints({.range = range}, info, converter, option);
+    }
+
+    std::optional<Tester> tester;
+    proto::InlayHintsResult result;
+};
+
+TEST_F(InlayHint, RequestRange) {
+    run(R"cpp(
 auto x1 = 1;$(request_range_start)
 auto x2 = 1;
 auto x3 = 1;
 auto x4 = 1;$(request_range_end)
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-    auto& info = txs.info;
-
-    proto::Range request{
-        .start = {1, 12}, // $(request_range_start)
-        .end = {4, 12}, // $(request_range_end)
-    };
-    auto res = feature::inlayHints({.range = request}, info, Converter, {.implicitCast = true});
-
-    // dbg(res);
+)cpp",
+        {
+            // $(request_range_start)
+            .start = {1, 12},
+            // $(request_range_end)
+            .end = {4, 12},
+    },
+        {
+            .implicitCast = true,
+        });
 
     // 3: x2, x3, x4 is included in the request range.
-    txs.equal(res.size(), 3)
-        //
-        ;
+    EXPECT_EQ(result.size(), 3);
 }
 
-TEST(InlayHint, AutoDecl) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, AutoDecl) {
+    run(R"cpp(
 auto$(1) x = 1;
 
 void f() {
@@ -76,23 +68,13 @@ template<typename T>
 void t() {
     auto z = T{};
 }
-)cpp";
+)cpp");
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 4)
-        //
-        ;
+    EXPECT_EQ(result.size(), 4);
 }
 
-TEST(InlayHint, FreeFnArguments) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, FreeFunctionArguments) {
+    run(R"cpp(
 void f(int a, int b) {}
 void g(int a = 1) {}
 void h() {
@@ -100,45 +82,25 @@ f($(1)1, $(2)2);
 g();
 }
 
-)cpp";
+)cpp");
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 2)
-        //
-        ;
+    EXPECT_EQ(result.size(), 2);
 }
 
-TEST(InlayHint, FnArgPassedAsLValueRef) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, FnArgPassedAsLValueRef) {
+    run(R"cpp(
 void f(int& a, int& b) { }
 void g() {
 int x = 1;
 f($(1)x, $(2)x);
 }
-)cpp";
+)cpp");
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 2)
-        //
-        ;
+    EXPECT_EQ(result.size(), 2);
 }
 
-TEST(InlayHint, MethodArguments) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, MethodArguments) {
+    run(R"cpp(
 struct A {
     void f(int a, int b, int d) {}
 };
@@ -147,23 +109,13 @@ void f() {
     A a;
     a.f($(1)1, $(2)2, $(3)3);
 }
-)cpp";
+)cpp");
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 3)
-        //
-        ;
+    EXPECT_EQ(result.size(), 3);
 }
 
-TEST(InlayHint, OperatorCall) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, OperatorCall) {
+    run(R"cpp(
 struct A {
     int operator()(int a, int b) { return a + b; }
 };
@@ -172,23 +124,13 @@ int f() {
     A a;
     return a(1, 2);
 }
-)cpp";
+)cpp");
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 2)
-        //
-        ;
+    EXPECT_EQ(result.size(), 2);
 }
 
-TEST(InlayHint, ReturnTypeHint) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, ReturnTypeHint) {
+    run(R"cpp(
 auto f()$(1) {
     return 1;
 }
@@ -203,45 +145,25 @@ void g() {
     }();
 }
 
-)cpp";
+)cpp");
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 3)
-        //
-        ;
+    EXPECT_EQ(result.size(), 3);
 }
 
-TEST(InlayHint, StructureBinding) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, StructureBinding) {
+    run(R"cpp(
 int f() {
     int a[2];
     auto [x$(1), y$(2)] = a;
     return x + y; // use x and y to avoid warning.
 }
-)cpp";
+)cpp");
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 2)
-        //
-        ;
+    EXPECT_EQ(result.size(), 2);
 }
 
-TEST(InlayHint, Constructor) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, Constructor) {
+    run(R"cpp(
 struct A {
     int x;
     int y;
@@ -255,61 +177,31 @@ void f() {
     A c$(3) = {1, 2};
 }
 
-)cpp";
+)cpp");
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 6)
-        //
-        ;
+    EXPECT_EQ(result.size(), 6);
 }
 
-TEST(InlayHint, InitializeList) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, InitializeList) {
+    run(R"cpp(
     int a[3] = {1, 2, 3};
     int b[2][3] = {{1, 2, 3}, {4, 5, 6}};
-)cpp";
+)cpp");
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 3 + (3 * 2 + 2))
-        //
-        ;
+    EXPECT_EQ(result.size(), 3 + (3 * 2 + 2));
 }
 
-TEST(InlayHint, Designators) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, Designators) {
+    run(R"cpp(
 struct A{ int x; int y;};
 A a = {.x = 1, .y = 2};
-)cpp";
+)cpp");
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 0)
-        //
-        ;
+    EXPECT_EQ(result.size(), 0);
 }
 
-TEST(InlayHint, IgnoreSimpleSetter) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, IgnoreSimpleSetter) {
+    run(R"cpp(
 struct A { 
     void setPara(int Para); 
     void set_para(int para); 
@@ -323,23 +215,13 @@ void f() {
     a.set_para_meter(1);
 }
 
-)cpp";
+)cpp");
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, LikeClangd);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 0)
-        //
-        ;
+    EXPECT_EQ(result.size(), 0);
 }
 
-TEST(InlayHint, BlockEnd) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, BlockEnd) {
+    run(R"cpp(
 struct A { 
     int x;
 }$(1);
@@ -362,48 +244,30 @@ struct Out {
     struct In {
 
     };$(5)}$(6);
-)cpp";
+)cpp",
+        {},
+        {
+            .blockEnd = true,
+            .structSizeAndAlign = false,
+        });
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    config::InlayHintOption option{
-        .blockEnd = true,
-        .structSizeAndAlign = false,
-    };
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, option);
-
-    // dbg(res);
-
-    txs.equal(res.size(), 6)
-        //
-        ;
+    EXPECT_EQ(result.size(), 6);
 }
 
-TEST(InlayHint, Lambda) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, Lambda) {
+    run(R"cpp(
 auto l = []$(1) {
     return 1;
 }$(2);
-)cpp";
+)cpp",
+        {},
+        {.returnType = true, .blockEnd = true});
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, {.returnType = true, .blockEnd = true});
-
-    // dbg(res);
-
-    txs.equal(res.size(), 3)
-        //
-        ;
+    EXPECT_EQ(result.size(), 3);
 }
 
-TEST(InlayHint, StructAndMemberHint) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, StructAndMemberHint) {
+    run(R"cpp(
 struct A {
     int x;
     int y;
@@ -412,47 +276,29 @@ struct A {
         int z;
     };
 };
-)cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    config::InlayHintOption option{
-        .blockEnd = false,
-        .structSizeAndAlign = true,
-        .memberSizeAndOffset = true,
-    };
-
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, option);
-
-    // dbg(res);
+)cpp",
+        {},
+        {
+            .blockEnd = false,
+            .structSizeAndAlign = true,
+            .memberSizeAndOffset = true,
+        });
 
     /// TODO:
     /// if InlayHintOption::memberSizeAndOffset was implemented, the total hint count is 2 + 3.
-    txs.equal(res.size(), 2 /*+ 3*/)
-        //
-        ;
+    EXPECT_EQ(result.size(), 2 /*+ 3*/);
 }
 
-TEST(InlayHint, ImplicitCast) {
-    const char* main = R"cpp(
+TEST_F(InlayHint, ImplicitCast) {
+    run(R"cpp(
     int x = 1.0;
-)cpp";
+)cpp",
+        {},
+        {.implicitCast = true});
 
-    Tester txs("main.cpp", main);
-    txs.run();
-    auto& info = txs.info;
-    auto res = feature::inlayHints({}, info, Converter, {.implicitCast = true});
-
-    // dbg(res);
-
-    /// FIXME:
-    /// Hint count should be 1.
-    txs.equal(res.size(), 0)
-        //
-        ;
+    /// FIXME: Hint count should be 1.
+    EXPECT_EQ(result.size(), 0);
 }
 
 }  // namespace
-}  // namespace clice
+}  // namespace clice::testing

@@ -28,12 +28,25 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "debug",
+            "displayName": "Config Debug",
+            "description": "Sets debug build type",
+            "inherits": "config-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
         }
     ],
     "buildPresets": [
         {
             "name": "release",
             "configurePreset": "release"
+        },
+        {
+            "name": "debug",
+            "configurePreset": "debug"
         }
     ]
-}
+}
