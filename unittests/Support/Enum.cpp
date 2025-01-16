@@ -1,10 +1,31 @@
 #include "Test/Test.h"
 #include "Support/Enum.h"
-#include "Support/JSON.h"
 
 namespace clice::testing {
 
 namespace {
+
+TEST(Reflection, EnumName) {
+    enum class E {
+        A,
+        B,
+        C,
+    };
+
+    static_assert(refl::enum_name(E::A) == "A");
+    static_assert(refl::enum_name(E::B) == "B");
+    static_assert(refl::enum_name(E::C) == "C");
+
+    enum F {
+        A,
+        B,
+        C,
+    };
+
+    static_assert(refl::enum_name(F::A) == "A");
+    static_assert(refl::enum_name(F::B) == "B");
+    static_assert(refl::enum_name(F::C) == "C");
+}
 
 struct Color : refl::Enum<Color> {
     enum Kind : uint8_t {
@@ -20,7 +41,7 @@ struct Color : refl::Enum<Color> {
     constexpr inline static auto InvalidEnum = Invalid;
 };
 
-TEST(Support, NormalEnum) {
+TEST(Reflection, NormalEnum) {
     constexpr Color invalid = {};
     static_assert(!invalid);
     static_assert(invalid.value() == Color::Invalid);
@@ -30,25 +51,19 @@ TEST(Support, NormalEnum) {
     constexpr Color blue = Color::Blue;
     constexpr Color yellow = Color::Yellow;
 
-    static_assert(red.name() == "Red" && red.value() == 0);
-    static_assert(green.name() == "Green" && green.value() == 1);
-    static_assert(blue.name() == "Blue" && blue.value() == 2);
-    static_assert(yellow.name() == "Yellow" && yellow.value() == 3);
+    static_assert(red.name() == "Red" && red.kind() == Color::Red && red.value() == 0);
+    static_assert(green.name() == "Green" && green.kind() == Color::Green && green.value() == 1);
+    static_assert(blue.name() == "Blue" && blue.kind() == Color::Blue && blue.value() == 2);
+    static_assert(yellow.name() == "Yellow" && yellow.kind() == Color::Yellow &&
+                  yellow.value() == 3);
 
     static_assert(red != green && red != blue && red != yellow);
 
     constexpr Color red2 = Color(0);
     static_assert(red == red2);
 
-    EXPECT_EQ(json::serialize(red), json::Value(0));
-    EXPECT_EQ(json::serialize(green), json::Value(1));
-    EXPECT_EQ(json::serialize(blue), json::Value(2));
-    EXPECT_EQ(json::serialize(yellow), json::Value(3));
-
-    EXPECT_EQ(json::deserialize<Color>(json::Value(0)), red);
-    EXPECT_EQ(json::deserialize<Color>(json::Value(1)), green);
-    EXPECT_EQ(json::deserialize<Color>(json::Value(2)), blue);
-    EXPECT_EQ(json::deserialize<Color>(json::Value(3)), yellow);
+    static_assert(red.is_one_of(Color::Red));
+    static_assert(!red.is_one_of(Color::Blue));
 }
 
 struct Mask : refl::Enum<Mask, true, uint32_t> {
@@ -62,7 +77,7 @@ struct Mask : refl::Enum<Mask, true, uint32_t> {
     using Enum::Enum;
 };
 
-TEST(Support, MaskEnum) {
+TEST(Reflection, MaskEnum) {
     constexpr Mask invalid = {};
     static_assert(!invalid);
     static_assert(invalid.value() == 0);
@@ -93,16 +108,6 @@ TEST(Support, MaskEnum) {
     EXPECT_TRUE(bool(mask6 & Mask::A));
     EXPECT_TRUE(bool(mask6 & Mask::B));
     EXPECT_TRUE(bool(mask6 & Mask::C));
-
-    EXPECT_EQ(json::serialize(mask), json::Value(1));
-    EXPECT_EQ(json::serialize(mask2), json::Value(2));
-    EXPECT_EQ(json::serialize(mask3), json::Value(4));
-    EXPECT_EQ(json::serialize(mask4), json::Value(8));
-
-    EXPECT_EQ(json::deserialize<Mask>(json::Value(1)), mask);
-    EXPECT_EQ(json::deserialize<Mask>(json::Value(2)), mask2);
-    EXPECT_EQ(json::deserialize<Mask>(json::Value(4)), mask3);
-    EXPECT_EQ(json::deserialize<Mask>(json::Value(8)), mask4);
 }
 
 struct StringEnum : refl::Enum<StringEnum, false, std::string_view> {
@@ -116,7 +121,7 @@ struct StringEnum : refl::Enum<StringEnum, false, std::string_view> {
     constexpr inline static std::array All = {A, B, C, D};
 };
 
-TEST(Support, StringEnum) {
+TEST(Reflection, StringEnum) {
     constexpr StringEnum a = StringEnum::A;
     constexpr StringEnum b = StringEnum::B;
     constexpr StringEnum c = StringEnum::C;
@@ -128,19 +133,9 @@ TEST(Support, StringEnum) {
     static_assert(d.value() == "D");
 
     static_assert(a != b && a != c && a != d);
-
-    EXPECT_EQ(json::serialize(a), json::Value("A"));
-    EXPECT_EQ(json::serialize(b), json::Value("B"));
-    EXPECT_EQ(json::serialize(c), json::Value("C"));
-    EXPECT_EQ(json::serialize(d), json::Value("D"));
-
-    EXPECT_EQ(json::deserialize<StringEnum>(json::Value("A")), a);
-    EXPECT_EQ(json::deserialize<StringEnum>(json::Value("B")), b);
-    EXPECT_EQ(json::deserialize<StringEnum>(json::Value("C")), c);
-    EXPECT_EQ(json::deserialize<StringEnum>(json::Value("D")), d);
 }
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing
 

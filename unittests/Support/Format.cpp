@@ -8,7 +8,7 @@ namespace {
 template <typename Object>
 std::string dump(Object&& object) {
     using T = std::remove_cvref_t<Object>;
-    if constexpr(refl::special_enum<T>) {
+    if constexpr(refl::reflectable_enum<T>) {
         return std::format("{}", object.name());
     } else if constexpr(std::ranges::input_range<T>) {
         if constexpr(std::same_as<T, std::remove_cvref_t<std::ranges::range_reference_t<T>>>) {

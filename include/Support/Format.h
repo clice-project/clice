@@ -105,7 +105,7 @@ struct std::formatter<clice::json::Value> : std::formatter<llvm::StringRef> {
     }
 };
 
-template <clice::refl::special_enum E>
+template <clice::refl::reflectable_enum E>
 struct std::formatter<E> : std::formatter<std::string_view> {
     using Base = std::formatter<std::string_view>;
 

@@ -319,7 +319,7 @@ struct Serde<Range> {
 };
 
 template <typename E>
-    requires refl::special_enum<E>
+    requires refl::reflectable_enum<E>
 struct Serde<E> {
     static json::Value serialize(const E& e) {
         return json::Value(e.value());

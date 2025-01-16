@@ -14,7 +14,7 @@ struct X {
 
 static_assert(std::is_same_v<refl::member_types<X>, type_list<int, int>>);
 
-TEST(Reflection, Name) {
+TEST(Reflection, FieldName) {
     static struct X {
         int a;
         int b;
