@@ -103,26 +103,54 @@ TEST(JSON, SequenceRange) {
     EXPECT_EQ((json::deserialize<llvm::SmallVector<int, 5>>(expect)), input3);
 }
 
-TEST(Support, JSON) {
-    struct Point {
-        int x;
-        int y;
-    };
+TEST(JSON, Enum) {
+    enum class E { A, B, C };
 
-    json::Value object = json::Object{
-        {"x", 1},
-        {"y", 2},
-    };
+    json::Value expect = json::Value(1);
 
-    auto point = json::deserialize<Point>(std::move(object));
-    ASSERT_EQ(point.x, 1);
-    ASSERT_EQ(point.y, 2);
-
-    auto result = json::serialize(point);
-    ASSERT_EQ(result, object);
+    E input = E::B;
+    EXPECT_EQ(json::serialize(input), expect);
+    EXPECT_EQ(json::deserialize<E>(expect), input);
 }
 
-TEST(Support, StatefulSerde) {
+TEST(JSON, Struct) {
+    struct A {
+        int x;
+        int y;
+
+        bool operator== (const A& other) const = default;
+    };
+
+    json::Value expect = json::Object{
+        {"x", 1},
+        {"y", 2}
+    };
+
+    A input = {1, 2};
+    EXPECT_EQ(json::serialize(input), expect);
+    EXPECT_EQ(json::deserialize<A>(expect), input);
+
+    struct B {
+        A a;
+        std::string s;
+
+        bool operator== (const B& other) const = default;
+    };
+
+    json::Value expect2 = json::Object{
+        {"a", json::Object{{"x", 1}, {"y", 2}}},
+        {"s", "hello"                         }
+    };
+
+    B input2 = {
+        {1, 2},
+        "hello",
+    };
+    EXPECT_EQ(json::serialize(input2), expect2);
+    EXPECT_EQ(json::deserialize<B>(expect2), input2);
+}
+
+TEST(JSON, StatefulSerde) {
     struct Refs {
         std::vector<ValueRef> data;
     };

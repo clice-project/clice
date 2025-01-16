@@ -5,7 +5,7 @@
 #include <string_view>
 #include <source_location>
 
-#include "TypeTraits.h"
+#include "Support/TypeTraits.h"
 
 namespace clice::refl {
 
@@ -42,9 +42,17 @@ struct wrapper {
 };
 
 template <typename T>
-struct storage {
-    inline static T value;
+union storage_t {
+    char dummy;
+    T value;
+
+    storage_t() {}
+
+    ~storage_t() {}
 };
+
+template <typename T>
+inline storage_t<T> storage;
 
 template <wrapper T>
 consteval auto member_name() {
@@ -70,132 +78,212 @@ consteval auto member_name() {
     return name;
 }
 
+template <std::size_t N>
+constexpr inline auto to_string_literal_impl = [] {
+    if constexpr(N == 0) {
+        return std::array<char, 2>{'0', '\0'};
+    } else {
+        constexpr auto length = [] {
+            std::size_t result = 0;
+            for(std::size_t n = N; n; n /= 10) {
+                ++result;
+            }
+            return result;
+        }();
+
+        std::array<char, length + 1> result = {};
+        for(std::size_t i = length; i; i /= 10) {
+            result[i - 1] = '0' + N % 10;
+        }
+        result[length] = '\0';
+        return result;
+    }
+}();
+
 }  // namespace impl
 
+template <std::size_t N>
+constexpr std::string_view to_string_literal() {
+    return {impl::to_string_literal_impl<N>.data()};
+}
+
 template <typename T>
-struct Struct {
-    constexpr inline static bool reflectable =
-        std::is_aggregate_v<T> && std::is_default_constructible_v<T>;
+struct Struct;
 
-    constexpr static std::size_t member_count() {
-        return impl::member_count<T>();
-    }
+/// To check if the type is reflectable_struct.
+template <typename T>
+concept reflectable_struct = Struct<std::remove_cvref_t<T>>::reflectable_struct;
 
-    constexpr static T& instance() {
-        return impl::storage<T>::value;
-    }
+/// Get the member count of the type.
+template <typename T>
+constexpr static std::size_t member_count() {
+    return Struct<std::remove_cvref_t<T>>::member_count;
+}
+
+/// Get the all member names of the type.
+template <typename T>
+constexpr static auto& member_names() {
+    return Struct<std::remove_cvref_t<T>>::member_names;
+}
+
+/// Get the member name of the type at index N.
+template <typename T, std::size_t N>
+constexpr static std::string_view member_name() {
+    return member_names<T>()[N];
+}
+
+/// Get the member types of the type.
+template <std::size_t N, typename T>
+constexpr decltype(auto) member_value(T&& object) {
+    return *std::get<N>(Struct<std::remove_cvref_t<T>>::collect_members(object));
+}
+
+template <typename T>
+using member_types =
+    tuple_to_list_t<decltype(Struct<T>::collect_members(std::declval<T>())), std::remove_pointer_t>;
+
+/// Specialize for aggregate class.
+template <typename T>
+    requires std::is_aggregate_v<T>
+struct Struct<T> {
+    constexpr inline static bool reflectable_struct = true;
+
+    constexpr inline static auto member_count = impl::member_count<T>();
 
     template <typename Object>
-    constexpr static auto collcet_members(Object&& object) {
+    constexpr static auto collect_members(Object&& object) {
         // clang-format off
-        constexpr std::size_t count = member_count();
-        if constexpr(count == 0) {
+        if constexpr (member_count == 0) {
             return std::tuple{};
-        } else if constexpr(count == 1) {
-            auto&& [a] = object;
-            return std::tuple{&a};
-        } else if constexpr(count == 2) {
-            auto&& [a, b] = object;
-            return std::tuple{&a, &b};
-        } else if constexpr(count == 3) {
-            auto&& [a, b, c] = object;
-            return std::tuple{&a, &b, &c};
-        } else if constexpr(count == 4) {
-            auto&& [a, b, c, d] = object;
-            return std::tuple{&a, &b, &c, &d};
-        } else if constexpr(count == 5) {
-            auto&& [a, b, c, d, e] = object;
-            return std::tuple{&a, &b, &c, &d, &e};
-        } else if constexpr(count == 6) {
-            auto&& [a, b, c, d, e, f] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f};
-        } else if constexpr(count == 7) {
-            auto&& [a, b, c, d, e, f, g] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g};
-        } else if constexpr(count == 8) {
-            auto&& [a, b, c, d, e, f, g, h] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h};
-        } else if constexpr(count == 9) {
-            auto&& [a, b, c, d, e, f, g, h, i] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i};
-        } else if constexpr(count == 10) {
-            auto&& [a, b, c, d, e, f, g, h, i, j] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j};
-        } else if constexpr(count == 11) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k};
-        } else if constexpr(count == 12) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l};
-        } else if constexpr(count == 13) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m};
-        } else if constexpr(count == 14) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n};
-        } else if constexpr(count == 15) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o};
-        } else if constexpr(count == 16) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p};
-        } else if constexpr(count == 17) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q};
-        } else if constexpr(count == 18) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r};
-        } else if constexpr(count == 19) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s};
-        } else if constexpr(count == 20) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t};
-        } else if constexpr(count == 21) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u};
-        } else if constexpr(count == 22) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v};
-        } else if constexpr(count == 23) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w};
-        } else if constexpr(count == 24) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x};
-        } else if constexpr(count == 25) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y};
-        } else if constexpr(count == 26) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z};
-        } else if constexpr(count == 27) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, _0] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0};
-        } else if constexpr(count == 28) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, _0, _1] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0, &_1};
-        } else if constexpr(count == 29) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, _0, _1, _2] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0, &_1, &_2};
-        } else if constexpr(count == 30) {
-            auto&& [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, _0, _1, _2, _3] = object;
-            return std::tuple{&a, &b, &c, &d, &e, &f, &g, &h, &i, &j, &k, &l, &m, &n, &o, &p, &q, &r, &s, &t, &u, &v, &w, &x, &y, &z, &_0, &_1, &_2, &_3};
+        } else if constexpr (member_count == 1) {
+            auto&& [e1] = object;
+                return std::tuple{ &e1 };
+        } else if constexpr (member_count == 2) {
+            auto&& [e1, e2] = object;
+            return std::tuple{ &e1, &e2 };
+        } else if constexpr (member_count == 3) {
+            auto&& [e1, e2, e3] = object;
+            return std::tuple{ &e1, &e2, &e3 };
+        } else if constexpr (member_count == 4) {
+            auto&& [e1, e2, e3, e4] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4 };
+        } else if constexpr (member_count == 5) {
+            auto&& [e1, e2, e3, e4, e5] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5 };
+        } else if constexpr (member_count == 6) {
+            auto&& [e1, e2, e3, e4, e5, e6] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6 };
+        } else if constexpr (member_count == 7) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7 };
+        } else if constexpr (member_count == 8) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8 };
+        } else if constexpr (member_count == 9) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9 };
+        } else if constexpr (member_count == 10) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10 };
+        } else if constexpr (member_count == 11) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11 };
+        } else if constexpr (member_count == 12) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12 };
+        } else if constexpr (member_count == 13) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13 };
+        } else if constexpr (member_count == 14) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14 };
+        } else if constexpr (member_count == 15) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15 };
+        } else if constexpr (member_count == 16) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16 };
+        } else if constexpr (member_count == 17) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17 };
+        } else if constexpr (member_count == 18) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18 };
+        } else if constexpr (member_count == 19) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19 };
+        } else if constexpr (member_count == 20) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20 };
+        } else if constexpr (member_count == 21) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21 };
+        } else if constexpr (member_count == 22) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22 };
+        } else if constexpr (member_count == 23) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23 };
+        } else if constexpr (member_count == 24) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24 };
+        } else if constexpr (member_count == 25) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25 };
+        } else if constexpr (member_count == 26) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25, &e26 };
+        } else if constexpr (member_count == 27) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25, &e26, &e27 };
+        } else if constexpr (member_count == 28) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25, &e26, &e27, &e28 };
+        } else if constexpr (member_count == 29) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28, e29] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25, &e26, &e27, &e28, &e29 };
+        } else if constexpr (member_count == 30) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28, e29, e30] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25, &e26, &e27, &e28, &e29, &e30 };
+        } else if constexpr (member_count == 31) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28, e29, e30, e31] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25, &e26, &e27, &e28, &e29, &e30, &e31 };
+        } else if constexpr (member_count == 32) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28, e29, e30, e31, e32] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25, &e26, &e27, &e28, &e29, &e30, &e31, &e32 };
+        } else if constexpr (member_count == 33) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28, e29, e30, e31, e32, e33] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25, &e26, &e27, &e28, &e29, &e30, &e31, &e32, &e33 };
+        } else if constexpr (member_count == 34) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28, e29, e30, e31, e32, e33, e34] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25, &e26, &e27, &e28, &e29, &e30, &e31, &e32, &e33, &e34 };
+        } else if constexpr (member_count == 35) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28, e29, e30, e31, e32, e33, e34, e35] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25, &e26, &e27, &e28, &e29, &e30, &e31, &e32, &e33, &e34, &e35 };
+        } else if constexpr (member_count == 36) {
+            auto&& [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28, e29, e30, e31, e32, e33, e34, e35, e36] = object;
+            return std::tuple{ &e1, &e2, &e3, &e4, &e5, &e6, &e7, &e8, &e9, &e10, &e11, &e12, &e13, &e14, &e15, &e16, &e17, &e18, &e19, &e20, &e21, &e22, &e23, &e24, &e25, &e26, &e27, &e28, &e29, &e30, &e31, &e32, &e33, &e34, &e35, &e36 };
         } else {
-            static_assert(count <= 30, "Not supported member count");
+            // For counts greater than 36, trigger a compile-time error
+            static_assert(member_count <= 36, "Not supported member count");
         }
         // clang-format on
     }
-};
 
-/// To check if the type is reflectable.
-template <typename T>
-concept reflectable = Struct<std::remove_cvref_t<T>>::reflectable;
+    constexpr inline static auto member_names = []<std::size_t... Is>(std::index_sequence<Is...>) {
+        if constexpr(member_count == 0) {
+            return std::array<std::string_view, 1>{};
+        } else {
+            constexpr auto members = collect_members(impl::storage<T>.value);
+            return std::array{impl::member_name<std::get<Is>(members)>()...};
+        }
+    }(std::make_index_sequence<member_count>{});
+};
 
 template <typename... Ts>
 struct Inheritance : Ts... {};
 
-/// Use to define a reflectable struct with inheritance.
+/// Use to define a reflectable_struct struct with inheritance.
 #define inherited_struct(name, ...)                                                                \
     struct name##Body;                                                                             \
     using name = clice::refl::Inheritance<__VA_ARGS__, name##Body>;                                \
@@ -203,29 +291,41 @@ struct Inheritance : Ts... {};
 
 template <typename... Ts>
 struct Struct<Inheritance<Ts...>> {
-    constexpr inline static bool reflectable = (refl::reflectable<Ts> && ...);
+    constexpr inline static bool reflectable_struct = (refl::reflectable_struct<Ts> && ...);
 
-    constexpr static std::size_t member_count() {
-        return (Struct<Ts>::member_count() + ...);
-    }
-
-    constexpr static auto& instance() {
-        return impl::storage<Inheritance<Ts...>>::value;
-    }
+    constexpr static std::size_t member_count = (Struct<Ts>::member_count + ...);
 
     template <typename Object>
-    constexpr static auto collcet_members(Object&& object) {
+    constexpr static auto collect_members(Object&& object) {
         if constexpr(std::is_const_v<std::remove_reference_t<Object>>) {
-            return std::tuple_cat(Struct<Ts>::collcet_members(static_cast<const Ts&>(object))...);
+            return std::tuple_cat(Struct<Ts>::collect_members(static_cast<const Ts&>(object))...);
         } else {
-            return std::tuple_cat(Struct<Ts>::collcet_members(static_cast<Ts&>(object))...);
+            return std::tuple_cat(Struct<Ts>::collect_members(static_cast<Ts&>(object))...);
         }
     }
+
+    constexpr inline static auto member_names = []<std::size_t... Is>(std::index_sequence<Is...>) {
+        constexpr auto members = collect_members(impl::storage<Inheritance<Ts...>>.value);
+        return std::array{impl::member_name<std::get<Is>(members)>()...};
+    }(std::make_index_sequence<member_count>{});
 };
 
-template <typename T>
-using member_types =
-    tuple_to_list_t<decltype(Struct<T>::collcet_members(std::declval<T>())), std::remove_pointer_t>;
+template <typename TupleLike>
+    requires requires { std::tuple_size<TupleLike>::value; }
+struct Struct<TupleLike> {
+    constexpr inline static bool reflectable_struct = true;
+
+    constexpr inline static std::size_t member_count = std::tuple_size_v<TupleLike>;
+
+    template <typename Object>
+    constexpr static auto collect_members(Object&& object) {
+        return std::apply([](auto&&... args) { return std::tuple{&args...}; }, object);
+    }
+
+    constexpr inline static auto member_names = []<std::size_t... Is>(std::index_sequence<Is...>) {
+        return std::array{to_string_literal<Is>()...};
+    }(std::make_index_sequence<member_count>{});
+};
 
 /// Turn the return value of the callable to bool.
 template <typename Callable>
@@ -241,31 +341,23 @@ constexpr auto foldable(const Callable& callable) {
     };
 }
 
-template <reflectable Object, typename Callback>
+template <reflectable_struct Object, typename Callback>
 constexpr bool foreach(Object&& object, const Callback& callback) {
-    using S = Struct<std::remove_cvref_t<Object>>;
-    constexpr auto count = S::member_count();
-    auto members = S::collcet_members(object);
-    constexpr auto static_members = S::collcet_members(S::instance());
+    auto foldable = refl::foldable(callback);
     return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-        return (foldable(callback)(impl::member_name<std::get<Is>(static_members)>(),
-                                   *std::get<Is>(members)) &&
-                ...);
-    }(std::make_index_sequence<count>{});
+        return (foldable(refl::member_name<Object, Is>(), refl::member_value<Is>(object)) && ...);
+    }(std::make_index_sequence<refl::member_count<Object>()>{});
 }
 
 /// Invoke callback for each member of lhs and rhs, return false
 /// in callback to abort the iteration. Return true if all members are visited.
-template <reflectable LHS, reflectable RHS, typename Callback>
+template <reflectable_struct LHS, reflectable_struct RHS, typename Callback>
 constexpr bool foreach(LHS&& lhs, RHS&& rhs, const Callback& callback) {
-    using L = Struct<std::remove_cvref_t<LHS>>;
-    using R = Struct<std::remove_cvref_t<RHS>>;
-    static_assert(L::member_count() == R::member_count(), "Member count mismatch");
+    static_assert(member_count<LHS>() == member_count<RHS>(), "Member count mismatch");
+    auto foldable = refl::foldable(callback);
     return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-        return (foldable(callback)(*std::get<Is>(L::collcet_members(lhs)),
-                                   *std::get<Is>(R::collcet_members(rhs))) &&
-                ...);
-    }(std::make_index_sequence<L::member_count()>{});
+        return (foldable(refl::member_value<Is>(lhs), refl::member_value<Is>(rhs)) && ...);
+    }(std::make_index_sequence<refl::member_count<LHS>()>{});
 }
 
 }  // namespace clice::refl

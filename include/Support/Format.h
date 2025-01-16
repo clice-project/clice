@@ -1,6 +1,7 @@
 #pragma once
 
 #include <format>
+#include <ranges>
 
 #include "Error.h"
 #include "JSON.h"
@@ -104,8 +105,7 @@ struct std::formatter<clice::json::Value> : std::formatter<llvm::StringRef> {
     }
 };
 
-template <typename E>
-    requires clice::refl::special_enum<E>
+template <clice::refl::special_enum E>
 struct std::formatter<E> : std::formatter<std::string_view> {
     using Base = std::formatter<std::string_view>;
 
@@ -119,3 +119,5 @@ struct std::formatter<E> : std::formatter<std::string_view> {
         return Base::format(e.name(), ctx);
     }
 };
+
+namespace clice {}  // namespace clice

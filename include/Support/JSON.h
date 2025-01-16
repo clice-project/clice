@@ -330,7 +330,7 @@ struct Serde<E> {
     }
 };
 
-template <refl::reflectable T>
+template <refl::reflectable_struct T>
 struct Serde<T> {
     constexpr inline static bool stateful =
         refl::member_types<T>::apply([]<typename... Ts> { return (stateful_serde<Ts> || ...); });

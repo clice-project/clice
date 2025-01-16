@@ -1,6 +1,5 @@
 #include "Test/Test.h"
 #include "Support/Struct.h"
-#include "Support/JSON.h"
 
 namespace clice::testing {
 
@@ -15,7 +14,53 @@ struct X {
 
 static_assert(std::is_same_v<refl::member_types<X>, type_list<int, int>>);
 
-TEST(Support, Struct) {
+TEST(Reflection, Name) {
+    static struct X {
+        int a;
+        int b;
+    } x;
+
+    static_assert(refl::impl::member_name<&x.a>() == "a", "Member name mismatch");
+    static_assert(refl::impl::member_name<&x.b>() == "b", "Member name mismatch");
+    static_assert(refl::member_names<X>() == std::array<std::string_view, 2>{"a", "b"});
+
+    static struct Y {
+        X x;
+    } y;
+
+    static_assert(refl::impl::member_name<&y.x>() == "x", "Member name mismatch");
+    static_assert(refl::impl::member_name<&y.x.a>() == "a", "Member name mismatch");
+    static_assert(refl::impl::member_name<&y.x.b>() == "b", "Member name mismatch");
+    static_assert(refl::member_names<Y>() == std::array<std::string_view, 1>{"x"});
+
+    struct H {
+        X x;
+        Y y;
+        H() = delete;
+    };
+
+    static union Z {
+        char dummy;
+        H h;
+
+        Z() {};
+        ~Z() {};
+    } z;
+
+    static_assert(refl::impl::member_name<&z.h.x>() == "x", "Member name mismatch");
+    static_assert(refl::impl::member_name<&z.h.y>() == "y", "Member name mismatch");
+    static_assert(refl::impl::member_name<&z.h.y.x>() == "x", "Member name mismatch");
+
+    struct M {
+        X x;
+        Y y;
+        H h;
+    };
+
+    static_assert(refl::member_names<M>() == std::array<std::string_view, 3>{"x", "y", "h"});
+}
+
+TEST(Reflection, Foreach) {
     bool x = false, y = false;
     refl::foreach(X{1, 2}, [&](auto name, auto value) {
         if(name == "x") {
@@ -35,27 +80,15 @@ TEST(Support, Struct) {
     EXPECT_TRUE(refl::foreach(x1, x2, [](auto& lhs, auto& rhs) { return lhs = rhs; }));
     EXPECT_EQ(x1.x, 3);
     EXPECT_EQ(x1.y, 4);
-
-    auto j1 = json::Value(json::Object{
-        {"x", 3},
-        {"y", 4},
-    });
-    EXPECT_EQ(json::serialize(x1), j1);
-
-    auto j2 = json::Value(json::Object{
-        {"x", 3},
-        {"y", 4},
-    });
-    EXPECT_EQ(x2, json::deserialize<X>(j2));
 }
 
-inherited_struct(Y, X) {
-    int z;
-};
+TEST(Reflection, Inheritance) {
+    inherited_struct(Y, X) {
+        int z;
+    };
 
-static_assert(std::is_same_v<refl::member_types<Y>, type_list<int, int, int>>);
+    static_assert(std::is_same_v<refl::member_types<Y>, type_list<int, int, int>>);
 
-TEST(Support, Inheritance) {
     bool x = false, y = false, z = false;
     refl::foreach(Y{1, 2, 3}, [&](auto name, auto value) {
         if(name == "x") {
@@ -79,26 +112,41 @@ TEST(Support, Inheritance) {
     EXPECT_EQ(y1.x, 4);
     EXPECT_EQ(y1.y, 5);
     EXPECT_EQ(y1.z, 6);
+}
 
-    auto j1 = json::Value(json::Object{
-        {"x", 4},
-        {"y", 5},
-        {"z", 6},
-    });
-    EXPECT_EQ(json::serialize(y1), j1);
+TEST(Reflection, TupleLike) {
+    std::pair<int, int> p = {1, 2};
 
-    auto j2 = json::Value(json::Object{
-        {"x", 4},
-        {"y", 5},
-        {"z", 6},
+    static_assert(refl::member_names<decltype(p)>() == std::array<std::string_view, 2>{"0", "1"});
+
+    std::tuple<int, int> t = {1, 2};
+
+    static_assert(refl::member_names<decltype(t)>() == std::array<std::string_view, 2>{"0", "1"});
+
+    bool x = false, y = false;
+    refl::foreach(t, [&](auto name, auto value) {
+        if(name == "0") {
+            x = true;
+            EXPECT_EQ(value, 1);
+        } else if(name == "1") {
+            y = true;
+            EXPECT_EQ(value, 2);
+        } else {
+            EXPECT_TRUE(false);
+        }
     });
-    auto y3 = json::deserialize<Y>(j2);
-    EXPECT_EQ(y2.x, y3.x);
-    EXPECT_EQ(y2.y, y3.y);
-    EXPECT_EQ(y2.z, y3.z);
+    EXPECT_TRUE(x && y);
+
+    std::tuple<int, int> t1 = {1, 2};
+    std::tuple<int, int> t2 = {3, 4};
+
+    EXPECT_TRUE(refl::foreach(t1, t2, [](auto& lhs, auto& rhs) { return lhs = rhs; }));
+    EXPECT_EQ(std::get<0>(t1), 3);
+    EXPECT_EQ(std::get<1>(t1), 4);
+    EXPECT_EQ(std::get<0>(t2), 3);
 }
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing
 

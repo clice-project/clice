@@ -29,7 +29,7 @@ struct Hash<std::vector<T>> {
     };
 };
 
-template <reflectable T>
+template <reflectable_struct T>
 struct Hash<T> {
     static llvm::hash_code hash(const T& value) {
         llvm::SmallVector<llvm::hash_code, 8> hashes;
