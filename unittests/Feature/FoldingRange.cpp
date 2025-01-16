@@ -38,6 +38,34 @@ static int run(llvm::StringRef code, std::vector<TestCase> cases) {
     return 0;
 }
 
+struct FoldingRange : public ::testing::Test {
+    std::optional<Tester> tester;
+    proto::FoldingRangeResult result;
+
+    void run(llvm::StringRef code) {
+        tester.emplace("main.cpp", code);
+        tester->run();
+        auto& info = tester->info;
+
+        FoldingRangeParams param;
+        SourceConverter converter;
+        result = feature::foldingRange(param, info, converter);
+    }
+
+    void test(std::size_t index,
+              llvm::StringRef begin,
+              llvm::StringRef end,
+              std::source_location current = std::source_location::current()) {
+        auto& folding = result[index];
+        EXPECT_EQ(tester->pos(begin),
+                  proto::Position{folding.startLine, folding.startCharacter},
+                  current);
+        EXPECT_EQ(tester->pos(end),
+                  proto::Position{folding.endLine, folding.endCharacter},
+                  current);
+    }
+};
+
 void dbg(const proto::FoldingRangeResult& result) {
     for(auto& item: result) {
         llvm::outs()
@@ -52,7 +80,7 @@ void dbg(const proto::FoldingRangeResult& result) {
     }
 }
 
-TEST(FoldingRange, Namespace) {
+TEST_F(FoldingRange, Namespace) {
     run(R"cpp(
 namespace single_line {$(1)
 //$(2)
@@ -72,15 +100,14 @@ namespace ugly
 //$(6)
 }
 
-)cpp",
-        {
-            TestCase{0, "1", "2"},
-            TestCase{1, "3", "4"},
-            TestCase{2, "5", "6"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "3", "4");
+    test(2, "5", "6");
 }
 
-TEST(FoldingRange, Enum) {
+TEST_F(FoldingRange, Enum) {
     run(R"cpp(
 enum _0 {$(1)
     A,
@@ -96,14 +123,13 @@ enum class _2 {$(3)
     C$(4)
 };
 
-)cpp",
-        {
-            TestCase{0, "1", "2"},
-            TestCase{1, "3", "4"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "3", "4");
 }
 
-TEST(FoldingRange, RecordDecl) {
+TEST_F(FoldingRange, RecordDecl) {
     run(R"cpp(
 struct _2 {$(1)
     int x;
@@ -133,18 +159,17 @@ void f() {$(9)
     };$(10)
 }
 
-)cpp",
-        {
-            TestCase{0, "1",  "2" },
-            TestCase{1, "3",  "4" },
-            TestCase{2, "5",  "6" },
-            TestCase{3, "7",  "8" },
-            TestCase{4, "9",  "10"},
-            TestCase{5, "11", "12"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "3", "4");
+    test(2, "5", "6");
+    test(3, "7", "8");
+    test(4, "9", "10");
+    test(5, "11", "12");
 }
 
-TEST(FoldingRange, CXXRecordDeclAndMemberMethod) {
+TEST_F(FoldingRange, CXXRecordDeclAndMemberMethod) {
     run(R"cpp(
 struct _2 {$(1)
     int x;
@@ -167,16 +192,15 @@ $(4)
 };
 
 struct _4;
-)cpp",
-        {
-            TestCase{0, "1", "2"},
-            TestCase{1, "3", "4"},
-            TestCase{2, "5", "6"},
-            TestCase{3, "7", "8"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "3", "4");
+    test(2, "5", "6");
+    test(3, "7", "8");
 }
 
-TEST(FoldingRange, LambdaCapture) {
+TEST_F(FoldingRange, LambdaCapture) {
     run(R"cpp(
 auto z = [$(1)
     x = 0, y = 1$(2)
@@ -189,15 +213,16 @@ auto s = [$(5)
     y = 1$(6)
 ](){ return; };
 
-)cpp",
-        {
-            TestCase{0, "1", "2"},
-            TestCase{1, "3", "4"},
-            TestCase{2, "5", "6"},
-    });
+)cpp");
+
+    EXPECT_EQ(result.size(), 3);
+
+    test(0, "1", "2");
+    test(1, "3", "4");
+    test(2, "5", "6");
 }
 
-TEST(FoldingRange, LambdaExpression) {
+TEST_F(FoldingRange, LambdaExpression) {
     run(R"cpp(
 auto _0 = [](int _) {};
 
@@ -215,15 +240,14 @@ auto _3 = []($(5)
         int _2$(6)
     ) {};
 
-)cpp",
-        {
-            TestCase{0, "1", "2"},
-            TestCase{1, "3", "4"},
-            TestCase{2, "5", "6"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "3", "4");
+    test(2, "5", "6");
 }
 
-TEST(FoldingRange, FunctionParams) {
+TEST_F(FoldingRange, FunctionParams) {
     run(R"cpp(
 void e() {}
 
@@ -243,15 +267,14 @@ void d($(5)
     int _2,
     ...$(6)
 );
-)cpp",
-        {
-            TestCase{0, "1", "2"},
-            TestCase{1, "3", "4"},
-            TestCase{2, "5", "6"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "3", "4");
+    test(2, "5", "6");
 }
 
-TEST(FoldingRange, FunctionBody) {
+TEST_F(FoldingRange, FunctionBody) {
     run(R"cpp(
 void f() {$(1)
 //
@@ -270,16 +293,15 @@ void n() {$(5)
     }
     //$(6)
 }
-)cpp",
-        {
-            TestCase{0, "1", "2"},
-            TestCase{1, "3", "4"},
-            TestCase{2, "5", "6"},
-            TestCase{3, "7", "8"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "3", "4");
+    test(2, "5", "6");
+    test(3, "7", "8");
 }
 
-TEST(FoldingRange, FunctionCall) {
+TEST_F(FoldingRange, FunctionCall) {
     run(R"cpp(
 int f(int _1, int _2, int _3, int _4, int _5, int _6) { return _1 + _2; }
 
@@ -292,14 +314,13 @@ int main() {$(1)
         4, 5, 6$(4)
     );$(2)
 }
-)cpp",
-        {
-            TestCase{0, "1", "2"},
-            TestCase{1, "3", "4"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "3", "4");
 }
 
-TEST(FoldingRange, CompoundStmt) {
+TEST_F(FoldingRange, CompoundStmt) {
     run(R"cpp(
 int main () {$(1)
 
@@ -318,15 +339,14 @@ int main () {$(1)
     return 0;$(2)
 }
 
-)cpp",
-        {
-            TestCase{0, "1", "2"},
-            TestCase{1, "3", "4"},
-            TestCase{2, "5", "6"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "3", "4");
+    test(2, "5", "6");
 }
 
-TEST(FoldingRange, InitializeList) {
+TEST_F(FoldingRange, InitializeList) {
     run(R"cpp(
 struct L { int xs[4]; };
 
@@ -339,14 +359,13 @@ L l2 = {$(3)
 //$(4)
 };
 
-)cpp",
-        {
-            TestCase{0, "1", "2"},
-            TestCase{1, "3", "4"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "3", "4");
 }
 
-TEST(FoldingRange, AccessControlBlock) {
+TEST_F(FoldingRange, AccessControlBlock) {
     run(R"cpp(
 struct empty { int x; };
 
@@ -370,18 +389,17 @@ public:
 private:
 public:$(12)
 };
-)cpp",
-        {
-            TestCase{0, "1",  "2" },
-            TestCase{1, "3",  "4" },
-            TestCase{2, "5",  "6" },
-            TestCase{3, "7",  "8" },
-            TestCase{4, "9",  "10"},
-            TestCase{5, "11", "12"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "3", "4");
+    test(2, "5", "6");
+    test(3, "7", "8");
+    test(4, "9", "10");
+    test(5, "11", "12");
 }
 
-TEST(FoldingRange, Macro) {
+TEST_F(FoldingRange, Macro) {
     run(R"cpp(
 #$(1)ifdef M1
 $(2)
@@ -394,12 +412,11 @@ $(2)
 
 //$(4)
 #endif
-)cpp",
-        {
-            TestCase{0, "1", "2"},
-            TestCase{1, "5", "6"},
-            TestCase{2, "3", "4"},
-    });
+)cpp");
+
+    test(0, "1", "2");
+    test(1, "5", "6");
+    test(2, "3", "4");
 }
 
 }  // namespace

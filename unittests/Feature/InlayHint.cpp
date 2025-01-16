@@ -34,44 +34,43 @@ const config::InlayHintOption LikeClangd{
 
 struct InlayHint : public ::testing::Test {
 protected:
-    void compile(llvm::StringRef code) {
+    void run(llvm::StringRef code,
+             proto::Range range = {},
+             const config::InlayHintOption& option = LikeClangd) {
         tester.emplace("main.cpp", code);
         tester->run();
-    }
-
-    void run(proto::Range range, const config::InlayHintOption& option) {
         auto& info = tester->info;
         SourceConverter converter;
         result = feature::inlayHints({.range = range}, info, converter, option);
     }
-
-    void check(int x, int y) {}
 
     std::optional<Tester> tester;
     proto::InlayHintsResult result;
 };
 
 TEST_F(InlayHint, RequestRange) {
-    compile(R"cpp(
+    run(R"cpp(
 auto x1 = 1;$(request_range_start)
 auto x2 = 1;
 auto x3 = 1;
 auto x4 = 1;$(request_range_end)
-)cpp");
-
-    run(
-        proto::Range{
-            .start = {1, 12}, // $(request_range_start)
-            .end = {4, 12}, // $(request_range_end)
+)cpp",
+        {
+            // $(request_range_start)
+            .start = {1, 12},
+            // $(request_range_end)
+            .end = {4, 12},
     },
-        {.implicitCast = true});
+        {
+            .implicitCast = true,
+        });
 
     // 3: x2, x3, x4 is included in the request range.
     EXPECT_EQ(result.size(), 3);
 }
 
 TEST_F(InlayHint, AutoDecl) {
-    compile(R"cpp(
+    run(R"cpp(
 auto$(1) x = 1;
 
 void f() {
@@ -88,13 +87,11 @@ void t() {
 }
 )cpp");
 
-    run({}, LikeClangd);
-
     EXPECT_EQ(result.size(), 4);
 }
 
 TEST_F(InlayHint, FreeFunctionArguments) {
-    compile(R"cpp(
+    run(R"cpp(
 void f(int a, int b) {}
 void g(int a = 1) {}
 void h() {
@@ -104,13 +101,11 @@ g();
 
 )cpp");
 
-    run({}, LikeClangd);
-
     EXPECT_EQ(result.size(), 2);
 }
 
 TEST_F(InlayHint, FnArgPassedAsLValueRef) {
-    compile(R"cpp(
+    run(R"cpp(
 void f(int& a, int& b) { }
 void g() {
 int x = 1;
@@ -118,13 +113,11 @@ f($(1)x, $(2)x);
 }
 )cpp");
 
-    run({}, LikeClangd);
-
     EXPECT_EQ(result.size(), 2);
 }
 
 TEST_F(InlayHint, MethodArguments) {
-    compile(R"cpp(
+    run(R"cpp(
 struct A {
     void f(int a, int b, int d) {}
 };
@@ -135,15 +128,11 @@ void f() {
 }
 )cpp");
 
-    run({}, LikeClangd);
-
-    // dbg(result);
-
     EXPECT_EQ(result.size(), 3);
 }
 
 TEST_F(InlayHint, OperatorCall) {
-    compile(R"cpp(
+    run(R"cpp(
 struct A {
     int operator()(int a, int b) { return a + b; }
 };
@@ -154,13 +143,11 @@ int f() {
 }
 )cpp");
 
-    run({}, LikeClangd);
-
     EXPECT_EQ(result.size(), 2);
 }
 
 TEST_F(InlayHint, ReturnTypeHint) {
-    compile(R"cpp(
+    run(R"cpp(
 auto f()$(1) {
     return 1;
 }
@@ -177,13 +164,11 @@ void g() {
 
 )cpp");
 
-    run({}, LikeClangd);
-
     EXPECT_EQ(result.size(), 3);
 }
 
 TEST_F(InlayHint, StructureBinding) {
-    compile(R"cpp(
+    run(R"cpp(
 int f() {
     int a[2];
     auto [x$(1), y$(2)] = a;
@@ -191,13 +176,11 @@ int f() {
 }
 )cpp");
 
-    run({}, LikeClangd);
-
     EXPECT_EQ(result.size(), 2);
 }
 
 TEST_F(InlayHint, Constructor) {
-    compile(R"cpp(
+    run(R"cpp(
 struct A {
     int x;
     int y;
@@ -213,35 +196,29 @@ void f() {
 
 )cpp");
 
-    run({}, LikeClangd);
-
     EXPECT_EQ(result.size(), 6);
 }
 
 TEST_F(InlayHint, InitializeList) {
-    compile(R"cpp(
+    run(R"cpp(
     int a[3] = {1, 2, 3};
     int b[2][3] = {{1, 2, 3}, {4, 5, 6}};
 )cpp");
-
-    run({}, LikeClangd);
 
     EXPECT_EQ(result.size(), 3 + (3 * 2 + 2));
 }
 
 TEST_F(InlayHint, Designators) {
-    compile(R"cpp(
+    run(R"cpp(
 struct A{ int x; int y;};
 A a = {.x = 1, .y = 2};
 )cpp");
-
-    run({}, LikeClangd);
 
     EXPECT_EQ(result.size(), 0);
 }
 
 TEST_F(InlayHint, IgnoreSimpleSetter) {
-    compile(R"cpp(
+    run(R"cpp(
 struct A { 
     void setPara(int Para); 
     void set_para(int para); 
@@ -257,13 +234,11 @@ void f() {
 
 )cpp");
 
-    run({}, LikeClangd);
-
     EXPECT_EQ(result.size(), 0);
 }
 
 TEST_F(InlayHint, BlockEnd) {
-    compile(R"cpp(
+    run(R"cpp(
 struct A { 
     int x;
 }$(1);
@@ -286,9 +261,8 @@ struct Out {
     struct In {
 
     };$(5)}$(6);
-)cpp");
-
-    run({},
+)cpp",
+        {},
         {
             .blockEnd = true,
             .structSizeAndAlign = false,
@@ -298,19 +272,19 @@ struct Out {
 }
 
 TEST_F(InlayHint, Lambda) {
-    compile(R"cpp(
+    run(R"cpp(
 auto l = []$(1) {
     return 1;
 }$(2);
-)cpp");
-
-    run({}, {.returnType = true, .blockEnd = true});
+)cpp",
+        {},
+        {.returnType = true, .blockEnd = true});
 
     EXPECT_EQ(result.size(), 3);
 }
 
 TEST_F(InlayHint, StructAndMemberHint) {
-    compile(R"cpp(
+    run(R"cpp(
 struct A {
     int x;
     int y;
@@ -319,9 +293,8 @@ struct A {
         int z;
     };
 };
-)cpp");
-
-    run({},
+)cpp",
+        {},
         {
             .blockEnd = false,
             .structSizeAndAlign = true,
@@ -334,11 +307,11 @@ struct A {
 }
 
 TEST_F(InlayHint, ImplicitCast) {
-    compile(R"cpp(
+    run(R"cpp(
     int x = 1.0;
-)cpp");
-
-    run({}, {.implicitCast = true});
+)cpp",
+        {},
+        {.implicitCast = true});
 
     /// FIXME: Hint count should be 1.
     EXPECT_EQ(result.size(), 0);

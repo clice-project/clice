@@ -75,8 +75,7 @@ consteval auto member_name() {
 template <typename T>
 struct Struct {
     constexpr inline static bool reflectable =
-        std::is_aggregate_v<std::remove_cvref_t<T>> &&
-        std::is_default_constructible_v<std::remove_cvref_t<T>>;
+        std::is_aggregate_v<T> && std::is_default_constructible_v<T>;
 
     constexpr static std::size_t member_count() {
         return impl::member_count<T>();
@@ -191,7 +190,7 @@ struct Struct {
 
 /// To check if the type is reflectable.
 template <typename T>
-concept reflectable = Struct<T>::reflectable;
+concept reflectable = Struct<std::remove_cvref_t<T>>::reflectable;
 
 template <typename... Ts>
 struct Inheritance : Ts... {};

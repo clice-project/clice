@@ -47,23 +47,15 @@ struct TextDocumentPositionParams {
     Position position;
 };
 
-
-struct MarkupKind {
-    std::string_view m_value;
-
-    constexpr MarkupKind(std::string_view value) : m_value(value) {}
-
-    constexpr static std::string_view PlainText = "plaintext";
-    constexpr static std::string_view Markdown = "markdown";
-};
+using MarkupKind = string;
 
 struct MarkupContent {
     /// The type of the Markup.
-    MarkupKind kind;
+    MarkupKind kind = "markdown";
 
     /// The content itself.
     string value;
- };
+};
 
 struct DidOpenTextDocumentParams {
     /// The document that was opened.
