@@ -5,39 +5,6 @@ namespace clice::testing {
 
 namespace {
 
-struct TestCase {
-    std::size_t index;
-    llvm::StringRef begin;
-    llvm::StringRef end;
-    std::source_location current;
-
-    TestCase(std::size_t index,
-             llvm::StringRef begin,
-             llvm::StringRef end,
-             std::source_location current = std::source_location::current()) :
-        index(index), begin(begin), end(end), current(current) {}
-};
-
-static int run(llvm::StringRef code, std::vector<TestCase> cases) {
-    Tester tester("main.cpp", code);
-    tester.run();
-    auto& info = tester.info;
-
-    FoldingRangeParams param;
-    SourceConverter converter;
-    auto result = feature::foldingRange(param, info, converter);
-
-    for(auto& [index, begin, end, current]: cases) {
-        auto& folding = result[index];
-        EXPECT_EQ(tester.pos(begin),
-                  proto::Position{folding.startLine, folding.startCharacter},
-                  current);
-        EXPECT_EQ(tester.pos(end), proto::Position{folding.endLine, folding.endCharacter}, current);
-    }
-
-    return 0;
-}
-
 struct FoldingRange : public ::testing::Test {
     std::optional<Tester> tester;
     proto::FoldingRangeResult result;
@@ -52,10 +19,10 @@ struct FoldingRange : public ::testing::Test {
         result = feature::foldingRange(param, info, converter);
     }
 
-    void test(std::size_t index,
-              llvm::StringRef begin,
-              llvm::StringRef end,
-              std::source_location current = std::source_location::current()) {
+    void EXPECT_RANGE(std::size_t index,
+                      llvm::StringRef begin,
+                      llvm::StringRef end,
+                      std::source_location current = std::source_location::current()) {
         auto& folding = result[index];
         EXPECT_EQ(tester->pos(begin),
                   proto::Position{folding.startLine, folding.startCharacter},
@@ -102,9 +69,9 @@ namespace ugly
 
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "3", "4");
-    test(2, "5", "6");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
+    EXPECT_RANGE(2, "5", "6");
 }
 
 TEST_F(FoldingRange, Enum) {
@@ -125,8 +92,8 @@ enum class _2 {$(3)
 
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "3", "4");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
 }
 
 TEST_F(FoldingRange, RecordDecl) {
@@ -161,12 +128,12 @@ void f() {$(9)
 
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "3", "4");
-    test(2, "5", "6");
-    test(3, "7", "8");
-    test(4, "9", "10");
-    test(5, "11", "12");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
+    EXPECT_RANGE(2, "5", "6");
+    EXPECT_RANGE(3, "7", "8");
+    EXPECT_RANGE(4, "9", "10");
+    EXPECT_RANGE(5, "11", "12");
 }
 
 TEST_F(FoldingRange, CXXRecordDeclAndMemberMethod) {
@@ -194,10 +161,10 @@ $(4)
 struct _4;
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "3", "4");
-    test(2, "5", "6");
-    test(3, "7", "8");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
+    EXPECT_RANGE(2, "5", "6");
+    EXPECT_RANGE(3, "7", "8");
 }
 
 TEST_F(FoldingRange, LambdaCapture) {
@@ -217,9 +184,9 @@ auto s = [$(5)
 
     EXPECT_EQ(result.size(), 3);
 
-    test(0, "1", "2");
-    test(1, "3", "4");
-    test(2, "5", "6");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
+    EXPECT_RANGE(2, "5", "6");
 }
 
 TEST_F(FoldingRange, LambdaExpression) {
@@ -242,9 +209,9 @@ auto _3 = []($(5)
 
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "3", "4");
-    test(2, "5", "6");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
+    EXPECT_RANGE(2, "5", "6");
 }
 
 TEST_F(FoldingRange, FunctionParams) {
@@ -269,9 +236,9 @@ void d($(5)
 );
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "3", "4");
-    test(2, "5", "6");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
+    EXPECT_RANGE(2, "5", "6");
 }
 
 TEST_F(FoldingRange, FunctionBody) {
@@ -295,10 +262,10 @@ void n() {$(5)
 }
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "3", "4");
-    test(2, "5", "6");
-    test(3, "7", "8");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
+    EXPECT_RANGE(2, "5", "6");
+    EXPECT_RANGE(3, "7", "8");
 }
 
 TEST_F(FoldingRange, FunctionCall) {
@@ -316,8 +283,8 @@ int main() {$(1)
 }
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "3", "4");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
 }
 
 TEST_F(FoldingRange, CompoundStmt) {
@@ -341,9 +308,9 @@ int main () {$(1)
 
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "3", "4");
-    test(2, "5", "6");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
+    EXPECT_RANGE(2, "5", "6");
 }
 
 TEST_F(FoldingRange, InitializeList) {
@@ -361,8 +328,8 @@ L l2 = {$(3)
 
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "3", "4");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
 }
 
 TEST_F(FoldingRange, AccessControlBlock) {
@@ -391,12 +358,12 @@ public:$(12)
 };
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "3", "4");
-    test(2, "5", "6");
-    test(3, "7", "8");
-    test(4, "9", "10");
-    test(5, "11", "12");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
+    EXPECT_RANGE(2, "5", "6");
+    EXPECT_RANGE(3, "7", "8");
+    EXPECT_RANGE(4, "9", "10");
+    EXPECT_RANGE(5, "11", "12");
 }
 
 TEST_F(FoldingRange, Macro) {
@@ -414,9 +381,9 @@ $(2)
 #endif
 )cpp");
 
-    test(0, "1", "2");
-    test(1, "5", "6");
-    test(2, "3", "4");
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "5", "6");
+    EXPECT_RANGE(2, "3", "4");
 }
 
 }  // namespace
