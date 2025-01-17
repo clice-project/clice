@@ -64,6 +64,7 @@ target("clice-core")
         }})
     elseif is_mode("release") then 
         add_packages("llvm", {public = true})
+        add_ldflags("-Wl,--gc-sections")
     end 
 
 target("clice")
