@@ -64,7 +64,6 @@ target("clice-core")
         }})
     elseif is_mode("release") then 
         add_packages("llvm", {public = true})
-        add_ldflags("-Wl,--gc-sections")
     end 
 
 target("clice")
@@ -102,7 +101,6 @@ target("unit_tests")
             "--test-dir=" .. path.absolute("tests"),
             "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
         )
-        target:add("rpathdirs", path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib"))
     end)
 
 rule("clice_build_config")
