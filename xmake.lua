@@ -58,6 +58,7 @@ target("clice-core")
         }})
     elseif is_mode("release") then 
         add_packages("llvm", {public = true})
+        add_ldflags("-Wl,--gc-sections")
     end 
 
 target("clice")
@@ -133,6 +134,10 @@ package("llvm")
 
     if is_plat("windows") then
         add_configs("runtimes", {description = "Set compiler runtimes.", default = "MD", readonly = true})
+    elseif is_plat("linux") then
+        if is_mode("debug") then
+            add_configs("shared", {description = "Build shared library.", default = true, type = "boolean", readonly = true})
+        end
     end
 
     if is_plat("windows", "mingw") then
