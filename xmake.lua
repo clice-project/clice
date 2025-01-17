@@ -20,7 +20,7 @@ if has_config("dev") then
     end
 end
 
-add_requires("llvm", "libuv")
+add_requires("llvm", "libuv", "toml++")
 
 add_rules("mode.release", "mode.debug")
 set_languages("c++23")
@@ -33,6 +33,7 @@ target("clice-core")
     add_includedirs("include", {public = true})
 
     add_packages("libuv", {public = true})
+    add_packages("toml++", {public = true})
     if is_mode("debug") then 
         add_packages("llvm", {
             public = true, 
