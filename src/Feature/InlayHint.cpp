@@ -82,8 +82,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     /// Collect hint for variable declared with `auto` keywords.
     /// The hint string wiil be placed at the right side of identifier, starting with ':' character.
     /// The `originDeclRange` will be used as the link of hint string.
-    void collectAutoDeclHint(clang::QualType deduced, clang::SourceRange identRange,
-                             std::optional<clang::SourceRange> linkDeclRange) {
+    void collectAutoDeclTypeHint(clang::QualType deduced, clang::SourceRange identRange,
+                                 std::optional<clang::SourceRange> linkDeclRange) {
 
         // For lambda expression, `getAsString` return a text like `(lambda at main.cpp:2:10)`
         //      auto lambda = [](){ return 1; };
@@ -211,9 +211,9 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
                 if(auto type = binding->getType(); !type.isNull() && !type->isDependentType()) {
                     // Hint at the end position of identifier.
                     auto name = binding->getName();
-                    collectAutoDeclHint(type.getCanonicalType(),
-                                        binding->getBeginLoc().getLocWithOffset(name.size()),
-                                        decl->getSourceRange());
+                    collectAutoDeclTypeHint(type.getCanonicalType(),
+                                            binding->getBeginLoc().getLocWithOffset(name.size()),
+                                            decl->getSourceRange());
                 }
             }
             return true;
@@ -233,7 +233,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
                 originDeclRange = mrd->getSourceRange();
 
             auto tailOfIdentifier = decl->getLocation().getLocWithOffset(decl->getName().size());
-            collectAutoDeclHint(qty, tailOfIdentifier, originDeclRange);
+            collectAutoDeclTypeHint(qty, tailOfIdentifier, originDeclRange);
         }
         return true;
     }
@@ -427,13 +427,10 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         result.push_back(std::move(hint));
     }
 
-    // bool TraverseFunctionDecl(clang::FunctionDecl* decl) {
-    //     return config.returnType ? Base::TraverseFunctionDecl(decl) : true;
-    // }
-
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
         // 1. Hint block end.
-        if(config.blockEnd && decl->isThisDeclarationADefinition()) {
+        if(config.blockEnd && decl->isThisDeclarationADefinition() &&
+           isMultiLineRange(decl->getSourceRange())) {
             /// FIXME:
             /// Use a proper name such as simplified signature of funtion.
             auto typeLoc = decl->getTypeSourceInfo()->getTypeLoc().getSourceRange();
@@ -441,7 +438,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             auto end = src.getCharacterData(typeLoc.getEnd());
             llvm::StringRef piece{begin, static_cast<size_t>(end - begin) + 1};
 
-            //
+            // Right side of '}'
             collectBlockEndHint(decl->getBodyRBrace().getLocWithOffset(1),
                                 std::format("// {}", piece),
                                 decl->getSourceRange(),
@@ -469,7 +466,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
 
     bool VisitLambdaExpr(const clang::LambdaExpr* expr) {
         // 1. Hint block end.
-        if(config.blockEnd)
+        if(config.blockEnd && isMultiLineRange(expr->getBody()->getSourceRange()))
             collectBlockEndHint(
                 expr->getEndLoc().getLocWithOffset(1),
                 std::format("// lambda #{}", expr->getLambdaClass()->getLambdaManglingNumber()),
@@ -541,7 +538,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         return remain.ltrim();
     }
 
-    /// This enum decide how to handle the duplicated hint in the same line.
+    /// This enum decide how to handle the duplicated block-end hint in the same line.
     enum class DecideDuplicated {
         // Accept all hints.
         AcceptBoth,
@@ -636,7 +633,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         if(!decl->isThisDeclarationADefinition())
             return true;
 
-        if(config.blockEnd) {
+        if(config.blockEnd && isMultiLineRange(decl->getBraceRange())) {
             std::string hintText = std::format("// {}", decl->getKindName().str());
             // Add a tail flag for enum declaration as clangd's do.
             if(const auto* enumDecl = llvm::dyn_cast<clang::EnumDecl>(decl);

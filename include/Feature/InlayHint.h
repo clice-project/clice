@@ -125,6 +125,17 @@ struct InlayHintOption {
     ///     .to_c() |ClassC|
     ///     .to_d() |ClassD|
     bool chainCall : 1 = false;
+
+    /// TODO:
+    /// Hint for a magic number literal to hex format. e.g.
+    ///     uint32 magic = 31|0x1F|;
+    bool numberLiteralToHex : 1 = false;
+
+    /// TODO:
+    /// Hint for a string literal length. e.g.
+    ///     const char* str = "123456"|len: 6|;
+    /// Too short string (len <= 8) will not be hinted.
+    bool cstrLength : 1 = false;
 };
 
 }  // namespace config
@@ -137,8 +148,7 @@ namespace feature {
 json::Value inlayHintCapability(json::Value InlayHintClientCapabilities);
 
 /// Compute inlay hints for a document in given range and config.
-proto::InlayHintsResult inlayHints(proto::InlayHintParams param,
-                                   ASTInfo& info,
+proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
                                    const SourceConverter& converter,
                                    const config::InlayHintOption& config);
 
