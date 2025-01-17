@@ -11,6 +11,7 @@ on:
           - '.gitignore'
           - 'LICENSE'
           - 'README.md'
+          - '.github/workflows/xmake.yml'
 
 jobs:
   build:
