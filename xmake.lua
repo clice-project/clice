@@ -32,13 +32,43 @@ target("clice-core")
     set_pcxxheader("include/Compiler/Clang.h")
     add_includedirs("include", {public = true})
 
-    add_packages("llvm", "libuv", {public = true})
+    add_packages("libuv", {public = true})
+    if is_mode("debug") then 
+        add_packages("llvm", {
+            public = true, 
+            links = {
+                "LLVMSupport",
+                "LLVMFrontendOpenMP",
+                "clangAST",
+                "clangASTMatchers",
+                "clangBasic",
+                "clangDependencyScanning",
+                "clangDriver",
+                "clangFormat",
+                "clangFrontend",
+                "clangIndex",
+                "clangLex",
+                "clangSema",
+                "clangSerialization",
+                "clangTooling",
+                "clangToolingCore",
+                "clangToolingInclusions",
+                "clangToolingInclusionsStdlib",
+                "clangToolingSyntax",
+        }})
+    elseif is_mode("release") then 
+        add_packages("llvm", {public = true})
+    end 
 
 target("clice")
     set_kind("binary")
     add_files("src/Driver/clice.cc")
 
     add_deps("clice-core")
+
+    on_config(function (target)
+        target:add("rpathdirs", path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib"))
+    end)
 
 target("integration_tests")
     set_default(false)
@@ -60,11 +90,11 @@ target("unit_tests")
     add_tests("default")
     
     on_config(function (target)
+        target:add("rpathdirs", path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib"))
         target:set("runargs", 
             "--test-dir=" .. path.absolute("tests"),
             "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
         )
-        target:add("rpathdirs", path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib"))
     end)
 
 rule("clice_build_config")
