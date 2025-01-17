@@ -1,7 +1,10 @@
 #pragma once
 
 #include "Async.h"
+#include "Config.h"
 #include "Protocol.h"
+#include "Database.h"
+#include "Scheduler.h"
 
 namespace clice {
 
@@ -147,6 +150,10 @@ private:
     async::Task<> onContextAll(const proto::TextDocumentIdentifier& params);
 
     async::Task<> onContextSwitch(const proto::TextDocumentIdentifier& params);
+
+    SourceConverter converter;
+    CompilationDatabase database;
+    Scheduler scheduler;
 };
 
 }  // namespace clice

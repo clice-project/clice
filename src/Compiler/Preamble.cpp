@@ -1,3 +1,12 @@
 #include "Compiler/Preamble.h"
 
-namespace clice {}
+namespace clice {
+
+
+std::string computePreamble(CompilationParams& params){
+
+
+
+}
+
+}

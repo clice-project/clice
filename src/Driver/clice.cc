@@ -27,7 +27,7 @@ int main(int argc, const char** argv) {
     if(cl::config.empty()) {
         log::warn("No config file specified; using default configuration.");
     } else {
-        /// config::load(argv[0], cl::config.getValue());
+        config::load(argv[0], cl::config.getValue());
         log::info("Successfully loaded configuration file from {0}.", cl::config.getValue());
     }
 

@@ -2,7 +2,7 @@
 
 namespace clice {
 
-async::Task<> FileController::open(llvm::StringRef file) {
+async::Task<> Scheduler::open(llvm::StringRef file) {
     /// 首先根据 rule 来对 file 进行判别
 
     /// 查看一下这 file 属于什么模式

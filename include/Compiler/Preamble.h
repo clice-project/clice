@@ -25,7 +25,6 @@ struct PCHInfo {
     std::vector<std::string> deps;
 };
 
-/// Compute the preamble to build PCH with the given content.
 std::string computePreamble(CompilationParams& params);
 
 /// Build PCH from given file path and content.

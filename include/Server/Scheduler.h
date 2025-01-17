@@ -22,9 +22,9 @@ struct Rule {
 };
 
 /// This class is responsible for managing all opened files.
-class FileController {
+class Scheduler {
 public:
-    FileController(CompilationDatabase& database, llvm::ArrayRef<Rule> rules) :
+    Scheduler(CompilationDatabase& database, llvm::ArrayRef<Rule> rules) :
         database(database), rules(rules) {}
 
     async::Task<> open(llvm::StringRef path);
@@ -35,7 +35,12 @@ public:
 
 private:
     CompilationDatabase& database;
+
     llvm::ArrayRef<Rule> rules;
+
+    struct File {};
+
+    llvm::StringMap<File> files;
 };
 
 }  // namespace clice
