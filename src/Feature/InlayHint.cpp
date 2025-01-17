@@ -74,7 +74,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
 
     /// Shrink the hint text to the max length.
     std::string shrinkText(std::string text) {
-        if(text.size() >= config.maxLength)
+        if(text.size() > config.maxLength)
             text.resize(config.maxLength - 3), text.append("...");
         return text;
     }
@@ -82,8 +82,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     /// Collect hint for variable declared with `auto` keywords.
     /// The hint string wiil be placed at the right side of identifier, starting with ':' character.
     /// The `originDeclRange` will be used as the link of hint string.
-    void collectAutoDeclHint(clang::QualType deduced,
-                             clang::SourceRange identRange,
+    void collectAutoDeclHint(clang::QualType deduced, clang::SourceRange identRange,
                              std::optional<clang::SourceRange> linkDeclRange) {
 
         // For lambda expression, `getAsString` return a text like `(lambda at main.cpp:2:10)`
@@ -123,22 +122,28 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         return {};
     }
 
-    /// Check if there is any comment like /*paramName*/ in given range.
-    bool hasHandWriteComment(clang::SourceRange range) {
-        auto firstChar = src.getCharacterData(range.getBegin());
-        auto length = static_cast<size_t>(src.getCharacterData(range.getEnd()) - firstChar);
+    /// Check if there is any comment like /*paramName*/ before a argument.
+    bool hasHandWriteComment(clang::SourceRange argument) {
+        auto [fid, offset] = src.getDecomposedLoc(argument.getBegin());
+        if(fid != src.getMainFileID())
+            return false;
 
-        llvm::StringRef text{firstChar, length};
-        return text.contains("/*") && text.contains("*/");
+        // Get source text until the argument and drop end whitespace.
+        llvm::StringRef content = code.substr(0, offset).rtrim();
+
+        // Any comment ends with `*/` is considered meaningful.
+        return content.ends_with("*/");
     }
 
     bool needHintArgument(const clang::ParmVarDecl* param, const clang::Expr* arg) {
+        auto name = param->getName();
+
         // Skip anonymous parameters.
-        if(param->getName().empty())
+        if(name.empty())
             return false;
 
         // Skip if the argument is a single name and it matches the parameter exactly.
-        if(param->getName().equals_insensitive(takeExprIdentifier(arg)))
+        if(name.equals_insensitive(takeExprIdentifier(arg)))
             return false;
 
         // Skip if the argument is preceded by any hand-written hint /*paramName*/.
@@ -404,8 +409,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         return true;
     }
 
-    void collectReturnTypeHint(clang::SourceLocation hintLoc,
-                               clang::QualType retType,
+    void collectReturnTypeHint(clang::SourceLocation hintLoc, clang::QualType retType,
                                clang::SourceRange retTypeDeclRange) {
         proto::InlayHintLablePart lable{
             .value = shrinkText(std::format("-> {}", retType.getAsString(policy))),
@@ -436,10 +440,12 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             auto begin = src.getCharacterData(typeLoc.getBegin());
             auto end = src.getCharacterData(typeLoc.getEnd());
             llvm::StringRef piece{begin, static_cast<size_t>(end - begin) + 1};
+
+            //
             collectBlockEndHint(decl->getBodyRBrace().getLocWithOffset(1),
                                 std::format("// {}", piece),
                                 decl->getSourceRange(),
-                                /*checkDuplicatedHint=*/true);
+                                DecideDuplicated::Ignore);
         }
 
         // 2. Hint return type.
@@ -465,10 +471,10 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         // 1. Hint block end.
         if(config.blockEnd)
             collectBlockEndHint(
-                expr->getEndLoc(),
+                expr->getEndLoc().getLocWithOffset(1),
                 std::format("// lambda #{}", expr->getLambdaClass()->getLambdaManglingNumber()),
                 expr->getSourceRange(),
-                /*checkDuplicatedHint=*/true);
+                DecideDuplicated::Replace);
 
         // 2. Hint return type.
         if(!config.returnType)
@@ -481,8 +487,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         // where to place the hint position, in default it is an invalid value.
         clang::SourceLocation hintLoc = {};
         if(!expr->hasExplicitParameters())
-            // left side of '{' before the lambda body.
-            hintLoc = expr->getCompoundStmtBody()->getLBracLoc();
+            // right side of ']' after the capture list.
+            hintLoc = expr->getIntroducerRange().getEnd().getLocWithOffset(1);
         else if(auto fnTypeLoc = decl->getFunctionTypeLoc())
             // right side of ')'.
             hintLoc = fnTypeLoc.getRParenLoc().getLocWithOffset(1);
@@ -535,23 +541,39 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         return remain.ltrim();
     }
 
-    void collectBlockEndHint(clang::SourceLocation location,
-                             std::string text,
-                             clang::SourceRange linkRange,
-                             bool checkDuplicatedHint) {
+    /// This enum decide how to handle the duplicated hint in the same line.
+    enum class DecideDuplicated {
+        // Accept all hints.
+        AcceptBoth,
+
+        // Drop the old hint, and accept the new hint. Commonly use the inner one.
+        //      namespace out::in {
+        //      } |// namespace in|
+        Replace,
+
+        // Ignore the new hint, and keep the old hint. Commonly use the outer one.
+        //      struct Out {
+        //          struct In {
+        //      }} |// struct Out|;
+        Ignore,
+    };
+
+    void collectBlockEndHint(clang::SourceLocation location, std::string text,
+                             clang::SourceRange linkRange, DecideDuplicated decision) {
         // Already has a comment in that line.
         if(auto remain = remainTextOfThatLine(location);
            remain.starts_with("/*") || remain.starts_with("//"))
             return;
 
         // Already has a duplicated hint in that location, use the newer hint instead.
-        // e.g. Drop outer hint for nested namspace declaration.
-        //      namespace out::in {}
         const auto lspPosition = cvtr.toPosition(location, src);
-        if(checkDuplicatedHint && !result.empty())
-            if(const auto& last = result.back().position;
-               last.line == lspPosition.line && last.character == lspPosition.character)
-                result.pop_back();  // drop old hint.
+        if(decision != DecideDuplicated::AcceptBoth && !result.empty())
+            if(const auto& last = result.back().position; last.line == lspPosition.line) {
+                if(decision == DecideDuplicated::Replace)
+                    result.pop_back();
+                else
+                    return;
+            }
 
         proto::InlayHintLablePart lable{
             .value = shrinkText(std::move(text)),
@@ -579,7 +601,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         collectBlockEndHint(decl->getRBraceLoc().getLocWithOffset(1),
                             std::format("// namespace {}", decl->getName()),
                             range,
-                            /*checkDuplicatedHint=*/true);
+                            DecideDuplicated::Replace);
         return true;
     }
 
@@ -626,7 +648,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             collectBlockEndHint(decl->getBraceRange().getEnd().getLocWithOffset(1),
                                 std::move(hintText),
                                 decl->getSourceRange(),
-                                /*checkDuplicatedHint=*/false);
+                                DecideDuplicated::Ignore);
         }
 
         if(config.structSizeAndAlign)
@@ -666,8 +688,7 @@ json::Value inlayHintCapability(json::Value InlayHintClientCapabilities) {
 }
 
 /// Compute inlay hints for a document in given range and config.
-proto::InlayHintsResult inlayHints(proto::InlayHintParams param,
-                                   ASTInfo& info,
+proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
                                    const SourceConverter& converter,
                                    const config::InlayHintOption& config) {
     const clang::SourceManager& src = info.srcMgr();
