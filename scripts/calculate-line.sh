@@ -1,1 +1,0 @@
-cloc . --exclude-dir=build,build-release,deps
