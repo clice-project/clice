@@ -142,19 +142,25 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
         return clice::error("Failed to execute action, because {} ", error);
     }
 
-    std::unique_ptr<clang::syntax::TokenBuffer> tokBuf;
+    std::optional<clang::syntax::TokenBuffer> tokBuf;
     if(tokCollector) {
-        tokBuf = std::make_unique<clang::syntax::TokenBuffer>(std::move(*tokCollector).consume());
+        tokBuf = std::move(*tokCollector).consume();
     }
 
     /// FIXME: getDependencies currently return ArrayRef<std::string>, which actually results in
     /// extra copy. It would be great to avoid this copy.
 
-    return ASTInfo(std::move(action),
+    std::optional<TemplateResolver> resolver;
+    if(instance->hasSema()) {
+        resolver.emplace(instance->getSema());
+    }
+
+    return ASTInfo(pp.getSourceManager().getMainFileID(),
+                   std::move(action),
                    std::move(instance),
+                   std::move(resolver),
                    std::move(tokBuf),
-                   std::move(directives),
-                   {});
+                   std::move(directives));
 }
 
 }  // namespace
@@ -368,7 +374,6 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
 
     auto& bounds = *params.bounds;
     out.preamble = params.content.substr(0, bounds.Size).str();
-    out.deps = info->deps();
     if(bounds.PreambleEndsAtStartOfLine) {
         out.preamble.append("@");
     }
@@ -404,7 +409,6 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out) {
 
     out.path = params.outPath.str();
     out.srcPath = params.srcPath.str();
-    out.deps = info->deps();
 
     return std::move(*info);
 }

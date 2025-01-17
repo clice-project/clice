@@ -30,8 +30,8 @@ TEST(SourceConverter, Position) {
     Tester txs("main.cpp", main);
     txs.run("-std=c++11");
 
-    auto& src = txs.info.srcMgr();
-    auto& tks = txs.info.tokBuf();
+    auto& src = txs.info->srcMgr();
+    auto& tks = txs.info->tokBuf();
 
     auto mainid = src.getMainFileID();
     auto tokens =

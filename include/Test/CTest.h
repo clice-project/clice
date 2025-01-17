@@ -76,7 +76,7 @@ class Tester {
 public:
     CompilationParams params;
     std::unique_ptr<llvm::vfs::InMemoryFileSystem> vfs;
-    ASTInfo info;
+    std::optional<ASTInfo> info;
 
     /// Annoated locations.
     std::vector<std::string> sources;
@@ -150,7 +150,7 @@ public:
             std::terminate();
         }
 
-        this->info = std::move(*info);
+        this->info.emplace(std::move(*info));
         return *this;
     }
 

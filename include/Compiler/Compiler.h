@@ -1,39 +1,32 @@
 #pragma once
 
-#include "Clang.h"
-#include "Module.h"
 #include "Preamble.h"
-#include "Resolver.h"
+#include "Module.h"
 #include "Directive.h"
+#include "Resolver.h"
 
-#include "Basic/Location.h"
-#include "Support/Error.h"
-
-#include "llvm/ADT/StringSet.h"
+#include "clang/Frontend/CompilerInstance.h"
 
 namespace clice {
 
 struct CompilationParams;
 
-/// All information about AST.
+/// All AST related information needed for language server.
 class ASTInfo {
 public:
-    ASTInfo() = default;
-
-    ASTInfo(std::unique_ptr<clang::FrontendAction> action,
+    ASTInfo(clang::FileID interested,
+            std::unique_ptr<clang::FrontendAction> action,
             std::unique_ptr<clang::CompilerInstance> instance,
-            std::unique_ptr<clang::syntax::TokenBuffer> tokBuf,
-            llvm::DenseMap<clang::FileID, Directive>&& directives,
-            std::vector<std::string> deps) :
-        action(std::move(action)), m_Instance(std::move(instance)), m_TokBuf(std::move(tokBuf)),
-        m_Directives(std::move(directives)), m_Deps(std::move(deps)) {
-        m_Resolver = std::make_unique<TemplateResolver>(this->m_Instance->getSema());
-    }
+            std::optional<TemplateResolver> resolver,
+            std::optional<clang::syntax::TokenBuffer> buffer,
+            llvm::DenseMap<clang::FileID, Directive> directives) :
+        interested(interested), action(std::move(action)), instance(std::move(instance)),
+        m_resolver(std::move(resolver)), buffer(std::move(buffer)),
+        m_directives(std::move(directives)) {}
 
     ASTInfo(const ASTInfo&) = delete;
 
     ASTInfo(ASTInfo&&) = default;
-    ASTInfo& operator= (ASTInfo&&) = default;
 
     ~ASTInfo() {
         if(action) {
@@ -41,72 +34,78 @@ public:
         }
     }
 
-    auto& sema() {
-        return m_Instance->getSema();
-    }
-
-    auto& context() {
-        return m_Instance->getASTContext();
-    }
-
+public:
     auto& srcMgr() {
-        return m_Instance->getSourceManager();
+        return instance->getSourceManager();
     }
 
     auto& pp() {
-        return m_Instance->getPreprocessor();
+        return instance->getPreprocessor();
     }
 
-    clang::TranslationUnitDecl* tu() {
-        return m_Instance->getASTContext().getTranslationUnitDecl();
+    auto& context() {
+        return instance->getASTContext();
+    }
+
+    auto& sema() {
+        return instance->getSema();
     }
 
     auto& tokBuf() {
-        assert(m_TokBuf && "Token buffer is not available");
-        return *m_TokBuf;
+        assert(buffer && "Token buffer is not available");
+        return *buffer;
     }
 
     auto& resolver() {
-        return *m_Resolver;
+        assert(m_resolver && "Template resolver is not available");
+        return *m_resolver;
     }
 
     auto& directives() {
-        return m_Directives;
+        return m_directives;
     }
 
-    auto& directive(clang::FileID id) {
-        return m_Directives[id];
+    auto tu() {
+        return instance->getASTContext().getTranslationUnitDecl();
     }
 
-    auto& deps() {
-        return m_Deps;
-    }
+    /// ============================================================================
+    ///                            Utility Functions
+    /// ============================================================================
 
-    auto& instance() {
-        return *m_Instance;
-    }
-
-    /// Get the length of the token at the given location.
+    /// @brief Get the length of the token at the given location.
+    /// All SourceLocation instances in the Clang AST originate from the start position of tokens,
+    /// which helps reduce memory usage. When token length information is needed, a simple lexing
+    /// operation based on the start position can be performed.
     auto getTokenLength(clang::SourceLocation loc) {
-        return clang::Lexer::MeasureTokenLength(loc, srcMgr(), m_Instance->getLangOpts());
+        return clang::Lexer::MeasureTokenLength(loc, srcMgr(), instance->getLangOpts());
     }
 
-    /// Get the spelling of the token at the given location.
+    /// @brief Get the spelling of the token at the given location.
     llvm::StringRef getTokenSpelling(clang::SourceLocation loc) {
         return llvm::StringRef(srcMgr().getCharacterData(loc), getTokenLength(loc));
     }
 
-    auto getLocation(clang::SourceLocation loc) {
-        return srcMgr().getPresumedLoc(loc);
-    }
-
 private:
+    /// The interested file ID. For file without header context, it is the main file ID.
+    /// For file with header context, it is the file ID of header file.
+    clang::FileID interested;
+
+    /// The frontend action used to build the AST.
     std::unique_ptr<clang::FrontendAction> action;
-    std::unique_ptr<clang::CompilerInstance> m_Instance;
-    std::unique_ptr<clang::syntax::TokenBuffer> m_TokBuf;
-    std::unique_ptr<TemplateResolver> m_Resolver;
-    llvm::DenseMap<clang::FileID, Directive> m_Directives;
-    std::vector<std::string> m_Deps;
+
+    /// Compiler instance, responsible for performing the actual compilation and managing the
+    /// lifecycle of all objects during the compilation process.
+    std::unique_ptr<clang::CompilerInstance> instance;
+
+    /// The template resolver used to resolve dependent name.
+    std::optional<TemplateResolver> m_resolver;
+
+    /// Token information collected during the preprocessing.
+    std::optional<clang::syntax::TokenBuffer> buffer;
+
+    /// All diretive information collected during the preprocessing.
+    llvm::DenseMap<clang::FileID, Directive> m_directives;
 };
 
 /// Build AST from given file path and content. If pch or pcm provided, apply them to the compiler.

@@ -24,7 +24,7 @@ protected:
         tester->run();
         auto& info = tester->info;
         SourceConverter converter;
-        result = feature::inlayHints({.range = range}, info, converter, option);
+        result = feature::inlayHints({.range = range}, *info, converter, option);
     }
 
     std::optional<Tester> tester;

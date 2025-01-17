@@ -25,14 +25,14 @@ TEST(Directive, Include) {
     tester.run();
 
     auto& info = tester.info;
-    auto& includes = info.directive(info.srcMgr().getMainFileID()).includes;
+    auto& includes = info->directives()[info->srcMgr().getMainFileID()].includes;
 
     auto EXPECT_INCLUDE = [&](std::size_t index,
                               llvm::StringRef position,
                               llvm::StringRef path,
                               std::source_location current = std::source_location::current()) {
         auto& include = includes[index];
-        EXPECT_EQ(SourceConverter().toPosition(include.loc, info.srcMgr()), tester.pos(position));
+        EXPECT_EQ(SourceConverter().toPosition(include.loc, info->srcMgr()), tester.pos(position));
         EXPECT_EQ(include.path, path);
     };
 
@@ -64,7 +64,7 @@ TEST(Directive, Condition) {
     Tester tester("main.cpp", code);
     tester.run("-std=c++23");
     auto& info = tester.info;
-    auto& conditions = info.directive(info.srcMgr().getMainFileID()).conditions;
+    auto& conditions = info->directives()[info->srcMgr().getMainFileID()].conditions;
 
     auto EPXECT_CON = [&](std::size_t index,
                           Condition::BranchKind kind,
@@ -72,7 +72,7 @@ TEST(Directive, Condition) {
                           std::source_location current = std::source_location::current()) {
         auto& condition = conditions[index];
         EXPECT_EQ(condition.kind, kind, current);
-        EXPECT_EQ(SourceConverter().toPosition(condition.loc, info.srcMgr()),
+        EXPECT_EQ(SourceConverter().toPosition(condition.loc, info->srcMgr()),
                   tester.pos(position),
                   current);
     };
@@ -111,7 +111,7 @@ int y = $(6)expr($(7)expr(1));
     Tester tester("main.cpp", code);
     tester.run();
     auto& info = tester.info;
-    auto& macros = info.directive(info.srcMgr().getMainFileID()).macros;
+    auto& macros = info->directives()[info->srcMgr().getMainFileID()].macros;
 
     auto EXPECT_MACRO = [&](std::size_t index,
                             MacroRef::Kind kind,
@@ -119,7 +119,7 @@ int y = $(6)expr($(7)expr(1));
                             std::source_location current = std::source_location::current()) {
         auto& macro = macros[index];
         EXPECT_EQ(macro.kind, kind, current);
-        EXPECT_EQ(SourceConverter().toPosition(macro.loc, info.srcMgr()),
+        EXPECT_EQ(SourceConverter().toPosition(macro.loc, info->srcMgr()),
                   tester.pos(position),
                   current);
     };
