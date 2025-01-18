@@ -72,19 +72,24 @@ inline void EXPECT_NE(const LHS& lhs,
     }
 }
 
-class Tester {
-public:
+struct Tester {
     CompilationParams params;
-    std::unique_ptr<llvm::vfs::InMemoryFileSystem> vfs;
     std::optional<ASTInfo> info;
 
     /// Annoated locations.
-    std::vector<std::string> sources;
-    llvm::StringMap<proto::Position> locations;
     llvm::StringMap<std::uint32_t> offsets;
+    llvm::StringMap<proto::Position> locations;
+    std::vector<std::string> sources;
 
 public:
+    Tester() = default;
+
     Tester(llvm::StringRef file, llvm::StringRef content) {
+        params.srcPath = file;
+        params.content = annoate(content);
+    }
+
+    void addMain(llvm::StringRef file, llvm::StringRef content) {
         params.srcPath = file;
         params.content = annoate(content);
     }
@@ -141,7 +146,6 @@ public:
     }
 
     Tester& run(const char* standard = "-std=c++20") {
-        params.vfs = std::move(vfs);
         params.command = std::format("clang++ {} {}", standard, params.srcPath);
 
         auto info = compile(params);

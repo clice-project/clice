@@ -70,15 +70,7 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
         std::terminate();
     }
 
-    return instance;
-}
-
-}  // namespace impl
-
-namespace {
-
-void applyPreamble(clang::CompilerInstance& instance, CompilationParams& params) {
-    auto& PPOpts = instance.getPreprocessorOpts();
+    auto& PPOpts = instance->getPreprocessorOpts();
     auto& pch = params.pch;
     auto& bounds = params.pchBounds;
 
@@ -92,10 +84,16 @@ void applyPreamble(clang::CompilerInstance& instance, CompilationParams& params)
 
     auto& pcms = params.pcms;
     for(auto& [name, path]: pcms) {
-        auto& HSOpts = instance.getHeaderSearchOpts();
+        auto& HSOpts = instance->getHeaderSearchOpts();
         HSOpts.PrebuiltModuleFiles.try_emplace(name.str(), std::move(path));
     }
+
+    return instance;
 }
+
+}  // namespace impl
+
+namespace {
 
 /// Execute given action with the on the given instance. `callback` is called after
 /// `BeginSourceFile`. Beacuse `BeginSourceFile` may create new preprocessor.
@@ -171,8 +169,6 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
 llvm::Expected<ASTInfo> compile(CompilationParams& params) {
     auto instance = impl::createInstance(params);
 
-    applyPreamble(*instance, params);
-
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
 
@@ -184,8 +180,6 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteCo
     instance->getFrontendOpts().CodeCompletionAt.Line = params.line;
     instance->getFrontendOpts().CodeCompletionAt.Column = params.column;
     instance->setCodeCompletionConsumer(consumer);
-
-    applyPreamble(*instance, params);
 
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
@@ -202,19 +196,16 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
     instance->getPreprocessorOpts().GeneratePreamble = true;
     instance->getLangOpts().CompilingPCH = true;
 
-    auto info = ExecuteAction(std::move(instance), std::make_unique<clang::GeneratePCHAction>());
-    if(!info) {
+    if(auto info =
+           ExecuteAction(std::move(instance), std::make_unique<clang::GeneratePCHAction>())) {
+        auto& bounds = *params.bounds;
+        out.preamble = params.content.substr(0, bounds).str();
+        out.path = params.outPath.str();
+        /// TODO: collect files involved in building this PCH.
+        return std::move(*info);
+    } else {
         return info.takeError();
     }
-
-    out.path = params.outPath.str();
-
-    auto& bounds = *params.bounds;
-    out.preamble = params.content.substr(0, bounds).str();
-
-    /// TODO: collect files involved in building this PCH.
-
-    return std::move(*info);
 }
 
 llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out) {
@@ -224,27 +215,22 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out) {
     instance->getFrontendOpts().OutputFile = params.outPath.str();
     instance->getFrontendOpts().ProgramAction = clang::frontend::GenerateReducedModuleInterface;
 
-    applyPreamble(*instance, params);
-
-    auto info = ExecuteAction(std::move(instance),
-                              std::make_unique<clang::GenerateReducedModuleInterfaceAction>());
-    if(!info) {
+    ;
+    if(auto info = ExecuteAction(std::move(instance),
+                                 std::make_unique<clang::GenerateReducedModuleInterfaceAction>())) {
+        assert(info->pp().isInNamedInterfaceUnit() &&
+               "Only module interface unit could be built as PCM");
+        out.isInterfaceUnit = true;
+        out.name = info->pp().getNamedModuleName();
+        for(auto& [name, path]: params.pcms) {
+            out.mods.emplace_back(name);
+        }
+        out.path = params.outPath.str();
+        out.srcPath = params.srcPath.str();
+        return std::move(*info);
+    } else {
         return info.takeError();
     }
-
-    assert(info->pp().isInNamedInterfaceUnit() &&
-           "Only module interface unit could be built as PCM");
-
-    out.isInterfaceUnit = true;
-    out.name = info->pp().getNamedModuleName();
-    for(auto& [name, path]: params.pcms) {
-        out.mods.emplace_back(name);
-    }
-
-    out.path = params.outPath.str();
-    out.srcPath = params.srcPath.str();
-
-    return std::move(*info);
 }
 
 }  // namespace clice

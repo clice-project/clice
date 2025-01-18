@@ -5,44 +5,119 @@ namespace clice::testing {
 
 namespace {
 
-TEST(Directive, Include) {
+struct Directive : ::testing::Test, Tester {
+    clang::SourceManager* SM;
+    llvm::ArrayRef<Include> includes;
+    llvm::ArrayRef<HasInclude> hasIncludes;
+    llvm::ArrayRef<Condition> conditions;
+    llvm::ArrayRef<MacroRef> macros;
+
+    void run(const char* standard = "-std=c++20") {
+        Tester::run("-std=c++23");
+        SM = &info->srcMgr();
+        auto fid = SM->getMainFileID();
+        includes = info->directives()[fid].includes;
+        hasIncludes = info->directives()[fid].hasIncludes;
+        conditions = info->directives()[fid].conditions;
+        macros = info->directives()[fid].macros;
+    }
+
+    void EXPECT_INCLUDE(std::size_t index,
+                        llvm::StringRef position,
+                        llvm::StringRef path,
+                        std::source_location current = std::source_location::current()) {
+        auto& include = includes[index];
+        auto entry = SM->getFileEntryRefForID(include.fid);
+        EXPECT_EQ(SourceConverter().toPosition(include.location, *SM), pos(position), current);
+        EXPECT_EQ(entry ? entry->getName() : "", path, current);
+    }
+
+    void EXPECT_HAS_INCLUDE(std::size_t index,
+                            llvm::StringRef position,
+                            llvm::StringRef path,
+                            std::source_location current = std::source_location::current()) {
+        auto& hasInclude = hasIncludes[index];
+        EXPECT_EQ(SourceConverter().toPosition(hasInclude.location, *SM), pos(position), current);
+        EXPECT_EQ(hasInclude.path, path, current);
+    }
+
+    void EXPECT_CON(std::size_t index,
+                    Condition::BranchKind kind,
+                    llvm::StringRef position,
+                    std::source_location current = std::source_location::current()) {
+        auto& condition = conditions[index];
+        EXPECT_EQ(condition.kind, kind, current);
+        EXPECT_EQ(SourceConverter().toPosition(condition.loc, *SM), pos(position), current);
+    }
+
+    void EXPECT_MACRO(std::size_t index,
+                      MacroRef::Kind kind,
+                      llvm::StringRef position,
+                      std::source_location current = std::source_location::current()) {
+        auto& macro = macros[index];
+        EXPECT_EQ(macro.kind, kind, current);
+        EXPECT_EQ(SourceConverter().toPosition(macro.loc, *SM), pos(position), current);
+    }
+};
+
+TEST_F(Directive, Include) {
     const char* test = "";
 
     const char* test2 = R"cpp(
 #include "test.h"
 )cpp";
 
-    const char* main = R"cpp(
-#$(0)include "test.h"
-#$(1)include "test2.h"
-#$(2)include "test3.h"
+    const char* pragma_once = R"cpp(
+#pragma once
 )cpp";
 
-    Tester tester("main.cpp", main);
-    tester.addFile("./test.h", test);
-    tester.addFile("./test2.h", test2);
-    tester.addFile("./test3.h", "");
-    tester.run();
+    const char* guard_macro = R"cpp(
+#ifndef TEST3_H
+#define TEST3_H
+#endif
+)cpp";
 
-    auto& info = tester.info;
-    auto& includes = info->directives()[info->srcMgr().getMainFileID()].includes;
+    const char* main = R"cpp(
+#$(0)include "test.h"
+#$(1)include "test.h"
+#$(2)include "pragma_once.h"
+#$(3)include "pragma_once.h"
+#$(4)include "guard_macro.h"
+#$(5)include "guard_macro.h"
+)cpp";
 
-    auto EXPECT_INCLUDE = [&](std::size_t index,
-                              llvm::StringRef position,
-                              llvm::StringRef path,
-                              std::source_location current = std::source_location::current()) {
-        auto& include = includes[index];
-        EXPECT_EQ(SourceConverter().toPosition(include.loc, info->srcMgr()), tester.pos(position));
-        EXPECT_EQ(include.path, path);
-    };
+    addMain("main.cpp", main);
+    addFile("./test.h", test);
+    addFile("./pragma_once.h", pragma_once);
+    addFile("./guard_macro.h", guard_macro);
+    run();
 
-    EXPECT_EQ(includes.size(), 3);
-    EXPECT_INCLUDE(0, "0", "test.h");
-    EXPECT_INCLUDE(1, "1", "test2.h");
-    EXPECT_INCLUDE(2, "2", "test3.h");
+    EXPECT_EQ(includes.size(), 6);
+    EXPECT_INCLUDE(0, "0", "./test.h");
+    EXPECT_INCLUDE(1, "1", "./test.h");
+    EXPECT_INCLUDE(2, "2", "./pragma_once.h");
+    EXPECT_INCLUDE(3, "3", "");
+    EXPECT_INCLUDE(4, "4", "./guard_macro.h");
+    EXPECT_INCLUDE(5, "5", "");
 }
 
-TEST(Directive, Condition) {
+TEST_F(Directive, HasInclude) {
+    const char* test = "";
+
+    const char* main = R"cpp(
+#if __has_include($(0)"test.h")
+#endif
+)cpp";
+
+    addMain("main.cpp", main);
+    addFile("./test.h", test);
+    run();
+
+    EXPECT_EQ(hasIncludes.size(), 1);
+    EXPECT_HAS_INCLUDE(0, "0", "./test.h");
+}
+
+TEST_F(Directive, Condition) {
     const char* code = R"cpp(
 #$(0)if 0
 
@@ -61,34 +136,21 @@ TEST(Directive, Condition) {
 #$(7)endif
 )cpp";
 
-    Tester tester("main.cpp", code);
-    tester.run("-std=c++23");
-    auto& info = tester.info;
-    auto& conditions = info->directives()[info->srcMgr().getMainFileID()].conditions;
-
-    auto EPXECT_CON = [&](std::size_t index,
-                          Condition::BranchKind kind,
-                          llvm::StringRef position,
-                          std::source_location current = std::source_location::current()) {
-        auto& condition = conditions[index];
-        EXPECT_EQ(condition.kind, kind, current);
-        EXPECT_EQ(SourceConverter().toPosition(condition.loc, info->srcMgr()),
-                  tester.pos(position),
-                  current);
-    };
+    addMain("main.cpp", code);
+    run("-std=c++23");
 
     EXPECT_EQ(conditions.size(), 8);
-    EPXECT_CON(0, Condition::BranchKind::If, "0");
-    EPXECT_CON(1, Condition::BranchKind::Elif, "1");
-    EPXECT_CON(2, Condition::BranchKind::Else, "2");
-    EPXECT_CON(3, Condition::BranchKind::EndIf, "3");
-    EPXECT_CON(4, Condition::BranchKind::Ifdef, "4");
-    EPXECT_CON(5, Condition::BranchKind::Elifdef, "5");
-    EPXECT_CON(6, Condition::BranchKind::Else, "6");
-    EPXECT_CON(7, Condition::BranchKind::EndIf, "7");
+    EXPECT_CON(0, Condition::BranchKind::If, "0");
+    EXPECT_CON(1, Condition::BranchKind::Elif, "1");
+    EXPECT_CON(2, Condition::BranchKind::Else, "2");
+    EXPECT_CON(3, Condition::BranchKind::EndIf, "3");
+    EXPECT_CON(4, Condition::BranchKind::Ifdef, "4");
+    EXPECT_CON(5, Condition::BranchKind::Elifdef, "5");
+    EXPECT_CON(6, Condition::BranchKind::Else, "6");
+    EXPECT_CON(7, Condition::BranchKind::EndIf, "7");
 }
 
-TEST(Directive, Macro) {
+TEST_F(Directive, Macro) {
     const char* code = R"cpp(
 #define $(0)expr(v) v
 
@@ -108,21 +170,8 @@ int y = $(6)expr($(7)expr(1));
 
 )cpp";
 
-    Tester tester("main.cpp", code);
-    tester.run();
-    auto& info = tester.info;
-    auto& macros = info->directives()[info->srcMgr().getMainFileID()].macros;
-
-    auto EXPECT_MACRO = [&](std::size_t index,
-                            MacroRef::Kind kind,
-                            llvm::StringRef position,
-                            std::source_location current = std::source_location::current()) {
-        auto& macro = macros[index];
-        EXPECT_EQ(macro.kind, kind, current);
-        EXPECT_EQ(SourceConverter().toPosition(macro.loc, info->srcMgr()),
-                  tester.pos(position),
-                  current);
-    };
+    addMain("main.cpp", code);
+    run();
 
     EXPECT_EQ(macros.size(), 9);
     EXPECT_MACRO(0, MacroRef::Kind::Def, "0");
