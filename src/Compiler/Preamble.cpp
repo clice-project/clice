@@ -2,7 +2,7 @@
 
 namespace clice {
 
-std::uint32_t computeBounds(llvm::StringRef content) {
+std::uint32_t computePreambleBound(llvm::StringRef content) {
     clang::LangOptions langOpts;
     langOpts.CPlusPlus = true;
     langOpts.CPlusPlus26 = true;

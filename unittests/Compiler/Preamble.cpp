@@ -7,7 +7,7 @@ namespace clice::testing {
 
 namespace {
 
-TEST(Preamble, ComputeBounds) {
+TEST(Preamble, ComputePreambleBound) {
     proto::Position pos;
     SourceConverter converter;
 
@@ -16,7 +16,7 @@ TEST(Preamble, ComputeBounds) {
     auto compute = [&](llvm::StringRef source) {
         annotation = {source};
         auto content = annotation.source();
-        return converter.toPosition(content, computeBounds(content));
+        return converter.toPosition(content, computePreambleBound(content));
     };
 
     pos = compute("#include <iostream>$(end)");
@@ -49,9 +49,9 @@ export module test;
 
 TEST(Preamble, Build) {
     CompilationParams params;
-    
 }
 
 }  // namespace
+
 }  // namespace clice::testing
 

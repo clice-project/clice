@@ -26,7 +26,7 @@ struct PCHInfo {
 };
 
 
-std::uint32_t computeBounds(llvm::StringRef content);
+std::uint32_t computePreambleBound(llvm::StringRef content);
 
 /// Computes the preamble bounds for the given content.
 /// If the bounds are not provided explicitly, they will be calculated based on the content.
