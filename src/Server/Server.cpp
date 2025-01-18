@@ -3,7 +3,7 @@
 
 namespace clice {
 
-Server::Server() : scheduler(database, {}) {
+Server::Server() : indexer(database), scheduler(database, {}) {
     addMethod("initialize", &Server::onInitialize);
     addMethod("initialized", &Server::onInitialized);
     addMethod("shutdown", &Server::onShutdown);
@@ -41,6 +41,8 @@ Server::Server() : scheduler(database, {}) {
 
     addMethod("workspace/didChangeWatchedFiles", &Server::onDidChangeWatchedFiles);
 
+    addMethod("index/current", &Server::onIndexCurrent);
+    addMethod("index/all", &Server::onIndexAll);
     addMethod("context/current", &Server::onContextCurrent);
     addMethod("context/switch", &Server::onContextSwitch);
     addMethod("context/all", &Server::onContextAll);

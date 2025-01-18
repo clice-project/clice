@@ -2,6 +2,14 @@
 
 namespace clice {
 
+async::Task<> Server::onIndexCurrent(const proto::TextDocumentIdentifier& params) {
+    co_return;
+}
+
+async::Task<> Server::onIndexAll(const proto::None& params) {
+    co_return;
+}
+
 async::Task<> Server::onContextCurrent(const proto::TextDocumentIdentifier& params) {
     co_return;
 }
