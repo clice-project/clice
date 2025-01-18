@@ -87,17 +87,24 @@ TEST_F(Directive, Include) {
 )cpp";
 
     addMain("main.cpp", main);
-    addFile("./test.h", test);
-    addFile("./pragma_once.h", pragma_once);
-    addFile("./guard_macro.h", guard_macro);
+
+    using Path = llvm::SmallString<128>;
+    Path ptest, ppragma_once, pguard_macro;
+    path::append(ptest, ".", "test.h");
+    path::append(ppragma_once, ".", "pragma_once.h");
+    path::append(pguard_macro, ".", "guard_macro.h");
+
+    addFile(ptest, test);
+    addFile(ppragma_once, pragma_once);
+    addFile(pguard_macro, guard_macro);
     run();
 
     EXPECT_EQ(includes.size(), 6);
-    EXPECT_INCLUDE(0, "0", "./test.h");
-    EXPECT_INCLUDE(1, "1", "./test.h");
-    EXPECT_INCLUDE(2, "2", "./pragma_once.h");
+    EXPECT_INCLUDE(0, "0", ptest);
+    EXPECT_INCLUDE(1, "1", ptest);
+    EXPECT_INCLUDE(2, "2", ppragma_once);
     EXPECT_INCLUDE(3, "3", "");
-    EXPECT_INCLUDE(4, "4", "./guard_macro.h");
+    EXPECT_INCLUDE(4, "4", pguard_macro);
     EXPECT_INCLUDE(5, "5", "");
 }
 
@@ -110,11 +117,15 @@ TEST_F(Directive, HasInclude) {
 )cpp";
 
     addMain("main.cpp", main);
-    addFile("./test.h", test);
+
+    llvm::SmallString<128> path;
+    path::append(path, ".", "test.h");
+    addFile(path, test);
+    
     run();
 
     EXPECT_EQ(hasIncludes.size(), 1);
-    EXPECT_HAS_INCLUDE(0, "0", "./test.h");
+    EXPECT_HAS_INCLUDE(0, "0", path);
 }
 
 TEST_F(Directive, Condition) {
