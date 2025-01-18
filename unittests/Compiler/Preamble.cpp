@@ -73,19 +73,23 @@ int x = foo();
 
     /// Build PCH.
     PCHInfo out;
-    auto info = compile(params, out);
-    EXPECT_TRUE(bool(info));
+    {
+        auto info = compile(params, out);
+        EXPECT_TRUE(bool(info));
 
-    EXPECT_EQ(out.path, outPath);
-    EXPECT_EQ(out.preamble, R"(#include "test.h")");
-    EXPECT_EQ(out.command, command);
-    EXPECT_EQ(out.deps, deps);
+        EXPECT_EQ(out.path, outPath);
+        EXPECT_EQ(out.preamble, R"(#include "test.h")");
+        EXPECT_EQ(out.command, command);
+        EXPECT_EQ(out.deps, deps);
+    }
 
     /// Build AST
-    params.bound.reset();
-    params.pch = {outPath, out.preamble.size()};
-    info = compile(params);
-    EXPECT_TRUE(bool(info));
+    {
+        params.bound.reset();
+        params.pch = {outPath, out.preamble.size()};
+        auto info = compile(params);
+        EXPECT_TRUE(bool(info));
+    }
 }
 
 TEST(Preamble, BuildPreambleForHeader) {
@@ -121,21 +125,25 @@ export int x = foo();
 
     /// Build PCH.
     PCHInfo out;
-    auto info = compile(params, out);
-    EXPECT_TRUE(bool(info));
+    {
+        auto info = compile(params, out);
+        EXPECT_TRUE(bool(info));
 
-    EXPECT_EQ(out.path, outPath);
-    EXPECT_EQ(out.preamble, llvm::StringRef(R"(
+        EXPECT_EQ(out.path, outPath);
+        EXPECT_EQ(out.preamble, llvm::StringRef(R"(
 module;
 #include "test.h")"));
-    EXPECT_EQ(out.command, command);
-    EXPECT_EQ(out.deps, deps);
+        EXPECT_EQ(out.command, command);
+        EXPECT_EQ(out.deps, deps);
+    }
 
     /// Build AST
-    params.bound.reset();
-    params.pch = {outPath, out.preamble.size()};
-    info = compile(params);
-    EXPECT_TRUE(bool(info));
+    {
+        params.bound.reset();
+        params.pch = {outPath, out.preamble.size()};
+        auto info = compile(params);
+        EXPECT_TRUE(bool(info));
+    }
 }
 
 }  // namespace
