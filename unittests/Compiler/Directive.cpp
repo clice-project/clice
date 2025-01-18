@@ -88,11 +88,9 @@ TEST_F(Directive, Include) {
 
     addMain("main.cpp", main);
 
-    using Path = llvm::SmallString<128>;
-    Path ptest, ppragma_once, pguard_macro;
-    path::append(ptest, ".", "test.h");
-    path::append(ppragma_once, ".", "pragma_once.h");
-    path::append(pguard_macro, ".", "guard_macro.h");
+    auto ptest = path::join(".", "test.h");
+    auto ppragma_once = path::join(".", "pragma_once.h");
+    auto pguard_macro = path::join(".", "guard_macro.h");
 
     addFile(ptest, test);
     addFile(ppragma_once, pragma_once);
@@ -121,7 +119,7 @@ TEST_F(Directive, HasInclude) {
     llvm::SmallString<128> path;
     path::append(path, ".", "test.h");
     addFile(path, test);
-    
+
     run();
 
     EXPECT_EQ(hasIncludes.size(), 1);

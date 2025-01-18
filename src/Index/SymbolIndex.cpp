@@ -2,6 +2,7 @@
 
 #include "Index.h"
 
+#include "Basic/SourceCode.h"
 #include "Index/SymbolIndex.h"
 #include "Compiler/Semantic.h"
 
@@ -72,10 +73,10 @@ public:
         if(success) {
             auto presumedBegin = srcMgr.getDecomposedExpansionLoc(begin);
             auto presumedEnd = srcMgr.getDecomposedExpansionLoc(end);
-            auto length = info.getTokenLength(end);
+            ///
             file.ranges.emplace_back(LocalSourceRange{
                 .begin = presumedBegin.second,
-                .end = presumedEnd.second + length,
+                .end = presumedEnd.second + getTokenLength(info.srcMgr(), end),
             });
         }
         return iter->second;

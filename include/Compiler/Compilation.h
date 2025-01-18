@@ -23,7 +23,7 @@ struct CompilationParams {
     /// which source code range the PCH will cover.
     /// - If we are building main file AST for header, we need a size to cut off code after the
     /// `#include` directive that includes the header to speed up the parsing.
-    std::optional<std::uint32_t> bounds;
+    std::optional<std::uint32_t> bound;
 
     llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 
@@ -31,8 +31,7 @@ struct CompilationParams {
     llvm::SmallVector<std::pair<std::string, std::string>> remappedFiles;
 
     /// Information about reuse PCH.
-    std::string pch;
-    clang::PreambleBounds pchBounds = {0, false};
+    std::pair<std::string, uint32_t> pch;
 
     /// Information about reuse PCM(name, path).
     llvm::StringMap<std::string> pcms;

@@ -48,7 +48,7 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
     instance->createFileManager(params.vfs);
 
     /// Add remapped files, if bounds is provided, cut off the content.
-    std::size_t size = params.bounds.has_value() ? params.bounds.value() : params.content.size();
+    std::size_t size = params.bound.has_value() ? params.bound.value() : params.content.size();
 
     assert(!instance->getPreprocessorOpts().RetainRemappedFileBuffers &&
            "RetainRemappedFileBuffers should be false");
@@ -66,24 +66,19 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
     }
 
     if(!instance->createTarget()) {
-        /// FIXME: add error handle here.
         std::terminate();
     }
 
-    auto& PPOpts = instance->getPreprocessorOpts();
-    auto& pch = params.pch;
-    auto& bounds = params.pchBounds;
-
-    if(bounds.Size != 0) {
+    auto [pch, bound] = params.pch;
+    if(bound != 0) {
+        auto& PPOpts = instance->getPreprocessorOpts();
         PPOpts.UsePredefines = false;
         PPOpts.ImplicitPCHInclude = std::move(pch);
-        PPOpts.PrecompiledPreambleBytes.first = bounds.Size;
-        PPOpts.PrecompiledPreambleBytes.second = bounds.PreambleEndsAtStartOfLine;
+        PPOpts.PrecompiledPreambleBytes = {bound, false};
         PPOpts.DisablePCHOrModuleValidation = clang::DisableValidationForModuleKind::PCH;
     }
 
-    auto& pcms = params.pcms;
-    for(auto& [name, path]: pcms) {
+    for(auto& [name, path]: params.pcms) {
         auto& HSOpts = instance->getHeaderSearchOpts();
         HSOpts.PrebuiltModuleFiles.try_emplace(name.str(), std::move(path));
     }
@@ -185,23 +180,25 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteCo
 }
 
 llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
-    assert(params.bounds.has_value() && "Preamble bounds is required to build PCH");
+    assert(params.bound.has_value() && "Preamble bounds is required to build PCH");
 
     auto instance = impl::createInstance(params);
 
+    llvm::StringRef outPath = params.outPath.str();
+
     /// Set options to generate PCH.
-    instance->getFrontendOpts().OutputFile = params.outPath.str();
+    instance->getFrontendOpts().OutputFile = outPath;
     instance->getFrontendOpts().ProgramAction = clang::frontend::GeneratePCH;
-    instance->getPreprocessorOpts().PrecompiledPreambleBytes = {0, false};
     instance->getPreprocessorOpts().GeneratePreamble = true;
     instance->getLangOpts().CompilingPCH = true;
 
     if(auto info =
            ExecuteAction(std::move(instance), std::make_unique<clang::GeneratePCHAction>())) {
-        auto& bounds = *params.bounds;
-        out.preamble = params.content.substr(0, bounds).str();
-        out.path = params.outPath.str();
-        /// TODO: collect files involved in building this PCH.
+        out.path = outPath;
+        out.preamble = params.content.substr(0, *params.bound);
+        out.command = params.command.str();
+        out.deps = info->deps();
+
         return std::move(*info);
     } else {
         return info.takeError();
