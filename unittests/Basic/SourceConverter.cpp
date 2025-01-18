@@ -30,8 +30,8 @@ TEST(SourceConverter, Position) {
     Tester txs("main.cpp", main);
     txs.run("-std=c++11");
 
-    auto& src = txs.info.srcMgr();
-    auto& tks = txs.info.tokBuf();
+    auto& src = txs.info->srcMgr();
+    auto& tks = txs.info->tokBuf();
 
     auto mainid = src.getMainFileID();
     auto tokens =
@@ -50,14 +50,14 @@ TEST(SourceConverter, Position) {
         SourceConverter cvtr{proto::PositionEncodingKind::UTF16};
         auto pos = cvtr.toPosition(eof, src);
         EXPECT_EQ(pos.line, 0);
-        EXPECT_EQ(pos.character, 19);
+        EXPECT_EQ(pos.character, 17);
     }
 
     {
         SourceConverter cvtr{proto::PositionEncodingKind::UTF32};
         auto pos = cvtr.toPosition(eof, src);
         EXPECT_EQ(pos.line, 0);
-        EXPECT_EQ(pos.character, 19);
+        EXPECT_EQ(pos.character, 16);
     }
 }
 

@@ -1,5 +1,5 @@
 #include "Basic/SymbolKind.h"
-#include "Compiler/Compiler.h"
+#include "Compiler/Compilation.h"
 
 namespace clice {
 

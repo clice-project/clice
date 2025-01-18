@@ -39,10 +39,10 @@ void run(llvm::StringRef code, std::source_location current = std::source_locati
         }
     };
 
-    Run run{tester.info};
-    run.TraverseAST(tester.info.context());
+    Run run{*tester.info};
+    run.TraverseAST(tester.info->context());
 
-    auto input = tester.info.resolver().resolve(run.input);
+    auto input = tester.info->resolver().resolve(run.input);
     auto expect = run.expect;
 
     EXPECT_EQ(input.isNull(), false);

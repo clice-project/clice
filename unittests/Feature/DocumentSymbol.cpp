@@ -46,7 +46,7 @@ namespace _1::_2{
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info, converter);
+    auto res = feature::documentSymbol(*txs.info, converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 8);
 }
@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info, converter);
+    auto res = feature::documentSymbol(*txs.info, converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 9);
 }
@@ -100,7 +100,7 @@ struct x {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info, converter);
+    auto res = feature::documentSymbol(*txs.info, converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 7);
 }
@@ -120,7 +120,7 @@ struct S {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info, converter);
+    auto res = feature::documentSymbol(*txs.info, converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 6);
 }
@@ -142,7 +142,7 @@ struct _0 {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info, converter);
+    auto res = feature::documentSymbol(*txs.info, converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 7);
 }
@@ -167,7 +167,7 @@ enum B {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info, converter);
+    auto res = feature::documentSymbol(*txs.info, converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 8);
 }
@@ -181,7 +181,7 @@ int y = 2;
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info, converter);
+    auto res = feature::documentSymbol(*txs.info, converter);
     // dbg(res);
     ASSERT_EQ(total_size(res), 2);
 }
@@ -211,7 +211,7 @@ VAR(test)
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(txs.info, converter);
+    auto res = feature::documentSymbol(*txs.info, converter);
     // dbg(res);
 
     // clang-format off

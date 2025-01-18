@@ -26,21 +26,17 @@ public:
     /// Measure the length (character count) of the content with the specified encoding kind.
     std::size_t remeasure(llvm::StringRef content) const;
 
+    /// Same as above, but input is raw offset to the content beginning.
+    proto::Position toPosition(llvm::StringRef content, std::uint32_t offset) const;
+
     /// Convert a clang::SourceLocation to a proto::Position according to the
     /// specified encoding kind. Note that `SourceLocation` in clang is 1-based and
     /// is always encoded in UTF-8.
-    proto::Position toPosition(llvm::StringRef content,
-                               clang::SourceLocation location,
-                               const clang::SourceManager& SM) const;
-
-    /// Same as above, but content is retrieved from the `SourceManager`.
     proto::Position toPosition(clang::SourceLocation location,
                                const clang::SourceManager& SM) const;
 
     /// Convert a clang::SourceRange to a proto::Range according to the specified encoding kind.
-    proto::Range toRange(clang::SourceRange range, const clang::SourceManager& SM) const {
-        return {toPosition(range.getBegin(), SM), toPosition(range.getEnd(), SM)};
-    }
+    proto::Range toRange(clang::SourceRange range, const clang::SourceManager& SM) const;
 
     /// Convert a proto::Position to a file offset in the content with the specified
     /// encoding kind.

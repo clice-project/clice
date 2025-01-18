@@ -43,7 +43,6 @@ std::string scanModuleName(CompilationParams& params);
 /// collect its module name and dependencies.
 llvm::Expected<ModuleInfo> scanModule(CompilationParams& params);
 
-/// Build PCM from given file path and content.
-llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out);
+
 
 }  // namespace clice

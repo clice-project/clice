@@ -69,6 +69,15 @@ struct ServerCapabilities {
     ///
     /// If omitted it defaults to 'utf-16'.
     PositionEncodingKind positionEncoding = PositionEncodingKind::UTF16;
+
+    /// Defines how text documents are synced. Is either a detailed structure
+    /// defining each notification or for backwards compatibility the
+    /// TextDocumentSyncKind number. If omitted it defaults to
+    /// `TextDocumentSyncKind.None`.
+    TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::Incremental;
+
+    /// The server provides semantic tokens support.
+    SemanticTokensOptions semanticTokensProvider;
 };
 
 struct InitializeResult {

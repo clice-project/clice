@@ -1,5 +1,5 @@
 #include "Compiler/Module.h"
-#include "Compiler/Compiler.h"
+#include "Compiler/Compilation.h"
 
 namespace clice {
 
@@ -27,9 +27,17 @@ std::string scanModuleName(CompilationParams& params) {
 
     std::string name;
     clang::Token token;
-    while(!lexer.LexFromRawLexer(token)) {
-        auto kind = token.getKind();
-        if(kind == clang::tok::hash) {
+    while(true) {
+        lexer.LexFromRawLexer(token);
+        if(token.is(clang::tok::eof)) {
+            break;
+        }
+
+        if(!token.isAtStartOfLine()) {
+            continue;
+        }
+
+        if(token.is(clang::tok::hash)) {
             lexer.LexFromRawLexer(token);
             auto diretive = token.getRawIdentifier();
             if(diretive == "if" || diretive == "ifdef" || diretive == "ifndef") {
@@ -37,7 +45,7 @@ std::string scanModuleName(CompilationParams& params) {
             } else if(diretive == "endif") {
                 isInDirective = false;
             }
-        } else if(kind == clang::tok::raw_identifier) {
+        } else if(token.is(clang::tok::raw_identifier)) {
             if(token.getRawIdentifier() != "export") [[likely]] {
                 continue;
             }
@@ -57,7 +65,7 @@ std::string scanModuleName(CompilationParams& params) {
 
             /// Otherwise, we can determine the module name directly.
             while(!lexer.LexFromRawLexer(token)) {
-                kind = token.getKind();
+                auto kind = token.getKind();
                 if(kind == clang::tok::raw_identifier) {
                     name += token.getRawIdentifier();
                 } else if(kind == clang::tok::colon) {
@@ -86,6 +94,44 @@ std::string scanModuleName(CompilationParams& params) {
     }
 
     return info->name;
+}
+
+llvm::Expected<ModuleInfo> scanModule(CompilationParams& params) {
+    struct ModuleCollector : public clang::PPCallbacks {
+        ModuleInfo& info;
+
+        ModuleCollector(ModuleInfo& info) : info(info) {}
+
+        void moduleImport(clang::SourceLocation importLoc,
+                          clang::ModuleIdPath path,
+                          const clang::Module* imported) override {
+            assert(path.size() == 1);
+            info.mods.emplace_back(path[0].first->getName());
+        }
+    };
+
+    ModuleInfo info;
+    clang::PreprocessOnlyAction action;
+    auto instance = impl::createInstance(params);
+
+    if(!action.BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
+        return error("Failed to begin source file");
+    }
+
+    auto& pp = instance->getPreprocessor();
+
+    pp.addPPCallbacks(std::make_unique<ModuleCollector>(info));
+
+    if(auto error = action.Execute()) {
+        return error;
+    }
+
+    if(pp.isInNamedModule()) {
+        info.isInterfaceUnit = pp.isInNamedInterfaceUnit();
+        info.name = pp.getNamedModuleName();
+    }
+
+    return info;
 }
 
 }  // namespace clice

@@ -16,7 +16,7 @@ struct FoldingRange : public ::testing::Test {
 
         FoldingRangeParams param;
         SourceConverter converter;
-        result = feature::foldingRange(param, info, converter);
+        result = feature::foldingRange(param, *info, converter);
     }
 
     void EXPECT_RANGE(std::size_t index,

@@ -1,5 +1,5 @@
-#include <Compiler/Compiler.h>
-#include <Feature/SignatureHelp.h>
+#include "Compiler/Compilation.h"
+#include "Feature/SignatureHelp.h"
 
 namespace clice::feature {
 

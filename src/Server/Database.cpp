@@ -1,7 +1,7 @@
 #include "Server/Logger.h"
 #include "Server/Database.h"
 #include "Support/Support.h"
-#include "Compiler/Compiler.h"
+#include "Compiler/Compilation.h"
 
 namespace clice {
 

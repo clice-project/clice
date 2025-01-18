@@ -25,10 +25,16 @@ struct PCHInfo {
     std::vector<std::string> deps;
 };
 
-/// Compute the preamble to build PCH with the given content.
-std::string computePreamble(CompilationParams& params);
 
-/// Build PCH from given file path and content.
-llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out);
+std::uint32_t computePreambleBound(llvm::StringRef content);
+
+/// Computes the preamble bounds for the given content.
+/// If the bounds are not provided explicitly, they will be calculated based on the content.
+///
+/// - If the header is empty, the bounds can be determined by lexing the source file.
+/// - If the header is not empty, the preprocessor must be executed to compute the bounds.
+std::uint32_t computeBounds(CompilationParams& params);
+
+
 
 }  // namespace clice
