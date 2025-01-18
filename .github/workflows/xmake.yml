@@ -54,8 +54,6 @@ jobs:
         with:
             xmake-version: branch@master
             actions-cache-folder: .xmake-cache-${{ matrix.os }}
-            package-cache: true
-            package-cache-key: ${{ matrix.os }}
             build-cache: true
             build-cache-key: ${{ matrix.os }}
 
