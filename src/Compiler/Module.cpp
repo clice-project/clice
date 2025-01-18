@@ -27,9 +27,17 @@ std::string scanModuleName(CompilationParams& params) {
 
     std::string name;
     clang::Token token;
-    while(!lexer.LexFromRawLexer(token)) {
-        auto kind = token.getKind();
-        if(kind == clang::tok::hash) {
+    while(true) {
+        lexer.LexFromRawLexer(token);
+        if(token.is(clang::tok::eof)) {
+            break;
+        }
+
+        if(!token.isAtStartOfLine()) {
+            continue;
+        }
+
+        if(token.is(clang::tok::hash)) {
             lexer.LexFromRawLexer(token);
             auto diretive = token.getRawIdentifier();
             if(diretive == "if" || diretive == "ifdef" || diretive == "ifndef") {
@@ -37,7 +45,7 @@ std::string scanModuleName(CompilationParams& params) {
             } else if(diretive == "endif") {
                 isInDirective = false;
             }
-        } else if(kind == clang::tok::raw_identifier) {
+        } else if(token.is(clang::tok::raw_identifier)) {
             if(token.getRawIdentifier() != "export") [[likely]] {
                 continue;
             }
@@ -57,7 +65,7 @@ std::string scanModuleName(CompilationParams& params) {
 
             /// Otherwise, we can determine the module name directly.
             while(!lexer.LexFromRawLexer(token)) {
-                kind = token.getKind();
+                auto kind = token.getKind();
                 if(kind == clang::tok::raw_identifier) {
                     name += token.getRawIdentifier();
                 } else if(kind == clang::tok::colon) {

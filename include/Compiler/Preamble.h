@@ -35,7 +35,6 @@ std::uint32_t computeBounds(llvm::StringRef content);
 /// - If the header is not empty, the preprocessor must be executed to compute the bounds.
 std::uint32_t computeBounds(CompilationParams& params);
 
-/// Build PCH from given file path and content.
-llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out);
+
 
 }  // namespace clice
