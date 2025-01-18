@@ -1,6 +1,6 @@
 #include "Basic/Document.h"
 #include "Basic/SourceConverter.h"
-#include "Compiler/Compiler.h"
+#include "Compiler/Compilation.h"
 
 namespace clice {
 

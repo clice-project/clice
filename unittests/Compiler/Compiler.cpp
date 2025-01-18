@@ -1,5 +1,5 @@
 #include "Test/Test.h"
-#include "Compiler/Compiler.h"
+#include "Compiler/Compilation.h"
 #include "Support/FileSystem.h"
 
 namespace clice::testing {

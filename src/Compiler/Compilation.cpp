@@ -1,8 +1,8 @@
-#include <Compiler/Command.h>
-#include <Compiler/Compiler.h>
+#include "Compiler/Command.h"
+#include "Compiler/Compilation.h"
 
-#include <clang/Lex/PreprocessorOptions.h>
-#include <clang/Frontend/TextDiagnosticPrinter.h>
+#include "clang/Lex/PreprocessorOptions.h"
+#include "clang/Frontend/TextDiagnosticPrinter.h"
 
 namespace clice {
 
@@ -163,40 +163,6 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
 }
 
 }  // namespace
-
-/// Scan the module name. This will not run the preprocessor.
-std::string scanModuleName(llvm::StringRef content) {
-    clang::LangOptions langOpts;
-    langOpts.Modules = true;
-    langOpts.CPlusPlus20 = true;
-    clang::Lexer lexer(clang::SourceLocation(),
-                       langOpts,
-                       content.begin(),
-                       content.begin(),
-                       content.end());
-
-    clang::Token token;
-    lexer.Lex(token);
-
-    while(!token.is(clang::tok::eof)) {
-        llvm::outs() << token.getName() << "\n";
-        if(token.is(clang::tok::kw_module)) {
-            lexer.Lex(token);
-
-            if(token.is(clang::tok::coloncolon)) {
-                lexer.Lex(token);
-            }
-
-            if(token.is(clang::tok::identifier)) {
-                return token.getIdentifierInfo()->getName().str();
-            }
-        }
-
-        lexer.Lex(token);
-    }
-
-    return "";
-}
 
 llvm::Expected<ModuleInfo> scanModule(CompilationParams& params) {
     struct ModuleCollector : public clang::PPCallbacks {

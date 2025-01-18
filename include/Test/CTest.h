@@ -2,7 +2,7 @@
 
 #include "gtest/gtest.h"
 #include "Basic/Location.h"
-#include "Compiler/Compiler.h"
+#include "Compiler/Compilation.h"
 #include "Support/Support.h"
 
 namespace clice::test {

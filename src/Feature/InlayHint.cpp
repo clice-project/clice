@@ -1,5 +1,5 @@
 #include "Basic/SourceConverter.h"
-#include "Compiler/Compiler.h"
+#include "Compiler/Compilation.h"
 #include "Feature/InlayHint.h"
 
 namespace clice {

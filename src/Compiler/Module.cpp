@@ -1,5 +1,5 @@
 #include "Compiler/Module.h"
-#include "Compiler/Compiler.h"
+#include "Compiler/Compilation.h"
 
 namespace clice {
 

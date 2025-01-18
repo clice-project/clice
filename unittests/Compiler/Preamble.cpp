@@ -1,7 +1,7 @@
 #include "Test/Test.h"
 #include "Basic/SourceConverter.h"
 #include "Compiler/Preamble.h"
-#include "Support/Format.h"
+#include "Compiler/Compilation.h"
 
 namespace clice::testing {
 
@@ -12,6 +12,7 @@ TEST(Preamble, ComputeBounds) {
     SourceConverter converter;
 
     Annotation annotation = {"\n\n\nint x = 1;"};
+
     auto compute = [&](llvm::StringRef source) {
         annotation = {source};
         auto content = annotation.source();
@@ -44,6 +45,11 @@ module;
 export module test;
     )cpp");
     EXPECT_EQ(pos, annotation.pos("end"));
+}
+
+TEST(Preamble, Build) {
+    CompilationParams params;
+    
 }
 
 }  // namespace

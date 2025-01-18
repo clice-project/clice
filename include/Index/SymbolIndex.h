@@ -3,7 +3,7 @@
 #include "ArrayView.h"
 #include "Basic/RelationKind.h"
 #include "Basic/SymbolKind.h"
-#include "Compiler/Compiler.h"
+#include "Compiler/Compilation.h"
 #include "Support/JSON.h"
 
 namespace clice::index {

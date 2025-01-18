@@ -1,5 +1,5 @@
 #include "Feature/FoldingRange.h"
-#include "Compiler/Compiler.h"
+#include "Compiler/Compilation.h"
 
 /// Clangd's FoldingRange Implementation:
 /// https://github.com/llvm/llvm-project/blob/main/clang-tools-extra/clangd/SemanticSelection.cpp

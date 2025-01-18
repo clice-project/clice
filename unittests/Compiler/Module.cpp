@@ -1,5 +1,5 @@
 #include "Test/Test.h"
-#include "Compiler/Compiler.h"
+#include "Compiler/Compilation.h"
 #include "llvm/Support/ToolOutputFile.h"
 
 namespace clice::testing {
