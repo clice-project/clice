@@ -31,8 +31,7 @@ struct CompilationParams {
     llvm::SmallVector<std::pair<std::string, std::string>> remappedFiles;
 
     /// Information about reuse PCH.
-    std::string pch;
-    clang::PreambleBounds pchBounds = {0, false};
+    std::pair<std::string, uint32_t> pch;
 
     /// Information about reuse PCM(name, path).
     llvm::StringMap<std::string> pcms;

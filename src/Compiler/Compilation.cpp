@@ -66,24 +66,19 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
     }
 
     if(!instance->createTarget()) {
-        /// FIXME: add error handle here.
         std::terminate();
     }
 
-    auto& PPOpts = instance->getPreprocessorOpts();
-    auto& pch = params.pch;
-    auto& bounds = params.pchBounds;
-
-    if(bounds.Size != 0) {
+    auto [pch, bound] = params.pch;
+    if(bound != 0) {
+        auto& PPOpts = instance->getPreprocessorOpts();
         PPOpts.UsePredefines = false;
         PPOpts.ImplicitPCHInclude = std::move(pch);
-        PPOpts.PrecompiledPreambleBytes.first = bounds.Size;
-        PPOpts.PrecompiledPreambleBytes.second = bounds.PreambleEndsAtStartOfLine;
+        PPOpts.PrecompiledPreambleBytes = {bound, false};
         PPOpts.DisablePCHOrModuleValidation = clang::DisableValidationForModuleKind::PCH;
     }
 
-    auto& pcms = params.pcms;
-    for(auto& [name, path]: pcms) {
+    for(auto& [name, path]: params.pcms) {
         auto& HSOpts = instance->getHeaderSearchOpts();
         HSOpts.PrebuiltModuleFiles.try_emplace(name.str(), std::move(path));
     }
@@ -202,28 +197,7 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
         out.path = outPath;
         out.preamble = params.content.substr(0, *params.bound);
         out.command = params.command.str();
-
-        llvm::StringSet<> deps;
-
-        /// FIXME: consider `#embed` and `__has_embed`.
-
-        for(auto& [fid, diretive]: info->directives()) {
-            for(auto& include: diretive.includes) {
-                if(include.fid.isValid()) {
-                    auto entry = info->srcMgr().getFileEntryRefForID(include.fid);
-                    assert(entry && "Invalid file entry");
-                    deps.try_emplace(entry->getName());
-                }
-            }
-
-            for(auto& hasInclude: diretive.hasIncludes) {
-                deps.try_emplace(hasInclude.path);
-            }
-        }
-
-        for(auto& deps: deps) {
-            out.deps.emplace_back(deps.getKey().str());
-        }
+        out.deps = info->deps();
 
         return std::move(*info);
     } else {

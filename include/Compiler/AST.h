@@ -65,6 +65,8 @@ public:
         return instance->getASTContext().getTranslationUnitDecl();
     }
 
+    std::vector<std::string> deps();
+
 private:
     /// The interested file ID. For file without header context, it is the main file ID.
     /// For file with header context, it is the file ID of header file.
