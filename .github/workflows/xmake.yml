@@ -52,12 +52,12 @@ jobs:
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:
-            xmake-version: branch@dev
+            xmake-version: branch@master
             actions-cache-folder: .xmake-cache-${{ matrix.os }}
             package-cache: true
-            package-cache-key: clice-${{ matrix.os }}
+            package-cache-key: ${{ matrix.os }}
             build-cache: true
-            build-cache-key: clice-${{ matrix.os }}
+            build-cache-key: ${{ matrix.os }}
 
       - name: Checkout repository
         uses: actions/checkout@v4
