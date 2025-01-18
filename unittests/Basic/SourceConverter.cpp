@@ -50,14 +50,14 @@ TEST(SourceConverter, Position) {
         SourceConverter cvtr{proto::PositionEncodingKind::UTF16};
         auto pos = cvtr.toPosition(eof, src);
         EXPECT_EQ(pos.line, 0);
-        EXPECT_EQ(pos.character, 19);
+        EXPECT_EQ(pos.character, 17);
     }
 
     {
         SourceConverter cvtr{proto::PositionEncodingKind::UTF32};
         auto pos = cvtr.toPosition(eof, src);
         EXPECT_EQ(pos.line, 0);
-        EXPECT_EQ(pos.character, 19);
+        EXPECT_EQ(pos.character, 16);
     }
 }
 

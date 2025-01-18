@@ -133,14 +133,7 @@ struct CompilationParams {
     /// which source code range the PCH will cover.
     /// - If we are building main file AST for header, we need a size to cut off code after the
     /// `#include` directive that includes the header to speed up the parsing.
-    std::optional<clang::PreambleBounds> bounds;
-
-    /// Computes the preamble bounds for the given content.
-    /// If the bounds are not provided explicitly, they will be calculated based on the content.
-    ///
-    /// - If the header is empty, the bounds can be determined by lexing the source file.
-    /// - If the header is not empty, the preprocessor must be executed to compute the bounds.
-    void computeBounds(llvm::StringRef header = "");
+    std::optional<std::uint32_t> bounds;
 
     llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 

@@ -48,8 +48,7 @@ auto createInstance(CompilationParams& params) {
     instance->createFileManager(params.vfs);
 
     /// Add remapped files, if bounds is provided, cut off the content.
-    std::size_t size =
-        params.bounds.has_value() ? params.bounds.value().Size : params.content.size();
+    std::size_t size = params.bounds.has_value() ? params.bounds.value() : params.content.size();
 
     assert(!instance->getPreprocessorOpts().RetainRemappedFileBuffers &&
            "RetainRemappedFileBuffers should be false");
@@ -165,100 +164,6 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
 
 }  // namespace
 
-void CompilationParams::computeBounds(llvm::StringRef header) {
-    assert(!bounds.has_value() && "Bounds is already computed");
-    assert(!content.empty() && "Source content is required to compute bounds");
-
-    if(header.empty()) {
-        auto invocation = createInvocation(*this);
-        bounds = clang::Lexer::ComputePreamble(content, invocation->getLangOpts());
-        return;
-    }
-
-    auto instance = createInstance(*this);
-
-    instance->getFrontendOpts().ProgramAction = clang::frontend::RunPreprocessorOnly;
-
-    struct SearchBoundary : public clang::PPCallbacks {
-        llvm::StringRef header;
-        clang::SourceLocation& hashLoc;
-
-        SearchBoundary(llvm::StringRef header, clang::SourceLocation& hashLoc) :
-            header(header), hashLoc(hashLoc) {}
-
-        void InclusionDirective(clang::SourceLocation hashLoc,
-                                const clang::Token& includeTok,
-                                llvm::StringRef filename,
-                                bool isAngled,
-                                clang::CharSourceRange filenameRange,
-                                clang::OptionalFileEntryRef file,
-                                llvm::StringRef searchPath,
-                                llvm::StringRef relativePath,
-                                const clang::Module* suggestedModule,
-                                bool moduleImported,
-                                clang::SrcMgr::CharacteristicKind fileType) override {
-            llvm::SmallString<128> path;
-            if(searchPath != ".") {
-                path::append(path, searchPath);
-            }
-            path::append(path, relativePath);
-            if(path == header) {
-                this->hashLoc = hashLoc;
-            }
-        }
-    };
-
-    /// The hash location of the include directive that includes the header.
-    clang::SourceLocation hashLoc;
-
-    clang::PreprocessOnlyAction action;
-
-    /// FIXME: merge the logic to `ExecuteAction`.
-    if(!instance->createTarget()) {
-        llvm::errs() << "Failed to create target\n";
-        std::terminate();
-    }
-
-    if(!action.BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
-        llvm::errs() << "Failed to begin source file\n";
-        std::terminate();
-    }
-
-    instance->getPreprocessor().addPPCallbacks(std::make_unique<SearchBoundary>(header, hashLoc));
-
-    if(auto error = action.Execute()) {
-        llvm::errs() << "Failed to execute action, because " << error << "\n";
-        std::terminate();
-    }
-
-    if(hashLoc.isInvalid()) {
-        llvm::errs() << "Failed to find the boundary\n";
-        std::terminate();
-    }
-
-    /// Find the top level file.
-    auto& srcMgr = instance->getSourceManager();
-    while(srcMgr.getIncludeLoc(srcMgr.getFileID(hashLoc)).isValid()) {
-        hashLoc = srcMgr.getIncludeLoc(srcMgr.getFileID(hashLoc));
-    }
-    auto offset = srcMgr.getFileOffset(hashLoc);
-
-    action.EndSourceFile();
-
-    /// We need to move to next line to get the correct bounds.
-    for(auto i = offset; i < content.size(); ++i) {
-        if(content[i] == '\n') {
-            bounds = {i + 2, true};
-            break;
-        }
-    }
-
-    if(!bounds.has_value()) {
-        llvm::errs() << "Failed to compute bounds\n";
-        std::terminate();
-    }
-}
-
 /// Scan the module name. This will not run the preprocessor.
 std::string scanModuleName(llvm::StringRef content) {
     clang::LangOptions langOpts;
@@ -373,10 +278,7 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
     out.path = params.outPath.str();
 
     auto& bounds = *params.bounds;
-    out.preamble = params.content.substr(0, bounds.Size).str();
-    if(bounds.PreambleEndsAtStartOfLine) {
-        out.preamble.append("@");
-    }
+    out.preamble = params.content.substr(0, bounds).str();
 
     /// TODO: collect files involved in building this PCH.
 
