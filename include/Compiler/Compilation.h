@@ -23,7 +23,7 @@ struct CompilationParams {
     /// which source code range the PCH will cover.
     /// - If we are building main file AST for header, we need a size to cut off code after the
     /// `#include` directive that includes the header to speed up the parsing.
-    std::optional<std::uint32_t> bounds;
+    std::optional<std::uint32_t> bound;
 
     llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 

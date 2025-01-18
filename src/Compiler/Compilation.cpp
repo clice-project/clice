@@ -48,7 +48,7 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
     instance->createFileManager(params.vfs);
 
     /// Add remapped files, if bounds is provided, cut off the content.
-    std::size_t size = params.bounds.has_value() ? params.bounds.value() : params.content.size();
+    std::size_t size = params.bound.has_value() ? params.bound.value() : params.content.size();
 
     assert(!instance->getPreprocessorOpts().RetainRemappedFileBuffers &&
            "RetainRemappedFileBuffers should be false");
@@ -185,23 +185,46 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteCo
 }
 
 llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
-    assert(params.bounds.has_value() && "Preamble bounds is required to build PCH");
+    assert(params.bound.has_value() && "Preamble bounds is required to build PCH");
 
     auto instance = impl::createInstance(params);
 
+    llvm::StringRef outPath = params.outPath.str();
+
     /// Set options to generate PCH.
-    instance->getFrontendOpts().OutputFile = params.outPath.str();
+    instance->getFrontendOpts().OutputFile = outPath;
     instance->getFrontendOpts().ProgramAction = clang::frontend::GeneratePCH;
-    instance->getPreprocessorOpts().PrecompiledPreambleBytes = {0, false};
     instance->getPreprocessorOpts().GeneratePreamble = true;
     instance->getLangOpts().CompilingPCH = true;
 
     if(auto info =
            ExecuteAction(std::move(instance), std::make_unique<clang::GeneratePCHAction>())) {
-        auto& bounds = *params.bounds;
-        out.preamble = params.content.substr(0, bounds).str();
-        out.path = params.outPath.str();
-        /// TODO: collect files involved in building this PCH.
+        out.path = outPath;
+        out.preamble = params.content.substr(0, *params.bound);
+        out.command = params.command.str();
+
+        llvm::StringSet<> deps;
+
+        /// FIXME: consider `#embed` and `__has_embed`.
+
+        for(auto& [fid, diretive]: info->directives()) {
+            for(auto& include: diretive.includes) {
+                if(include.fid.isValid()) {
+                    auto entry = info->srcMgr().getFileEntryRefForID(include.fid);
+                    assert(entry && "Invalid file entry");
+                    deps.try_emplace(entry->getName());
+                }
+            }
+
+            for(auto& hasInclude: diretive.hasIncludes) {
+                deps.try_emplace(hasInclude.path);
+            }
+        }
+
+        for(auto& deps: deps) {
+            out.deps.emplace_back(deps.getKey().str());
+        }
+
         return std::move(*info);
     } else {
         return info.takeError();

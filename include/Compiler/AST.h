@@ -65,23 +65,6 @@ public:
         return instance->getASTContext().getTranslationUnitDecl();
     }
 
-    /// ============================================================================
-    ///                            Utility Functions
-    /// ============================================================================
-
-    /// @brief Get the length of the token at the given location.
-    /// All SourceLocation instances in the Clang AST originate from the start position of tokens,
-    /// which helps reduce memory usage. When token length information is needed, a simple lexing
-    /// operation based on the start position can be performed.
-    auto getTokenLength(clang::SourceLocation loc) {
-        return clang::Lexer::MeasureTokenLength(loc, srcMgr(), instance->getLangOpts());
-    }
-
-    /// @brief Get the spelling of the token at the given location.
-    llvm::StringRef getTokenSpelling(clang::SourceLocation loc) {
-        return llvm::StringRef(srcMgr().getCharacterData(loc), getTokenLength(loc));
-    }
-
 private:
     /// The interested file ID. For file without header context, it is the main file ID.
     /// For file with header context, it is the file ID of header file.

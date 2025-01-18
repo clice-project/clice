@@ -7,7 +7,18 @@
 
 namespace clice {
 
-namespace path = llvm::sys::path;
+namespace path {
+
+using namespace llvm::sys::path;
+
+template <typename... Args>
+std::string join(Args&&... args) {
+    llvm::SmallString<128> path;
+    ((path::append(path, std::forward<Args>(args))), ...);
+    return path.str().str();
+}
+
+}  // namespace path
 
 namespace fs {
 
