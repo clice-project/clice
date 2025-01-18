@@ -96,4 +96,42 @@ std::string scanModuleName(CompilationParams& params) {
     return info->name;
 }
 
+llvm::Expected<ModuleInfo> scanModule(CompilationParams& params) {
+    struct ModuleCollector : public clang::PPCallbacks {
+        ModuleInfo& info;
+
+        ModuleCollector(ModuleInfo& info) : info(info) {}
+
+        void moduleImport(clang::SourceLocation importLoc,
+                          clang::ModuleIdPath path,
+                          const clang::Module* imported) override {
+            assert(path.size() == 1);
+            info.mods.emplace_back(path[0].first->getName());
+        }
+    };
+
+    ModuleInfo info;
+    clang::PreprocessOnlyAction action;
+    auto instance = impl::createInstance(params);
+
+    if(!action.BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
+        return error("Failed to begin source file");
+    }
+
+    auto& pp = instance->getPreprocessor();
+
+    pp.addPPCallbacks(std::make_unique<ModuleCollector>(info));
+
+    if(auto error = action.Execute()) {
+        return error;
+    }
+
+    if(pp.isInNamedModule()) {
+        info.isInterfaceUnit = pp.isInNamedInterfaceUnit();
+        info.name = pp.getNamedModuleName();
+    }
+
+    return info;
+}
+
 }  // namespace clice

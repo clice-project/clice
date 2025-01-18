@@ -6,9 +6,9 @@
 
 namespace clice {
 
-namespace {
+namespace impl {
 
-auto createInvocation(CompilationParams& params) {
+std::unique_ptr<clang::CompilerInvocation> createInvocation(CompilationParams& params) {
     llvm::SmallString<1024> buffer;
     llvm::SmallVector<const char*, 16> args;
 
@@ -34,7 +34,7 @@ auto createInvocation(CompilationParams& params) {
     return invocation;
 }
 
-auto createInstance(CompilationParams& params) {
+std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& params) {
     auto instance = std::make_unique<clang::CompilerInstance>();
 
     instance->setInvocation(createInvocation(params));
@@ -72,6 +72,10 @@ auto createInstance(CompilationParams& params) {
 
     return instance;
 }
+
+}  // namespace impl
+
+namespace {
 
 void applyPreamble(clang::CompilerInstance& instance, CompilationParams& params) {
     auto& PPOpts = instance.getPreprocessorOpts();
@@ -164,46 +168,8 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
 
 }  // namespace
 
-llvm::Expected<ModuleInfo> scanModule(CompilationParams& params) {
-    struct ModuleCollector : public clang::PPCallbacks {
-        ModuleInfo& info;
-
-        ModuleCollector(ModuleInfo& info) : info(info) {}
-
-        void moduleImport(clang::SourceLocation importLoc,
-                          clang::ModuleIdPath path,
-                          const clang::Module* imported) override {
-            assert(path.size() == 1);
-            info.mods.emplace_back(path[0].first->getName());
-        }
-    };
-
-    ModuleInfo info;
-    clang::PreprocessOnlyAction action;
-    auto instance = createInstance(params);
-
-    if(!action.BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
-        return error("Failed to begin source file");
-    }
-
-    auto& pp = instance->getPreprocessor();
-
-    pp.addPPCallbacks(std::make_unique<ModuleCollector>(info));
-
-    if(auto error = action.Execute()) {
-        return error;
-    }
-
-    if(pp.isInNamedModule()) {
-        info.isInterfaceUnit = pp.isInNamedInterfaceUnit();
-        info.name = pp.getNamedModuleName();
-    }
-
-    return info;
-}
-
 llvm::Expected<ASTInfo> compile(CompilationParams& params) {
-    auto instance = createInstance(params);
+    auto instance = impl::createInstance(params);
 
     applyPreamble(*instance, params);
 
@@ -211,7 +177,7 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params) {
 }
 
 llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteConsumer* consumer) {
-    auto instance = createInstance(params);
+    auto instance = impl::createInstance(params);
 
     /// Set options to run code completion.
     instance->getFrontendOpts().CodeCompletionAt.FileName = params.srcPath.str();
@@ -227,7 +193,7 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteCo
 llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
     assert(params.bounds.has_value() && "Preamble bounds is required to build PCH");
 
-    auto instance = createInstance(params);
+    auto instance = impl::createInstance(params);
 
     /// Set options to generate PCH.
     instance->getFrontendOpts().OutputFile = params.outPath.str();
@@ -252,7 +218,7 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
 }
 
 llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out) {
-    auto instance = createInstance(params);
+    auto instance = impl::createInstance(params);
 
     /// Set options to generate PCM.
     instance->getFrontendOpts().OutputFile = params.outPath.str();
