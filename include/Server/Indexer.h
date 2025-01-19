@@ -21,6 +21,9 @@ public:
     /// Index the given file(for opened file).
     async::Task<> index(llvm::StringRef file, ASTInfo& info);
 
+    /// Generate the index file path based on time and file name.
+    std::string getIndexPath(llvm::StringRef file);
+
     /// Dump the index information to JSON.
     json::Value dumpToJSON();
 

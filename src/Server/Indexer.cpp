@@ -7,15 +7,6 @@
 
 namespace clice {
 
-static long long generate_unique_id() {
-    auto now = std::chrono::system_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, 1000);
-    return ms + dis(gen);
-}
-
 static uint32_t addIncludeChain(std::vector<Indexer::IncludeLocation>& locations,
                                 llvm::DenseMap<clang::FileID, uint32_t>& files,
                                 clang::SourceManager& SM,
@@ -51,6 +42,13 @@ Indexer::~Indexer() {
 }
 
 async::Task<> Indexer::index(llvm::StringRef file) {
+    auto real_path = path::real_path(file);
+    if(!real_path) {
+        log::warn("Failed to get real path of {0}, because {1}", file, real_path.error());
+        co_return;
+    }
+    file = *real_path;
+
     auto command = database.getCommand(file);
     if(command.empty()) {
         log::warn("No command found for file: {}", file);
@@ -133,9 +131,9 @@ async::Task<> Indexer::index(llvm::StringRef file) {
     /// Write binary index to file.
     for(auto& [fid, index]: indices) {
         if(fid == SM.getMainFileID()) {
-            tu->index = path::join(options.dir,
-                                   path::filename(tu->srcPath) + "." +
-                                       llvm::Twine(generate_unique_id()) + ".sidx");
+            if(tu->index.empty()) {
+                tu->index = getIndexPath(tu->srcPath);
+            }
             co_await async::write(tu->index, static_cast<char*>(index.base), index.size);
             continue;
         }
@@ -147,10 +145,9 @@ async::Task<> Indexer::index(llvm::StringRef file) {
         assert(headers.contains(name) && "Header not found");
         for(auto& context: headers[name]->contexts[tu]) {
             if(context.include == include) {
-                /// Write index to binary file.
-                context.index = path::join(options.dir,
-                                           path::filename(name) + "." +
-                                               llvm::Twine(generate_unique_id()) + ".fidx");
+                if(context.index.empty()) {
+                    context.index = getIndexPath(name);
+                }
                 co_await async::write(context.index, static_cast<char*>(index.base), index.size);
             }
         }
@@ -161,6 +158,15 @@ async::Task<> Indexer::index(llvm::StringRef file) {
 
 async::Task<> Indexer::index(llvm::StringRef file, ASTInfo& info) {
     co_return;
+}
+
+std::string Indexer::getIndexPath(llvm::StringRef file) {
+    auto now = std::chrono::system_clock::now();
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 1000);
+    return path::join(options.dir, path::filename(file) + "." + llvm::Twine(ms + dis(gen)));
 }
 
 json::Value Indexer::dumpToJSON() {
@@ -193,6 +199,23 @@ json::Value Indexer::dumpToJSON() {
         {"headers", std::move(headers)},
         {"tus",     std::move(tus)    },
     };
+}
+
+void Indexer::saveToDisk() {
+    std::error_code ec;
+    llvm::raw_fd_ostream os(path::join(options.dir, "index.json"), ec);
+    if(ec) {
+        log::warn("Failed to open index file: {}", ec.message());
+        return;
+    }
+
+    os << dumpToJSON();
+
+    if(os.has_error()) {
+        log::warn("Failed to write index file: {}", os.error().message());
+    } else {
+        log::info("Successfully saved index to disk");
+    }
 }
 
 }  // namespace clice

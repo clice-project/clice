@@ -1,5 +1,7 @@
 #pragma once
 
+#include <expected>
+
 #include "llvm/Support/Path.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/VirtualFileSystem.h"
@@ -15,6 +17,15 @@ template <typename... Args>
 std::string join(Args&&... args) {
     llvm::SmallString<128> path;
     ((path::append(path, std::forward<Args>(args))), ...);
+    return path.str().str();
+}
+
+/// Get the real path of the given file. File must exist.
+inline std::expected<std::string, std::string> real_path(llvm::StringRef file) {
+    llvm::SmallString<128> path;
+    if(auto error = llvm::sys::fs::real_path(file, path)) {
+        return std::unexpected(error.message());
+    }
     return path.str().str();
 }
 

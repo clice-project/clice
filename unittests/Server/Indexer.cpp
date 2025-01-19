@@ -21,6 +21,8 @@ TEST(Indexer, Basic) {
     async::schedule(p2.release());
 
     async::run();
+
+    indexer.saveToDisk();
 }
 
 }  // namespace clice::testing

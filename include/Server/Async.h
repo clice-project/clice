@@ -448,7 +448,7 @@ struct write {
             async::schedule(awaiter.waiting);
 
             uv_fs_t close_req;
-            uv_fs_close(fs->loop, &close_req, fs->file, nullptr);
+            uv_fs_close(fs->loop, &close_req, fs->result, nullptr);
             uv_fs_req_cleanup(fs);
         };
 
