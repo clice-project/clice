@@ -11,10 +11,13 @@ namespace clice {
 class CompilationDatabase {
 public:
     /// Update the compile commands with the given file.
-    void update(llvm::StringRef file);
+    void updateCommands(llvm::StringRef file);
+
+    /// Update the compile commands with the given file and compile command.
+    void updateCommand(llvm::StringRef file, llvm::StringRef command);
 
     /// Update the module map with the given file and module name.
-    void update(llvm::StringRef file, llvm::StringRef name);
+    void updateModule(llvm::StringRef file, llvm::StringRef name);
 
     /// Lookup the compile commands of the given file.
     llvm::StringRef getCommand(llvm::StringRef file);

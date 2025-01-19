@@ -18,12 +18,10 @@ static uint32_t addIncludeChain(std::vector<Indexer::IncludeLocation>& locations
     locations.emplace_back();
     auto entry = SM.getFileEntryRefForID(fid);
     assert(entry && "Invalid file entry");
-    auto presumed = SM.getPresumedLoc(SM.getIncludeLoc(fid), false);
-
     locations[index].filename = entry->getName();
-    locations[index].line = presumed.getLine();
 
-    if(presumed.getFileID().isValid()) {
+    if(auto presumed = SM.getPresumedLoc(SM.getIncludeLoc(fid), false); presumed.isValid()) {
+        locations[index].line = presumed.getLine();
         auto include = addIncludeChain(locations, files, SM, presumed.getFileID());
         locations[index].include = include;
     }
@@ -72,7 +70,7 @@ async::Task<> Indexer::index(llvm::StringRef file) {
             }
 
             /// Add all include chains.
-            files[fid] = addIncludeChain(locations, files, SM, include.fid);
+            addIncludeChain(locations, files, SM, include.fid);
         }
     }
 
@@ -88,6 +86,7 @@ async::Task<> Indexer::index(llvm::StringRef file) {
             .srcPath = file.str(),
             .index = "",
         };
+        tus.try_emplace(file, tu);
     }
 
     /// Update the translation unit.
@@ -95,6 +94,10 @@ async::Task<> Indexer::index(llvm::StringRef file) {
 
     /// Update the header context.
     for(auto& [fid, include]: files) {
+        if(fid == SM.getMainFileID()) {
+            continue;
+        }
+
         auto entry = SM.getFileEntryRefForID(fid);
         assert(entry && "Invalid file entry");
         auto name = entry->getName();
@@ -105,6 +108,7 @@ async::Task<> Indexer::index(llvm::StringRef file) {
         } else {
             header = new Header;
             header->srcPath = name;
+            headers.try_emplace(name, header);
         }
 
         header->contexts[tu].emplace_back(Context{
@@ -140,6 +144,38 @@ async::Task<> Indexer::index(llvm::StringRef file) {
 
 async::Task<> Indexer::index(llvm::StringRef file, ASTInfo& info) {
     co_return;
+}
+
+json::Value Indexer::dumpToJSON() {
+    json::Array headers;
+    for(auto& [_, header]: this->headers) {
+        json::Array contexts;
+        for(auto& [tu, context]: header->contexts) {
+            contexts.emplace_back(json::Object{
+                {"tu",       tu->srcPath             },
+                {"contexts", json::serialize(context)},
+            });
+        }
+
+        headers.emplace_back(json::Object{
+            {"srcPath",  header->srcPath    },
+            {"contexts", std::move(contexts)},
+        });
+    }
+
+    json::Array tus;
+    for(auto& [_, tu]: this->tus) {
+        tus.emplace_back(json::Object{
+            {"srcPath",   tu->srcPath                   },
+            {"index",     tu->index                     },
+            {"locations", json::serialize(tu->locations)},
+        });
+    }
+
+    return json::Object{
+        {"headers", std::move(headers)},
+        {"tus",     std::move(tus)    },
+    };
 }
 
 }  // namespace clice

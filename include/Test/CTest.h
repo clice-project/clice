@@ -5,14 +5,6 @@
 #include "Compiler/Compilation.h"
 #include "Support/Support.h"
 
-namespace clice::test {
-
-llvm::StringRef source_dir();
-
-llvm::StringRef resource_dir();
-
-}  // namespace clice::test
-
 namespace clice::testing {
 
 #undef EXPECT_EQ

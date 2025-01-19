@@ -7,6 +7,8 @@
 
 namespace clice::testing {
 
+llvm::StringRef test_dir();
+
 #undef EXPECT_EQ
 #undef EXPECT_NE
 

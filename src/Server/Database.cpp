@@ -6,7 +6,7 @@
 namespace clice {
 
 /// Update the compile commands with the given file.
-void CompilationDatabase::update(llvm::StringRef filename) {
+void CompilationDatabase::updateCommands(llvm::StringRef filename) {
     /// Read the compile commands from the file.
     json::Value json = nullptr;
 
@@ -97,8 +97,12 @@ void CompilationDatabase::update(llvm::StringRef filename) {
     log::info("Successfully built module map, total {0} modules", moduleMap.size());
 }
 
+void CompilationDatabase::updateCommand(llvm::StringRef file, llvm::StringRef command) {
+    commands[file] = command;
+}
+
 /// Update the module map with the given file and module name.
-void CompilationDatabase::update(llvm::StringRef file, llvm::StringRef name) {
+void CompilationDatabase::updateModule(llvm::StringRef file, llvm::StringRef name) {
     moduleMap[name] = file;
 }
 

@@ -19,6 +19,15 @@ public:
     /// Index the given file(for opened file).
     async::Task<> index(llvm::StringRef file, ASTInfo& info);
 
+    /// Dump the index information to JSON.
+    json::Value dumpToJSON();
+
+    /// Save the index information to disk.
+    void saveToDisk();
+
+    /// Load the index information from disk.
+    void loadFromDisk();
+
     struct TranslationUnit;
 
     struct Context {
