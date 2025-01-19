@@ -41,11 +41,9 @@ jobs:
           sudo update-alternatives --set gcc /usr/bin/gcc-14
           sudo update-alternatives --set g++ /usr/bin/g++-14
 
-          wget -O - https://apt.llvm.org/llvm.sh | sudo bash
-          sudo apt install -y llvm-19 llvm-19-tools clang-19 libclang-rt-19-dev lld-19
-          sudo ln -s /usr/bin/llvm-ar-19 /usr/bin/llvm-ar
-          sudo ln -s /usr/bin/llvm-ranlib-19 /usr/bin/llvm-ranlib
-
+          wget -O - https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
           sudo apt install -y cmake ninja-build 
 
       - name: Setup xmake
