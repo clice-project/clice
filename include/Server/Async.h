@@ -198,10 +198,10 @@ auto suspend(Callback&& callback) {
     return suspend_awaiter{std::forward<Callback>(callback)};
 }
 
-struct empty {};
+struct none {};
 
 template <typename Task, typename V = typename std::remove_cvref_t<Task>::value_type>
-using task_value_t = std::conditional_t<std::is_void_v<V>, empty, V>;
+using task_value_t = std::conditional_t<std::is_void_v<V>, none, V>;
 
 template <typename... Tasks>
 auto gather(Tasks&&... tasks) -> Task<std::tuple<task_value_t<Tasks>...>> {
@@ -227,7 +227,7 @@ auto gather(Tasks&&... tasks) -> Task<std::tuple<task_value_t<Tasks>...>> {
     /// If all tasks are done, return the results.
     auto getResult = []<typename Task>(Task& task) {
         if constexpr(std::is_void_v<typename Task::value_type>) {
-            return empty{};
+            return none{};
         } else {
             return task.await_resume();
         }

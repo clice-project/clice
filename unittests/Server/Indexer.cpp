@@ -19,8 +19,6 @@ TEST(Indexer, Basic) {
     auto p2 = indexer.index(foo);
     async::run(p1, p2);
 
-    llvm::outs() << p2.done() << "\n";
-
     indexer.saveToDisk();
 }
 

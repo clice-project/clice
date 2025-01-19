@@ -2,6 +2,7 @@
 
 #include <expected>
 
+#include "Assert.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/VirtualFileSystem.h"
@@ -25,7 +26,7 @@ std::string join(Args&&... args) {
 inline std::string real_path(llvm::StringRef file) {
     llvm::SmallString<128> path;
     auto error = llvm::sys::fs::real_path(file, path);
-    assert(!error && "File does not exist");
+    ASSERT(!error, "Failed to get real path of {0}, because {1}", file, error.message());
     return path.str().str();
 }
 
