@@ -100,8 +100,6 @@ target("unit_tests")
 
 rule("clice_build_config")
     on_load(function (target)
-        target:set("toolchains", "clang")
-
         target:add("cxflags", "-fno-rtti", {tools = {"clang", "gcc"}})
         target:add("cxflags", "/GR-", {tools = {"clang_cl", "cl"}})
         target:set("exceptions", "no-cxx")
