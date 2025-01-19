@@ -47,18 +47,21 @@ jobs:
           sudo ln -s /usr/bin/llvm-ar-18 /usr/bin/llvm-ar
           sudo ln -s /usr/bin/llvm-ranlib-18 /usr/bin/llvm-ranlib
 
-          sudo apt install -y cmake ninja-build 
+          sudo apt install -y cmake ninja-build
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:
-            xmake-version: branch@master
-            actions-cache-folder: .xmake-cache-${{ matrix.os }}
-            build-cache: true
-            build-cache-key: ${{ matrix.os }}
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
+          xmake-version: branch@master
+          actions-cache-folder: '.xmake-cache'
+          actions-cache-key: ${{ matrix.os }}
+          package-cache: true
+          package-cache-key: ${{ matrix.os }}
+          build-cache: true
+          build-cache-key: ${{ matrix.os }}
 
       - name: Build clice
         run: |
