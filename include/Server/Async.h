@@ -456,7 +456,7 @@ struct write {
                    &fs,
                    path.c_str(),
                    O_WRONLY | O_CREAT | O_TRUNC,
-                   S_IRUSR | S_IWUSR,
+                   0666,
                    nullptr);
 
         uv_buf_t buf[1] = {uv_buf_init(data, size)};
