@@ -98,12 +98,12 @@ void CompilationDatabase::updateCommands(llvm::StringRef filename) {
 }
 
 void CompilationDatabase::updateCommand(llvm::StringRef file, llvm::StringRef command) {
-    commands[file] = command;
+    commands[path::real_path(file)] = command;
 }
 
 /// Update the module map with the given file and module name.
 void CompilationDatabase::updateModule(llvm::StringRef file, llvm::StringRef name) {
-    moduleMap[name] = file;
+    moduleMap[path::real_path(file)] = file;
 }
 
 /// Lookup the compile commands of the given file.

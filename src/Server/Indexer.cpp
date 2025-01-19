@@ -20,7 +20,7 @@ static uint32_t addIncludeChain(std::vector<Indexer::IncludeLocation>& locations
     locations.emplace_back();
     auto entry = SM.getFileEntryRefForID(fid);
     assert(entry && "Invalid file entry");
-    locations[index].filename = entry->getName();
+    locations[index].filename = path::real_path(path::real_path(entry->getName()));
 
     if(auto presumed = SM.getPresumedLoc(SM.getIncludeLoc(fid), false); presumed.isValid()) {
         locations[index].line = presumed.getLine();
@@ -43,11 +43,7 @@ Indexer::~Indexer() {
 
 async::Task<> Indexer::index(llvm::StringRef file) {
     auto real_path = path::real_path(file);
-    if(!real_path) {
-        log::warn("Failed to get real path of {0}, because {1}", file, real_path.error());
-        co_return;
-    }
-    file = *real_path;
+    file = real_path;
 
     auto command = database.getCommand(file);
     if(command.empty()) {
@@ -109,7 +105,7 @@ async::Task<> Indexer::index(llvm::StringRef file) {
 
         auto entry = SM.getFileEntryRefForID(fid);
         assert(entry && "Invalid file entry");
-        auto name = entry->getName();
+        auto name = path::real_path(entry->getName());
 
         Header* header = nullptr;
         if(auto iter = headers.find(name); iter != headers.end()) {
@@ -140,7 +136,7 @@ async::Task<> Indexer::index(llvm::StringRef file) {
 
         auto entry = SM.getFileEntryRefForID(fid);
         assert(entry && "Invalid file entry");
-        auto name = entry->getName();
+        auto name = path::real_path(entry->getName());
         auto include = files[fid];
         assert(headers.contains(name) && "Header not found");
         for(auto& context: headers[name]->contexts[tu]) {

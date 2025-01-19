@@ -8,6 +8,7 @@
 #include <optional>
 #include <concepts>
 #include <coroutine>
+#include <type_traits>
 
 #include "Support/JSON.h"
 
@@ -136,11 +137,11 @@ public:
     }
 
 public:
-    core_handle handle() const noexcept {
+    coroutine_handle handle() const noexcept {
         return core;
     }
 
-    core_handle release() noexcept {
+    coroutine_handle release() noexcept {
         auto handle = core;
         core = nullptr;
         return handle;
@@ -197,9 +198,13 @@ auto suspend(Callback&& callback) {
     return suspend_awaiter{std::forward<Callback>(callback)};
 }
 
+struct empty {};
+
+template <typename Task, typename V = typename std::remove_cvref_t<Task>::value_type>
+using task_value_t = std::conditional_t<std::is_void_v<V>, empty, V>;
+
 template <typename... Tasks>
-auto gather(Tasks&&... tasks)
-    -> Task<std::tuple<typename std::remove_cvref_t<Tasks>::value_type...>> {
+auto gather(Tasks&&... tasks) -> Task<std::tuple<task_value_t<Tasks>...>> {
     bool all_done = (tasks.done() && ...);
 
     if(!all_done) {
@@ -220,7 +225,14 @@ auto gather(Tasks&&... tasks)
     }
 
     /// If all tasks are done, return the results.
-    co_return std::tuple{tasks.await_resume()...};
+    auto getResult = []<typename Task>(Task& task) {
+        if constexpr(std::is_void_v<typename Task::value_type>) {
+            return empty{};
+        } else {
+            return task.await_resume();
+        }
+    };
+    co_return std::tuple{getResult(tasks)...};
 }
 
 /// Run the tasks in parallel and return the results.

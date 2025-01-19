@@ -5,7 +5,7 @@ namespace clice::testing {
 
 TEST(Indexer, Basic) {
     config::IndexOptions options;
-    options.dir = path::join(".", "temp");
+    options.dir = path::real_path(path::join(".", "temp"));
 
     CompilationDatabase database;
     auto prefix = path::join(test_dir(), "indexer");
@@ -17,13 +17,11 @@ TEST(Indexer, Basic) {
     Indexer indexer(options, database);
     auto p1 = indexer.index(main);
     auto p2 = indexer.index(foo);
-    async::schedule(p1.release());
-    async::schedule(p2.release());
+    async::run(p1, p2);
 
-    async::run();
+    llvm::outs() << p2.done() << "\n";
 
     indexer.saveToDisk();
-    
 }
 
 }  // namespace clice::testing

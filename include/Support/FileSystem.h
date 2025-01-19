@@ -20,17 +20,13 @@ std::string join(Args&&... args) {
     return path.str().str();
 }
 
-/// Get the real path of the given file. File must exist.
-inline std::expected<std::string, std::string> real_path(llvm::StringRef file) {
-    llvm::SmallString<128> path;
-    if(auto error = llvm::sys::fs::real_path(file, path)) {
-        return std::unexpected(error.message());
-    }
-    return path.str().str();
-}
+/// Get the real path of the given file. The file must exist. If the file does not exist,
 
-inline std::string resolve(llvm::StringRef file){
-   ///llvm::sys::path::remove_dots(file, true);
+inline std::string real_path(llvm::StringRef file) {
+    llvm::SmallString<128> path;
+    auto error = llvm::sys::fs::real_path(file, path);
+    assert(!error && "File does not exist");
+    return path.str().str();
 }
 
 }  // namespace path
