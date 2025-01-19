@@ -6,6 +6,6 @@ if(WIN32)
 else()
     set(CMAKE_SYSTEM_NAME Linux)
 
-    set(CMAKE_C_COMPILER clang-19)
-    set(CMAKE_CXX_COMPILER clang++-19)
+    set(CMAKE_C_COMPILER clang-20)
+    set(CMAKE_CXX_COMPILER clang++-20)
 endif()
