@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Shared.h"
 #include "ArrayView.h"
 #include "Basic/RelationKind.h"
 #include "Basic/SymbolKind.h"
@@ -87,6 +88,6 @@ public:
     std::size_t size;
 };
 
-llvm::DenseMap<clang::FileID, SymbolIndex> test(ASTInfo& info);
+Shared<SymbolIndex> index(ASTInfo& info);
 
 }  // namespace clice::index

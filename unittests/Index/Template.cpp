@@ -14,7 +14,7 @@ void $(2)foo() {}
 
     IndexTester tester{"main.cpp", code};
     tester.run();
-    auto indices = index::test(*tester.info);
+    auto indices = index::index(*tester.info);
 
     std::size_t total = 0;
     llvm::SmallVector<index::SymbolIndex::Symbol> symbols;

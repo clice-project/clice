@@ -207,7 +207,7 @@ private:
 
 }  // namespace
 
-llvm::DenseMap<clang::FileID, SymbolIndex> test(ASTInfo& info) {
+Shared<SymbolIndex> index(ASTInfo& info) {
     SymbolIndexBuilder collector(info);
     return collector.build();
 }
