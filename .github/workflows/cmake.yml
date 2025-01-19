@@ -27,7 +27,7 @@ jobs:
         uses: MinoruSekine/setup-scoop@v4.0.1
         with:
           buckets: main
-          apps: main/llvm ninja
+          apps: llvm ninja
 
       - name: Setup llvm & libstdc++ & cmake & ninja
         if: matrix.os == 'ubuntu-24.04'

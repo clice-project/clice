@@ -23,6 +23,7 @@ TEST(Indexer, Basic) {
     async::run();
 
     indexer.saveToDisk();
+    
 }
 
 }  // namespace clice::testing

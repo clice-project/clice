@@ -29,6 +29,10 @@ inline std::expected<std::string, std::string> real_path(llvm::StringRef file) {
     return path.str().str();
 }
 
+inline std::string resolve(llvm::StringRef file){
+   ///llvm::sys::path::remove_dots(file, true);
+}
+
 }  // namespace path
 
 namespace fs {
