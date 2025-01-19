@@ -70,7 +70,7 @@ jobs:
 
       - name: Build clice (release)
         run: |
-          xmake config --yes --toolchain=clang-20
+          xmake config --yes --toolchain=clang
           xmake --verbose --diagnosis
 
       - name: Run tests
