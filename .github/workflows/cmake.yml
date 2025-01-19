@@ -67,13 +67,13 @@ jobs:
         if: matrix.os == 'windows-2022'
         uses: ilammy/msvc-dev-cmd@v1
       
-      - name: Build clice
+      - name: Build clice (debug)
         if: matrix.os == 'ubuntu-24.04'
         run: |
           cmake --preset debug
           cmake --build --preset debug
 
-      - name: Build clice
+      - name: Build clice (release)
         if: matrix.os == 'windows-2022'
         run: |
           cmake --preset release

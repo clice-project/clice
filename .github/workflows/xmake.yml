@@ -62,10 +62,16 @@ jobs:
           build-cache: true
           build-cache-key: ${{ matrix.os }}
 
-      - name: Build clice
+      - name: Build clice (debug)
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          xmake config --yes --mode=debug --toolchain=clang-19
+          xmake --verbose --diagnosis
+
+      - name: Build clice (release)
         run: |
           xmake config --yes --toolchain=clang-19
-          xmake --diagnosis
+          xmake --verbose --diagnosis
 
       - name: Run tests
         run: xmake test --verbose
