@@ -71,7 +71,7 @@ jobs:
       - name: Xmake configure
         if: matrix.os == 'windows-2022'
         run: |
-          xmake config --yes --mode=${{ matrix.build_type }}
+          xmake config --yes --mode=${{ matrix.build_type }} --toolchain=clang
 
       - name: Build clice
         run: |
