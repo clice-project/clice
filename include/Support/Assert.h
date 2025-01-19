@@ -11,7 +11,7 @@ namespace clice {
         std::abort();                                                                              \
     }
 #else
-#define ASSERT(expr, message)
+#define ASSERT(expr, message, ...)
 #endif
 
 }  // namespace clice
