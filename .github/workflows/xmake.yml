@@ -42,10 +42,9 @@ jobs:
           sudo update-alternatives --set gcc /usr/bin/gcc-14
           sudo update-alternatives --set g++ /usr/bin/g++-14
 
-          wget -O - https://apt.llvm.org/llvm.sh | sudo bash
-          sudo apt install -y llvm-18 llvm-18-tools clang-18 libclang-rt-18-dev lld-18
-          sudo ln -s /usr/bin/llvm-ar-18 /usr/bin/llvm-ar
-          sudo ln -s /usr/bin/llvm-ranlib-18 /usr/bin/llvm-ranlib
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
 
           sudo apt install -y cmake ninja-build
 
@@ -65,7 +64,8 @@ jobs:
 
       - name: Build clice
         run: |
-          xmake --yes --diagnosis
+          xmake config --yes --toolchain=clang-19
+          xmake --diagnosis
 
       - name: Run tests
         run: xmake test --verbose
