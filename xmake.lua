@@ -11,6 +11,11 @@ if has_config("dev") then
     set_policy("compatibility.version", "3.0")
     if is_plat("windows") then
         set_runtimes("MD")
+        if is_mode("debug") then
+            print("Clice does not support build in debug mode with pre-compiled llvm binary on windows.\n"
+                .."See https://github.com/clice-project/clice/issues/42 for more information.")
+            os.raise()
+        end
     elseif is_plat("linux") and is_mode("debug") then
         set_policy("build.sanitizer.address", true)
     end
@@ -113,9 +118,11 @@ rule("clice_build_config")
 
 package("llvm")
     if is_plat("windows") then
-        add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
-        add_versions("20.0.0", "ba3fcd482340b8f892f02b9fc2a233a3ba0e0931fdf4e84a3e2a2ec47283d096")
-        -- Clice does not support build in debug mode with pre-compiled llvm binary on windows. See https://github.com/clice-project/clice/issues/42 for more information.
+        if is_mode("release") then
+            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
+            add_versions("20.0.0", "ba3fcd482340b8f892f02b9fc2a233a3ba0e0931fdf4e84a3e2a2ec47283d096")
+        else
+        end 
     elseif is_plat("linux") then
         if is_mode("debug") then
             add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-debug.tar.xz")

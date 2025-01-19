@@ -20,6 +20,13 @@ jobs:
         os: [ubuntu-24.04, windows-2022]
         build_type: [release, debug]
 
+        is_windows:
+          - ${{ matrix.os == 'windows-2022'}}
+        exclude:
+          - { is_windows: true }
+        include:
+          - { build_type: release }
+
     runs-on: ${{ matrix.os }}
 
     steps:
