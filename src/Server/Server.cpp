@@ -3,7 +3,7 @@
 
 namespace clice {
 
-Server::Server() : indexer(database), scheduler(database, {}) {
+Server::Server() : indexer({},database), scheduler(database, {}) {
     addMethod("initialize", &Server::onInitialize);
     addMethod("initialized", &Server::onInitialized);
     addMethod("shutdown", &Server::onShutdown);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Async.h"
+#include "Config.h"
 #include "Database.h"
 
 namespace clice {
@@ -9,7 +10,8 @@ class ASTInfo;
 
 class Indexer {
 public:
-    Indexer(CompilationDatabase& database) : database(database) {}
+    Indexer(const config::IndexOptions& options, CompilationDatabase& database) :
+        options(options), database(database) {}
 
     ~Indexer();
 
@@ -74,6 +76,7 @@ public:
     };
 
 private:
+    const config::IndexOptions& options;
     CompilationDatabase& database;
     llvm::StringMap<Header*> headers;
     llvm::StringMap<TranslationUnit*> tus;

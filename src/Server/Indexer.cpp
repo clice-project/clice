@@ -1,9 +1,20 @@
+#include <random>
+
 #include "Compiler/Compilation.h"
 #include "Index/SymbolIndex.h"
 #include "Server/Logger.h"
 #include "Server/Indexer.h"
 
 namespace clice {
+
+static long long generate_unique_id() {
+    auto now = std::chrono::system_clock::now();
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 1000);
+    return ms + dis(gen);
+}
 
 static uint32_t addIncludeChain(std::vector<Indexer::IncludeLocation>& locations,
                                 llvm::DenseMap<clang::FileID, uint32_t>& files,
@@ -122,7 +133,10 @@ async::Task<> Indexer::index(llvm::StringRef file) {
     /// Write binary index to file.
     for(auto& [fid, index]: indices) {
         if(fid == SM.getMainFileID()) {
-            tu->index = "111";
+            tu->index = path::join(options.dir,
+                                   path::filename(tu->srcPath) + "." +
+                                       llvm::Twine(generate_unique_id()) + ".sidx");
+            co_await async::write(tu->index, static_cast<char*>(index.base), index.size);
             continue;
         }
 
@@ -134,7 +148,10 @@ async::Task<> Indexer::index(llvm::StringRef file) {
         for(auto& context: headers[name]->contexts[tu]) {
             if(context.include == include) {
                 /// Write index to binary file.
-                context.index = "111";
+                context.index = path::join(options.dir,
+                                           path::filename(name) + "." +
+                                               llvm::Twine(generate_unique_id()) + ".fidx");
+                co_await async::write(context.index, static_cast<char*>(index.base), index.size);
             }
         }
     }

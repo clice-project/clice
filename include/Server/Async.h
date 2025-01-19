@@ -428,11 +428,54 @@ struct stat {
     }
 };
 
+struct write {
+    uv_fs_t fs;
+    std::string path;
+    char* data;
+    size_t size;
+    core_handle waiting;
+
+    bool await_ready() const noexcept {
+        return false;
+    }
+
+    void await_suspend(core_handle waiting) noexcept {
+        fs.data = this;
+        this->waiting = waiting;
+
+        auto callback = [](uv_fs_t* fs) {
+            auto& awaiter = *static_cast<write*>(fs->data);
+            async::schedule(awaiter.waiting);
+
+            uv_fs_t close_req;
+            uv_fs_close(fs->loop, &close_req, fs->file, nullptr);
+            uv_fs_req_cleanup(fs);
+        };
+
+        uv_fs_open(uv_default_loop(),
+                   &fs,
+                   path.c_str(),
+                   O_WRONLY | O_CREAT | O_TRUNC,
+                   S_IRUSR | S_IWUSR,
+                   nullptr);
+
+        uv_buf_t buf[1] = {uv_buf_init(data, size)};
+        uv_fs_write(uv_default_loop(), &fs, fs.result, buf, 1, 0, callback);
+    }
+
+    void await_resume() noexcept {}
+};
+
 }  // namespace awaiter
 
 /// Get the file status asynchronously.
 inline auto stat(llvm::StringRef path) {
     return awaiter::stat{{}, path.str(), {}, {}};
+}
+
+/// Write the data to the file asynchronously.
+inline auto write(llvm::StringRef path, char* data, size_t size) {
+    return awaiter::write{{}, path.str(), data, size, {}};
 }
 
 using Callback = llvm::unique_function<Task<void>(json::Value)>;
