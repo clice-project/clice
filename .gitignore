@@ -31,9 +31,8 @@
 *.out
 *.app
 
-build*
-notes/
 temp/
+*build/
 .cache/
 .llvm*/
 .xmake/
