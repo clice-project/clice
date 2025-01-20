@@ -3,6 +3,8 @@
 #include "Basic/Document.h"
 #include "Support/JSON.h"
 
+#include <clang/Basic/SourceLocation.h>
+
 namespace clice {
 
 namespace proto {
@@ -147,10 +149,16 @@ namespace feature {
 
 json::Value inlayHintCapability(json::Value InlayHintClientCapabilities);
 
-/// Compute inlay hints for a document in given range and config.
+/// Compute inlay hints for MainfileID in given range and config.
 proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
                                    const SourceConverter& converter,
                                    const config::InlayHintOption& config);
+
+/// Same with `inlayHints` but including all fileID, not just the MainFileID.
+/// Used for header context.
+llvm::DenseMap<clang::FileID, proto::InlayHintsResult>
+    inlayHints(proto::DocumentUri uri, ASTInfo& info, const SourceConverter& converter,
+               const config::InlayHintOption& config);
 
 }  // namespace feature
 

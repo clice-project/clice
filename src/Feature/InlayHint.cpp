@@ -27,23 +27,32 @@ struct OffsetRange {
     }
 };
 
-/// Compute inlay hints for a document in given range and config.
+/// Compute inlay hints for a AST. There is two kind of collection:
+///     A. Only collect hints in MainFileID.
+///     B. Collect hints in each files, used for header context.
+/// The result is always stored in a densmap<FileID, vector<InlayHint>>, and return as needed.
 struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
 
     using Base = clang::RecursiveASTVisitor<InlayHintCollector>;
+
+    /// The result of inlay hints for given AST.
+    using Storage = llvm::DenseMap<clang::FileID, proto::InlayHintsResult>;
 
     const clang::SourceManager& src;
 
     const SourceConverter& cvtr;
 
-    /// The config of inlay hints collector.
-    const config::InlayHintOption config;
-
     /// The restrict range of request.
     const OffsetRange limit;
 
+    /// The config of inlay hints collector.
+    const config::InlayHintOption config;
+
+    /// Indicate that only hints in main file should be collected (mode A).
+    const bool onlyMain;
+
     /// The result of inlay hints.
-    proto::InlayHintsResult result;
+    Storage result;
 
     /// Current file's uri.
     const proto::DocumentUri docuri;
@@ -59,6 +68,9 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         // skip invalid range or not in main file
         if(range.isInvalid())
             return true;
+
+        if(!onlyMain)
+            return false;
 
         if(!src.isInMainFile(range.getBegin()) || !src.isInMainFile(range.getEnd()))
             return true;
@@ -106,7 +118,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             .kind = proto::InlayHintKind::Type,
         };
 
-        result.push_back(std::move(hint));
+        clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(identRange.getBegin());
+        result[fid].push_back(std::move(hint));
     }
 
     // If `expr` spells a single unqualified identifier, return that name, otherwise, return an
@@ -179,13 +192,15 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
                                     .range = cvtr.toRange(params[i]->getSourceRange(), src)}
             };
 
+            auto argBeginLoc = args[i]->getSourceRange().getBegin();
             proto::InlayHint hint{
-                .position = cvtr.toPosition(args[i]->getSourceRange().getBegin(), src),
+                .position = cvtr.toPosition(argBeginLoc, src),
                 .lable = {std::move(lable)},
                 .kind = proto::InlayHintKind::Parameter,
             };
 
-            result.push_back(std::move(hint));
+            clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(argBeginLoc);
+            result[fid].push_back(std::move(hint));
         }
     }
 
@@ -424,7 +439,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             .kind = proto::InlayHintKind::Type,
         };
 
-        result.push_back(std::move(hint));
+        clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(hintLoc);
+        result[fid].push_back(std::move(hint));
     }
 
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
@@ -508,7 +524,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             .kind = proto::InlayHintKind::Parameter,
         };
 
-        result.push_back(std::move(hint));
+        clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(location);
+        result[fid].push_back(std::move(hint));
     }
 
     bool VisitInitListExpr(const clang::InitListExpr* Syn) {
@@ -562,12 +579,13 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
            remain.starts_with("/*") || remain.starts_with("//"))
             return;
 
+        auto& state = result[onlyMain ? src.getMainFileID() : src.getFileID(location)];
         // Already has a duplicated hint in that location, use the newer hint instead.
         const auto lspPosition = cvtr.toPosition(location, src);
-        if(decision != DecideDuplicated::AcceptBoth && !result.empty())
-            if(const auto& last = result.back().position; last.line == lspPosition.line) {
+        if(decision != DecideDuplicated::AcceptBoth && !state.empty())
+            if(const auto& last = state.back().position; last.line == lspPosition.line) {
                 if(decision == DecideDuplicated::Replace)
-                    result.pop_back();
+                    state.pop_back();
                 else
                     return;
             }
@@ -584,7 +602,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             .kind = proto::InlayHintKind::Parameter,
         };
 
-        result.push_back(std::move(hint));
+        state.push_back(std::move(hint));
     }
 
     bool VisitNamespaceDecl(const clang::NamespaceDecl* decl) {
@@ -626,7 +644,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             .kind = proto::InlayHintKind::Parameter,
         };
 
-        result.push_back(std::move(hint));
+        auto fid = onlyMain ? src.getMainFileID() : src.getFileID(tail);
+        result[fid].push_back(std::move(hint));
     }
 
     bool VisitTagDecl(const clang::TagDecl* decl) {
@@ -684,7 +703,6 @@ json::Value inlayHintCapability(json::Value InlayHintClientCapabilities) {
     return {};
 }
 
-/// Compute inlay hints for a document in given range and config.
 proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
                                    const SourceConverter& converter,
                                    const config::InlayHintOption& config) {
@@ -710,8 +728,10 @@ proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
     InlayHintCollector collector{
         .src = src,
         .cvtr = converter,
-        .config = config,
         .limit = requestRange,
+        .config = config,
+        .onlyMain = true,
+        .result = InlayHintCollector::Storage{},
         .docuri = std::move(param.textDocument.uri),
         .policy = info.context().getPrintingPolicy(),
         .code = codeText,
@@ -719,6 +739,26 @@ proto::InlayHintsResult inlayHints(proto::InlayHintParams param, ASTInfo& info,
 
     collector.TraverseTranslationUnitDecl(info.tu());
 
+    return std::move(collector.result[src.getMainFileID()]);
+}
+
+llvm::DenseMap<clang::FileID, proto::InlayHintsResult>
+    inlayHints(proto::DocumentUri uri, ASTInfo& info, const SourceConverter& converter,
+               const config::InlayHintOption& config) {
+    const clang::SourceManager& src = info.srcMgr();
+
+    InlayHintCollector collector{
+        .src = src,
+        .cvtr = converter,
+        .config = config,
+        .onlyMain = false,
+        .result = InlayHintCollector::Storage{},
+        .docuri = std::move(uri),
+        .policy = info.context().getPrintingPolicy(),
+        .code = src.getBufferData(src.getMainFileID()),
+    };
+
+    collector.TraverseTranslationUnitDecl(info.tu());
     return std::move(collector.result);
 }
 

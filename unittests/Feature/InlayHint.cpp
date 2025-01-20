@@ -424,5 +424,41 @@ TEST_F(InlayHint, ImplicitCast) {
     EXPECT_HINT_COUNT(0);
 }
 
+TEST_F(InlayHint, WithHeaderContext) {
+    const char* header = R"cpp(
+namespace _1 {
+    // only one hint in header.
+}
+
+)cpp";
+
+    const char* source = R"cpp(
+#include "header.h"
+
+namespace _2 {
+    // only one hint here.
+}
+
+)cpp";
+
+    Tester tx;
+    tx.addFile(path::join(".", "header.h"), header);
+    tx.addMain("main.cpp", source);
+    tx.run();
+
+    auto& info = tx.info;
+    EXPECT_TRUE(info.has_value());
+
+    SourceConverter cvtr{proto::PositionEncodingKind::UTF8};
+    auto maps = feature::inlayHints("", *info, cvtr, {.blockEnd = true});
+
+    // 2 fileID
+    EXPECT_EQ(maps.size(), 2);
+    
+    for(auto& [fid, result]: maps) {
+        EXPECT_EQ(result.size(), 1);
+    }
+}
+
 }  // namespace
 }  // namespace clice::testing
