@@ -21,15 +21,19 @@ void $(2)foo() {}
 
     auto json = index.toJSON();
 
+    llvm::SmallString<128> path;
+    auto error = fs::createTemporaryFile("index", ".sidx", path);
+    ASSERT_FALSE(error);
+
     {
         std::error_code ec;
-        llvm::raw_fd_ostream file("index.sidx", ec);
+        llvm::raw_fd_ostream file(path, ec);
         ASSERT_FALSE(ec);
         file.write(static_cast<char*>(index.base), index.size);
     }
 
     {
-        auto file = llvm::MemoryBuffer::getFile("index.sidx");
+        auto file = llvm::MemoryBuffer::getFile(path);
         ASSERT_TRUE(bool(file));
         auto& buffer = file.get();
         auto size = buffer->getBufferSize();
