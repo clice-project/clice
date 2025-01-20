@@ -1,68 +1,11 @@
 #pragma once
 
-#include "gtest/gtest.h"
+#include "Test.h"
 #include "Basic/Location.h"
 #include "Compiler/Compilation.h"
 #include "Support/Support.h"
 
 namespace clice::testing {
-
-#undef EXPECT_EQ
-#undef EXPECT_NE
-
-inline void EXPECT_FAILURE(std::string msg,
-                           std::source_location current = std::source_location::current()) {
-    ::testing::internal::AssertHelper(::testing ::TestPartResult ::kNonFatalFailure,
-                                      current.file_name(),
-                                      current.line(),
-                                      msg.c_str()) = ::testing ::Message();
-}
-
-template <typename LHS, typename RHS>
-inline void EXPECT_EQ(const LHS& lhs,
-                      const RHS& rhs,
-                      std::source_location current = std::source_location::current()) {
-    if(!refl::equal(lhs, rhs)) {
-        std::string expect;
-        if constexpr(requires { sizeof(json::Serde<LHS>); }) {
-            llvm::raw_string_ostream(expect) << json::serialize(lhs);
-        } else {
-            expect = "cannot dump value";
-        }
-
-        std::string actual;
-        if constexpr(requires { sizeof(json::Serde<RHS>); }) {
-            llvm::raw_string_ostream(actual) << json::serialize(rhs);
-        } else {
-            actual = "cannot dump value";
-        }
-
-        EXPECT_FAILURE(std::format("expect: {}, actual: {}\n", expect, actual), current);
-    }
-}
-
-template <typename LHS, typename RHS>
-inline void EXPECT_NE(const LHS& lhs,
-                      const RHS& rhs,
-                      std::source_location current = std::source_location::current()) {
-    if(refl::equal(lhs, rhs)) {
-        std::string expect;
-        if constexpr(requires { sizeof(json::Serde<LHS>); }) {
-            llvm::raw_string_ostream(expect) << json::serialize(lhs);
-        } else {
-            expect = "cannot dump value";
-        }
-
-        std::string actual;
-        if constexpr(requires { sizeof(json::Serde<RHS>); }) {
-            llvm::raw_string_ostream(actual) << json::serialize(rhs);
-        } else {
-            actual = "cannot dump value";
-        }
-
-        EXPECT_FAILURE(std::format("expect: {}, actual: {}\n", expect, actual), current);
-    }
-}
 
 struct Tester {
     CompilationParams params;
