@@ -19,17 +19,14 @@ struct FoldingRange : public ::testing::Test {
         result = feature::foldingRange(param, *info, converter);
     }
 
-    void EXPECT_RANGE(std::size_t index,
-                      llvm::StringRef begin,
-                      llvm::StringRef end,
+    void EXPECT_RANGE(std::size_t index, llvm::StringRef begin, llvm::StringRef end,
                       std::source_location current = std::source_location::current()) {
         auto& folding = result[index];
-        EXPECT_EQ(tester->pos(begin),
-                  proto::Position{folding.startLine, folding.startCharacter},
-                  current);
-        EXPECT_EQ(tester->pos(end),
-                  proto::Position{folding.endLine, folding.endCharacter},
-                  current);
+
+        auto beginPos = tester->pos(begin);
+        EXPECT_EQ(beginPos, proto::Position{folding.startLine, folding.startCharacter}, current);
+        auto endPos = tester->pos(end);
+        EXPECT_EQ(endPos, proto::Position{folding.endLine, folding.endCharacter}, current);
     }
 };
 
@@ -370,6 +367,35 @@ $(2)
     EXPECT_RANGE(0, "1", "2");
     EXPECT_RANGE(1, "5", "6");
     EXPECT_RANGE(2, "3", "4");
+}
+
+TEST_F(FoldingRange, PragmaRegion) {
+    run(R"cpp(
+#pragma region level1 $(1)
+    #pragma region level2 $(2)
+        #pragma region level3 $(3)
+
+        //$(4)
+        #pragma endregion level3
+
+    //$(5)
+    #pragma endregion level2
+
+//$(6)
+#pragma endregion level1
+
+#pragma endregion   // mismatch region, skipeed
+
+// broken region, use the end of file as endregion
+#pragma region $(7)
+
+$(eof))cpp");
+
+    EXPECT_EQ(result.size(), 4);
+    EXPECT_RANGE(0, "3", "4");
+    EXPECT_RANGE(1, "2", "5");
+    EXPECT_RANGE(2, "1", "6");
+    EXPECT_RANGE(3, "7", "eof");
 }
 
 }  // namespace

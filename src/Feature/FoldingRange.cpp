@@ -302,6 +302,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
                 continue;
 
             collectConditionMacro(dirc.conditions);
+            collectPragmaRegion(dirc.pragmas);
 
             /// TODO:
             /// Collect multiline include statement.
@@ -313,7 +314,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
         // All condition directives have been stored in `conds` variable, ordered by presumed line
         // number increasement, so use a stack to handle the branch structure.
-        llvm::SmallVector<Condition, 8> stack = {};
+        llvm::SmallVector<const Condition*> stack = {};
 
         for(auto& cond: conds) {
             switch(cond.kind) {
@@ -322,29 +323,61 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
                 case Condition::BranchKind::Ifndef:
                 case Condition::BranchKind::Elif:
                 case Condition::BranchKind::Elifndef: {
-                    stack.push_back(cond);
+                    stack.push_back(&cond);
                     break;
                 }
 
                 case Condition::BranchKind::Else: {
                     if(!stack.empty()) {
                         auto last = stack.pop_back_val();
-                        collect({last.loc, prevLineLastColOf(cond.loc)});
+                        collect({last->loc, prevLineLastColOf(cond.loc)});
                     }
 
-                    stack.push_back(cond);
+                    stack.push_back(&cond);
                     break;
                 }
 
                 case Condition::BranchKind::EndIf: {
                     if(!stack.empty()) {
                         auto last = stack.pop_back_val();
-                        collect({last.loc, prevLineLastColOf(cond.loc)});
+                        collect({last->loc, prevLineLastColOf(cond.loc)});
                     }
                     break;
                 }
 
                 default: break;
+            }
+        }
+    }
+
+    /// Collect all condition macro's block as folding range.
+    void collectPragmaRegion(const std::vector<Pragma>& pragmas) {
+        auto lastLocOfLine = [this](clang::SourceLocation loc) {
+            return src.translateLineCol(src.getMainFileID(),
+                                        src.getPresumedLineNumber(loc),
+                                        std::numeric_limits<unsigned>::max());
+        };
+
+        llvm::SmallVector<const Pragma*> stack = {};
+        for(auto& pragma: pragmas) {
+            switch(pragma.kind) {
+                case Pragma::Kind::Region: stack.push_back(&pragma); break;
+                case Pragma::Kind::EndRegion:
+                    if(!stack.empty()) {
+                        auto last = stack.pop_back_val();
+                        collect({lastLocOfLine(last->loc), prevLineLastColOf(pragma.loc)});
+                    }
+                    break;
+                default: break;
+            }
+        }
+
+        // If there is some region without end pragma, use the end of file as the end region.
+        if(!stack.empty()) {
+            auto eof = src.getLocForEndOfFile(src.getMainFileID());
+            while(!stack.empty()) {
+                auto last = stack.pop_back_val();
+                collect({lastLocOfLine(last->loc), eof});
             }
         }
     }
