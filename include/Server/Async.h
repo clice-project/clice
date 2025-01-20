@@ -478,6 +478,35 @@ struct write {
     void await_resume() noexcept {}
 };
 
+struct read {
+    uv_fs_t fs;
+    std::string path;
+    core_handle waiting;
+
+    bool await_ready() const noexcept {
+        return false;
+    }
+
+    void await_suspend(core_handle waiting) noexcept {
+        fs.data = this;
+        this->waiting = waiting;
+
+        auto callback = [](uv_fs_t* fs) {
+            auto& awaiter = *static_cast<read*>(fs->data);
+            async::schedule(awaiter.waiting);
+
+            uv_fs_t close_req;
+            uv_fs_close(fs->loop, &close_req, fs->result, nullptr);
+            uv_fs_req_cleanup(fs);
+        };
+
+        uv_fs_open(uv_default_loop(), &fs, path.c_str(), O_RDONLY, 0, nullptr);
+
+        uv_buf_t buf[1] = {};
+        uv_fs_read(uv_default_loop(), &fs, fs.result, buf, 1, 0, callback);
+    }
+};
+
 }  // namespace awaiter
 
 /// Get the file status asynchronously.

@@ -3,6 +3,8 @@
 #include "Async.h"
 #include "Config.h"
 #include "Database.h"
+#include "Protocol.h"
+#include "Basic/RelationKind.h"
 
 namespace clice {
 
@@ -33,6 +35,38 @@ public:
     /// Load the index information from disk.
     void loadFromDisk();
 
+private:
+    struct SymbolID {
+        uint64_t id;
+        std::string name;
+    };
+
+    async::Task<std::unique_ptr<llvm::MemoryBuffer>> read(llvm::StringRef path);
+
+    async::Task<> lookup(llvm::ArrayRef<SymbolID> ids,
+                         RelationKind kind,
+                         llvm::StringRef srcPath,
+                         llvm::StringRef content,
+                         std::string indexPath,
+                         std::vector<proto::Location>& result);
+
+public:
+    async::Task<std::vector<proto::Location>>
+        lookup(const proto::TextDocumentPositionParams& params, RelationKind kind);
+
+    async::Task<proto::CallHierarchyIncomingCallsResult>
+        incomingCalls(const proto::CallHierarchyIncomingCallsParams& params);
+
+    async::Task<proto::CallHierarchyOutgoingCallsResult>
+        outgoingCalls(const proto::CallHierarchyOutgoingCallsParams& params);
+
+    async::Task<proto::TypeHierarchySupertypesResult>
+        supertypes(const proto::TypeHierarchySupertypesParams& params);
+
+    async::Task<proto::TypeHierarchySubtypesResult>
+        subtypes(const proto::TypeHierarchySubtypesParams& params);
+
+public:
     struct TranslationUnit;
 
     struct Context {

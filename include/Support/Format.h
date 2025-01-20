@@ -69,6 +69,21 @@ struct std::formatter<llvm::Error> : std::formatter<llvm::StringRef> {
 };
 
 template <>
+struct std::formatter<std::error_code> : std::formatter<llvm::StringRef> {
+    using Base = std::formatter<llvm::StringRef>;
+
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext& ctx) {
+        return Base::parse(ctx);
+    }
+
+    template <typename FormatContext>
+    auto format(const std::error_code& e, FormatContext& ctx) const {
+        return Base::format(e.message(), ctx);
+    }
+};
+
+template <>
 struct std::formatter<clice::json::Value> : std::formatter<llvm::StringRef> {
     using Base = std::formatter<llvm::StringRef>;
 

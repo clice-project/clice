@@ -145,16 +145,17 @@ void SymbolIndex::locateSymbols(uint32_t position,
     }
 }
 
-/// Locate symbol with the given id(usually from another index).
-SymbolIndex::Symbol SymbolIndex::locateSymbol(SymbolIndex::SymbolID ID) const {
+std::optional<SymbolIndex::Symbol> SymbolIndex::locateSymbol(uint64_t id,
+                                                             llvm::StringRef name) const {
     auto index = static_cast<const SymbolIndexVisitor*>(base);
     auto symbols = index->getSymbols();
-    auto iter = std::ranges::lower_bound(symbols, ID.id(), {}, [&](const auto& symbol) {
-        return symbol.id;
-    });
+    auto range =
+        std::ranges::equal_range(symbols, id, {}, [&](const auto& symbol) { return symbol.id; });
 
-    if(iter != symbols.end() && iter->id == ID.id() && index->getString(iter->name) == ID.name()) {
-        return {base, &*iter};
+    for(auto& symbol: range) {
+        if(index->getString(symbol.name) == name) {
+            return SymbolIndex::Symbol{base, &symbol};
+        }
     }
 
     return {};

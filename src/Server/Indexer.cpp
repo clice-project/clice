@@ -1,5 +1,6 @@
 #include <random>
 
+#include "Support/Assert.h"
 #include "Compiler/Compilation.h"
 #include "Index/SymbolIndex.h"
 #include "Server/Logger.h"
@@ -130,7 +131,7 @@ async::Task<> Indexer::index(llvm::StringRef file) {
             if(tu->index.empty()) {
                 tu->index = getIndexPath(tu->srcPath);
             }
-            co_await async::write(tu->index, static_cast<char*>(index.base), index.size);
+            co_await async::write(tu->index + ".sidx", static_cast<char*>(index.base), index.size);
             continue;
         }
 
@@ -144,7 +145,9 @@ async::Task<> Indexer::index(llvm::StringRef file) {
                 if(context.index.empty()) {
                     context.index = getIndexPath(name);
                 }
-                co_await async::write(context.index, static_cast<char*>(index.base), index.size);
+                co_await async::write(context.index + ".sidx",
+                                      static_cast<char*>(index.base),
+                                      index.size);
             }
         }
     }
@@ -212,6 +215,180 @@ void Indexer::saveToDisk() {
     } else {
         log::info("Successfully saved index to disk");
     }
+}
+
+void Indexer::loadFromDisk() {
+    return;
+}
+
+async::Task<std::unique_ptr<llvm::MemoryBuffer>> Indexer::read(llvm::StringRef path) {
+    co_return co_await async::submit([path] {
+        auto file = llvm::MemoryBuffer::getFile(path);
+        ASSERT(file, "Failed to open file: {}, because: {}", path, file.getError());
+        return std::move(file.get());
+    });
+}
+
+async::Task<> Indexer::lookup(llvm::ArrayRef<Indexer::SymbolID> ids,
+                              RelationKind kind,
+                              llvm::StringRef srcPath,
+                              llvm::StringRef content,
+                              std::string indexPath,
+                              std::vector<proto::Location>& result) {
+    auto indexFile = llvm::MemoryBuffer::getFile(indexPath);
+    ASSERT(indexFile,
+           "Failed to open index file: {}, Beacuse: {}",
+           indexPath,
+           indexFile.getError());
+    index::SymbolIndex index(const_cast<char*>(indexFile.get()->getBufferStart()),
+                             indexFile.get()->getBufferSize(),
+                             false);
+
+    for(auto& id: ids) {
+        if(auto symbol = index.locateSymbol(id.id, id.name)) {
+            for(auto relation: symbol->relations()) {
+                if(relation.kind() & kind) {
+                    auto range = relation.range();
+                    auto begin = SourceConverter().toPosition(content, range->begin);
+                    auto end = SourceConverter().toPosition(content, range->end);
+                    result.emplace_back(proto::Location{
+                        .uri = SourceConverter::toURI(srcPath),
+                        .range = proto::Range{.start = begin, .end = end},
+                    });
+                }
+            }
+        }
+    }
+
+    co_return;
+}
+
+async::Task<std::vector<proto::Location>>
+    Indexer::lookup(const proto::TextDocumentPositionParams& params, RelationKind kind) {
+    auto srcPath = SourceConverter::toPath(params.textDocument.uri);
+    llvm::StringRef indexPathPrefix = "";
+
+    if(auto iter = tus.find(srcPath); iter != tus.end()) {
+        indexPathPrefix = iter->second->index;
+    } else if(auto iter = headers.find(srcPath); iter != headers.end()) {
+        /// FIXME: Indexer should use a variable to indicate know
+        /// which context of the header is active. And use it to
+        /// determine the index path prefix. Currently, we just
+        /// use the first context.
+        for(auto& [_, contexts]: iter->second->contexts) {
+            for(auto& context: contexts) {
+                if(!context.index.empty()) {
+                    indexPathPrefix = context.index;
+                    break;
+                }
+            }
+
+            if(!indexPathPrefix.empty()) {
+                break;
+            }
+        }
+    }
+
+    if(indexPathPrefix.empty()) {
+        /// FIXME: If such index file does not exist, we should
+        /// wait for the index task to complete.
+        co_return proto::DefinitionResult{};
+    }
+
+    proto::DefinitionResult result;
+    std::string indexPath = (indexPathPrefix + ".sidx").str();
+
+    llvm::SmallVector<SymbolID, 4> ids;
+
+    /// Lookup Target index first
+    {
+        auto srcFile = co_await read(srcPath);
+        auto content = srcFile->getBuffer();
+        auto offset = SourceConverter().toOffset(content, params.position);
+
+        auto indexFile = co_await read(indexPath);
+        index::SymbolIndex index(const_cast<char*>(indexFile.get()->getBufferStart()),
+                                 indexFile.get()->getBufferSize(),
+                                 false);
+        llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
+        index.locateSymbols(offset, symbols);
+
+        for(auto& symbol: symbols) {
+            ids.emplace_back(SymbolID{symbol.id(), symbol.name().str()});
+
+            for(auto relation: symbol.relations()) {
+                if(relation.kind() & kind) {
+                    auto range = relation.range();
+                    auto begin = SourceConverter().toPosition(content, range->begin);
+                    auto end = SourceConverter().toPosition(content, range->end);
+                    result.emplace_back(proto::Location{
+                        .uri = SourceConverter::toURI(srcPath),
+                        .range = proto::Range{.start = begin, .end = end},
+                    });
+                }
+            }
+        }
+    }
+
+    for(auto& [path, tu]: tus) {
+        if(path == srcPath || tu->index.empty()) {
+            continue;
+        }
+
+        auto srcPath = path.str();
+        auto srcFile = co_await read(srcPath);
+        co_await lookup(ids, kind, srcPath, srcFile->getBuffer(), tu->index + ".sidx", result);
+    }
+
+    llvm::StringSet<> visited;
+    for(auto& [path, header]: headers) {
+        if(path == srcPath) {
+            continue;
+        }
+
+        auto srcPath = path.str();
+        auto srcFile = co_await read(srcPath);
+        auto content = srcFile->getBuffer();
+
+        for(auto& [_, contexts]: header->contexts) {
+            for(auto& context: contexts) {
+                if(context.index.empty() || visited.contains(context.index)) {
+                    continue;
+                }
+
+                visited.insert(context.index);
+                co_await lookup(ids, kind, srcPath, content, context.index + ".sidx", result);
+            }
+        }
+    }
+
+    co_await async::submit([&] {
+        ranges::sort(result, refl::less);
+        auto [first, last] = ranges::unique(result, refl::equal);
+        result.erase(first, last);
+    });
+
+    co_return result;
+}
+
+async::Task<proto::CallHierarchyIncomingCallsResult>
+    Indexer::incomingCalls(const proto::CallHierarchyIncomingCallsParams& params) {
+    co_return proto::CallHierarchyIncomingCallsResult{};
+}
+
+async::Task<proto::CallHierarchyOutgoingCallsResult>
+    Indexer::outgoingCalls(const proto::CallHierarchyOutgoingCallsParams& params) {
+    co_return proto::CallHierarchyOutgoingCallsResult{};
+}
+
+async::Task<proto::TypeHierarchySupertypesResult>
+    Indexer::supertypes(const proto::TypeHierarchySupertypesParams& params) {
+    co_return proto::TypeHierarchySupertypesResult{};
+}
+
+async::Task<proto::TypeHierarchySubtypesResult>
+    Indexer::subtypes(const proto::TypeHierarchySubtypesParams& params) {
+    co_return proto::TypeHierarchySubtypesResult{};
 }
 
 }  // namespace clice

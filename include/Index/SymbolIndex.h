@@ -19,15 +19,18 @@ struct LocalSourceRange {
 
 class SymbolIndex {
 public:
-    SymbolIndex(void* base, std::size_t size) : base(base), size(size) {}
+    SymbolIndex(void* base, std::size_t size, bool own = true) : base(base), size(size), own(own) {}
 
-    SymbolIndex(SymbolIndex&& other) : base(other.base), size(other.size) {
+    SymbolIndex(SymbolIndex&& other) noexcept : base(other.base), size(other.size), own(other.own) {
         other.base = nullptr;
         other.size = 0;
+        other.own = false;
     }
 
     ~SymbolIndex() {
-        std::free(base);
+        if(own) {
+            std::free(base);
+        }
     }
 
     struct Symbol;
@@ -79,13 +82,14 @@ public:
     void locateSymbols(uint32_t position, llvm::SmallVectorImpl<Symbol>& symbols) const;
 
     /// Locate symbol with the given id(usually from another index).
-    Symbol locateSymbol(SymbolID ID) const;
+    std::optional<Symbol> locateSymbol(uint64_t id, llvm::StringRef name) const;
 
     json::Value toJSON() const;
 
 public:
     void* base;
     std::size_t size;
+    bool own;
 };
 
 Shared<SymbolIndex> index(ASTInfo& info);
