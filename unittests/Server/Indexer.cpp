@@ -22,11 +22,13 @@ TEST(Indexer, Basic) {
     auto p2 = indexer.index(foo);
     async::run(p1, p2);
 
+    auto kind =
+        RelationKind(RelationKind::Reference, RelationKind::Definition, RelationKind::Declaration);
     proto::DeclarationParams params{
         .textDocument = {.uri = SourceConverter::toURI(foo)},
         .position = {2, 5}
     };
-    auto lookup = indexer.lookup(params, RelationKind::Declaration);
+    auto lookup = indexer.lookup(params, kind);
     auto&& [result] = async::run(lookup);
 
     indexer.saveToDisk();
@@ -34,8 +36,10 @@ TEST(Indexer, Basic) {
     Indexer indexer2(options, database);
     indexer2.loadFromDisk();
 
-    auto lookup2 = indexer2.lookup(params, RelationKind::Declaration);
+    auto lookup2 = indexer2.lookup(params, kind);
     auto&& [result2] = async::run(lookup2);
+
+    print("Result: {}\n", json::serialize(result));
 
     EXPECT_EQ(result, result2);
 }

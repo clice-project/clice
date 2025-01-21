@@ -8,6 +8,7 @@ async::Task<> Server::onIndexCurrent(const proto::TextDocumentIdentifier& params
 }
 
 async::Task<> Server::onIndexAll(const proto::None& params) {
+    co_await indexer.indexAll();
     co_return;
 }
 
