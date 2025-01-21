@@ -17,7 +17,7 @@ TEST(Indexer, Basic) {
 
     Indexer indexer(options, database);
     indexer.loadFromDisk();
-    
+
     auto p1 = indexer.index(main);
     auto p2 = indexer.index(foo);
     async::run(p1, p2);
@@ -36,8 +36,42 @@ TEST(Indexer, Basic) {
 
     auto lookup2 = indexer2.lookup(params, RelationKind::Declaration);
     auto&& [result2] = async::run(lookup2);
-    
+
     EXPECT_EQ(result, result2);
+}
+
+TEST(Indexer, IndexAll) {
+    config::IndexOptions options;
+    options.dir = path::join(".", "temp");
+    auto error = fs::create_directories(options.dir);
+
+    CompilationDatabase database;
+    database.updateCommands("/home/ykiko/C++/clice/build/compile_commands.json");
+
+    Indexer indexer(options, database);
+    indexer.loadFromDisk();
+
+    auto p1 = indexer.indexAll();
+    async::run(p1);
+
+    indexer.saveToDisk();
+}
+
+TEST(Indexer, Debug) {
+    config::IndexOptions options;
+    options.dir = path::join(".", "temp");
+    auto error = fs::create_directories(options.dir);
+
+    CompilationDatabase database;
+    database.updateCommands("/home/ykiko/C++/clice/build/compile_commands.json");
+
+    Indexer indexer(options, database);
+    indexer.loadFromDisk();
+
+    auto p1 = indexer.index("/home/ykiko/C++/clice/build/_deps/libuv-src/src/unix/random-sysctl-linux.c");
+    async::run(p1);
+
+    indexer.saveToDisk();
 }
 
 }  // namespace clice::testing

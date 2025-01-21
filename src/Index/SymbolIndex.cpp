@@ -151,6 +151,11 @@ public:
 
         auto [begin, end] = range;
         auto expansion = srcMgr.getExpansionLoc(begin);
+        if(srcMgr.isWrittenInBuiltinFile(expansion) ||
+           srcMgr.isWrittenInCommandLineFile(expansion)) {
+            return;
+        }
+
         assert(expansion.isValid() && expansion.isFileID() && "Invalid expansion location");
         clang::FileID id = srcMgr.getFileID(expansion);
         assert(id.isValid() && "Invalid file id");

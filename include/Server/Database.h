@@ -25,6 +25,18 @@ public:
     /// Lookup the module interface unit file path of the given module name.
     llvm::StringRef getModuleFile(llvm::StringRef name);
 
+    auto size() const {
+        return commands.size();
+    }
+
+    auto begin() {
+        return commands.begin();
+    }
+
+    auto end() {
+        return commands.end();
+    }
+
 private:
     /// A map between file path and compile commands.
     llvm::StringMap<std::string> commands;

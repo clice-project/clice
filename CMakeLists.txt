@@ -71,10 +71,6 @@ file(GLOB_RECURSE CLICE_SOURCES
 )
 add_library(clice-core "${CLICE_BUILD_TYPE}" "${CLICE_SOURCES}")
 
-target_precompile_headers(clice-core PRIVATE 
-    "${CMAKE_SOURCE_DIR}/include/Compiler/Clang.h"
-)
-
 # set llvm include and lib path
 target_include_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/include")
 target_link_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/lib")

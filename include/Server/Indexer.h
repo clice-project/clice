@@ -69,11 +69,16 @@ public:
     /// Check whether the index file is outdated.
     async::Task<bool> needUpdate(TranslationUnit* tu);
 
+    /// Try to merge the index file with same content for the given header.
+    async::Task<> merge(Header* header);
+
     /// Index the given file(for unopened file).
     async::Task<> index(llvm::StringRef file);
 
     /// Index the given file(for opened file).
     async::Task<> index(llvm::StringRef file, ASTInfo& info);
+
+    async::Task<> indexAll();
 
     /// Generate the index file path based on time and file name.
     std::string getIndexPath(llvm::StringRef file);

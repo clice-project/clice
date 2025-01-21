@@ -7,6 +7,9 @@ namespace clice {
 
 /// Update the compile commands with the given file.
 void CompilationDatabase::updateCommands(llvm::StringRef filename) {
+    auto path = path::real_path(filename);
+    filename = path;
+
     /// Read the compile commands from the file.
     json::Value json = nullptr;
 
@@ -78,21 +81,16 @@ void CompilationDatabase::updateCommands(llvm::StringRef filename) {
               commands.size());
 
     /// Scan all files to build module map.
-    CompilationParams params;
-    for(auto& [path, command]: commands) {
-        params.srcPath = path;
-        params.command = command;
-        auto info = scanModule(params);
-        if(!info) {
-            log::warn("Failed to scan module from {0}, because {1}", path, info.takeError());
-            continue;
-        }
-
-        if(info->isInterfaceUnit) {
-            assert(!info->name.empty() && "module name is empty");
-            moduleMap[info->name] = path;
-        }
-    }
+    // CompilationParams params;
+    // for(auto& [path, command]: commands) {
+    //     params.srcPath = path;
+    //     params.command = command;
+    //
+    //    auto name = scanModuleName(params);
+    //    if(!name.empty()) {
+    //        moduleMap[name] = path;
+    //    }
+    //}
 
     log::info("Successfully built module map, total {0} modules", moduleMap.size());
 }

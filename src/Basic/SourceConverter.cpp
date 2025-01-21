@@ -4,6 +4,7 @@
 #include "Support/Support.h"
 
 #include "clang/Basic/SourceManager.h"
+#include "Compiler/Clang.h"
 
 namespace clice {
 

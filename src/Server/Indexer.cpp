@@ -60,6 +60,43 @@ async::Task<bool> Indexer::needUpdate(TranslationUnit* tu) {
     co_return false;
 }
 
+async::Task<> Indexer::merge(Header* header) {
+    co_await async::submit([header] {
+        llvm::StringMap<std::unique_ptr<llvm::MemoryBuffer>> indices;
+
+        for(auto& [tu, contexts]: header->contexts) {
+            for(auto& context: contexts) {
+                if(context.indexPath.empty()) {
+                    continue;
+                }
+
+                auto file = llvm::MemoryBuffer::getFile(context.indexPath + ".sidx");
+                if(!file) {
+                    log::warn("Failed to open index file: {}", context.indexPath);
+                    continue;
+                }
+
+                bool merged = false;
+                for(auto& [indexPath, value]: indices) {
+                    if(file->get()->getBuffer() == value->getBuffer()) {
+                        auto error = fs::remove(context.indexPath + ".sidx");
+                        log::info("Merged index file: {} -> {}", context.indexPath, indexPath);
+                        context.indexPath = indexPath;
+                        merged = true;
+                        break;
+                    }
+                }
+
+                if(!merged) {
+                    indices.try_emplace(context.indexPath, std::move(file.get()));
+                }
+            }
+        }
+    });
+
+    co_return;
+}
+
 async::Task<> Indexer::index(llvm::StringRef file) {
     auto real_path = path::real_path(file);
     file = real_path;
@@ -174,6 +211,9 @@ async::Task<> Indexer::index(llvm::StringRef file) {
         }
 
         auto entry = SM.getFileEntryRefForID(fid);
+        if(!entry) {
+            continue;
+        }
         assert(entry && "Invalid file entry");
         auto name = path::real_path(entry->getName());
         auto include = files[fid];
@@ -195,6 +235,34 @@ async::Task<> Indexer::index(llvm::StringRef file) {
 
 async::Task<> Indexer::index(llvm::StringRef file, ASTInfo& info) {
     co_return;
+}
+
+async::Task<> Indexer::indexAll() {
+    auto total = database.size();
+    auto count = 0;
+
+    std::vector<async::Task<>> tasks;
+
+    for(auto& [file, command]: database) {
+        tasks.emplace_back(index(file));
+
+        if(tasks.size() == 4) {
+            co_await async::gather(tasks[0], tasks[1], tasks[2], tasks[3]);
+            tasks.clear();
+            count += 4;
+            log::info("Indexing progress: {0}/{1}", count, total);
+        }
+    }
+
+    tasks.clear();
+    for(auto& [path, header]: headers) {
+        tasks.emplace_back(merge(header));
+
+        if(tasks.size() == 4) {
+            co_await async::gather(tasks[0], tasks[1], tasks[2], tasks[3]);
+            tasks.clear();
+        }
+    }
 }
 
 std::string Indexer::getIndexPath(llvm::StringRef file) {

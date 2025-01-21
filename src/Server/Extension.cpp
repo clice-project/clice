@@ -3,7 +3,8 @@
 namespace clice {
 
 async::Task<> Server::onIndexCurrent(const proto::TextDocumentIdentifier& params) {
-    co_return;
+    auto path = SourceConverter::toPath(params.uri);
+    co_await indexer.index(path);
 }
 
 async::Task<> Server::onIndexAll(const proto::None& params) {

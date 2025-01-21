@@ -706,7 +706,10 @@ public:
         }
 
         auto NNS = TransformNestedNameSpecifierLoc(TL.getQualifierLoc()).getNestedNameSpecifier();
-
+        if(!NNS){
+            return clang::QualType();
+        }
+        
         /// FIXME: figure out here.
         clang::TemplateArgumentListInfo info;
         using iterator = clang::TemplateArgumentLocContainerIterator<
