@@ -5,7 +5,8 @@ namespace clice::testing {
 
 TEST(Indexer, Basic) {
     config::IndexOptions options;
-    options.dir = path::real_path(path::join(".", "temp"));
+    options.dir = path::join(".", "temp");
+    auto error = fs::create_directories(options.dir);
 
     CompilationDatabase database;
     auto prefix = path::join(test_dir(), "indexer");
@@ -15,6 +16,8 @@ TEST(Indexer, Basic) {
     database.updateCommand(main, std::format("clang++ {}", main));
 
     Indexer indexer(options, database);
+    indexer.loadFromDisk();
+    
     auto p1 = indexer.index(main);
     auto p2 = indexer.index(foo);
     async::run(p1, p2);
@@ -26,9 +29,15 @@ TEST(Indexer, Basic) {
     auto lookup = indexer.lookup(params, RelationKind::Declaration);
     auto&& [result] = async::run(lookup);
 
-    llvm::outs() << json::serialize(result) << "\n";
-
     indexer.saveToDisk();
+
+    Indexer indexer2(options, database);
+    indexer2.loadFromDisk();
+
+    auto lookup2 = indexer2.lookup(params, RelationKind::Declaration);
+    auto&& [result2] = async::run(lookup2);
+    
+    EXPECT_EQ(result, result2);
 }
 
 }  // namespace clice::testing

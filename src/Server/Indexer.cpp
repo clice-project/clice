@@ -42,9 +42,58 @@ Indexer::~Indexer() {
     }
 }
 
+async::Task<bool> Indexer::needUpdate(TranslationUnit* tu) {
+    auto stats = co_await async::stat(tu->srcPath);
+    /// If the file is modified, we need to update the index.
+    if(stats.mtime > tu->mtime) {
+        co_return true;
+    }
+
+    /// Check all headers.
+    for(auto& header: tu->headers) {
+        auto stats = co_await async::stat(header->srcPath);
+        if(stats.mtime > tu->mtime) {
+            co_return true;
+        }
+    }
+
+    co_return false;
+}
+
 async::Task<> Indexer::index(llvm::StringRef file) {
     auto real_path = path::real_path(file);
     file = real_path;
+
+    TranslationUnit* tu = nullptr;
+    bool needIndex = false;
+
+    if(auto iter = tus.find(file); iter != tus.end()) {
+        /// If no need to update, just return.
+        if(!co_await needUpdate(iter->second)) {
+            log::info("No need to update index for file: {}", file);
+            co_return;
+        }
+
+        /// Otherwise, we need to update the translation unit.
+        /// Clear all old header contexts associated with this translation unit.
+        tu = iter->second;
+        needIndex = true;
+        for(auto& header: tu->headers) {
+            header->contexts[tu].clear();
+        }
+    } else {
+        tu = new TranslationUnit{
+            .srcPath = file.str(),
+            .indexPath = "",
+        };
+        needIndex = true;
+        tus.try_emplace(file, tu);
+    }
+
+    if(!needIndex) {
+        log::info("No need to update index for file: {}", file);
+        co_return;
+    }
 
     auto command = database.getCommand(file);
     if(command.empty()) {
@@ -80,22 +129,9 @@ async::Task<> Indexer::index(llvm::StringRef file) {
         }
     }
 
-    TranslationUnit* tu = nullptr;
-    if(auto iter = tus.find(file); iter != tus.end()) {
-        tu = iter->second;
-        /// Clear all contexts associated with this translation unit.
-        for(auto& header: tu->headers) {
-            header->contexts[tu].clear();
-        }
-    } else {
-        tu = new TranslationUnit{
-            .srcPath = file.str(),
-            .index = "",
-        };
-        tus.try_emplace(file, tu);
-    }
-
     /// Update the translation unit.
+    tu->mtime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch());
     tu->locations = std::move(locations);
 
     /// Update the header context.
@@ -118,7 +154,7 @@ async::Task<> Indexer::index(llvm::StringRef file) {
         }
 
         header->contexts[tu].emplace_back(Context{
-            .index = "",
+            .indexPath = "",
             .include = include,
         });
     }
@@ -128,10 +164,12 @@ async::Task<> Indexer::index(llvm::StringRef file) {
     /// Write binary index to file.
     for(auto& [fid, index]: indices) {
         if(fid == SM.getMainFileID()) {
-            if(tu->index.empty()) {
-                tu->index = getIndexPath(tu->srcPath);
+            if(tu->indexPath.empty()) {
+                tu->indexPath = getIndexPath(tu->srcPath);
             }
-            co_await async::write(tu->index + ".sidx", static_cast<char*>(index.base), index.size);
+            co_await async::write(tu->indexPath + ".sidx",
+                                  static_cast<char*>(index.base),
+                                  index.size);
             continue;
         }
 
@@ -142,10 +180,10 @@ async::Task<> Indexer::index(llvm::StringRef file) {
         assert(headers.contains(name) && "Header not found");
         for(auto& context: headers[name]->contexts[tu]) {
             if(context.include == include) {
-                if(context.index.empty()) {
-                    context.index = getIndexPath(name);
+                if(context.indexPath.empty()) {
+                    context.indexPath = getIndexPath(name);
                 }
-                co_await async::write(context.index + ".sidx",
+                co_await async::write(context.indexPath + ".sidx",
                                       static_cast<char*>(index.base),
                                       index.size);
             }
@@ -189,7 +227,8 @@ json::Value Indexer::dumpToJSON() {
     for(auto& [_, tu]: this->tus) {
         tus.emplace_back(json::Object{
             {"srcPath",   tu->srcPath                   },
-            {"index",     tu->index                     },
+            {"indexPath", tu->indexPath                 },
+            {"mtime",     tu->mtime.count()             },
             {"locations", json::serialize(tu->locations)},
         });
     }
@@ -201,10 +240,11 @@ json::Value Indexer::dumpToJSON() {
 }
 
 void Indexer::saveToDisk() {
+    auto path = path::join(options.dir, "index.json");
     std::error_code ec;
-    llvm::raw_fd_ostream os(path::join(options.dir, "index.json"), ec);
+    llvm::raw_fd_ostream os(path, ec);
     if(ec) {
-        log::warn("Failed to open index file: {}", ec.message());
+        log::warn("Failed to open index file: {} Beacuse {}", path, ec.message());
         return;
     }
 
@@ -218,6 +258,52 @@ void Indexer::saveToDisk() {
 }
 
 void Indexer::loadFromDisk() {
+    auto path = path::join(options.dir, "index.json");
+    auto file = llvm::MemoryBuffer::getFile(path);
+    if(!file) {
+        log::warn("Failed to open index file: {} Beacuse {}", path, file.getError());
+        return;
+    }
+
+    auto json = json::parse(file.get()->getBuffer());
+    ASSERT(json, "Failed to parse index file: {}", path);
+
+    for(auto& value: *json->getAsObject()->getArray("tus")) {
+        auto object = value.getAsObject();
+        auto tu = new TranslationUnit{
+            .srcPath = object->getString("srcPath")->str(),
+            .indexPath = object->getString("indexPath")->str(),
+            .mtime = std::chrono::milliseconds(*object->getInteger("mtime")),
+            .locations = json::deserialize<std::vector<IncludeLocation>>(*object->get("locations")),
+        };
+        tus.try_emplace(tu->srcPath, tu);
+    }
+
+    /// All headers must be already initialized.
+    for(auto& value: *json->getAsObject()->getArray("headers")) {
+        auto object = value.getAsObject();
+        llvm::StringRef srcPath = *object->getString("srcPath");
+
+        Header* header = nullptr;
+        if(auto iter = headers.find(srcPath); iter != headers.end()) {
+            header = iter->second;
+        } else {
+            header = new Header;
+            header->srcPath = srcPath;
+            headers.try_emplace(srcPath, header);
+        }
+
+        for(auto& value: *object->getArray("contexts")) {
+            auto object = value.getAsObject();
+            auto tu = tus[*object->getString("tu")];
+            header->contexts[tu] =
+                json::deserialize<std::vector<Context>>(*object->get("contexts"));
+            tu->headers.insert(header);
+        }
+    }
+
+    log::info("Successfully loaded index from disk");
+
     return;
 }
 
@@ -269,7 +355,7 @@ async::Task<std::vector<proto::Location>>
     llvm::StringRef indexPathPrefix = "";
 
     if(auto iter = tus.find(srcPath); iter != tus.end()) {
-        indexPathPrefix = iter->second->index;
+        indexPathPrefix = iter->second->indexPath;
     } else if(auto iter = headers.find(srcPath); iter != headers.end()) {
         /// FIXME: Indexer should use a variable to indicate know
         /// which context of the header is active. And use it to
@@ -277,8 +363,8 @@ async::Task<std::vector<proto::Location>>
         /// use the first context.
         for(auto& [_, contexts]: iter->second->contexts) {
             for(auto& context: contexts) {
-                if(!context.index.empty()) {
-                    indexPathPrefix = context.index;
+                if(!context.indexPath.empty()) {
+                    indexPathPrefix = context.indexPath;
                     break;
                 }
             }
@@ -331,13 +417,13 @@ async::Task<std::vector<proto::Location>>
     }
 
     for(auto& [path, tu]: tus) {
-        if(path == srcPath || tu->index.empty()) {
+        if(path == srcPath || tu->indexPath.empty()) {
             continue;
         }
 
         auto srcPath = path.str();
         auto srcFile = co_await read(srcPath);
-        co_await lookup(ids, kind, srcPath, srcFile->getBuffer(), tu->index + ".sidx", result);
+        co_await lookup(ids, kind, srcPath, srcFile->getBuffer(), tu->indexPath + ".sidx", result);
     }
 
     llvm::StringSet<> visited;
@@ -352,12 +438,12 @@ async::Task<std::vector<proto::Location>>
 
         for(auto& [_, contexts]: header->contexts) {
             for(auto& context: contexts) {
-                if(context.index.empty() || visited.contains(context.index)) {
+                if(context.indexPath.empty() || visited.contains(context.indexPath)) {
                     continue;
                 }
 
-                visited.insert(context.index);
-                co_await lookup(ids, kind, srcPath, content, context.index + ".sidx", result);
+                visited.insert(context.indexPath);
+                co_await lookup(ids, kind, srcPath, content, context.indexPath + ".sidx", result);
             }
         }
     }

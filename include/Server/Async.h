@@ -397,8 +397,7 @@ inline auto wait_for(std::chrono::milliseconds duration) {
 }
 
 struct Stats {
-    using time_point = std::chrono::time_point<std::chrono::system_clock>;
-    time_point mtime;
+    std::chrono::milliseconds mtime;
 };
 
 namespace awaiter {
@@ -420,8 +419,8 @@ struct stat {
         auto callback = [](uv_fs_t* fs) {
             auto transform = [](uv_timespec_t& mtime) {
                 using namespace std::chrono;
-                return system_clock::time_point(duration_cast<system_clock::duration>(
-                    seconds(mtime.tv_sec) + nanoseconds(mtime.tv_nsec)));
+                return milliseconds(duration_cast<milliseconds>(seconds(mtime.tv_sec) +
+                                                                nanoseconds(mtime.tv_nsec)));
             };
 
             auto& awaiter = *static_cast<stat*>(fs->data);
@@ -430,6 +429,10 @@ struct stat {
             awaiter.stats.mtime = transform(fs->statbuf.st_mtim);
 
             async::schedule(awaiter.waiting);
+
+            uv_fs_t close_req;
+            uv_fs_close(fs->loop, &close_req, fs->result, nullptr);
+            uv_fs_req_cleanup(fs);
         };
 
         uv_fs_stat(uv_default_loop(), &fs, path.c_str(), callback);
