@@ -66,7 +66,7 @@ async::Task<> Indexer::merge(Header* header) {
 
         for(auto& [tu, contexts]: header->contexts) {
             for(auto& context: contexts) {
-                if(context.indexPath.empty()) {
+                if(context.indexPath.empty() || indices.contains(context.indexPath)) {
                     continue;
                 }
 
@@ -95,6 +95,23 @@ async::Task<> Indexer::merge(Header* header) {
     });
 
     co_return;
+}
+
+async::Task<> Indexer::merge(llvm::StringRef header) {
+    if(auto iter = headers.find(header); iter != headers.end()) {
+        co_await merge(iter->second);
+    }
+}
+
+async::Task<> Indexer::mergeAll() {
+    std::vector<async::Task<>> tasks;
+    for(auto& [_, header]: headers) {
+        tasks.emplace_back(merge(header));
+    }
+
+    for(auto& task: tasks) {
+        co_await task;
+    }
 }
 
 async::Task<> Indexer::index(llvm::StringRef file) {
@@ -254,15 +271,12 @@ async::Task<> Indexer::indexAll() {
         }
     }
 
-    tasks.clear();
-    for(auto& [path, header]: headers) {
-        tasks.emplace_back(merge(header));
-
-        if(tasks.size() == 4) {
-            co_await async::gather(tasks[0], tasks[1], tasks[2], tasks[3]);
-            tasks.clear();
-        }
+    for(auto& task: tasks) {
+        co_await task;
     }
+    tasks.clear();
+
+    co_await mergeAll();
 }
 
 std::string Indexer::getIndexPath(llvm::StringRef file) {
@@ -305,6 +319,28 @@ json::Value Indexer::dumpToJSON() {
         {"headers", std::move(headers)},
         {"tus",     std::move(tus)    },
     };
+}
+
+void Indexer::dumpForTest(llvm::StringRef file) {
+    llvm::StringSet<> files;
+
+    if(auto iter = headers.find(file); iter != headers.end()) {
+        for(auto& [tu, contexts]: iter->second->contexts) {
+            for(auto& context: contexts) {
+                if(files.contains(context.indexPath)) {
+                    continue;
+                }
+
+                if(auto buffer = llvm::MemoryBuffer::getFile(context.indexPath + ".sidx")) {
+                    index::SymbolIndex index(const_cast<char*>(buffer.get()->getBufferStart()),
+                                             buffer.get()->getBufferSize(),
+                                             false);
+                    println("Include {}, Value: {}", context.include, index.toJSON());
+                    files.insert(context.indexPath);
+                }
+            }
+        }
+    }
 }
 
 void Indexer::saveToDisk() {

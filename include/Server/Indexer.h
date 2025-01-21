@@ -72,6 +72,10 @@ public:
     /// Try to merge the index file with same content for the given header.
     async::Task<> merge(Header* header);
 
+    async::Task<> merge(llvm::StringRef header);
+
+    async::Task<> mergeAll();
+
     /// Index the given file(for unopened file).
     async::Task<> index(llvm::StringRef file);
 
@@ -85,6 +89,11 @@ public:
 
     /// Dump the index information to JSON.
     json::Value dumpToJSON();
+
+    /// Dump all index information of the given file for test.
+    void dumpForTest(llvm::StringRef file);
+
+    void lookupHeaderContexts(llvm::StringRef file);
 
     /// Save the index information to disk.
     void saveToDisk();

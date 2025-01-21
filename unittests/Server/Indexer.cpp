@@ -40,6 +40,25 @@ TEST(Indexer, Basic) {
     EXPECT_EQ(result, result2);
 }
 
+TEST(Indexer, Assert) {
+    config::IndexOptions options;
+    options.dir = path::join(".", "temp");
+    auto error = fs::create_directories(options.dir);
+
+    CompilationDatabase database;
+    auto prefix = path::join(test_dir(), "indexer");
+    auto main = path::real_path(path::join(prefix, "main.cpp"));
+    database.updateCommand(main, std::format("clang++ {}", main));
+
+    Indexer indexer(options, database);
+    indexer.loadFromDisk();
+
+    auto p1 = indexer.index(main);
+    async::run(p1);
+
+    indexer.saveToDisk();
+}
+
 TEST(Indexer, IndexAll) {
     config::IndexOptions options;
     options.dir = path::join(".", "temp");
@@ -51,8 +70,12 @@ TEST(Indexer, IndexAll) {
     Indexer indexer(options, database);
     indexer.loadFromDisk();
 
+    /// auto p1 = indexer.indexAll();
     auto p1 = indexer.indexAll();
     async::run(p1);
+
+    auto p2 = indexer.mergeAll();
+    async::run(p2);
 
     indexer.saveToDisk();
 }
@@ -68,8 +91,12 @@ TEST(Indexer, Debug) {
     Indexer indexer(options, database);
     indexer.loadFromDisk();
 
-    auto p1 = indexer.index("/home/ykiko/C++/clice/build/_deps/libuv-src/src/unix/random-sysctl-linux.c");
-    async::run(p1);
+    /// auto p1 =
+    /// indexer.index("/home/ykiko/C++/clice/build/_deps/libuv-src/src/unix/random-sysctl-linux.c");
+    // auto p = indexer.merge("/usr/include/assert.h");
+    // async::run(p);
+
+    /// indexer.dumpForTest("/usr/include/assert.h");
 
     indexer.saveToDisk();
 }

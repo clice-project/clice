@@ -110,6 +110,10 @@ public:
         std::ranges::sort(file.occurrences, refl::less, [&](const auto& occurrence) {
             return file.ranges[occurrence.location];
         });
+
+        /// Remove duplicate occurrences.
+        auto range = ranges::unique(file.occurrences, refl::equal);
+        file.occurrences.erase(range.begin(), range.end());
     }
 
 public:
@@ -132,11 +136,10 @@ public:
     void handleMacroOccurrence(const clang::MacroInfo* def,
                                clang::SourceLocation location,
                                RelationKind kind) {
-        auto spelling = srcMgr.getSpellingLoc(location);
-        clang::FileID id = srcMgr.getFileID(spelling);
-        assert(id.isValid() && "Invalid file id");
-        auto& file = files[id];
-
+        /// auto spelling = srcMgr.getSpellingLoc(location);
+        /// clang::FileID id = srcMgr.getFileID(spelling);
+        /// assert(id.isValid() && "Invalid file id");
+        /// auto& file = files[id];
         /// TODO:
     }
 
