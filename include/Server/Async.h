@@ -204,7 +204,8 @@ template <typename Task, typename V = typename std::remove_cvref_t<Task>::value_
 using task_value_t = std::conditional_t<std::is_void_v<V>, none, V>;
 
 template <typename... Tasks>
-auto gather(Tasks&&... tasks) -> Task<std::tuple<task_value_t<Tasks>...>> {
+auto gather [[gnu::noinline]] (Tasks&&... tasks) -> Task<std::tuple<task_value_t<Tasks>...>> {
+    /// FIXME: If remove noinline, the program crashes. Figure out in the future.
     (async::schedule(tasks.handle()), ...);
 
     while(!(tasks.done() && ...)) {
