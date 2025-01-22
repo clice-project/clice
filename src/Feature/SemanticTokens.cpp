@@ -14,15 +14,20 @@ public:
         TraverseAST(sema.getASTContext());
     }
 
+    /// Build semantic tokens based on the lexical tokens.
+    std::vector<SemanticToken> buildForLex(clang::FileID fid) {
+        std::vector<SemanticToken> result;
+
+        auto buffer = tokBuf.spelledTokens(fid);
+        clang::syntax::tokenize(fid, srcMgr, {});
+    }
+
     proto::SemanticTokens build() {
         /// Collect semantic from spelled tokens.
         auto mainFileID = srcMgr.getMainFileID();
         auto spelledTokens = tokBuf.spelledTokens(mainFileID);
         for(auto& token: spelledTokens) {
             SymbolKind type = SymbolKind::Invalid;
-            // llvm::outs() << clang::tok::getTokenName(token.kind()) << " "
-            //              << pp.getIdentifierInfo(token.text(srcMgr))->isKeyword(pp.getLangOpts())
-            //              << "\n";
 
             auto kind = token.kind();
             switch(kind) {
@@ -81,28 +86,6 @@ public:
 
         /// Collect semantic tokens from AST.
         TraverseAST(sema.getASTContext());
-
-        proto::SemanticTokens result;
-        std::ranges::sort(tokens, [](const SemanticToken& lhs, const SemanticToken& rhs) {
-            return lhs.line < rhs.line || (lhs.line == rhs.line && lhs.column < rhs.column);
-        });
-
-        std::size_t lastLine = 0;
-        std::size_t lastColumn = 0;
-
-        for(auto& token: tokens) {
-            result.data.push_back(token.line - lastLine);
-            result.data.push_back(token.line == lastLine ? token.column - lastColumn
-                                                         : token.column);
-            result.data.push_back(token.length);
-            // result.data.push_back(llvm::to_underlying(token.column));
-            // result.data.push_back(0);
-
-            lastLine = token.line;
-            lastColumn = token.column;
-        }
-
-        return result;
     }
 
     std::vector<SemanticToken> tokens;
@@ -115,12 +98,18 @@ index::SharedIndex<std::vector<SemanticToken>> semanticTokens(ASTInfo& info) {
 }
 
 proto::SemanticTokens toSemanticTokens(llvm::ArrayRef<SemanticToken> tokens,
+                                       SourceConverter& SC,
+                                       llvm::StringRef content,
                                        const config::SemanticTokensOption& option) {
-    return {};
+
+    std::size_t lastLine = 0;
+    std::size_t lastColumn = 0;
+
+    for(auto& token: tokens) {}
 }
 
-proto::SemanticTokens semanticTokens(ASTInfo& info, const config::SemanticTokensOption& option) {
-    return {};
-}
+proto::SemanticTokens semanticTokens(ASTInfo& info,
+                                     SourceConverter& SC,
+                                     const config::SemanticTokensOption& option) {}
 
 }  // namespace clice::feature

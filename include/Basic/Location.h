@@ -51,4 +51,3 @@ struct TextEdit {
 
 }  // namespace clice::proto
 
-

@@ -2,6 +2,8 @@
 
 #include "Basic/Document.h"
 #include "Basic/SymbolKind.h"
+#include "Basic/SourceCode.h"
+#include "Basic/SourceConverter.h"
 #include "Index/FeatureIndex.h"
 
 namespace clice {
@@ -50,9 +52,7 @@ struct SemanticTokens {
 namespace feature {
 
 struct SemanticToken {
-    uint32_t line;
-    uint32_t column;
-    uint32_t length;
+    LocalSourceRange range;
     SymbolKind kind;
     SymbolModifiers modifiers;
 };
@@ -62,10 +62,14 @@ index::SharedIndex<std::vector<SemanticToken>> semanticTokens(ASTInfo& info);
 
 /// Translate semantic tokens to LSP format.
 proto::SemanticTokens toSemanticTokens(llvm::ArrayRef<SemanticToken> tokens,
+                                       SourceConverter& SC,
+                                       llvm::StringRef content,
                                        const config::SemanticTokensOption& option);
 
 /// Generate semantic tokens for main file and translate to LSP format.
-proto::SemanticTokens semanticTokens(ASTInfo& info, const config::SemanticTokensOption& option);
+proto::SemanticTokens semanticTokens(ASTInfo& info,
+                                     SourceConverter& SC,
+                                     const config::SemanticTokensOption& option);
 
 }  // namespace feature
 

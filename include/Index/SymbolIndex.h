@@ -2,20 +2,18 @@
 
 #include "Shared.h"
 #include "ArrayView.h"
-#include "Basic/RelationKind.h"
+#include "Basic/SourceCode.h"
 #include "Basic/SymbolKind.h"
-#include "Compiler/Compilation.h"
+#include "Basic/RelationKind.h"
 #include "Support/JSON.h"
 
+namespace clice {
+
+class ASTInfo;
+
+}
+
 namespace clice::index {
-
-struct LocalSourceRange {
-    /// The begin position offset to the source file.
-    uint32_t begin;
-
-    /// The end position offset to the source file.
-    uint32_t end;
-};
 
 class SymbolIndex {
 public:
