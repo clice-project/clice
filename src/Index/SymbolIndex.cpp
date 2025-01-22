@@ -110,12 +110,16 @@ public:
         std::ranges::sort(file.occurrences, refl::less, [&](const auto& occurrence) {
             return file.ranges[occurrence.location];
         });
+
+        /// Remove duplicate occurrences.
+        auto range = ranges::unique(file.occurrences, refl::equal);
+        file.occurrences.erase(range.begin(), range.end());
     }
 
 public:
     void handleDeclOccurrence(const clang::NamedDecl* decl,
-                              clang::SourceLocation location,
-                              RelationKind kind) {
+                              RelationKind kind,
+                              clang::SourceLocation location) {
         decl = normalize(decl);
 
         /// We always use spelling location for occurrence.
@@ -130,13 +134,12 @@ public:
     }
 
     void handleMacroOccurrence(const clang::MacroInfo* def,
-                               clang::SourceLocation location,
-                               RelationKind kind) {
-        auto spelling = srcMgr.getSpellingLoc(location);
-        clang::FileID id = srcMgr.getFileID(spelling);
-        assert(id.isValid() && "Invalid file id");
-        auto& file = files[id];
-
+                               RelationKind kind,
+                               clang::SourceLocation location) {
+        /// auto spelling = srcMgr.getSpellingLoc(location);
+        /// clang::FileID id = srcMgr.getFileID(spelling);
+        /// assert(id.isValid() && "Invalid file id");
+        /// auto& file = files[id];
         /// TODO:
     }
 
@@ -151,6 +154,11 @@ public:
 
         auto [begin, end] = range;
         auto expansion = srcMgr.getExpansionLoc(begin);
+        if(srcMgr.isWrittenInBuiltinFile(expansion) ||
+           srcMgr.isWrittenInCommandLineFile(expansion)) {
+            return;
+        }
+
         assert(expansion.isValid() && expansion.isFileID() && "Invalid expansion location");
         clang::FileID id = srcMgr.getFileID(expansion);
         assert(id.isValid() && "Invalid file id");
@@ -207,7 +215,7 @@ private:
 
 }  // namespace
 
-llvm::DenseMap<clang::FileID, SymbolIndex> test(ASTInfo& info) {
+Shared<SymbolIndex> index(ASTInfo& info) {
     SymbolIndexBuilder collector(info);
     return collector.build();
 }

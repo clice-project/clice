@@ -38,14 +38,20 @@ static void event_loop(uv_idle_t* handle) {
 }
 
 void schedule(std::coroutine_handle<> core) {
-    assert(core && !core.done() && "schedule: invalid coroutine handle");
-    tasks.emplace_back(core);
+    uv_async_t* async = new uv_async_t;
+    async->data = core.address();
+    uv_async_init(loop, async, [](uv_async_t* handle) {
+        auto core = std::coroutine_handle<>::from_address(handle->data);
+        core.resume();
+        uv_close((uv_handle_t*)handle, [](uv_handle_t* handle) { delete (uv_async_t*)handle; });
+    });
+    uv_async_send(async);
 }
 
 void run() {
-    uv_idle_t idle;
-    uv_idle_init(loop, &idle);
-    uv_idle_start(&idle, event_loop);
+    // uv_idle_t idle;
+    // uv_idle_init(loop, &idle);
+    // uv_idle_start(&idle, event_loop);
 
     uv_run(loop, UV_RUN_DEFAULT);
 }

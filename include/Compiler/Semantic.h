@@ -61,7 +61,7 @@ public:
         /// its own implementation to avoid infinite recursion.
         if constexpr(!std::same_as<decltype(&SemanticVisitor::handleDeclOccurrence),
                                    decltype(&Derived::handleDeclOccurrence)>) {
-            getDerived().handleDeclOccurrence(decl, location, kind);
+            getDerived().handleDeclOccurrence(decl, kind, location);
         }
     }
 
@@ -75,7 +75,7 @@ public:
 
         if constexpr(!std::same_as<decltype(&SemanticVisitor::handleMacroOccurrence),
                                    decltype(&Derived::handleMacroOccurrence)>) {
-            getDerived().handleMacroOccurrence(def, location, kind);
+            getDerived().handleMacroOccurrence(def, kind, location);
         }
     }
 
@@ -283,7 +283,7 @@ public:
         handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
         handleRelation(decl,
                        RelationKind::TypeDefinition,
-                       declForType(decl->getType()),
+                       llvm::cast<clang::NamedDecl>(decl->getDeclContext()),
                        decl->getLocation());
         return true;
     }
@@ -605,10 +605,10 @@ public:
     ///                      ^~~~ reference
     VISIT_TYPELOC(DependentNameTypeLoc) {
         auto location = loc.getNameLoc();
-        for(auto decl: resolver.lookup(loc.getTypePtr())) {
-            handleDeclOccurrence(decl, RelationKind::WeakReference, location);
-            handleRelation(decl, RelationKind::WeakReference, decl, location);
-        }
+        // for(auto decl: resolver.lookup(loc.getTypePtr())) {
+        //     handleDeclOccurrence(decl, RelationKind::WeakReference, location);
+        //     handleRelation(decl, RelationKind::WeakReference, decl, location);
+        // }
         return true;
     }
 
@@ -616,10 +616,10 @@ public:
     ///                       ^~~~ reference
     VISIT_TYPELOC(DependentTemplateSpecializationTypeLoc) {
         auto location = loc.getTemplateNameLoc();
-        for(auto decl: resolver.lookup(loc.getTypePtr())) {
-            handleDeclOccurrence(decl, RelationKind::WeakReference, location);
-            handleRelation(decl, RelationKind::WeakReference, decl, location);
-        }
+        // for(auto decl: resolver.lookup(loc.getTypePtr())) {
+        //     handleDeclOccurrence(decl, RelationKind::WeakReference, location);
+        //     handleRelation(decl, RelationKind::WeakReference, decl, location);
+        // }
         return true;
     }
 

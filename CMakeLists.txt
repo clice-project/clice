@@ -40,9 +40,9 @@ else()
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -g -O0 -fsanitize=address -Wno-deprecated-declarations")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -g -O0 -fsanitize=address -fsanitize=undefined -Wno-deprecated-declarations")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address -fsanitize=undefined")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address -fsanitize=undefined")
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -O3 -Wno-deprecated-declarations")
     if(WIN32)
@@ -70,10 +70,6 @@ file(GLOB_RECURSE CLICE_SOURCES
     "${CMAKE_SOURCE_DIR}/src/Support/*.cpp"
 )
 add_library(clice-core "${CLICE_BUILD_TYPE}" "${CLICE_SOURCES}")
-
-target_precompile_headers(clice-core PRIVATE 
-    "${CMAKE_SOURCE_DIR}/include/Compiler/Clang.h"
-)
 
 # set llvm include and lib path
 target_include_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/include")

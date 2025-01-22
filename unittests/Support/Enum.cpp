@@ -108,6 +108,11 @@ TEST(Reflection, MaskEnum) {
     EXPECT_TRUE(bool(mask6 & Mask::A));
     EXPECT_TRUE(bool(mask6 & Mask::B));
     EXPECT_TRUE(bool(mask6 & Mask::C));
+
+    constexpr Mask mask7 = Mask(Mask::A, Mask::B, Mask::C);
+    static_assert(mask7 & Mask::A);
+    static_assert(mask7 & Mask::B);
+    static_assert(mask7 & Mask::C);
 }
 
 struct StringEnum : refl::Enum<StringEnum, false, std::string_view> {

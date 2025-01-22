@@ -2,6 +2,7 @@
 
 #include "Async.h"
 #include "Config.h"
+#include "Indexer.h"
 #include "Protocol.h"
 #include "Database.h"
 #include "Scheduler.h"
@@ -145,6 +146,10 @@ private:
     ///                                 Extension
     /// ============================================================================
 
+    async::Task<> onIndexCurrent(const proto::TextDocumentIdentifier& params);
+
+    async::Task<> onIndexAll(const proto::None&);
+
     async::Task<> onContextCurrent(const proto::TextDocumentIdentifier& params);
 
     async::Task<> onContextAll(const proto::TextDocumentIdentifier& params);
@@ -153,6 +158,7 @@ private:
 
     SourceConverter converter;
     CompilationDatabase database;
+    Indexer indexer;
     Scheduler scheduler;
 };
 

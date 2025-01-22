@@ -1,4 +1,5 @@
 #include "Compiler/Preamble.h"
+#include "clang/Lex/Lexer.h"
 
 namespace clice {
 

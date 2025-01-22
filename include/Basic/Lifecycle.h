@@ -74,7 +74,22 @@ struct ServerCapabilities {
     /// defining each notification or for backwards compatibility the
     /// TextDocumentSyncKind number. If omitted it defaults to
     /// `TextDocumentSyncKind.None`.
-    TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::Incremental;
+    TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::None;
+
+    /// The server provides go to declaration support.
+    DeclarationOptions declarationProvider = {};
+
+    /// The server provides goto definition support.
+    DefinitionOptions definitionProvider = {};
+
+    /// The server provides goto type definition support.
+    TypeDefinitionOptions typeDefinitionProvider = {};
+
+    /// The server provides goto implementation support.
+    ImplementationOptions implementationProvider = {};
+
+    /// The server provides find references support.
+    ReferenceOptions referencesProvider = {};
 
     /// The server provides semantic tokens support.
     SemanticTokensOptions semanticTokensProvider;

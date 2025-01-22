@@ -140,7 +140,7 @@ const clang::NamedDecl* declForType(clang::QualType type) {
     if(type.isNull()) {
         return nullptr;
     }
-
+    
     if(auto RT = type->getAs<clang::TagType>()) {
         return RT->getDecl();
     }

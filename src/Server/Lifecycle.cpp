@@ -37,7 +37,7 @@ async::Task<> Server::onInitialize(json::Value id, const proto::InitializeParams
     for(auto& dir: config::server.compile_commands_dirs) {
         llvm::SmallString<128> path = {dir};
         path::append(path, "compile_commands.json");
-        database.update(path);
+        database.updateCommands(path);
     }
 }
 

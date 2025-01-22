@@ -65,11 +65,19 @@ public:
         return instance->getASTContext().getTranslationUnitDecl();
     }
 
+    /// The interested file ID. For file without header context, it is the main file ID.
+    /// For file with header context, it is the file ID of header file.
+    clang::FileID getInterestedFile() {
+        return interested;
+    }
+
+    /// All files involved in building the AST.
+    const llvm::DenseSet<clang::FileID>& files();
+
     std::vector<std::string> deps();
 
 private:
-    /// The interested file ID. For file without header context, it is the main file ID.
-    /// For file with header context, it is the file ID of header file.
+    /// The interested file ID.
     clang::FileID interested;
 
     /// The frontend action used to build the AST.
@@ -87,6 +95,8 @@ private:
 
     /// All diretive information collected during the preprocessing.
     llvm::DenseMap<clang::FileID, Directive> m_directives;
+
+    llvm::DenseSet<clang::FileID> allFiles;
 };
 
 }  // namespace clice

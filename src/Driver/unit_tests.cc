@@ -16,17 +16,13 @@ llvm::cl::opt<std::string> resource_dir("resource-dir", llvm::cl::desc("Resource
 
 }  // namespace cl
 
-namespace test {
+namespace testing {
 
-llvm::StringRef source_dir() {
-    return cl::test_dir.getValue();
+llvm::StringRef test_dir() {
+    return cl::test_dir;
 }
 
-llvm::StringRef resource_dir() {
-    return cl::resource_dir.c_str();
-}
-
-}  // namespace test
+}  // namespace testing
 
 }  // namespace clice
 

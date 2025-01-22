@@ -2,21 +2,36 @@
 
 namespace clice::proto {
 
+struct WorkDoneProgressOptions {
+    /// Report on work done progress.
+    bool workDoneProgress = false;
+};
+
+using DeclarationOptions = WorkDoneProgressOptions;
+
 using DeclarationParams = TextDocumentPositionParams;
 
 using DeclarationResult = std::vector<Location>;
+
+using DefinitionOptions = DeclarationParams;
 
 using DefinitionParams = TextDocumentPositionParams;
 
 using DefinitionResult = std::vector<Location>;
 
+using TypeDefinitionOptions = WorkDoneProgressOptions;
+
 using TypeDefinitionParams = TextDocumentPositionParams;
 
 using TypeDefinitionResult = std::vector<Location>;
 
+using ImplementationOptions = WorkDoneProgressOptions;
+
 using ImplementationParams = TextDocumentPositionParams;
 
 using ImplementationResult = std::vector<Location>;
+
+using ReferenceOptions = WorkDoneProgressOptions;
 
 using ReferenceParams = TextDocumentPositionParams;
 
