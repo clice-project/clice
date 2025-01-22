@@ -205,23 +205,10 @@ using task_value_t = std::conditional_t<std::is_void_v<V>, none, V>;
 
 template <typename... Tasks>
 auto gather(Tasks&&... tasks) -> Task<std::tuple<task_value_t<Tasks>...>> {
-    bool all_done = (tasks.done() && ...);
+    (async::schedule(tasks.handle()), ...);
 
-    if(!all_done) {
-        llvm::SmallVector<core_handle, sizeof...(Tasks)> handles = {tasks.handle()...};
-        bool started = false;
-
-        if(!started) {
-            for(auto handle: handles) {
-                async::schedule(handle);
-            }
-            started = true;
-        }
-
-        while(!all_done) {
-            co_await async::suspend([](core_handle handle) { async::schedule(handle); });
-            all_done = (tasks.done() && ...);
-        }
+    while(!(tasks.done() && ...)) {
+        co_await async::suspend([](core_handle handle) { async::schedule(handle); });
     }
 
     /// If all tasks are done, return the results.
