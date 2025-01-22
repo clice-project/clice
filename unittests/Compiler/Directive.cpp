@@ -11,6 +11,7 @@ struct Directive : ::testing::Test, Tester {
     llvm::ArrayRef<HasInclude> hasIncludes;
     llvm::ArrayRef<Condition> conditions;
     llvm::ArrayRef<MacroRef> macros;
+    llvm::ArrayRef<Pragma> pragmas;
 
     void run(const char* standard = "-std=c++20") {
         Tester::run("-std=c++23");
@@ -20,11 +21,10 @@ struct Directive : ::testing::Test, Tester {
         hasIncludes = info->directives()[fid].hasIncludes;
         conditions = info->directives()[fid].conditions;
         macros = info->directives()[fid].macros;
+        pragmas = info->directives()[fid].pragmas;
     }
 
-    void EXPECT_INCLUDE(std::size_t index,
-                        llvm::StringRef position,
-                        llvm::StringRef path,
+    void EXPECT_INCLUDE(std::size_t index, llvm::StringRef position, llvm::StringRef path,
                         std::source_location current = std::source_location::current()) {
         auto& include = includes[index];
         auto entry = SM->getFileEntryRefForID(include.fid);
@@ -32,31 +32,34 @@ struct Directive : ::testing::Test, Tester {
         EXPECT_EQ(entry ? entry->getName() : "", path, current);
     }
 
-    void EXPECT_HAS_INCLUDE(std::size_t index,
-                            llvm::StringRef position,
-                            llvm::StringRef path,
+    void EXPECT_HAS_INCLUDE(std::size_t index, llvm::StringRef position, llvm::StringRef path,
                             std::source_location current = std::source_location::current()) {
         auto& hasInclude = hasIncludes[index];
         EXPECT_EQ(SourceConverter().toPosition(hasInclude.location, *SM), pos(position), current);
         EXPECT_EQ(hasInclude.path, path, current);
     }
 
-    void EXPECT_CON(std::size_t index,
-                    Condition::BranchKind kind,
-                    llvm::StringRef position,
+    void EXPECT_CON(std::size_t index, Condition::BranchKind kind, llvm::StringRef position,
                     std::source_location current = std::source_location::current()) {
         auto& condition = conditions[index];
         EXPECT_EQ(condition.kind, kind, current);
         EXPECT_EQ(SourceConverter().toPosition(condition.loc, *SM), pos(position), current);
     }
 
-    void EXPECT_MACRO(std::size_t index,
-                      MacroRef::Kind kind,
-                      llvm::StringRef position,
+    void EXPECT_MACRO(std::size_t index, MacroRef::Kind kind, llvm::StringRef position,
                       std::source_location current = std::source_location::current()) {
         auto& macro = macros[index];
         EXPECT_EQ(macro.kind, kind, current);
         EXPECT_EQ(SourceConverter().toPosition(macro.loc, *SM), pos(position), current);
+    }
+
+    void EXPECT_PRAGMA(std::size_t index, Pragma::Kind kind, llvm::StringRef position,
+                       llvm::StringRef text,
+                       std::source_location current = std::source_location::current()) {
+        auto& pragma = pragmas[index];
+        EXPECT_EQ(pragma.kind, kind, current);
+        EXPECT_EQ(pragma.stmt, text, current);
+        EXPECT_EQ(SourceConverter().toPosition(pragma.loc, *SM), pos(position), current);
     }
 };
 
@@ -192,6 +195,22 @@ int y = $(6)expr($(7)expr(1));
     EXPECT_MACRO(6, MacroRef::Kind::Ref, "6");
     EXPECT_MACRO(7, MacroRef::Kind::Ref, "7");
     EXPECT_MACRO(8, MacroRef::Kind::Undef, "8");
+}
+
+TEST_F(Directive, Pragma) {
+    const char* code = R"cpp(
+$(0)#pragma GCC poison printf sprintf fprintf
+$(1)#pragma region
+$(2)#pragma endregion
+)cpp";
+
+    addMain("main.cpp", code);
+    run();
+
+    EXPECT_EQ(3, pragmas.size());
+    EXPECT_PRAGMA(0, Pragma::Kind::Other, "0", "#pragma GCC poison printf sprintf fprintf");
+    EXPECT_PRAGMA(1, Pragma::Kind::Region, "1", "#pragma region");
+    EXPECT_PRAGMA(2, Pragma::Kind::EndRegion, "2", "#pragma endregion");
 }
 
 }  // namespace
