@@ -4,7 +4,7 @@
 #include "Basic/SymbolKind.h"
 #include "Basic/SourceCode.h"
 #include "Basic/SourceConverter.h"
-#include "Index/FeatureIndex.h"
+#include "Index/Shared.h"
 
 namespace clice {
 
@@ -58,7 +58,7 @@ struct SemanticToken {
 };
 
 /// Generate semantic tokens for all files.
-index::SharedIndex<std::vector<SemanticToken>> semanticTokens(ASTInfo& info);
+index::Shared<std::vector<SemanticToken>> semanticTokens(ASTInfo& info);
 
 /// Translate semantic tokens to LSP format.
 proto::SemanticTokens toSemanticTokens(llvm::ArrayRef<SemanticToken> tokens,

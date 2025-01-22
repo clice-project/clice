@@ -59,8 +59,12 @@ struct SymbolKind : refl::Enum<SymbolKind, false, uint8_t> {
 
 struct SymbolModifiers : refl::Enum<SymbolModifiers, true, uint32_t> {
     enum Kind {
-
+        Declaration = 0,
+        Definition,
+        Reference,
     };
+
+    using Enum::Enum;
 };
 
 }  // namespace clice

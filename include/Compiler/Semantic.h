@@ -61,7 +61,7 @@ public:
         /// its own implementation to avoid infinite recursion.
         if constexpr(!std::same_as<decltype(&SemanticVisitor::handleDeclOccurrence),
                                    decltype(&Derived::handleDeclOccurrence)>) {
-            getDerived().handleDeclOccurrence(decl, location, kind);
+            getDerived().handleDeclOccurrence(decl, kind, location);
         }
     }
 
@@ -75,7 +75,7 @@ public:
 
         if constexpr(!std::same_as<decltype(&SemanticVisitor::handleMacroOccurrence),
                                    decltype(&Derived::handleMacroOccurrence)>) {
-            getDerived().handleMacroOccurrence(def, location, kind);
+            getDerived().handleMacroOccurrence(def, kind, location);
         }
     }
 

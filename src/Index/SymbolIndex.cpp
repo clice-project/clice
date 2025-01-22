@@ -118,8 +118,8 @@ public:
 
 public:
     void handleDeclOccurrence(const clang::NamedDecl* decl,
-                              clang::SourceLocation location,
-                              RelationKind kind) {
+                              RelationKind kind,
+                              clang::SourceLocation location) {
         decl = normalize(decl);
 
         /// We always use spelling location for occurrence.
@@ -134,8 +134,8 @@ public:
     }
 
     void handleMacroOccurrence(const clang::MacroInfo* def,
-                               clang::SourceLocation location,
-                               RelationKind kind) {
+                               RelationKind kind,
+                               clang::SourceLocation location) {
         /// auto spelling = srcMgr.getSpellingLoc(location);
         /// clang::FileID id = srcMgr.getFileID(spelling);
         /// assert(id.isValid() && "Invalid file id");
