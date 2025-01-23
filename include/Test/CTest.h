@@ -4,6 +4,7 @@
 #include "Basic/Location.h"
 #include "Compiler/Compilation.h"
 #include "Support/Support.h"
+#include <llvm/ADT/StringRef.h>
 
 namespace clice::testing {
 
@@ -95,6 +96,10 @@ public:
 
     proto::Position pos(llvm::StringRef key) const {
         return locations.lookup(key);
+    }
+
+    std::uint32_t offset(llvm::StringRef key) const {
+        return offsets.lookup(key);
     }
 };
 
