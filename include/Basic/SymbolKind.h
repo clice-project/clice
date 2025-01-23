@@ -45,6 +45,7 @@ struct SymbolKind : refl::Enum<SymbolKind, false, uint8_t> {
         Bracket,         ///> `[` and `]`.
         Brace,           ///> `{` and `}`.
         Angle,           ///> `<` and `>`.
+        Conflict,        ///> This token have multiple kinds.
         Invalid,
     };
 

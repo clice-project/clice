@@ -81,7 +81,7 @@ public:
     }
 
     Tester& run(const char* standard = "-std=c++20") {
-        params.command = std::format("clang++ {} {}", standard, params.srcPath);
+        params.command = std::format("clang++ {} {} -fms-extensions", standard, params.srcPath);
 
         auto info = compile(params);
         if(!info) {
