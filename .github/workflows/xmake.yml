@@ -75,7 +75,7 @@ jobs:
 
       - name: Build clice
         run: |
-          xmake --verbose --diagnosis
+          xmake build --verbose --diagnosis --all
 
       - name: Run tests
         run: xmake test --verbose
