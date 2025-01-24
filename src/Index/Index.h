@@ -9,34 +9,65 @@ using Array = std::vector<T>;
 
 using String = std::string;
 
-#define MAKE_CLANGD_HAPPY
-#include "Index.inl"
+struct ValueRef {
+    uint32_t offset = std::numeric_limits<uint32_t>::max();
+
+    bool valid() const {
+        return offset != std::numeric_limits<uint32_t>::max();
+    }
+
+    operator uint32_t () const {
+        return offset;
+    }
+};
+
+struct Relation {
+    RelationKind kind;
+
+    /// The `data` array contains two fields whose meanings depend on the `kind`.
+    /// Each `RelationKind` specifies the interpretation of these fields as follows:
+    ///
+    /// - `Definition` and `Declaration`:
+    ///   - `data[0]`: The range of the name token.
+    ///   - `data[1]`: The range of the whole symbol.
+    ///
+    /// - `Reference` and `WeakReference`:
+    ///   - `data[0]`: The range of the reference.
+    ///   - `data[1]`: Empty (unused).
+    ///
+    /// - `Interface`, `Implementation`, `TypeDefinition`, `Base`, `Derived`,
+    ///   `Constructor`, and `Destructor`:
+    ///   - `data[0]`: The target symbol.
+    ///   - `data[1]`: Empty (unused).
+    ///
+    /// - `Caller` and `Callee`:
+    ///   - `data[0]`: The target symbol (e.g., the called function).
+    ///   - `data[1]`: The range of the call site.
+    ///
+    ValueRef data;
+    ValueRef data1;
+};
+
+struct Symbol {
+    uint64_t id;
+    String name;
+    SymbolKind kind;
+    Array<Relation> relations;
+};
+
+struct Occurrence {
+    ValueRef location;
+    ValueRef symbol;
+};
+
+struct SymbolIndex {
+    Array<Symbol> symbols;
+    Array<Occurrence> occurrences;
+    Array<LocalSourceRange> ranges;
+};
 
 }  // namespace memory
 
-/// This namespace defines the binary format of the index file. Generally,
-/// transform all pointer to offset to base address and cache location in the
-/// location array. And data only will be deserialized when it is accessed.
-namespace binary {
-
-template <typename T>
-struct Array {
-    /// Offset to index start.
-    uint32_t offset;
-
-    /// Number of elements.
-    uint32_t size;
-};
-
-using String = Array<char>;
-
-#define MAKE_CLANGD_HAPPY
-#include "Index.inl"
-
-}  // namespace binary
-
 SymbolIndex serialize(const memory::SymbolIndex& index);
-
-binary::FeatureIndex* serialize(const memory::FeatureIndex& index);
 
 }  // namespace clice::index

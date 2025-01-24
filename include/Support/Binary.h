@@ -5,9 +5,11 @@
 #include <cstring>
 #include <cstdlib>
 
+#include "Enum.h"
 #include "Struct.h"
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringRef.h"
 
 namespace clice::binary {
 
@@ -48,7 +50,7 @@ template <typename T>
 constexpr inline bool is_directly_binarizable_v = false;
 
 template <typename T>
-    requires std::is_integral_v<T>
+    requires (std::is_integral_v<T> || refl::reflectable_enum<T>)
 constexpr inline bool is_directly_binarizable_v<T> = true;
 
 template <refl::reflectable_struct T>
@@ -267,28 +269,19 @@ struct fixed_string : std::array<char, N + 1> {
 template <std::size_t M>
 fixed_string(const char (&)[M]) -> fixed_string<M - 1>;
 
-template <auto v>
-struct identity {
-    constexpr inline static auto value = v;
-};
-
-template <fixed_string name>
-auto operator""_m () {
-    return identity<name>{};
-}
-
 /// A helper class to access the binary data.
 template <typename T>
 struct Proxy {
-    char* base;
-    const impl::binarify_t<T>* object;
+    using underlying_type = impl::binarify_t<T>;
+    const void* base;
+    const void* data;
 
-    auto& value() {
-        return *object;
+    const auto& value() const {
+        return *reinterpret_cast<const underlying_type*>(data);
     }
 
-    template <auto name>
-    auto operator[] (identity<name>) {
+    template <fixed_string name>
+    auto get() const {
         constexpr auto& names = refl::member_names<T>();
 
         constexpr auto index = []() {
@@ -302,31 +295,52 @@ struct Proxy {
 
         if constexpr(index != names.size()) {
             using type = std::tuple_element_t<index, typename refl::member_types<T>::to_tuple>;
-            return Proxy<type>{base, &std::get<index>(*object)};
+            return Proxy<type>{base, &std::get<index>(value())};
         } else {
             static_assert(dependent_false<T>, "Member not found.");
         }
     }
 
-    auto operator[] (std::size_t index) {
-        using V = typename T::value_type;
-        llvm::ArrayRef<impl::binarify_t<V>> array{
-            reinterpret_cast<impl::binarify_t<V>*>(base + object->offset),
-            object->size,
-        };
-        return Proxy<typename T::value_type>{base, &array[index]};
+    auto as_string() const {
+        auto [offset, size] = value();
+        return llvm::StringRef{reinterpret_cast<const char*>(base) + offset, size};
     }
 
-    auto size() {
-        return object->size;
+    auto as_array() const {
+        auto [offset, size] = value();
+        using U = impl::binarify_t<typename T::value_type>;
+        return llvm::ArrayRef<U>{
+            reinterpret_cast<const U*>(static_cast<const char*>(base) + offset),
+            size,
+        };
+    }
+
+    auto operator[] (std::size_t index) const {
+        return Proxy<typename T::value_type>{base, &as_array()[index]};
+    }
+
+    auto size() const {
+        return value().size;
+    }
+
+    auto operator->() const {
+        return &value();
+    }
+
+    operator const underlying_type& () const {
+        return value();
     }
 };
 
 /// Binirize an object.
 template <typename Object>
-Proxy<Object> binarify(const Object& object) {
-    auto buffer = impl::Packer<Object>{}.pack(object);
-    return Proxy<Object>{buffer, reinterpret_cast<const impl::binarify_t<Object>*>(buffer)};
+std::pair<Proxy<Object>, size_t> binarify(const Object& object) {
+    impl::Packer<Object> packer;
+    auto buffer = packer.pack(object);
+    return {
+        Proxy<Object>{buffer, reinterpret_cast<const impl::binarify_t<Object>*>(buffer)},
+        packer.size
+    };
 }
 
 }  // namespace clice::binary

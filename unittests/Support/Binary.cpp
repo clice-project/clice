@@ -50,12 +50,12 @@ struct Point {
 
 TEST(Binary, Simple) {
     using namespace clice::binary;
-    auto proxy = binary::binarify(Point{1, 2});
+    auto proxy = binary::binarify(Point{1, 2}).first;
 
     EXPECT_EQ(proxy.value().x, 1);
     EXPECT_EQ(proxy.value().y, 2);
 
-    std::free(proxy.base);
+    std::free(const_cast<void*>(proxy.base));
 }
 
 struct Points {
@@ -67,15 +67,14 @@ TEST(Binary, Nested) {
         {Point{1, 2}, Point{3, 4}}
     };
 
-    auto proxy = binary::binarify(points);
+    auto proxy = binary::binarify(points).first;
 
-    using namespace clice::binary;
-    auto points2 = proxy["points"_m];
+    auto points2 = proxy.get<"points">();
 
     EXPECT_EQ(points2[0].value(), Point{1, 2});
     EXPECT_EQ(points2[1].value(), Point{3, 4});
 
-    std::free(proxy.base);
+    std::free(const_cast<void*>(proxy.base));
 }
 
 }  // namespace
