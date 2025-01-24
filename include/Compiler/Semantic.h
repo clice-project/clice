@@ -94,6 +94,15 @@ public:
         }
     }
 
+    void handleAttrOccurrence(const clang::Attr* attr, clang::SourceRange range) {
+        assert(attr && "Invalid attribute");
+        assert(range.isValid() && "Invalid range");
+        if constexpr(!std::same_as<decltype(&SemanticVisitor::handleAttrOccurrence),
+                                   decltype(&Derived::handleAttrOccurrence)>) {
+            getDerived().handleAttrOccurrence(attr, range);
+        }
+    }
+
     /// Invoked when a relation between two decls is seen in source code.
     /// @param decl The source decl.
     /// @param kind The kind of the relation.
@@ -110,17 +119,6 @@ public:
                                    decltype(&Derived::handleRelation)>) {
             getDerived().handleRelation(decl, kind, target, range);
         }
-    }
-
-    void handleOccurrence(const clang::BuiltinType* type, clang::SourceRange range) {
-        /// FIXME:
-        /// Builtin type doesn't have corresponding decl. So we handle it separately.
-        /// And it is possible that a builtin type is composed of multiple tokens.
-        /// e.g. `unsigned long long`.
-    }
-
-    void handleOccurrence(const clang::Attr* attr, clang::SourceRange range) {
-        /// FIXME:
     }
 
     void run() {
@@ -632,7 +630,7 @@ public:
             return true;
         }
 
-        getDerived().handleOccurrence(attr, attr->getLocation());
+        getDerived().handleAttrOccurrence(attr, attr->getLocation());
 
         return Base::TraverseAttr(attr);
     }
@@ -645,7 +643,7 @@ public:
         }
 
         for(auto attr: stmt->getAttrs()) {
-            getDerived().handleOccurrence(attr, attr->getRange());
+            getDerived().handleAttrOccurrence(attr, attr->getRange());
         }
 
         return Base::TraverseAttributedStmt(stmt);

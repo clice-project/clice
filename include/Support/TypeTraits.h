@@ -63,6 +63,8 @@ struct type_list {
     constexpr static auto apply(auto&& lambda) {
         return lambda.template operator()<Ts...>();
     }
+
+    using to_tuple = std::tuple<Ts...>;
 };
 
 /// Turn a tuple into a type list.

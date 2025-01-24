@@ -2,12 +2,42 @@
 
 #include <vector>
 
+#include "Shared.h"
+#include "Feature/SemanticTokens.h"
+
 #include "llvm/ADT/DenseMap.h"
 #include "clang/Basic/SourceLocation.h"
 
 namespace clice::index {
 
-template <typename T>
-using SharedIndex = llvm::DenseMap<clang::FileID, T>;
+class FeatureIndex {
+public:
+    FeatureIndex(void* base, std::size_t size, bool own = true) :
+        base(base), size(size), own(own) {}
 
-}
+    FeatureIndex(const FeatureIndex&) = delete;
+
+    FeatureIndex(FeatureIndex&& other) noexcept :
+        base(other.base), size(other.size), own(other.own) {
+        other.base = nullptr;
+        other.size = 0;
+        other.own = false;
+    }
+
+    ~FeatureIndex() {
+        if(own) {
+            std::free(base);
+        }
+    }
+
+    llvm::ArrayRef<feature::SemanticToken> semanticTokens() const;
+
+public:
+    void* base;
+    std::size_t size;
+    bool own;
+};
+
+Shared<FeatureIndex> indexFeature(ASTInfo& info);
+
+}  // namespace clice::index

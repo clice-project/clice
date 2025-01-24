@@ -5,6 +5,7 @@
 #include "Basic/SourceCode.h"
 #include "Index/SymbolIndex.h"
 #include "Compiler/Semantic.h"
+#include "Support/Binary.h"
 
 #include "clang/Index/USRGeneration.h"
 
@@ -190,7 +191,8 @@ public:
         auto symbol = getSymbol(file, decl);
         file.symbols[symbol].relations.emplace_back(memory::Relation{
             .kind = kind,
-            .data = {data[0], data[1]},
+            .data = data[0],
+            .data1 = data[1],
         });
     }
 
@@ -203,7 +205,8 @@ public:
 
         llvm::DenseMap<clang::FileID, SymbolIndex> indices;
         for(auto& [id, file]: files) {
-            indices.try_emplace(id, serialize(file));
+            auto [buffer, size] = clice::binary::binarify(static_cast<memory::SymbolIndex>(file));
+            indices.try_emplace(id, SymbolIndex{const_cast<void*>(buffer.base), size, true});
         }
         return std::move(indices);
     }

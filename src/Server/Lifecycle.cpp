@@ -9,24 +9,14 @@ async::Task<> Server::onInitialize(json::Value id, const proto::InitializeParams
     result.serverInfo.version = "0.0.1";
 
     /// Set `SemanticTokensOptions`
-    result.capabilities.semanticTokensProvider.legend.tokenTypes = {
-        "keyword",  "class",    "interface",  "enum",   "struct",   "type",   "parameter",
-        "variable", "property", "enumMember", "event",  "function", "method", "macro",
-        "keyword",  "modifier", "comment",    "string", "number",   "regexp", "operator",
-    };
+    for(auto kind: SymbolKind::all()) {
+        std::string name{kind};
+        name[0] = std::tolower(name[0]);
+        result.capabilities.semanticTokensProvider.legend.tokenTypes.emplace_back(std::move(name));
+    }
 
     result.capabilities.semanticTokensProvider.legend.tokenModifiers = {
-        "declaration",
-        "definition",
-        "readonly",
-        "static",
-        "deprecated",
-        "abstract",
-        "async",
-        "modification",
-        "documentation",
-        "defaultLibrary",
-        "local",
+
     };
 
     co_await response(std::move(id), json::serialize(result));
