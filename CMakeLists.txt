@@ -14,7 +14,7 @@ set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
 if(WIN32)
     # https://github.com/llvm/llvm-project/issues/86250
     add_definitions(-DCLANG_BUILD_STATIC)
-else
+else()
     find_package(LLVM REQUIRED CONFIG)
     find_package(Clang REQUIRED CONFIG)
 endif()
