@@ -10,11 +10,15 @@ if(NOT DEFINED LLVM_INSTALL_PATH OR LLVM_INSTALL_PATH STREQUAL "")
 endif()
 
 set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
-# https://github.com/llvm/llvm-project/issues/86250
-if(NOT WIN32)
+
+if(WIN32)
+    # https://github.com/llvm/llvm-project/issues/86250
+    add_definitions(-DCLANG_BUILD_STATIC)
+else
     find_package(LLVM REQUIRED CONFIG)
     find_package(Clang REQUIRED CONFIG)
 endif()
+
 message(STATUS "Found LLVM ${LLVM_INCLUDE_DIRS}")
 
 if(CLICE_DEV)

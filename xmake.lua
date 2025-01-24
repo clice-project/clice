@@ -39,6 +39,7 @@ target("clice-core")
 
     add_packages("libuv", {public = true})
     add_packages("toml++", {public = true})
+    add_defines("CLANG_BUILD_STATIC", {public = true})
     if is_mode("debug") then 
         add_packages("llvm", {
             public = true, 
