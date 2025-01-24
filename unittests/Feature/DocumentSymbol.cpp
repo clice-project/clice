@@ -6,20 +6,22 @@ namespace clice::testing {
 
 namespace {
 
-void total_size(const proto::DocumentSymbolResult& result, size_t& size) {
+using namespace feature::document_symbol;
+
+void total_size(const Result& result, size_t& size) {
     for(auto& item: result) {
         ++size;
         total_size(item.children, size);
     }
 }
 
-size_t total_size(const proto::DocumentSymbolResult& result) {
+size_t total_size(const Result& result) {
     size_t size = 0;
     total_size(result, size);
     return size;
 }
 
-const SourceConverter converter{proto::PositionEncodingKind::UTF8};
+const SourceConverter SC{proto::PositionEncodingKind::UTF8};
 
 TEST(DocumentSymbol, Namespace) {
     const char* main = R"cpp(
@@ -46,7 +48,7 @@ namespace _1::_2{
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(*txs.info, converter);
+    auto res = documentSymbolInMainFile(*txs.info, SC);
     // dbg(res);
     ASSERT_EQ(total_size(res), 8);
 }
@@ -75,7 +77,7 @@ int main(int argc, char* argv[]) {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(*txs.info, converter);
+    auto res = documentSymbolInMainFile(*txs.info, SC);
     // dbg(res);
     ASSERT_EQ(total_size(res), 9);
 }
@@ -100,7 +102,7 @@ struct x {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(*txs.info, converter);
+    auto res = documentSymbolInMainFile(*txs.info, SC);
     // dbg(res);
     ASSERT_EQ(total_size(res), 7);
 }
@@ -120,7 +122,7 @@ struct S {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(*txs.info, converter);
+    auto res = documentSymbolInMainFile(*txs.info, SC);
     // dbg(res);
     ASSERT_EQ(total_size(res), 6);
 }
@@ -142,7 +144,7 @@ struct _0 {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(*txs.info, converter);
+    auto res = documentSymbolInMainFile(*txs.info, SC);
     // dbg(res);
     ASSERT_EQ(total_size(res), 7);
 }
@@ -167,7 +169,7 @@ enum B {
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(*txs.info, converter);
+    auto res = documentSymbolInMainFile(*txs.info, SC);
     // dbg(res);
     ASSERT_EQ(total_size(res), 8);
 }
@@ -181,7 +183,7 @@ int y = 2;
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(*txs.info, converter);
+    auto res = documentSymbolInMainFile(*txs.info, SC);
     // dbg(res);
     ASSERT_EQ(total_size(res), 2);
 }
@@ -211,7 +213,7 @@ VAR(test)
     Tester txs("main.cpp", main);
     txs.run();
 
-    auto res = feature::documentSymbol(*txs.info, converter);
+    auto res = documentSymbolInMainFile(*txs.info, SC);
     // dbg(res);
 
     // clang-format off
