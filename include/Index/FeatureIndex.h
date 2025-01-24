@@ -12,8 +12,17 @@ namespace clice::index {
 
 class FeatureIndex {
 public:
-    FeatureIndex(char* base, std::size_t size, bool own = true) :
+    FeatureIndex(void* base, std::size_t size, bool own = true) :
         base(base), size(size), own(own) {}
+
+    FeatureIndex(const FeatureIndex&) = delete;
+
+    FeatureIndex(FeatureIndex&& other) noexcept :
+        base(other.base), size(other.size), own(other.own) {
+        other.base = nullptr;
+        other.size = 0;
+        other.own = false;
+    }
 
     ~FeatureIndex() {
         if(own) {
@@ -21,10 +30,10 @@ public:
         }
     }
 
-    std::vector<feature::SemanticToken> semanticTokens();
+    llvm::ArrayRef<feature::SemanticToken> semanticTokens() const;
 
-private:
-    char* base;
+public:
+    void* base;
     std::size_t size;
     bool own;
 };

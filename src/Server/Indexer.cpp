@@ -1,10 +1,11 @@
 #include <random>
 
-#include "Support/Assert.h"
 #include "Compiler/Compilation.h"
 #include "Index/SymbolIndex.h"
+#include "Index/FeatureIndex.h"
 #include "Server/Logger.h"
 #include "Server/Indexer.h"
+#include "Support/Assert.h"
 
 namespace clice {
 
@@ -213,10 +214,11 @@ async::Task<> Indexer::index(llvm::StringRef file) {
         });
     }
 
-    auto indices = co_await async::submit([&info] { return index::index(*info); });
+    auto symbolIndices = co_await async::submit([&info] { return index::index(*info); });
+    auto featureIndices = co_await async::submit([&info] { return index::indexFeature(*info); });
 
     /// Write binary index to file.
-    for(auto& [fid, index]: indices) {
+    for(auto& [fid, index]: symbolIndices) {
         if(fid == SM.getMainFileID()) {
             if(tu->indexPath.empty()) {
                 tu->indexPath = getIndexPath(tu->srcPath);
@@ -241,6 +243,37 @@ async::Task<> Indexer::index(llvm::StringRef file) {
                     context.indexPath = getIndexPath(name);
                 }
                 co_await async::write(context.indexPath + ".sidx",
+                                      static_cast<char*>(index.base),
+                                      index.size);
+            }
+        }
+    }
+
+    for(auto& [fid, index]: featureIndices) {
+        if(fid == SM.getMainFileID()) {
+            if(tu->indexPath.empty()) {
+                tu->indexPath = getIndexPath(tu->srcPath);
+            }
+            co_await async::write(tu->indexPath + ".fidx",
+                                  static_cast<char*>(index.base),
+                                  index.size);
+            continue;
+        }
+
+        auto entry = SM.getFileEntryRefForID(fid);
+        if(!entry) {
+            continue;
+        }
+        assert(entry && "Invalid file entry");
+        auto name = path::real_path(entry->getName());
+        auto include = files[fid];
+        assert(headers.contains(name) && "Header not found");
+        for(auto& context: headers[name]->contexts[tu]) {
+            if(context.include == include) {
+                if(context.indexPath.empty()) {
+                    context.indexPath = getIndexPath(name);
+                }
+                co_await async::write(context.indexPath + ".fidx",
                                       static_cast<char*>(index.base),
                                       index.size);
             }
@@ -319,6 +352,33 @@ json::Value Indexer::dumpToJSON() {
         {"headers", std::move(headers)},
         {"tus",     std::move(tus)    },
     };
+}
+
+async::Task<proto::SemanticTokens> Indexer::semanticTokens(llvm::StringRef file) {
+    std::string indexPath = "";
+
+    if(auto iter = tus.find(file); iter != tus.end()) {
+        indexPath = iter->second->indexPath;
+    } else if(auto iter = headers.find(file); iter != headers.end()) {
+        indexPath = iter->second->contexts.begin()->second.begin()->indexPath;
+    }
+
+    if(indexPath.empty()) {
+        co_return proto::SemanticTokens{};
+    }
+
+    auto content = co_await read(file);
+    auto buffer = co_await read(indexPath + ".fidx");
+
+    index::FeatureIndex index(const_cast<char*>(buffer->getBufferStart()),
+                              buffer->getBufferSize(),
+                              false);
+
+    SourceConverter converter;
+    co_return feature::toSemanticTokens(index.semanticTokens(),
+                                        converter,
+                                        content->getBuffer(),
+                                        {});
 }
 
 void Indexer::dumpForTest(llvm::StringRef file) {

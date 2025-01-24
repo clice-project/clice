@@ -90,6 +90,8 @@ public:
     /// Dump the index information to JSON.
     json::Value dumpToJSON();
 
+    async::Task<proto::SemanticTokens> semanticTokens(llvm::StringRef file);
+
     /// Dump all index information of the given file for test.
     void dumpForTest(llvm::StringRef file);
 

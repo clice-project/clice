@@ -91,7 +91,9 @@ async::Task<> Server::onDocumentSymbol(json::Value id, const proto::DocumentSymb
 }
 
 async::Task<> Server::onSemanticTokens(json::Value id, const proto::SemanticTokensParams& params) {
-    co_return;
+    auto path = SourceConverter::toPath(params.textDocument.uri);
+    auto tokens = co_await indexer.semanticTokens(path);
+    co_await response(std::move(id), json::serialize(tokens));
 }
 
 async::Task<> Server::onInlayHint(json::Value id, const proto::InlayHintParams& params) {
