@@ -23,10 +23,12 @@ auto operator<=> (const proto::Position& lhs, const proto::Position rhs) {
     return std::tie(lhs.line, lhs.character) <=> std::tie(rhs.line, rhs.character);
 }
 
-struct InlayHint : public ::testing::Test {
+using namespace feature::inlay_hint;
+
+struct InlayHints : public ::testing::Test {
 protected:
     std::optional<Tester> tester;
-    proto::InlayHintsResult result;
+    Result result;
 
     void run(llvm::StringRef code, proto::Range range = {},
              const config::InlayHintOption& option = LikeClangd) {
@@ -34,13 +36,13 @@ protected:
         tester->run();
         auto& info = tester->info;
         SourceConverter converter;
-        result = feature::inlayHints({.range = range}, *info, converter, option);
+        result = inlayHints({.range = range}, *info, converter, option);
     }
 
     size_t indexOf(llvm::StringRef key) {
-        auto expect = tester->locations.at(key);
-        auto iter = std::find_if(result.begin(), result.end(), [&expect](proto::InlayHint& hint) {
-            return hint.position == expect;
+        auto expect = tester->offset(key);
+        auto iter = std::find_if(result.begin(), result.end(), [&expect](InlayHint& hint) {
+            return hint.offset == expect;
         });
 
         assert(iter != result.end());
@@ -49,16 +51,16 @@ protected:
 
     void EXPECT_AT(llvm::StringRef key, llvm::StringRef text) {
         auto index = indexOf(key);
-        EXPECT_EQ(result[index].lable.front().value, text);
+        EXPECT_EQ(result[index].lable.value, text);
     }
 
     void EXPECT_ALL_KEY_IS_TEXT() {
         EXPECT_EQ(tester->locations.size(), result.size());
 
         for(auto& hint: result) {
-            auto text = hint.lable.front().value;
-            auto expect = tester->locations.at(text);
-            EXPECT_EQ(expect, hint.position);
+            auto text = hint.lable.value;
+            auto expect = tester->offset(text);
+            EXPECT_EQ(expect, hint.offset);
         }
     }
 
@@ -68,26 +70,24 @@ protected:
         size_t end = result.size();
 
         if(!startKey.empty()) {
-            auto left = tester->pos(startKey);
-            begin =
-                std::count_if(result.begin(), result.end(), [left](const proto::InlayHint& hint) {
-                    return hint.position <= left;
-                });
+            auto left = tester->offset(startKey);
+            begin = std::count_if(result.begin(), result.end(), [left](const InlayHint& hint) {
+                return hint.offset <= left;
+            });
         }
 
         if(!endKey.empty()) {
-            auto right = tester->pos(startKey);
-            begin =
-                std::count_if(result.begin(), result.end(), [right](const proto::InlayHint& hint) {
-                    return hint.position <= right;
-                });
+            auto right = tester->offset(startKey);
+            begin = std::count_if(result.begin(), result.end(), [right](const InlayHint& hint) {
+                return hint.offset <= right;
+            });
         }
 
         EXPECT_EQ(count, end - begin);
     }
 };
 
-TEST_F(InlayHint, MaxLength) {
+TEST_F(InlayHints, MaxLength) {
     run(R"cpp(
     struct _2345678 {};
     constexpr _2345678 f() { return {}; }
@@ -104,7 +104,7 @@ TEST_F(InlayHint, MaxLength) {
     EXPECT_ALL_KEY_IS_TEXT();
 }
 
-TEST_F(InlayHint, RequestRange) {
+TEST_F(InlayHints, RequestRange) {
     run(R"cpp(
 auto x1 = 1;$(request_range_start)
 auto x2$(1) = 1;
@@ -130,7 +130,7 @@ auto x4$(3) = 1;$(request_range_end)
     EXPECT_AT("3", text);
 }
 
-TEST_F(InlayHint, AutoDecl) {
+TEST_F(InlayHints, AutoDecl) {
     run(R"cpp(
 auto x$(1) = 1;
 
@@ -158,7 +158,7 @@ void t() {
     EXPECT_AT("4", intHint);
 }
 
-TEST_F(InlayHint, FreeFunctionArguments) {
+TEST_F(InlayHints, FreeFunctionArguments) {
     run(R"cpp(
 void f(int a, int b) {}
 void g(int a = 1) {}
@@ -172,7 +172,7 @@ g();
     EXPECT_ALL_KEY_IS_TEXT();
 }
 
-TEST_F(InlayHint, FnArgPassedAsLValueRef) {
+TEST_F(InlayHints, FnArgPassedAsLValueRef) {
     run(R"cpp(
 void f(int& a, int& b) { }
 void g() {
@@ -184,7 +184,7 @@ f($(a&:)x, $(b&:)x);
     EXPECT_ALL_KEY_IS_TEXT();
 }
 
-TEST_F(InlayHint, MethodArguments) {
+TEST_F(InlayHints, MethodArguments) {
     run(R"cpp(
 struct A {
     void f(int a, double b, unsigned int c) {}
@@ -199,7 +199,7 @@ void f() {
     EXPECT_ALL_KEY_IS_TEXT();
 }
 
-TEST_F(InlayHint, OperatorCall) {
+TEST_F(InlayHints, OperatorCall) {
     run(R"cpp(
 struct A {
     int operator()(int a, int b) { return a + b; }
@@ -217,7 +217,7 @@ int f() {
     EXPECT_ALL_KEY_IS_TEXT();
 }
 
-TEST_F(InlayHint, ReturnTypeHint) {
+TEST_F(InlayHints, ReturnTypeHint) {
     run(R"cpp(
 auto f()$(-> int) {
     return 1;
@@ -238,7 +238,7 @@ void g() {
     EXPECT_ALL_KEY_IS_TEXT();
 }
 
-TEST_F(InlayHint, StructureBinding) {
+TEST_F(InlayHints, StructureBinding) {
     run(R"cpp(
 int f() {
     int a[2];
@@ -252,7 +252,7 @@ int f() {
     EXPECT_AT("2", ": int");
 }
 
-TEST_F(InlayHint, Constructor) {
+TEST_F(InlayHints, Constructor) {
     run(R"cpp(
 struct A {
     int x;
@@ -283,7 +283,7 @@ void f() {
     EXPECT_AT("6", asB);
 }
 
-TEST_F(InlayHint, InitializeList) {
+TEST_F(InlayHints, InitializeList) {
     run(R"cpp(
     int a[3] = {1, 2, 3};
     int b[2][3] = {{1, 2, 3}, {4, 5, 6}};
@@ -292,7 +292,7 @@ TEST_F(InlayHint, InitializeList) {
     EXPECT_HINT_COUNT(3 + (3 * 2 + 2));
 }
 
-TEST_F(InlayHint, Designators) {
+TEST_F(InlayHints, Designators) {
     run(R"cpp(
 struct A{ int x; int y;};
 A a = {.x = 1, .y = 2};
@@ -301,7 +301,7 @@ A a = {.x = 1, .y = 2};
     EXPECT_HINT_COUNT(0);
 }
 
-TEST_F(InlayHint, IgnoreCases) {
+TEST_F(InlayHints, IgnoreCases) {
     // Ignore
     // 1. simple setters
     // 2. arguments that has had-written /*argName*/
@@ -328,7 +328,7 @@ void g() {
     EXPECT_HINT_COUNT(0);
 }
 
-TEST_F(InlayHint, BlockEnd) {
+TEST_F(InlayHints, BlockEnd) {
     run(R"cpp(
 struct A { 
     int x;
@@ -368,7 +368,7 @@ struct Out {
     EXPECT_AT("5", "// struct Out");
 }
 
-TEST_F(InlayHint, Lambda) {
+TEST_F(InlayHints, Lambda) {
     run(R"cpp(
 auto l$(1) = []$(2) {
     return 1;
@@ -384,7 +384,7 @@ auto l$(1) = []$(2) {
     EXPECT_AT("3", "// lambda #0");
 }
 
-TEST_F(InlayHint, StructAndMemberHint) {
+TEST_F(InlayHints, StructAndMemberHint) {
     run(R"cpp(
 struct A$(size: 8, align: 4) {
     int x;
@@ -413,7 +413,7 @@ struct A$(size: 8, align: 4) {
     EXPECT_ALL_KEY_IS_TEXT();
 }
 
-TEST_F(InlayHint, ImplicitCast) {
+TEST_F(InlayHints, ImplicitCast) {
     run(R"cpp(
     int x = 1.0;
 )cpp",
@@ -424,10 +424,14 @@ TEST_F(InlayHint, ImplicitCast) {
     EXPECT_HINT_COUNT(0);
 }
 
-TEST_F(InlayHint, WithHeaderContext) {
+TEST_F(InlayHints, WithHeaderContext) {
     const char* header = R"cpp(
 namespace _1 {
-    // only one hint in header.
+    // there are 2 hint in header, namespace end and type hint of `x`
+
+    struct _2345678 {};
+    constexpr _2345678 f() { return {}; }
+    constexpr auto x = f();
 }
 
 )cpp";
@@ -450,13 +454,27 @@ namespace _2 {
     EXPECT_TRUE(info.has_value());
 
     SourceConverter cvtr{proto::PositionEncodingKind::UTF8};
-    auto maps = feature::inlayHints("", *info, cvtr, {.blockEnd = true});
+    auto maps = inlayHints("", *info, cvtr);
 
     // 2 fileID
     EXPECT_EQ(maps.size(), 2);
-    
+
+    clang::FileID mainID = info->srcMgr().getMainFileID();
+    config::InlayHintOption option{
+        .blockEnd = true,
+    };
     for(auto& [fid, result]: maps) {
-        EXPECT_EQ(result.size(), 1);
+        if(fid == mainID) {
+            EXPECT_EQ(result.size(), 1);
+        } else {
+            /// Drop  `structSizeAndAlign` of `struct _2345678`.
+            config::InlayHintOption fixOption{
+                .blockEnd = true,
+                .structSizeAndAlign = false,
+            };
+            auto lspRes = toLspType(result, "", fixOption, header, cvtr);
+            EXPECT_EQ(lspRes.size(), 2);
+        }
     }
 }
 
