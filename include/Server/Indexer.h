@@ -6,6 +6,8 @@
 #include "Protocol.h"
 #include "Basic/RelationKind.h"
 
+#include "llvm/ADT/DenseSet.h"
+
 namespace clice {
 
 class ASTInfo;
@@ -109,11 +111,8 @@ private:
 
     async::Task<std::unique_ptr<llvm::MemoryBuffer>> read(llvm::StringRef path);
 
-    async::Task<> lookup(llvm::ArrayRef<SymbolID> ids,
-                         RelationKind kind,
-                         llvm::StringRef srcPath,
-                         llvm::StringRef content,
-                         std::string indexPath,
+    async::Task<> lookup(llvm::ArrayRef<SymbolID> ids, RelationKind kind, llvm::StringRef srcPath,
+                         llvm::StringRef content, std::string indexPath,
                          std::vector<proto::Location>& result);
 
 public:
