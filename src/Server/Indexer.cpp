@@ -291,25 +291,37 @@ async::Task<> Indexer::indexAll() {
     auto total = database.size();
     auto count = 0;
 
+    auto each = [&](llvm::StringRef file) -> async::Task<> {
+        count += 1;
+        log::info("Indexing process: {}/{}, file: {}", count, total, file);
+        co_await index(file);
+    };
+
+    auto iter = database.begin();
+    auto end = database.end();
+
     std::vector<async::Task<>> tasks;
+    /// TODO: Use threads count in the future.
+    tasks.resize(8);
 
-    for(auto& [file, command]: database) {
-        tasks.emplace_back(index(file));
+    log::info("Start indexing all files");
 
-        if(tasks.size() == 4) {
-            co_await async::gather(tasks[0], tasks[1], tasks[2], tasks[3]);
-            tasks.clear();
-            count += 4;
-            log::info("Indexing progress: {0}/{1}", count, total);
+    while(iter != end ||
+          ranges::any_of(tasks, [](auto& task) { return !task.empty() && !task.done(); })) {
+        for(auto& task: tasks) {
+            if(task.empty() || task.done()) {
+                if(iter != end) {
+                    task = each(iter->first());
+                    async::schedule(task.handle());
+                    ++iter;
+                }
+            }
         }
+
+        co_await async::suspend([&](auto handle) { async::schedule(handle); });
     }
 
-    for(auto& task: tasks) {
-        co_await task;
-    }
-    tasks.clear();
-
-    co_await mergeAll();
+    /// co_await mergeAll();
 }
 
 std::string Indexer::getIndexPath(llvm::StringRef file) {

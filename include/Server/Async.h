@@ -118,17 +118,26 @@ public:
     using value_type = T;
 
 public:
+    Task() = default;
+
     Task(coroutine_handle handle) : core(handle) {}
 
     Task(const Task&) = delete;
 
-    Task(Task&& other) : core(other.core) {
+    Task(Task&& other) noexcept : core(other.core) {
         other.core = nullptr;
     }
 
     Task& operator= (const Task&) = delete;
 
-    Task& operator= (Task&& other) = delete;
+    Task& operator= (Task&& other) noexcept {
+        if(core) {
+            core.destroy();
+        }
+        core = other.core;
+        other.core = nullptr;
+        return *this;
+    }
 
     ~Task() {
         if(core) {
@@ -145,6 +154,10 @@ public:
         auto handle = core;
         core = nullptr;
         return handle;
+    }
+
+    bool empty() const noexcept {
+        return !core;
     }
 
     bool done() const noexcept {
