@@ -165,6 +165,8 @@ async::Task<> Indexer::index(llvm::StringRef file) {
         co_return;
     }
 
+    log::info("vfs address: {}", (void*)&info->srcMgr().getFileManager().getVirtualFileSystem());
+
     /// Update all headers and translation units.
     auto& SM = info->srcMgr();
     std::vector<IncludeLocation> locations;
@@ -302,7 +304,7 @@ async::Task<> Indexer::indexAll() {
 
     std::vector<async::Task<>> tasks;
     /// TODO: Use threads count in the future.
-    tasks.resize(8);
+    tasks.resize(20);
 
     log::info("Start indexing all files");
 
