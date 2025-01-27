@@ -52,7 +52,11 @@ void run() {
     // uv_idle_t idle;
     // uv_idle_init(loop, &idle);
     // uv_idle_start(&idle, event_loop);
+#ifdef _WIN32
+    _putenv_s("UV_THREADPOOL_SIZE", "20");
+#else
     setenv("UV_THREADPOOL_SIZE", "20", 1);
+#endif
     uv_run(loop, UV_RUN_DEFAULT);
 }
 
