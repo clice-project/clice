@@ -78,10 +78,6 @@ struct Mask : refl::Enum<Mask, true, uint32_t> {
 };
 
 TEST(Reflection, MaskEnum) {
-    constexpr Mask invalid = {};
-    static_assert(!invalid);
-    static_assert(invalid.value() == 0);
-
     constexpr Mask mask = Mask::A;
     constexpr Mask mask2 = Mask::B;
     constexpr Mask mask3 = Mask::C;

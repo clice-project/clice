@@ -15,7 +15,10 @@ TEST(SourceConverter, Remeasure) {
 
     SourceConverter utf16{proto::PositionEncodingKind::UTF16};
 
+#ifndef _MSC_VER
+    // MSVC can not recognize the character.
     EXPECT_EQ(utf16.remeasure("↓"), 1);
+#endif 
     EXPECT_EQ(utf16.remeasure("¥"), 1);
 
     SourceConverter utf32{proto::PositionEncodingKind::UTF32};

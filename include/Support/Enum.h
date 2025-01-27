@@ -151,8 +151,7 @@ public:
 
     using underlying_type = underlying;
 
-    /// FIXME:
-    Enum() = default;
+    constexpr Enum() : m_Value(underlying{}) {}
 
     /// A integral must explicitly convert to the enum.
     explicit constexpr Enum(underlying value) : m_Value(value) {}
@@ -234,7 +233,12 @@ public:
 
     template <std::same_as<typename Derived::Kind>... Kinds>
     bool is_one_of(Kinds... kinds) const {
-        return (operator& (kinds) || ...);
+#ifdef _MSC_VER
+        /// The another one will cause a ICE on MSVC  -.-|| 
+        return ((this->value() & kinds) || ...);
+#else
+        return (this->operator& (kinds) || ...);
+#endif 
     }
 
 private:

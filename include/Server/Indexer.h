@@ -34,24 +34,24 @@ public:
 
     struct Context {
         /// The include chain that introduces this context.
-        uint32_t include = -1;
+        uint32_t include = UINT32_MAX;
 
         /// The index information of this context.
-        uint32_t index = -1;
+        uint32_t index = UINT32_MAX;
     };
 
     struct IncludeLocation {
         /// The location of the include directive.
-        uint32_t line = -1;
+        uint32_t line = UINT32_MAX;
 
         /// The index of the file that includes this header.
-        uint32_t include = -1;
+        uint32_t include = UINT32_MAX;
 
         /// The file name of the header in the string pool. Beacuse
         /// a header may be included by multiple files, so we use
         /// a string pool to cache the file name to reduce the memory
         /// usage.
-        uint32_t filename = -1;
+        uint32_t filename = UINT32_MAX;
     };
 
     struct Header {

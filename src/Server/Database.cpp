@@ -1,9 +1,60 @@
-#include "Support/Logger.h"
 #include "Server/Database.h"
 #include "Support/FileSystem.h"
 #include "Compiler/Compilation.h"
+#include "Support/Logger.h"
+
+#include <expected>
 
 namespace clice {
+
+namespace {
+
+struct CompileCommand {
+    /// Absolute path of the file.
+    std::string file;
+
+    /// The compile command.
+    std::string command;
+};
+
+/// Try extract compile command from an item in CDB file. An reason will be returned if failed.
+std::expected<CompileCommand, std::string> tryParseCompileCommand(const json::Object* object) {
+    llvm::SmallString<128> path, buffer;
+    if(auto dir = object->getString("directory"))
+        buffer = dir.value();
+
+    if(auto file = object->getString("file")) {
+        buffer = path::join(buffer, *file);
+        if(auto error = fs::real_path(buffer, path)) {
+            auto reason =
+                std::format("Failed to get realpath of {0}, because {1}", *file, error.message());
+            return std::unexpected(std::move(reason));
+        }
+    } else {
+        return std::unexpected(std::format("Json item doesn't have a \"file\" key"));
+    }
+
+    CompileCommand cmd;
+    cmd.file = path.str();
+
+    if(auto command = object->getString("command")) {
+        cmd.command = command->str();
+        return cmd;
+    }
+
+    if(auto args = object->getArray("arguments")) {
+        for(auto& arg: *args) {
+            cmd.command += *arg.getAsString(), cmd.command += ' ';
+        }
+        cmd.command.shrink_to_fit();
+        return cmd;
+    }
+
+    auto reason = std::format("File:{0} doesn't have a \"command\" or \"arguments\" key.", path);
+    return std::unexpected(std::move(reason));
+}
+
+}  // namespace
 
 /// Update the compile commands with the given file.
 void CompilationDatabase::updateCommands(llvm::StringRef filename) {
@@ -52,28 +103,12 @@ void CompilationDatabase::updateCommands(llvm::StringRef filename) {
             continue;
         }
 
-        /// FIXME: currently we assume all path here is absolute.
-        /// Add `directory` field in the future.
-
-        llvm::SmallString<128> path;
-
-        if(auto file = object->getString("file")) {
-            if(auto error = fs::real_path(*file, path)) {
-                log::warn("Failed to get real path of {0}, because {1}", *file, error.message());
-                continue;
-            }
+        if(auto res = tryParseCompileCommand(object); res.has_value()) {
+            auto [file, command] = std::move(res).value();
+            commands[file] = std::move(command);
         } else {
-            log::warn("The element does not have a file field, input file: {0}", filename);
-            continue;
+            log::warn("Failed to parse CDB file: {0}, reason: {1}", filename, res.error());
         }
-
-        auto command = object->getString("command");
-        if(!command) {
-            log::warn("The key:{0} does not have a command field, input file: {1}", path, filename);
-            continue;
-        }
-
-        commands[path] = *command;
     }
 
     log::info("Successfully loaded compile commands from {0}, total {1} commands",

@@ -47,6 +47,17 @@ inline void EXPECT_EQ(const LHS& lhs,
     }
 }
 
+#ifdef _MSC_VER
+template <std::size_t N>
+inline void EXPECT_EQ(const std::string& lhs, 
+                      const char (&rhs)[N],  
+                      std::source_location current = std::source_location::current()) {
+    if (lhs != rhs) {
+        EXPECT_FAILURE(std::format("expect: {}, actual: {}\n", lhs, rhs), current);
+    }
+}
+#endif 
+
 template <typename LHS, typename RHS>
 inline void EXPECT_NE(const LHS& lhs,
                       const RHS& rhs,
