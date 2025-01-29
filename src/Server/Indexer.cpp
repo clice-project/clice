@@ -225,9 +225,9 @@ async::Task<> Indexer::index(llvm::StringRef file) {
             if(tu->indexPath.empty()) {
                 tu->indexPath = getIndexPath(tu->srcPath);
             }
-            co_await async::write(tu->indexPath + ".sidx",
-                                  static_cast<char*>(index.base),
-                                  index.size);
+            // co_await async::write(tu->indexPath + ".sidx",
+            //                       static_cast<char*>(index.base),
+            //                       index.size);
             continue;
         }
 
@@ -244,6 +244,7 @@ async::Task<> Indexer::index(llvm::StringRef file) {
                 if(context.indexPath.empty()) {
                     context.indexPath = getIndexPath(name);
                 }
+
                 co_await async::write(context.indexPath + ".sidx",
                                       static_cast<char*>(index.base),
                                       index.size);
@@ -256,9 +257,9 @@ async::Task<> Indexer::index(llvm::StringRef file) {
             if(tu->indexPath.empty()) {
                 tu->indexPath = getIndexPath(tu->srcPath);
             }
-            co_await async::write(tu->indexPath + ".fidx",
-                                  static_cast<char*>(index.base),
-                                  index.size);
+            // co_await async::write(tu->indexPath + ".fidx",
+            //                       static_cast<char*>(index.base),
+            //                       index.size);
             continue;
         }
 
@@ -275,9 +276,9 @@ async::Task<> Indexer::index(llvm::StringRef file) {
                 if(context.indexPath.empty()) {
                     context.indexPath = getIndexPath(name);
                 }
-                co_await async::write(context.indexPath + ".fidx",
-                                      static_cast<char*>(index.base),
-                                      index.size);
+                // co_await async::write(context.indexPath + ".fidx",
+                //                       static_cast<char*>(index.base),
+                //                       index.size);
             }
         }
     }
