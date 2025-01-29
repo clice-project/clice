@@ -6,11 +6,12 @@
 
 #include "uv.h"
 
-#include <cassert>
-
 #ifdef _WIN32
 #undef THIS
 #endif
+
+#include <cassert>
+#include <type_traits>
 
 namespace clice::async {
 
@@ -25,4 +26,4 @@ T& uv_cast(U* u) {
     return *static_cast<std::remove_cvref_t<T>*>(u->data);
 }
 
-}
+}  // namespace clice::async

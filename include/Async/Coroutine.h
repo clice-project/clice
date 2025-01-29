@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <optional>
 #include <coroutine>
+#include <source_location>
 
 namespace clice::async {
 
@@ -162,4 +163,4 @@ private:
     coroutine_handle core;
 };
 
-}  // namespace async
+}  // namespace clice::async
