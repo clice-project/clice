@@ -44,16 +44,16 @@ Indexer::~Indexer() {
 }
 
 async::Task<bool> Indexer::needUpdate(TranslationUnit* tu) {
-    auto stats = co_await async::stat(tu->srcPath);
+    auto stats = co_await async::fs::stat(tu->srcPath);
     /// If the file is modified, we need to update the index.
-    if(stats.mtime > tu->mtime) {
+    if(stats.has_value() && stats->mtime > tu->mtime) {
         co_return true;
     }
 
     /// Check all headers.
     for(auto& header: tu->headers) {
-        auto stats = co_await async::stat(header->srcPath);
-        if(stats.mtime > tu->mtime) {
+        auto stats = co_await async::fs::stat(header->srcPath);
+        if(stats.has_value() && stats->mtime > tu->mtime) {
             co_return true;
         }
     }
@@ -225,9 +225,11 @@ async::Task<> Indexer::index(llvm::StringRef file) {
             if(tu->indexPath.empty()) {
                 tu->indexPath = getIndexPath(tu->srcPath);
             }
-            // co_await async::write(tu->indexPath + ".sidx",
-            //                       static_cast<char*>(index.base),
-            //                       index.size);
+
+            co_await async::fs::write(tu->indexPath + ".sidx",
+                                      static_cast<char*>(index.base),
+                                      index.size);
+
             continue;
         }
 
@@ -245,9 +247,9 @@ async::Task<> Indexer::index(llvm::StringRef file) {
                     context.indexPath = getIndexPath(name);
                 }
 
-                co_await async::write(context.indexPath + ".sidx",
-                                      static_cast<char*>(index.base),
-                                      index.size);
+                co_await async::fs::write(context.indexPath + ".sidx",
+                                          static_cast<char*>(index.base),
+                                          index.size);
             }
         }
     }
@@ -257,9 +259,11 @@ async::Task<> Indexer::index(llvm::StringRef file) {
             if(tu->indexPath.empty()) {
                 tu->indexPath = getIndexPath(tu->srcPath);
             }
-            // co_await async::write(tu->indexPath + ".fidx",
-            //                       static_cast<char*>(index.base),
-            //                       index.size);
+
+            co_await async::fs::write(tu->indexPath + ".fidx",
+                                      static_cast<char*>(index.base),
+                                      index.size);
+
             continue;
         }
 
@@ -276,9 +280,10 @@ async::Task<> Indexer::index(llvm::StringRef file) {
                 if(context.indexPath.empty()) {
                     context.indexPath = getIndexPath(name);
                 }
-                // co_await async::write(context.indexPath + ".fidx",
-                //                       static_cast<char*>(index.base),
-                //                       index.size);
+
+                co_await async::fs::write(context.indexPath + ".fidx",
+                                          static_cast<char*>(index.base),
+                                          index.size);
             }
         }
     }

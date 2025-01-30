@@ -5,10 +5,10 @@
 
 namespace clice::async {
 
-namespace {
-
 /// The default event loop.
 uv_loop_t* loop = uv_default_loop();
+
+namespace {
 
 /// The task queue waiting for resuming.
 std::deque<std::coroutine_handle<>> tasks;
