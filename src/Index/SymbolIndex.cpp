@@ -33,8 +33,7 @@ public:
 
     struct File : memory::SymbolIndex {
         llvm::DenseMap<const void*, uint32_t> symbolCache;
-        llvm::DenseMap<std::pair<clang::SourceLocation, clang::SourceLocation>, uint32_t>
-            locationCache;
+        llvm::DenseMap<std::pair<uint32_t, uint32_t>, uint32_t> locationCache;
     };
 
     /// Get the symbol id for the given decl.
@@ -88,15 +87,16 @@ public:
     auto getLocation(File& file, clang::SourceRange range) {
         /// add new location.
         auto [begin, end] = range;
-        auto [iter, success] = file.locationCache.try_emplace({begin, end}, file.ranges.size());
+        auto presumedBegin = srcMgr.getDecomposedExpansionLoc(begin);
+        auto presumedEnd = srcMgr.getDecomposedExpansionLoc(end);
+        ///
+        auto beginOffset = presumedBegin.second;
+        auto endOffset = presumedEnd.second + getTokenLength(info.srcMgr(), end);
+
+        auto [iter, success] =
+            file.locationCache.try_emplace({beginOffset, endOffset}, file.ranges.size());
         if(success) {
-            auto presumedBegin = srcMgr.getDecomposedExpansionLoc(begin);
-            auto presumedEnd = srcMgr.getDecomposedExpansionLoc(end);
-            ///
-            file.ranges.emplace_back(LocalSourceRange{
-                .begin = presumedBegin.second,
-                .end = presumedEnd.second + getTokenLength(info.srcMgr(), end),
-            });
+            file.ranges.emplace_back(LocalSourceRange{beginOffset, endOffset});
         }
         return iter->second;
     }
