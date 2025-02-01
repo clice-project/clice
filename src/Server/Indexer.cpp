@@ -6,6 +6,7 @@
 #include "Server/Logger.h"
 #include "Server/Indexer.h"
 #include "Support/Assert.h"
+#include "llvm/ADT/StringRef.h"
 
 namespace clice {
 
@@ -127,9 +128,17 @@ void Indexer::addContexts(this Self& self,
             self.headers.try_emplace(name, header);
         }
 
-        header->contexts[tu].emplace_back(Context{
-            .include = include,
+        /// Add new header context.
+        auto contexts = header->contexts[tu];
+        auto iter = ranges::find_if(contexts, [&](const Context& context) {
+            return context.include == include;
         });
+
+        if(iter == contexts.end()) {
+            header->contexts[tu].emplace_back(Context{
+                .include = include,
+            });
+        }
     }
 }
 
@@ -211,13 +220,24 @@ async::Task<> Indexer::updateIndices(this Self& self,
         assert(self.headers.contains(name) && "Invalid header name");
 
         auto header = self.headers[name];
-        bool existed = false;
+
+        auto include = files[fid];
+        auto iter = ranges::find_if(header->contexts[tu], [&](const Context& context) {
+            return context.include == include;
+        });
+        assert(iter != header->contexts[tu].end() && "Invalid include index");
+
+        /// Found whether the we already have the same index. If so, use it directly.
+        /// Otherwise, we need to create a new index.
 
         auto& indices = header->indices;
 
-        for(auto& cindex: indices) {
-            if(index.symbolHash == cindex.symbolHash && index.featureHash == cindex.featureHash) {
+        bool existed = false;
+        for(std::size_t i = 0; i < indices.size(); ++i) {
+            auto& element = indices[i];
+            if(index.symbolHash == element.symbolHash && index.featureHash == element.featureHash) {
                 existed = true;
+                iter->index = i;
                 break;
             }
         }
@@ -226,18 +246,15 @@ async::Task<> Indexer::updateIndices(this Self& self,
             continue;
         }
 
-        header->contexts[tu].emplace_back(Context{
-            .include = files[fid],
-            .index = static_cast<uint32_t>(header->indices.size()),
-        });
-
+        iter->index = static_cast<uint32_t>(indices.size());
         indices.emplace_back(HeaderIndex{
             .path = self.getIndexPath(name),
             .symbolHash = index.symbolHash,
             .featureHash = index.featureHash,
         });
 
-        if(header->srcPath == "/usr/include/assert.h") {
+        if(header->srcPath ==
+           "/home/ykiko/C++/llvm-project/build-debug-install/include/llvm/ADT/StringRef.h") {
             if(index.symbol) {
                 auto json = index.symbol->toJSON();
                 llvm::SmallString<128> path;
@@ -338,8 +355,6 @@ async::Task<> Indexer::indexAll() {
 
         co_await async::suspend([&](auto handle) { async::schedule(handle); });
     }
-
-    /// co_await mergeAll();
 }
 
 std::string Indexer::getIndexPath(llvm::StringRef file) {

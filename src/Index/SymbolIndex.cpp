@@ -1,6 +1,6 @@
 #include <numeric>
 
-#include "Index.h"
+#include "Index/Index.h"
 
 #include "Basic/SourceCode.h"
 #include "Index/SymbolIndex.h"
@@ -189,6 +189,11 @@ public:
     void handleDeclOccurrence(const clang::NamedDecl* decl,
                               RelationKind kind,
                               clang::SourceLocation location) {
+        /// If the name is not available, then we will skip it.
+        if(auto II = decl->getIdentifier(); !II || II->getName().empty()) {
+            return;
+        }
+
         decl = normalize(decl);
 
         /// We always use spelling location for occurrence.
@@ -244,6 +249,12 @@ public:
                         RelationKind kind,
                         const clang::NamedDecl* target,
                         clang::SourceRange range) {
+        /// FIXME: We should use a better way to handle anonymous decl.
+        /// If the name is not available, then we will skip it.
+        if(auto II = decl->getIdentifier(); !II || II->getName().empty()) {
+            return;
+        }
+
         const clang::NamedDecl* original = decl;
         bool sameDecl = decl == target;
         decl = normalize(decl);
