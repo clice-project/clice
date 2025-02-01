@@ -125,4 +125,27 @@ auto submit(Callback&& callback) {
     return impl::awaiter::thread_pool<C, R>{{}, {}, std::forward<Callback>(callback)};
 }
 
+class Lock {
+public:
+    Lock(bool& locked) : locked(locked) {}
+
+    Task<void> operator co_await() {
+        while(locked) {
+            co_await async::suspend([](core_handle handle) { async::schedule(handle); });
+        }
+        locked = true;
+    }
+
+    void unlock() {
+        locked = false;
+    }
+
+    ~Lock() {
+        locked = false;
+    }
+
+private:
+    bool& locked;
+};
+
 }  // namespace clice::async

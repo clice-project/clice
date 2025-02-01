@@ -9,30 +9,6 @@
 
 namespace clice {
 
-static uint32_t addIncludeChain(std::vector<Indexer::IncludeLocation>& locations,
-                                llvm::DenseMap<clang::FileID, uint32_t>& files,
-                                clang::SourceManager& SM,
-                                clang::FileID fid) {
-    auto [iter, success] = files.try_emplace(fid, locations.size());
-    if(!success) {
-        return iter->second;
-    }
-
-    auto index = iter->second;
-    locations.emplace_back();
-    auto entry = SM.getFileEntryRefForID(fid);
-    assert(entry && "Invalid file entry");
-    locations[index].filename = path::real_path(path::real_path(entry->getName()));
-
-    if(auto presumed = SM.getPresumedLoc(SM.getIncludeLoc(fid), false); presumed.isValid()) {
-        locations[index].line = presumed.getLine();
-        auto include = addIncludeChain(locations, files, SM, presumed.getFileID());
-        locations[index].include = include;
-    }
-
-    return index;
-}
-
 Indexer::~Indexer() {
     for(auto& [_, header]: headers) {
         delete header;
@@ -43,136 +19,77 @@ Indexer::~Indexer() {
     }
 }
 
-async::Task<bool> Indexer::needUpdate(TranslationUnit* tu) {
-    auto stats = co_await async::fs::stat(tu->srcPath);
-    /// If the file is modified, we need to update the index.
-    if(stats.has_value() && stats->mtime > tu->mtime) {
-        co_return true;
+async::Task<Indexer::TranslationUnit*> Indexer::check(this Self& self, llvm::StringRef file) {
+    auto iter = self.tus.find(file);
+
+    /// If no translation unit found, we need to create a new one.
+    if(iter == self.tus.end()) {
+        auto tu = new TranslationUnit;
+        tu->srcPath = file.str();
+        self.tus.try_emplace(file, tu);
+        co_return tu;
     }
 
-    /// Check all headers.
-    for(auto& header: tu->headers) {
+    auto tu = iter->second;
+
+    async::Lock lock(self.locked);
+    co_await lock;
+
+    /// Otherwise, we need to check whether the file needs to be updated.
+    auto stats = co_await async::fs::stat(tu->srcPath);
+    if(stats.has_value() && stats->mtime > tu->mtime) {
+        co_return tu;
+    }
+
+    for(auto header: tu->headers) {
         auto stats = co_await async::fs::stat(header->srcPath);
         if(stats.has_value() && stats->mtime > tu->mtime) {
-            co_return true;
+            co_return tu;
         }
     }
 
-    co_return false;
+    /// If no need to update, just return nullptr.
+    co_return nullptr;
 }
 
-async::Task<> Indexer::merge(Header* header) {
-    co_await async::submit([header] {
-        llvm::StringMap<std::unique_ptr<llvm::MemoryBuffer>> indices;
+uint32_t Indexer::addIncludeChain(std::vector<Indexer::IncludeLocation>& locations,
+                                  llvm::DenseMap<clang::FileID, uint32_t>& files,
+                                  clang::SourceManager& SM,
+                                  clang::FileID fid) {
+    auto [iter, success] = files.try_emplace(fid, locations.size());
+    if(!success) {
+        return iter->second;
+    }
 
-        for(auto& [tu, contexts]: header->contexts) {
-            for(auto& context: contexts) {
-                if(context.indexPath.empty() || indices.contains(context.indexPath)) {
-                    continue;
-                }
+    auto index = iter->second;
+    locations.emplace_back();
+    auto entry = SM.getFileEntryRefForID(fid);
+    assert(entry && "Invalid file entry");
 
-                auto file = llvm::MemoryBuffer::getFile(context.indexPath + ".sidx");
-                if(!file) {
-                    log::warn("Failed to open index file: {}", context.indexPath);
-                    continue;
-                }
+    {
+        auto path = path::real_path(entry->getName());
+        auto [iter, success] = pathIndices.try_emplace(path, pathPool.size());
+        locations[index].filename = iter->second;
+    }
 
-                bool merged = false;
-                for(auto& [indexPath, value]: indices) {
-                    if(file->get()->getBuffer() == value->getBuffer()) {
-                        auto error = fs::remove(context.indexPath + ".sidx");
-                        log::info("Merged index file: {} -> {}", context.indexPath, indexPath);
-                        context.indexPath = indexPath;
-                        merged = true;
-                        break;
-                    }
-                }
+    if(auto presumed = SM.getPresumedLoc(SM.getIncludeLoc(fid), false); presumed.isValid()) {
+        locations[index].line = presumed.getLine();
+        auto include = addIncludeChain(locations, files, SM, presumed.getFileID());
+        locations[index].include = include;
+    }
 
-                if(!merged) {
-                    indices.try_emplace(context.indexPath, std::move(file.get()));
-                }
-            }
-        }
-    });
-
-    co_return;
+    return index;
 }
 
-async::Task<> Indexer::merge(llvm::StringRef header) {
-    if(auto iter = headers.find(header); iter != headers.end()) {
-        co_await merge(iter->second);
-    }
-}
+void Indexer::addContexts(this Self& self,
+                          ASTInfo& info,
+                          TranslationUnit* tu,
+                          llvm::DenseMap<clang::FileID, uint32_t>& files) {
+    auto& SM = info.srcMgr();
 
-async::Task<> Indexer::mergeAll() {
-    std::vector<async::Task<>> tasks;
-    for(auto& [_, header]: headers) {
-        tasks.emplace_back(merge(header));
-    }
-
-    for(auto& task: tasks) {
-        co_await task;
-    }
-}
-
-async::Task<> Indexer::index(llvm::StringRef file) {
-    auto real_path = path::real_path(file);
-    file = real_path;
-
-    TranslationUnit* tu = nullptr;
-    bool needIndex = false;
-
-    if(auto iter = tus.find(file); iter != tus.end()) {
-        /// If no need to update, just return.
-        if(!co_await needUpdate(iter->second)) {
-            log::info("No need to update index for file: {}", file);
-            co_return;
-        }
-
-        /// Otherwise, we need to update the translation unit.
-        /// Clear all old header contexts associated with this translation unit.
-        tu = iter->second;
-        needIndex = true;
-        for(auto& header: tu->headers) {
-            header->contexts[tu].clear();
-        }
-    } else {
-        tu = new TranslationUnit{
-            .srcPath = file.str(),
-            .indexPath = "",
-        };
-        needIndex = true;
-        tus.try_emplace(file, tu);
-    }
-
-    if(!needIndex) {
-        log::info("No need to update index for file: {}", file);
-        co_return;
-    }
-
-    auto command = database.getCommand(file);
-    if(command.empty()) {
-        log::warn("No command found for file: {}", file);
-        co_return;
-    }
-
-    CompilationParams params;
-    params.command = command;
-    auto info = co_await async::submit([&params] { return compile(params); });
-
-    if(!info) {
-        log::warn("Failed to compile {}: {}", file, info.takeError());
-        co_return;
-    }
-
-    log::info("vfs address: {}", (void*)&info->srcMgr().getFileManager().getVirtualFileSystem());
-
-    /// Update all headers and translation units.
-    auto& SM = info->srcMgr();
     std::vector<IncludeLocation> locations;
-    llvm::DenseMap<clang::FileID, uint32_t> files;
 
-    for(auto& [fid, directive]: info->directives()) {
+    for(auto& [fid, directive]: info.directives()) {
         for(auto& include: directive.includes) {
             /// If the include is invalid, it indicates that the file is skipped because of
             /// include guard, or `#pragma once`. Such file cannot provide header context.
@@ -182,7 +99,7 @@ async::Task<> Indexer::index(llvm::StringRef file) {
             }
 
             /// Add all include chains.
-            addIncludeChain(locations, files, SM, include.fid);
+            self.addIncludeChain(locations, files, SM, include.fid);
         }
     }
 
@@ -202,93 +119,182 @@ async::Task<> Indexer::index(llvm::StringRef file) {
         auto name = path::real_path(entry->getName());
 
         Header* header = nullptr;
-        if(auto iter = headers.find(name); iter != headers.end()) {
+        if(auto iter = self.headers.find(name); iter != self.headers.end()) {
             header = iter->second;
         } else {
             header = new Header;
             header->srcPath = name;
-            headers.try_emplace(name, header);
+            self.headers.try_emplace(name, header);
         }
 
         header->contexts[tu].emplace_back(Context{
-            .indexPath = "",
             .include = include,
         });
     }
+}
 
-    auto symbolIndices = co_await async::submit([&info] { return index::index(*info); });
-    auto featureIndices = co_await async::submit([&info] { return index::indexFeature(*info); });
+async::Task<> Indexer::updateIndices(this Self& self,
+                                     ASTInfo& info,
+                                     TranslationUnit* tu,
+                                     llvm::DenseMap<clang::FileID, uint32_t>& files) {
+    struct Index {
+        llvm::XXH128_hash_t symbolHash = {0, 0};
+        std::optional<index::SymbolIndex> symbol;
 
-    /// Write binary index to file.
-    for(auto& [fid, index]: symbolIndices) {
-        if(fid == SM.getMainFileID()) {
-            if(tu->indexPath.empty()) {
-                tu->indexPath = getIndexPath(tu->srcPath);
+        llvm::XXH128_hash_t featureHash = {0, 0};
+        std::optional<index::FeatureIndex> feature;
+    };
+
+    auto indices = co_await async::submit([&info] {
+        llvm::DenseMap<clang::FileID, Index> indices;
+
+        auto symbolIndices = index::index(info);
+        for(auto& [fid, index]: symbolIndices) {
+            indices[fid].symbol.emplace(std::move(index));
+        }
+
+        auto featureIndices = index::indexFeature(info);
+        for(auto& [fid, index]: featureIndices) {
+            indices[fid].feature.emplace(std::move(index));
+        }
+
+        for(auto& [fid, index]: indices) {
+            if(index.symbol) {
+                auto data = llvm::ArrayRef<uint8_t>(reinterpret_cast<uint8_t*>(index.symbol->base),
+                                                    index.symbol->size);
+                index.symbolHash = llvm::xxh3_128bits(data);
             }
 
-            co_await async::fs::write(tu->indexPath + ".sidx",
-                                      static_cast<char*>(index.base),
-                                      index.size);
+            if(index.feature) {
+                auto data = llvm::ArrayRef<uint8_t>(reinterpret_cast<uint8_t*>(index.feature->base),
+                                                    index.feature->size);
+                index.featureHash = llvm::xxh3_128bits(data);
+            }
+        }
+
+        return indices;
+    });
+
+    async::Lock lock(self.locked);
+    co_await lock;
+
+    auto& SM = info.srcMgr();
+    for(auto& [fid, index]: indices) {
+        if(fid == SM.getMainFileID()) {
+            if(tu->indexPath.empty()) {
+                tu->indexPath = self.getIndexPath(tu->srcPath);
+            }
+
+            if(index.symbol) {
+                co_await async::fs::write(tu->indexPath + ".sidx",
+                                          index.symbol->base,
+                                          index.symbol->size);
+            }
+
+            if(index.feature) {
+                co_await async::fs::write(tu->indexPath + ".fidx",
+                                          index.feature->base,
+                                          index.feature->size);
+            }
 
             continue;
         }
 
         auto entry = SM.getFileEntryRefForID(fid);
         if(!entry) {
-            continue;
+            log::info("Invalid file entry for file id: {}", fid.getHashValue());
         }
         assert(entry && "Invalid file entry");
-        auto name = path::real_path(entry->getName());
-        auto include = files[fid];
-        assert(headers.contains(name) && "Header not found");
-        for(auto& context: headers[name]->contexts[tu]) {
-            if(context.include == include) {
-                if(context.indexPath.empty()) {
-                    context.indexPath = getIndexPath(name);
-                }
 
-                co_await async::fs::write(context.indexPath + ".sidx",
-                                          static_cast<char*>(index.base),
-                                          index.size);
+        auto name = path::real_path(entry->getName());
+        assert(self.headers.contains(name) && "Invalid header name");
+
+        auto header = self.headers[name];
+        bool existed = false;
+
+        auto& indices = header->indices;
+
+        for(auto& cindex: indices) {
+            if(index.symbolHash == cindex.symbolHash && index.featureHash == cindex.featureHash) {
+                existed = true;
+                break;
             }
         }
-    }
 
-    for(auto& [fid, index]: featureIndices) {
-        if(fid == SM.getMainFileID()) {
-            if(tu->indexPath.empty()) {
-                tu->indexPath = getIndexPath(tu->srcPath);
-            }
-
-            co_await async::fs::write(tu->indexPath + ".fidx",
-                                      static_cast<char*>(index.base),
-                                      index.size);
-
+        if(existed) {
             continue;
         }
 
-        auto entry = SM.getFileEntryRefForID(fid);
-        if(!entry) {
-            continue;
-        }
-        assert(entry && "Invalid file entry");
-        auto name = path::real_path(entry->getName());
-        auto include = files[fid];
-        assert(headers.contains(name) && "Header not found");
-        for(auto& context: headers[name]->contexts[tu]) {
-            if(context.include == include) {
-                if(context.indexPath.empty()) {
-                    context.indexPath = getIndexPath(name);
-                }
+        header->contexts[tu].emplace_back(Context{
+            .include = files[fid],
+            .index = static_cast<uint32_t>(header->indices.size()),
+        });
 
-                co_await async::fs::write(context.indexPath + ".fidx",
-                                          static_cast<char*>(index.base),
-                                          index.size);
+        indices.emplace_back(HeaderIndex{
+            .path = self.getIndexPath(name),
+            .symbolHash = index.symbolHash,
+            .featureHash = index.featureHash,
+        });
+
+        if(header->srcPath == "/usr/include/assert.h") {
+            if(index.symbol) {
+                println("{{ hash: {}, index: {} }}",
+                        json::serialize(index.symbolHash),
+                        index.symbol->toJSON());
             }
+
+            // if(index.feature) {
+            //     println("{{ hash: {}, index: {} }}",
+            //             json::serialize(index.featureHash),
+            //             json::serialize(index.feature->semanticTokens()));
+            // }
+        }
+
+        if(index.symbol) {
+            co_await async::fs::write(indices.back().path + ".sidx",
+                                      index.symbol->base,
+                                      index.symbol->size);
+        }
+
+        if(index.feature) {
+            co_await async::fs::write(indices.back().path + ".fidx",
+                                      index.feature->base,
+                                      index.feature->size);
         }
     }
+}
 
-    co_return;
+async::Task<> Indexer::index(this Self& self, llvm::StringRef file) {
+    auto path = path::real_path(file);
+    file = path;
+
+    auto tu = co_await self.check(file);
+    if(!tu) {
+        log::info("No need to update index for file: {}", file);
+        co_return;
+    }
+
+    auto command = self.database.getCommand(file);
+    if(command.empty()) {
+        log::warn("No command found for file: {}", file);
+        co_return;
+    }
+
+    CompilationParams params;
+    params.command = command;
+
+    auto info = co_await async::submit([&params] { return compile(params); });
+    if(!info) {
+        log::warn("Failed to compile {}: {}", file, info.takeError());
+        co_return;
+    }
+
+    llvm::DenseMap<clang::FileID, uint32_t> files;
+
+    /// Otherwise, we need to update all header contexts.
+    self.addContexts(*info, tu, files);
+
+    co_await self.updateIndices(*info, tu, files);
 }
 
 async::Task<> Indexer::index(llvm::StringRef file, ASTInfo& info) {
@@ -353,8 +359,9 @@ json::Value Indexer::dumpToJSON() {
         }
 
         headers.emplace_back(json::Object{
-            {"srcPath",  header->srcPath    },
-            {"contexts", std::move(contexts)},
+            {"srcPath",  header->srcPath                 },
+            {"contexts", std::move(contexts)             },
+            {"indices",  json::serialize(header->indices)},
         });
     }
 
@@ -369,8 +376,9 @@ json::Value Indexer::dumpToJSON() {
     }
 
     return json::Object{
-        {"headers", std::move(headers)},
-        {"tus",     std::move(tus)    },
+        {"headers", std::move(headers)       },
+        {"tus",     std::move(tus)           },
+        {"paths",   json::serialize(pathPool)},
     };
 }
 
@@ -380,7 +388,7 @@ async::Task<proto::SemanticTokens> Indexer::semanticTokens(llvm::StringRef file)
     if(auto iter = tus.find(file); iter != tus.end()) {
         indexPath = iter->second->indexPath;
     } else if(auto iter = headers.find(file); iter != headers.end()) {
-        indexPath = iter->second->contexts.begin()->second.begin()->indexPath;
+        /// indexPath = iter->second->contexts.begin()->second.begin()->index->path;
     }
 
     if(indexPath.empty()) {
@@ -402,22 +410,18 @@ async::Task<proto::SemanticTokens> Indexer::semanticTokens(llvm::StringRef file)
 }
 
 void Indexer::dumpForTest(llvm::StringRef file) {
-    llvm::StringSet<> files;
+    if(auto iter = tus.find(file); iter != tus.end()) {
+        auto tu = iter->second;
+    }
 
     if(auto iter = headers.find(file); iter != headers.end()) {
-        for(auto& [tu, contexts]: iter->second->contexts) {
-            for(auto& context: contexts) {
-                if(files.contains(context.indexPath)) {
-                    continue;
-                }
-
-                if(auto buffer = llvm::MemoryBuffer::getFile(context.indexPath + ".sidx")) {
-                    index::SymbolIndex index(const_cast<char*>(buffer.get()->getBufferStart()),
-                                             buffer.get()->getBufferSize(),
-                                             false);
-                    println("Include {}, Value: {}", context.include, index.toJSON());
-                    files.insert(context.indexPath);
-                }
+        auto header = iter->second;
+        for(auto& index: header->indices) {
+            auto buffer = llvm::MemoryBuffer::getFile(index.path + ".sidx");
+            if(buffer) {
+                auto content = buffer.get()->getBuffer();
+                index::SymbolIndex sindex(const_cast<char*>(content.data()), content.size(), false);
+                println("{}: {}", index.path, sindex.toJSON());
             }
         }
     }
@@ -476,6 +480,8 @@ void Indexer::loadFromDisk() {
             header->srcPath = srcPath;
             headers.try_emplace(srcPath, header);
         }
+
+        header->indices = json::deserialize<std::vector<HeaderIndex>>(*object->get("indices"));
 
         for(auto& value: *object->getArray("contexts")) {
             auto object = value.getAsObject();
@@ -547,10 +553,10 @@ async::Task<std::vector<proto::Location>>
         /// use the first context.
         for(auto& [_, contexts]: iter->second->contexts) {
             for(auto& context: contexts) {
-                if(!context.indexPath.empty()) {
-                    indexPathPrefix = context.indexPath;
-                    break;
-                }
+                // if(!context.indexPath.empty()) {
+                //     indexPathPrefix = context.indexPath;
+                //     break;
+                // }
             }
 
             if(!indexPathPrefix.empty()) {
@@ -621,14 +627,14 @@ async::Task<std::vector<proto::Location>>
         auto content = srcFile->getBuffer();
 
         for(auto& [_, contexts]: header->contexts) {
-            for(auto& context: contexts) {
-                if(context.indexPath.empty() || visited.contains(context.indexPath)) {
-                    continue;
-                }
-
-                visited.insert(context.indexPath);
-                co_await lookup(ids, kind, srcPath, content, context.indexPath + ".sidx", result);
-            }
+            // for(auto& context: contexts) {
+            //     if(context.indexPath.empty() || visited.contains(context.indexPath)) {
+            //         continue;
+            //     }
+            //
+            //    visited.insert(context.indexPath);
+            //    co_await lookup(ids, kind, srcPath, content, context.indexPath + ".sidx", result);
+            //}
         }
     }
 

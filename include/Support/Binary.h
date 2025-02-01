@@ -174,7 +174,7 @@ struct Packer {
     /// Write the object to the buffer and return the binary representation.
     template <typename Object>
     auto write(const Object& object) {
-        if constexpr(is_directly_binarizable_v<Object>) {
+        if constexpr(is_directly_binarizable_v<Object> && !refl::reflectable_struct<Object>) {
             return object;
         } else if constexpr(std::same_as<Object, std::string>) {
             auto& section = std::get<Section<char>>(layout);
@@ -194,15 +194,20 @@ struct Packer {
             section.count += size;
 
             for(std::size_t i = 0; i < size; ++i) {
-                binarify_t<V> result = write(object[i]);
-                std::memcpy(buffer + offset + i * sizeof(binarify_t<V>), &result, sizeof(result));
+                ::new (buffer + offset + i * sizeof(binarify_t<V>)) auto{write(object[i])};
             }
 
             return array<V>{offset, size};
         } else if constexpr(refl::reflectable_struct<Object>) {
+            std::array<char, sizeof(binarify_t<Object>)> buffer = {};
+
             binarify_t<Object> result = {};
-            refl::foreach(result, object, [&](auto& lhs, auto& rhs) { lhs = write(rhs); });
-            return result;
+            refl::foreach(result, object, [&](auto& lhs, auto& rhs) {
+                auto offset = reinterpret_cast<char*>(&lhs) - reinterpret_cast<char*>(&result);
+                ::new (buffer.data() + offset) auto{write(rhs)};
+            });
+
+            return buffer;
         } else {
             static_assert(dependent_false<Object>, "Unsupported type.");
         }

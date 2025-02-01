@@ -233,7 +233,7 @@ public:
 
     auto buildForIndex() {
         for(auto fid: info.files()) {
-            highlightFromLexer(fid);
+            /// highlightFromLexer(fid);
         }
 
         run();

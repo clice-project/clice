@@ -38,17 +38,24 @@ public:
     };
 
     /// Get the symbol id for the given decl.
-    uint64_t getSymbolID(const clang::Decl* decl) {
-        auto iter = symbolIDs.find(decl);
+    uint64_t getSymbolID(const void* symbol, bool isMacro = false) {
+        auto iter = symbolIDs.find(symbol);
         if(iter != symbolIDs.end()) {
             return iter->second;
         }
 
         llvm::SmallString<128> USR;
-        clang::index::generateUSRForDecl(decl, USR);
+        if(isMacro) {
+            auto def = static_cast<const clang::MacroInfo*>(symbol);
+            auto name = getTokenSpelling(srcMgr, def->getDefinitionLoc());
+            clang::index::generateUSRForMacro(name, def->getDefinitionLoc(), srcMgr, USR);
+        } else {
+            clang::index::generateUSRForDecl(static_cast<const clang::Decl*>(symbol), USR);
+        }
+
         assert(!USR.empty() && "Invalid USR");
         auto id = llvm::xxh3_64bits(USR);
-        symbolIDs.try_emplace(decl, id);
+        symbolIDs.try_emplace(symbol, id);
         return id;
     }
 
@@ -65,7 +72,18 @@ public:
         return iter->second;
     }
 
-    /// TODO: handle macro reference.
+    auto getSymbol(File& file, const clang::MacroInfo* def) {
+        auto [iter, success] = file.symbolCache.try_emplace(def, file.symbols.size());
+        /// If insert success, then we need to add a new symbol.
+        if(success) {
+            file.symbols.emplace_back(memory::Symbol{
+                .id = getSymbolID(def, true),
+                .name = getTokenSpelling(srcMgr, def->getDefinitionLoc()).str(),
+                .kind = SymbolKind::Macro,
+            });
+        }
+        return iter->second;
+    }
 
     auto getLocation(File& file, clang::SourceRange range) {
         /// add new location.
@@ -137,11 +155,14 @@ public:
     void handleMacroOccurrence(const clang::MacroInfo* def,
                                RelationKind kind,
                                clang::SourceLocation location) {
-        /// auto spelling = srcMgr.getSpellingLoc(location);
-        /// clang::FileID id = srcMgr.getFileID(spelling);
-        /// assert(id.isValid() && "Invalid file id");
-        /// auto& file = files[id];
-        /// TODO:
+        auto spelling = srcMgr.getSpellingLoc(location);
+        clang::FileID id = srcMgr.getFileID(spelling);
+        assert(id.isValid() && "Invalid file id");
+        auto& file = files[id];
+
+        auto symbol = getSymbol(file, def);
+        auto loc = getLocation(file, {spelling, spelling});
+        file.occurrences.emplace_back(memory::Occurrence{loc, symbol});
     }
 
     void handleRelation(const clang::NamedDecl* decl,
@@ -204,9 +225,19 @@ public:
         }
 
         llvm::DenseMap<clang::FileID, SymbolIndex> indices;
-        for(auto& [id, file]: files) {
+        for(auto& [fid, file]: files) {
+            auto loc = srcMgr.getLocForStartOfFile(fid);
+
+            /// FIXME: Figure out why index result will contain them.
+            if(srcMgr.isWrittenInBuiltinFile(loc) || srcMgr.isWrittenInCommandLineFile(loc) ||
+               srcMgr.isWrittenInScratchSpace(loc)) {
+                continue;
+            }
+
             auto [buffer, size] = clice::binary::binarify(static_cast<memory::SymbolIndex>(file));
-            indices.try_emplace(id, SymbolIndex{const_cast<void*>(buffer.base), size, true});
+            indices.try_emplace(
+                fid,
+                SymbolIndex{static_cast<char*>(const_cast<void*>(buffer.base)), size, true});
         }
         return std::move(indices);
     }
