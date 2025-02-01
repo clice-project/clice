@@ -199,9 +199,10 @@ struct Packer {
 
             return array<V>{offset, size};
         } else if constexpr(refl::reflectable_struct<Object>) {
-            std::array<char, sizeof(binarify_t<Object>)> buffer = {};
+            std::array<char, sizeof(binarify_t<Object>)> buffer;
+            std::memset(buffer.data(), 0, sizeof(buffer));
 
-            binarify_t<Object> result = {};
+            binarify_t<Object> result;
             refl::foreach(result, object, [&](auto& lhs, auto& rhs) {
                 auto offset = reinterpret_cast<char*>(&lhs) - reinterpret_cast<char*>(&result);
                 ::new (buffer.data() + offset) auto{write(rhs)};

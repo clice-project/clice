@@ -102,37 +102,87 @@ public:
     }
 
     void sort(File& file) {
-        /// new(index) -> old(value)
-        std::vector<uint32_t> new2old(file.symbols.size());
-        std::ranges::iota(new2old, 0u);
+        /// We will serialize the index to binary format and compare the data to
+        /// check whether they are the index. So here we need to sort all vectors
+        /// to make sure that the data is in the same order even they are in different
+        /// files.
 
-        /// Sort the symbols by `Symbol::id`.
-        std::ranges::sort(std::ranges::views::zip(file.symbols, new2old),
-                          {},
-                          [](const auto& element) { return std::get<0>(element).id; });
+        /// Map the old index to new index.
+        std::vector<uint32_t> symbolMap(file.symbols.size());
+        std::vector<uint32_t> locationMap(file.ranges.size());
 
-        /// old(index) -> new(value)
-        std::vector<uint32_t> old2new(file.symbols.size());
-        for(uint32_t i = 0; i < file.symbols.size(); ++i) {
-            old2new[new2old[i]] = i;
+        {
+            /// Sort symbols and update the symbolMap.
+            std::vector<uint32_t> new2old(file.symbols.size());
+            std::ranges::iota(new2old, 0u);
+
+            ranges::sort(views::zip(file.symbols, new2old), refl::less, [](const auto& element) {
+                auto& symbol = std::get<0>(element);
+                return std::tuple(symbol.id, symbol.name, symbol.kind);
+            });
+
+            for(uint32_t i = 0; i < file.symbols.size(); ++i) {
+                symbolMap[new2old[i]] = i;
+            }
         }
 
-        /// Adjust the all symbol references.
+        {
+            /// Sort locations and update the locationMap.
+            std::vector<uint32_t> new2old(file.ranges.size());
+            std::ranges::iota(new2old, 0u);
+
+            ranges::sort(views::zip(file.ranges, new2old), refl::less, [](const auto& element) {
+                return std::get<0>(element);
+            });
+
+            for(uint32_t i = 0; i < file.ranges.size(); ++i) {
+                locationMap[new2old[i]] = i;
+            }
+        }
+
+        /// Sort occurrences and update the symbol and location references.
         for(auto& occurrence: file.occurrences) {
-            occurrence.symbol = {old2new[occurrence.symbol]};
+            occurrence.symbol = {symbolMap[occurrence.symbol]};
+            occurrence.location = {locationMap[occurrence.location]};
         }
 
-        /// FIXME: may need to adjust the relations.
-
-        /// Sort occurrences by `Occurrence::Location`. Note that file is the first field of
-        /// `Location`, this means that location with the same file will be adjacent.
-        std::ranges::sort(file.occurrences, refl::less, [&](const auto& occurrence) {
-            return file.ranges[occurrence.location];
+        ranges::sort(file.occurrences, refl::less, [](const auto& occurrence) {
+            return occurrence.location;
         });
 
-        /// Remove duplicate occurrences.
         auto range = ranges::unique(file.occurrences, refl::equal);
         file.occurrences.erase(range.begin(), range.end());
+
+        /// Sort all relations and update the symbol and location references.
+        for(auto& symbol: file.symbols) {
+            for(auto& relation: symbol.relations) {
+                auto kind = relation.kind;
+                if(kind.is_one_of(RelationKind::Definition, RelationKind::Declaration)) {
+                    relation.data = {locationMap[relation.data]};
+                    relation.data1 = {locationMap[relation.data1]};
+                } else if(kind.is_one_of(RelationKind::Reference, RelationKind::WeakReference)) {
+                    relation.data = {locationMap[relation.data]};
+                } else if(kind.is_one_of(RelationKind::Interface,
+                                         RelationKind::Implementation,
+                                         RelationKind::TypeDefinition,
+                                         RelationKind::Base,
+                                         RelationKind::Derived,
+                                         RelationKind::Constructor,
+                                         RelationKind::Destructor)) {
+                    relation.data = {symbolMap[relation.data]};
+                } else if(kind.is_one_of(RelationKind::Caller, RelationKind::Callee)) {
+                    relation.data = {symbolMap[relation.data]};
+                    relation.data1 = {locationMap[relation.data1]};
+                } else {
+                    assert(false && "Invalid relation kind");
+                }
+            }
+
+            ranges::sort(symbol.relations, refl::less);
+
+            auto range = ranges::unique(symbol.relations, refl::equal);
+            symbol.relations.erase(range.begin(), range.end());
+        }
     }
 
 public:
@@ -163,6 +213,31 @@ public:
         auto symbol = getSymbol(file, def);
         auto loc = getLocation(file, {spelling, spelling});
         file.occurrences.emplace_back(memory::Occurrence{loc, symbol});
+
+        {
+            auto expansion = srcMgr.getExpansionLoc(location);
+            clang::FileID id = srcMgr.getFileID(expansion);
+            assert(id.isValid() && "Invalid file id");
+
+            auto& file = files[id];
+            auto loc = getLocation(file, {expansion, expansion});
+            auto symbol = getSymbol(file, def);
+
+            if(kind & RelationKind::Definition) {
+                file.symbols[symbol].relations.emplace_back(memory::Relation{
+                    .kind = kind,
+                    .data = {loc},
+                    .data1 = {getLocation(
+                        file,
+                        clang::SourceRange(def->getDefinitionLoc(), def->getDefinitionEndLoc()))},
+                });
+            } else {
+                file.symbols[symbol].relations.emplace_back(memory::Relation{
+                    .kind = kind,
+                    .data = {loc},
+                });
+            }
+        }
     }
 
     void handleRelation(const clang::NamedDecl* decl,

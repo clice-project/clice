@@ -179,6 +179,7 @@ async::Task<> Indexer::updateIndices(this Self& self,
     co_await lock;
 
     auto& SM = info.srcMgr();
+
     for(auto& [fid, index]: indices) {
         if(fid == SM.getMainFileID()) {
             if(tu->indexPath.empty()) {
@@ -238,9 +239,12 @@ async::Task<> Indexer::updateIndices(this Self& self,
 
         if(header->srcPath == "/usr/include/assert.h") {
             if(index.symbol) {
-                println("{{ hash: {}, index: {} }}",
-                        json::serialize(index.symbolHash),
-                        index.symbol->toJSON());
+                auto json = index.symbol->toJSON();
+                llvm::SmallString<128> path;
+                llvm::raw_svector_ostream stream(path);
+                stream << json;
+
+                co_await async::fs::write(indices.back().path + ".json", path.data(), path.size());
             }
 
             // if(index.feature) {
