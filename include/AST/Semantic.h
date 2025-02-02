@@ -2,10 +2,9 @@
 
 #include "Resolver.h"
 #include "SymbolKind.h"
-#include "Basic/RelationKind.h"
+#include "RelationKind.h"
 #include "Compiler/Compilation.h"
 #include "Compiler/Utility.h"
-#include "Support/Support.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice {
@@ -32,13 +31,6 @@ public:
 
     bool needFilter(clang::SourceLocation location) {
         return location.isInvalid() || (mainFileOnly && !srcMgr.isInMainFile(location));
-    }
-
-    void dump [[gnu::noinline]] (clang::SourceLocation loc) {
-        auto location = srcMgr.getPresumedLoc(loc);
-        llvm::SmallString<128> path;
-        auto err = fs::real_path(location.getFilename(), path);
-        llvm::outs() << path << ":" << location.getLine() << ":" << location.getColumn() << "\n";
     }
 
     /// Invoked when a declaration occur is seen in source code.
