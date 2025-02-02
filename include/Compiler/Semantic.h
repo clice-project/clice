@@ -7,6 +7,7 @@
 #include "Basic/RelationKind.h"
 #include "Basic/SymbolKind.h"
 #include "Support/Support.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice {
 
@@ -122,7 +123,7 @@ public:
     }
 
     void run() {
-        Base::TraverseAST(sema.getASTContext());
+        Base::TraverseAST(info.context());
 
         for(auto directive: info.directives()) {
             for(auto macro: directive.second.macros) {
@@ -141,7 +142,7 @@ public:
             }
         }
 
-        if(auto module = sema.getASTContext().getCurrentNamedModule()) {
+        if(auto module = info.context().getCurrentNamedModule()) {
             auto keyword = module->DefinitionLoc;
             auto begin = tokBuf.spelledTokenContaining(keyword);
             assert(begin->kind() == clang::tok::identifier && begin->text(srcMgr) == "module" &&
@@ -173,6 +174,14 @@ public:
     /// ============================================================================
     ///                                Declaration
     /// ============================================================================
+
+#define VISIT_DECL(type) bool Visit##type(const clang::type* decl)
+#define VISIT_STMT(type) bool Visit##type(const clang::type* stmt)
+#define VISIT_EXPR(type) bool Visit##type(const clang::type* expr)
+#define VISIT_TYPE(type) bool Visit##type(const clang::type* type)
+#define VISIT_TYPELOC(type) bool Visit##type(clang::type loc)
+
+#define TRAVERSE_DECL(type) bool Traverse##type(clang::type* decl)
 
     TRAVERSE_DECL(Decl) {
         if(!decl) {

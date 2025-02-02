@@ -1,4 +1,8 @@
-#include <Compiler/Utility.h>
+#include "Compiler/Utility.h"
+#include "clang/AST/Decl.h"
+#include "clang/AST/DeclCXX.h"
+#include "clang/AST/DeclTemplate.h"
+#include "clang/Basic/SourceManager.h"
 
 namespace clice {
 
@@ -42,8 +46,8 @@ const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
 
         auto kind = CTSD->getTemplateSpecializationKind();
         if(kind == clang::TSK_Undeclared) {
-            /// The instantiation of template is lazy, in this case, the specialization is undeclared.
-            /// Temporarily return primary template of the specialization.
+            /// The instantiation of template is lazy, in this case, the specialization is
+            /// undeclared. Temporarily return primary template of the specialization.
             /// FIXME: Is there a better way to handle such case?
             return CTSD->getSpecializedTemplate()->getTemplatedDecl();
         } else if(kind == clang::TSK_ExplicitSpecialization) {
@@ -167,9 +171,7 @@ const clang::NamedDecl* declForType(clang::QualType type) {
             return decl->getTemplatedDecl();
         }
 
-        if(llvm::isa<clang::TemplateTemplateParmDecl,
-
-                     clang::BuiltinTemplateDecl>(decl)) {
+        if(llvm::isa<clang::TemplateTemplateParmDecl, clang::BuiltinTemplateDecl>(decl)) {
             return decl;
         }
 

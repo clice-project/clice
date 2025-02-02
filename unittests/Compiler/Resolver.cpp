@@ -1,4 +1,5 @@
 #include "Test/CTest.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice::testing {
 

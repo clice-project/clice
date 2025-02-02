@@ -3,6 +3,7 @@
 #include "AST.h"
 #include "Module.h"
 #include "Preamble.h"
+#include "Support/FileSystem.h"
 
 namespace clice {
 

@@ -3,6 +3,8 @@
 #include "Directive.h"
 #include "AST/Resolver.h"
 #include "clang/Frontend/CompilerInstance.h"
+#include "clang/Frontend/FrontendActions.h"
+#include "clang/Tooling/Syntax/Tokens.h"
 
 namespace clice {
 

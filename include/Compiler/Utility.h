@@ -1,4 +1,4 @@
-#include "Clang.h"
+#include "clang/AST/Decl.h"
 
 namespace clice {
 

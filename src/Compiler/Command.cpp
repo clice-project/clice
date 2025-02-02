@@ -1,6 +1,6 @@
 #include "Compiler/Command.h"
-#include "llvm/Support/Program.h"
-#include "llvm/Support/raw_ostream.h"
+#include "Support/FileSystem.h"
+#include "Support/Format.h"
 
 namespace clice {
 

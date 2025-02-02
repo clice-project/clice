@@ -1,6 +1,7 @@
 #include <stack>
 
-#include <AST/Selection.h>
+#include "AST/Selection.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice {
 
