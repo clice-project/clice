@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Clang.h"
+#include "Compiler/Clang.h"
 
 namespace clice {
 

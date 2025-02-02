@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Compilation.h"
-#include "Resolver.h"
 #include "Utility.h"
 
+#include "AST/Resolver.h"
 #include "Basic/RelationKind.h"
 #include "Basic/SymbolKind.h"
 #include "Support/Support.h"

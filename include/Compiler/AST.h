@@ -1,8 +1,7 @@
 #pragma once
 
-#include "Resolver.h"
 #include "Directive.h"
-
+#include "AST/Resolver.h"
 #include "clang/Frontend/CompilerInstance.h"
 
 namespace clice {

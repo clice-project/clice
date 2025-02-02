@@ -1,8 +1,6 @@
-
-
 #include <stack>
 
-#include <Compiler/Selection.h>
+#include <AST/Selection.h>
 
 namespace clice {
 
@@ -19,19 +17,23 @@ public:
         auto& sm = context.getSourceManager();  // FIXME: support other file.
         auto tokens = buffer.spelledTokens(sm.getMainFileID());
 
-        left = std::to_address(std::partition_point(tokens.begin(), tokens.end(), [&](const auto& token) {
-            // int       xxxx = 3;
-            //       ^^^^^^
-            // expect to find the first token whose end location is greater than or equal to `begin`.
-            return sm.getFileOffset(token.endLocation()) < begin;
-        }));
+        left = std::to_address(
+            std::partition_point(tokens.begin(), tokens.end(), [&](const auto& token) {
+                // int       xxxx = 3;
+                //       ^^^^^^
+                // expect to find the first token whose end location is greater than or equal to
+                // `begin`.
+                return sm.getFileOffset(token.endLocation()) < begin;
+            }));
 
-        rigth = std::to_address(std::partition_point(tokens.rbegin(), tokens.rend(), [&](const auto& token) {
-            // int xxxx        = 3;
-            //      ^^^^^^
-            // expect to find the first token whose start location is less than or equal to `end`.
-            return sm.getFileOffset(token.location()) > end;
-        }));
+        rigth = std::to_address(
+            std::partition_point(tokens.rbegin(), tokens.rend(), [&](const auto& token) {
+                // int xxxx        = 3;
+                //      ^^^^^^
+                // expect to find the first token whose start location is less than or equal to
+                // `end`.
+                return sm.getFileOffset(token.location()) > end;
+            }));
 
         if(left == tokens.end() || rigth == tokens.end()) {
             std::terminate();
@@ -156,21 +158,15 @@ public:
             return Base::TraverseDecl(decl);
         }
 
-        return builder.hook(decl, [&] {
-            return Base::TraverseDecl(decl);
-        });
+        return builder.hook(decl, [&] { return Base::TraverseDecl(decl); });
     }
 
     bool TraverseStmt(clang::Stmt* stmt) {
-        return builder.hook(stmt, [&] {
-            return Base::TraverseStmt(stmt);
-        });
+        return builder.hook(stmt, [&] { return Base::TraverseStmt(stmt); });
     }
 
     bool TraverseAttr(clang::Attr* attr) {
-        return builder.hook(attr, [&] {
-            return Base::TraverseAttr(attr);
-        });
+        return builder.hook(attr, [&] { return Base::TraverseAttr(attr); });
     }
 
     /// we don't care about the node without location information, so skip them.
@@ -193,33 +189,23 @@ public:
             return TraverseTypeLoc(QTL.getUnqualifiedLoc());
         }
 
-        return builder.hook(&loc, [&] {
-            return Base::TraverseTypeLoc(loc);
-        });
+        return builder.hook(&loc, [&] { return Base::TraverseTypeLoc(loc); });
     }
 
     bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc NNS) {
-        return builder.hook(&NNS, [&] {
-            return Base::TraverseNestedNameSpecifierLoc(NNS);
-        });
+        return builder.hook(&NNS, [&] { return Base::TraverseNestedNameSpecifierLoc(NNS); });
     }
 
     bool TraverseTemplateArgumentLoc(const clang::TemplateArgumentLoc& argument) {
-        return builder.hook(&argument, [&] {
-            return Base::TraverseTemplateArgumentLoc(argument);
-        });
+        return builder.hook(&argument, [&] { return Base::TraverseTemplateArgumentLoc(argument); });
     }
 
     bool TraverseCXXBaseSpecifier(const clang::CXXBaseSpecifier& base) {
-        return builder.hook(&base, [&] {
-            return Base::TraverseCXXBaseSpecifier(base);
-        });
+        return builder.hook(&base, [&] { return Base::TraverseCXXBaseSpecifier(base); });
     }
 
     bool TraverseConstructorInitializer(clang::CXXCtorInitializer* init) {
-        return builder.hook(init, [&] {
-            return Base::TraverseConstructorInitializer(init);
-        });
+        return builder.hook(init, [&] { return Base::TraverseConstructorInitializer(init); });
     }
 
     // bool TraverseDeclarationNameInfo(clang::DeclarationNameInfo info) {

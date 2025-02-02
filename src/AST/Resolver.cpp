@@ -1,5 +1,5 @@
+#include "AST/Resolver.h"
 #include "Support/Support.h"
-#include <Compiler/Resolver.h>
 #include <clang/Sema/Template.h>
 #include <clang/Sema/TreeTransform.h>
 #include <clang/Sema/TemplateDeduction.h>
@@ -706,10 +706,10 @@ public:
         }
 
         auto NNS = TransformNestedNameSpecifierLoc(TL.getQualifierLoc()).getNestedNameSpecifier();
-        if(!NNS){
+        if(!NNS) {
             return clang::QualType();
         }
-        
+
         /// FIXME: figure out here.
         clang::TemplateArgumentListInfo info;
         using iterator = clang::TemplateArgumentLocContainerIterator<
