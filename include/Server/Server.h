@@ -1,11 +1,13 @@
 #pragma once
 
-#include "Async.h"
+
 #include "Config.h"
 #include "Indexer.h"
 #include "Protocol.h"
 #include "Database.h"
 #include "Scheduler.h"
+
+#include "Async/Async.h"
 
 namespace clice {
 

@@ -58,7 +58,7 @@ void $(2)foo() {}
         ASSERT_TRUE(bool(file));
         auto& buffer = file.get();
         auto size = buffer->getBufferSize();
-        auto base = std::malloc(size);
+        auto base = static_cast<char*>(std::malloc(size));
         std::memcpy(base, buffer->getBufferStart(), size);
         index::SymbolIndex index(base, size);
         EXPECT_EQ(json, index.toJSON());

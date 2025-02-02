@@ -47,6 +47,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -g -O0 -fsanitize=address -fsanitize=undefined -Wno-deprecated-declarations")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address -fsanitize=undefined")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address -fsanitize=undefined")
+elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -fsanitize=thread -Wno-deprecated-declarations")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fsanitize=thread -fuse-ld=lld")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=thread -fuse-ld=lld")
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -O3 -Wno-deprecated-declarations")
     if(WIN32)
@@ -65,7 +69,8 @@ else ()
 endif()
 
 # build clice core part as library
-file(GLOB_RECURSE CLICE_SOURCES 
+file(GLOB_RECURSE CLICE_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/Async/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/Basic/*.cpp" 
     "${CMAKE_SOURCE_DIR}/src/Compiler/*.cpp" 
     "${CMAKE_SOURCE_DIR}/src/Index/*.cpp" 

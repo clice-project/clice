@@ -45,7 +45,11 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
         new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()),
         true);
 
-    instance->createFileManager(params.vfs);
+    if(auto remapping = clang::createVFSFromCompilerInvocation(instance->getInvocation(),
+                                                               instance->getDiagnostics(),
+                                                               params.vfs)) {
+        instance->createFileManager(std::move(remapping));
+    }
 
     /// Add remapped files, if bounds is provided, cut off the content.
     std::size_t size = params.bound.has_value() ? params.bound.value() : params.content.size();

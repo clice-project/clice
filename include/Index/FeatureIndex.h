@@ -12,7 +12,7 @@ namespace clice::index {
 
 class FeatureIndex {
 public:
-    FeatureIndex(void* base, std::size_t size, bool own = true) :
+    FeatureIndex(char* base, std::size_t size, bool own = true) :
         base(base), size(size), own(own) {}
 
     FeatureIndex(const FeatureIndex&) = delete;
@@ -33,7 +33,7 @@ public:
     llvm::ArrayRef<feature::SemanticToken> semanticTokens() const;
 
 public:
-    void* base;
+    char* base;
     std::size_t size;
     bool own;
 };
