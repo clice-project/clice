@@ -1,9 +1,8 @@
 #include "AST/Resolver.h"
-#include "Support/Support.h"
-#include <clang/Sema/Template.h>
-#include <clang/Sema/TreeTransform.h>
-#include <clang/Sema/TemplateDeduction.h>
-#include <ranges>
+#include "Support/Format.h"
+#include "clang/Sema/Template.h"
+#include "clang/Sema/TreeTransform.h"
+#include "clang/Sema/TemplateDeduction.h"
 
 namespace clice {
 
@@ -295,22 +294,24 @@ public:
         return true;
     }
 
+    using lookup_result = clang::DeclContext::lookup_result;
+
     /// If this class and its base class have members with the same name, `DeclContext::lookup`
     /// will return multiple declarations in order from the base class to the derived class, so we
     /// use the last declaration.
-    clang::Decl* preferred(clang::lookup_result members) {
+    clang::Decl* preferred(lookup_result members) {
         clang::Decl* decl = nullptr;
         std::ranges::for_each(members, [&](auto member) { decl = member; });
         return decl;
     }
 
-    clang::lookup_result lookup(clang::QualType type, clang::DeclarationName name) {
+    lookup_result lookup(clang::QualType type, clang::DeclarationName name) {
         clang::Decl* TD = nullptr;
         llvm::ArrayRef<clang::TemplateArgument> args;
         type = TransformType(type);
 
         if(type.isNull()) {
-            return clang::lookup_result();
+            return lookup_result();
         }
 
         if(auto TST = type->getAs<clang::TemplateSpecializationType>()) {
@@ -324,7 +325,7 @@ public:
         }
 
         if(!TD) {
-            return clang::lookup_result();
+            return lookup_result();
         }
 
 #ifndef NDEBUG
@@ -342,14 +343,13 @@ public:
             }
         }
 
-        return clang::lookup_result();
+        return lookup_result();
     }
 
     /// Look up the name in the given nested name specifier.
-    clang::lookup_result lookup(const clang::NestedNameSpecifier* NNS,
-                                clang::DeclarationName name) {
+    lookup_result lookup(const clang::NestedNameSpecifier* NNS, clang::DeclarationName name) {
         if(!NNS) {
-            return clang::lookup_result();
+            return lookup_result();
         }
 
         /// Search the resolved entities first.
@@ -388,9 +388,9 @@ public:
     }
 
     /// Look up the name in the bases of the given class. Keep stack unchanged.
-    clang::lookup_result lookupInBases(clang::CXXRecordDecl* CRD, clang::DeclarationName name) {
+    lookup_result lookupInBases(clang::CXXRecordDecl* CRD, clang::DeclarationName name) {
         if(!CRD->hasDefinition()) {
-            return clang::lookup_result();
+            return lookup_result();
         }
 
         for(auto base: CRD->bases()) {
@@ -403,19 +403,19 @@ public:
             }
         }
 
-        return clang::lookup_result();
+        return lookup_result();
     }
 
     /// Look up the name in the given class template. We first search the name in the
     /// primary template, if failed, try dependent base classes, if still failed, try
     /// partial specializations. **Note that this function will be responsible for pushing
     /// the class template and its template arguments to the instantiation stack**.
-    clang::lookup_result lookup(clang::ClassTemplateDecl* CTD,
-                                clang::DeclarationName name,
-                                TemplateArguments visibleArguments) {
+    lookup_result lookup(clang::ClassTemplateDecl* CTD,
+                         clang::DeclarationName name,
+                         TemplateArguments visibleArguments) {
         llvm::SmallVector<clang::TemplateArgument, 4> arguments;
         if(!checkTemplateArguments(CTD, visibleArguments, arguments)) {
-            return clang::lookup_result();
+            return lookup_result();
         }
 
         /// Try to find the name in the partial specializations.
@@ -454,7 +454,7 @@ public:
 
         /// FIXME: try full specializations?.
 
-        return clang::lookup_result();
+        return lookup_result();
     }
 
     /// Instantiate the given type and clear the instantiation stack.
@@ -787,8 +787,8 @@ clang::QualType TemplateResolver::resugar(clang::QualType type, clang::Decl* dec
     return resugar.TransformType(type);
 }
 
-clang::lookup_result TemplateResolver::lookup(const clang::NestedNameSpecifier* NNS,
-                                              clang::DeclarationName name) {
+TemplateResolver::lookup_result TemplateResolver::lookup(const clang::NestedNameSpecifier* NNS,
+                                                         clang::DeclarationName name) {
     PseudoInstantiator instantiator(sema, resolved);
     return instantiator.lookup(NNS, name);
 }

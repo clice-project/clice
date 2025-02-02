@@ -9,34 +9,9 @@
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Tooling/Syntax/Tokens.h"
 #include "clang/Sema/Sema.h"
+#include "AST/SourceLocation.h"
 
-namespace std {
-
-template <>
-struct tuple_size<clang::SourceRange> : std::integral_constant<std::size_t, 2> {};
-
-template <>
-struct tuple_element<0, clang::SourceRange> {
-    using type = clang::SourceLocation;
-};
-
-template <>
-struct tuple_element<1, clang::SourceRange> {
-    using type = clang::SourceLocation;
-};
-
-}  // namespace std
-
-namespace clang {
-
-template <std::size_t I>
-clang::SourceLocation get(clang::SourceRange range) {
-    if constexpr(I == 0) {
-        return range.getBegin();
-    } else {
-        return range.getEnd();
-    }
-}
+namespace clice {
 
 #define VISIT_DECL(type) bool Visit##type(const clang::type* decl)
 #define VISIT_STMT(type) bool Visit##type(const clang::type* stmt)
@@ -48,4 +23,4 @@ clang::SourceLocation get(clang::SourceRange range) {
 
 using lookup_result = clang::DeclContext::lookup_result;
 
-}  // namespace clang
+}  // namespace clice
