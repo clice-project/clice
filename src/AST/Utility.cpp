@@ -1,4 +1,4 @@
-#include "Compiler/Utility.h"
+#include "AST/Utility.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclTemplate.h"

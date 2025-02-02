@@ -1,10 +1,10 @@
 #pragma once
 
+#include "Utility.h"
 #include "Resolver.h"
 #include "SymbolKind.h"
 #include "RelationKind.h"
 #include "Compiler/Compilation.h"
-#include "Compiler/Utility.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice {
@@ -17,8 +17,6 @@ public:
     SemanticVisitor(ASTInfo& info, bool mainFileOnly = false) :
         sema(info.sema()), pp(info.pp()), resolver(info.resolver()), srcMgr(info.srcMgr()),
         tokBuf(info.tokBuf()), info(info), mainFileOnly(mainFileOnly) {}
-
-public:
 
 public:
     consteval bool VisitImplicitInstantiation() {
