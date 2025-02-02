@@ -23,17 +23,19 @@ TEST(Index, FunctionParams) {
 TEST(Index, FunctionType) {
     const char* code = R"cpp(
     template <typename T>
-    struct function {};
+    struct function;
 
-    void bar(function<void(int)> f);
+    void bar(function<void(int)>& f);
 
-    void bar2(function<void(int x)> f);
+    void bar2(function<void(int x)>& f);
 )cpp";
 
     IndexTester tester("main.cpp", code);
     tester.run();
 
     auto data = tester.indices.find(tester.info->getInterestedFile())->second.toJSON();
+    /// println("{}", data);
+    /// tester.info->tu()->dump();
 
     /// TODO: add more tests, FunctionTemplate, VarTemplate, ..., Dependent Name, ..., etc.
     /// add tests for find references ..., !test symbol count.
