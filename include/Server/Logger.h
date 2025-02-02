@@ -17,7 +17,7 @@ template <typename... Args>
 void log(Level level, std::string_view fmt, Args&&... args) {
     namespace chrono = std::chrono;
     auto now = chrono::floor<chrono::milliseconds>(chrono::system_clock::now());
-    auto time = chrono::zoned_time(chrono::current_zone(), now);
+    auto time = now;  // chrono::zoned_time(chrono::current_zone(), now);
     auto tag = [&] {
         switch(level) {
             case Level::INFO: return "\033[32mINFO\033[0m";          // Green

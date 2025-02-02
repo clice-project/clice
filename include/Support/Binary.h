@@ -174,7 +174,7 @@ struct Packer {
     /// Write the object to the buffer and return the binary representation.
     template <typename Object>
     auto write(const Object& object) {
-        if constexpr(is_directly_binarizable_v<Object>) {
+        if constexpr(is_directly_binarizable_v<Object> && !refl::reflectable_struct<Object>) {
             return object;
         } else if constexpr(std::same_as<Object, std::string>) {
             auto& section = std::get<Section<char>>(layout);
@@ -194,15 +194,21 @@ struct Packer {
             section.count += size;
 
             for(std::size_t i = 0; i < size; ++i) {
-                binarify_t<V> result = write(object[i]);
-                std::memcpy(buffer + offset + i * sizeof(binarify_t<V>), &result, sizeof(result));
+                ::new (buffer + offset + i * sizeof(binarify_t<V>)) auto{write(object[i])};
             }
 
             return array<V>{offset, size};
         } else if constexpr(refl::reflectable_struct<Object>) {
-            binarify_t<Object> result = {};
-            refl::foreach(result, object, [&](auto& lhs, auto& rhs) { lhs = write(rhs); });
-            return result;
+            std::array<char, sizeof(binarify_t<Object>)> buffer;
+            std::memset(buffer.data(), 0, sizeof(buffer));
+
+            binarify_t<Object> result;
+            refl::foreach(result, object, [&](auto& lhs, auto& rhs) {
+                auto offset = reinterpret_cast<char*>(&lhs) - reinterpret_cast<char*>(&result);
+                ::new (buffer.data() + offset) auto{write(rhs)};
+            });
+
+            return buffer;
         } else {
             static_assert(dependent_false<Object>, "Unsupported type.");
         }
@@ -280,6 +286,11 @@ struct Proxy {
         return *reinterpret_cast<const underlying_type*>(data);
     }
 
+    template <std::size_t I>
+    auto get() const {
+        return Proxy<refl::member_type<T, I>>{base, &std::get<I>(value())};
+    }
+
     template <fixed_string name>
     auto get() const {
         constexpr auto& names = refl::member_names<T>();
@@ -293,12 +304,7 @@ struct Proxy {
             return names.size();
         }();
 
-        if constexpr(index != names.size()) {
-            using type = std::tuple_element_t<index, typename refl::member_types<T>::to_tuple>;
-            return Proxy<type>{base, &std::get<index>(value())};
-        } else {
-            static_assert(dependent_false<T>, "Member not found.");
-        }
+        return this->template get<index>();
     }
 
     auto as_string() const {

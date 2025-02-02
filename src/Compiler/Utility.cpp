@@ -39,10 +39,15 @@ const static clang::CXXRecordDecl* getDeclContextForTemplateInstationPattern(con
 
 const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
     if(auto CTSD = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(decl)) {
-        /// If the decl is an full specialization, return itself.
 
         auto kind = CTSD->getTemplateSpecializationKind();
-        if(kind == clang::TSK_Undeclared || kind == clang::TSK_ExplicitSpecialization) {
+        if(kind == clang::TSK_Undeclared) {
+            /// The instantiation of template is lazy, in this case, the specialization is undeclared.
+            /// Temporarily return primary template of the specialization.
+            /// FIXME: Is there a better way to handle such case?
+            return CTSD->getSpecializedTemplate()->getTemplatedDecl();
+        } else if(kind == clang::TSK_ExplicitSpecialization) {
+            /// If the decl is an full specialization, return itself.
             return CTSD;
         }
 
@@ -140,7 +145,7 @@ const clang::NamedDecl* declForType(clang::QualType type) {
     if(type.isNull()) {
         return nullptr;
     }
-    
+
     if(auto RT = type->getAs<clang::TagType>()) {
         return RT->getDecl();
     }
