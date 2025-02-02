@@ -1,5 +1,5 @@
+#include "AST/Semantic.h"
 #include "Index/Shared.h"
-#include "Compiler/Semantic.h"
 #include "Feature/SemanticTokens.h"
 
 namespace clice::feature {

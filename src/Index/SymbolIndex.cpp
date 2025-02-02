@@ -2,9 +2,9 @@
 
 #include "Index/Index.h"
 
+#include "AST/Semantic.h"
 #include "Basic/SourceCode.h"
 #include "Index/SymbolIndex.h"
-#include "Compiler/Semantic.h"
 #include "Support/Binary.h"
 
 #include "clang/Index/USRGeneration.h"

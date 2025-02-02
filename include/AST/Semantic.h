@@ -1,11 +1,10 @@
 #pragma once
 
-#include "Compilation.h"
-#include "Utility.h"
-
-#include "AST/Resolver.h"
+#include "Resolver.h"
+#include "SymbolKind.h"
 #include "Basic/RelationKind.h"
-#include "Basic/SymbolKind.h"
+#include "Compiler/Compilation.h"
+#include "Compiler/Utility.h"
 #include "Support/Support.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 
