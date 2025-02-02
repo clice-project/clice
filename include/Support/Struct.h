@@ -142,6 +142,9 @@ template <typename T>
 using member_types =
     tuple_to_list_t<decltype(Struct<T>::collect_members(std::declval<T>())), std::remove_pointer_t>;
 
+template <typename T, std::size_t I>
+using member_type = std::tuple_element_t<I, typename member_types<T>::to_tuple>;
+
 /// Specialize for aggregate class.
 template <typename T>
     requires std::is_aggregate_v<T>

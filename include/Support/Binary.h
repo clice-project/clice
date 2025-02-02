@@ -286,6 +286,11 @@ struct Proxy {
         return *reinterpret_cast<const underlying_type*>(data);
     }
 
+    template <std::size_t I>
+    auto get() const {
+        return Proxy<refl::member_type<T, I>>{base, &std::get<I>(value())};
+    }
+
     template <fixed_string name>
     auto get() const {
         constexpr auto& names = refl::member_names<T>();
@@ -299,12 +304,7 @@ struct Proxy {
             return names.size();
         }();
 
-        if constexpr(index != names.size()) {
-            using type = std::tuple_element_t<index, typename refl::member_types<T>::to_tuple>;
-            return Proxy<type>{base, &std::get<index>(value())};
-        } else {
-            static_assert(dependent_false<T>, "Member not found.");
-        }
+        return this->template get<index>();
     }
 
     auto as_string() const {

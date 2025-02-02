@@ -253,23 +253,23 @@ async::Task<> Indexer::updateIndices(this Self& self,
             .featureHash = index.featureHash,
         });
 
-        if(header->srcPath ==
-           "/home/ykiko/C++/llvm-project/build-debug-install/include/llvm/ADT/StringRef.h") {
-            if(index.symbol) {
-                auto json = index.symbol->toJSON();
-                llvm::SmallString<128> path;
-                llvm::raw_svector_ostream stream(path);
-                stream << json;
-
-                co_await async::fs::write(indices.back().path + ".json", path.data(), path.size());
-            }
-
-            // if(index.feature) {
-            //     println("{{ hash: {}, index: {} }}",
-            //             json::serialize(index.featureHash),
-            //             json::serialize(index.feature->semanticTokens()));
-            // }
-        }
+        // if(header->srcPath == "/home/ykiko/C++/clice/include/Support/JSON.h") {
+        //     if(index.symbol) {
+        //         auto json = index.symbol->toJSON();
+        //         llvm::SmallString<128> path;
+        //         llvm::raw_svector_ostream stream(path);
+        //         stream << json;
+        //
+        //        co_await async::fs::write(indices.back().path + ".json", path.data(),
+        //        path.size());
+        //    }
+        //
+        //    // if(index.feature) {
+        //    //     println("{{ hash: {}, index: {} }}",
+        //    //             json::serialize(index.featureHash),
+        //    //             json::serialize(index.feature->semanticTokens()));
+        //    // }
+        //}
 
         if(index.symbol) {
             co_await async::fs::write(indices.back().path + ".sidx",

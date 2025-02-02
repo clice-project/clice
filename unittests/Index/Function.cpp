@@ -41,6 +41,35 @@ TEST(Index, FunctionType) {
     /// add tests for find references ..., !test symbol count.
 }
 
+TEST(Index, Method) {
+    const char* code = R"cpp(
+    template <typename T, typename U>
+    struct function;
+
+    template <typename T, typename U>
+        requires (__is_same(U, int))
+    struct function<T, U> {
+        void foo();
+    };
+
+    template <typename T, typename U>
+        requires (__is_same(U, float))
+    struct function<T, U> {
+        void foo();
+    };
+)cpp";
+
+    IndexTester tester("main.cpp", code);
+    tester.run();
+
+    auto data = tester.indices.find(tester.info->getInterestedFile())->second.toJSON();
+    /// println("{}", data);
+    /// tester.info->tu()->dump();
+    
+    /// TODO: add more tests, FunctionTemplate, VarTemplate, ..., Dependent Name, ..., etc.
+    /// add tests for find references ..., !test symbol count.
+}
+
 }  // namespace
 
 }  // namespace clice::testing

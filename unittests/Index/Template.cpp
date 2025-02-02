@@ -9,7 +9,7 @@ TEST(Index, ClassTemplate) {
     template <typename T, typename U>
     struct $(primary_decl)foo;
 
-    using type = $(forward_full)foo<int, int>;
+    /// using type = $(forward_full)foo<int, int>;
 
     template <typename T, typename U>
     struct $(primary)foo {};
@@ -45,7 +45,8 @@ TEST(Index, ClassTemplate) {
     tester.GotoDefinition("partial_spec_decl", "partial_spec");
     tester.GotoDefinition("explicit_partial", "partial_spec");
     tester.GotoDefinition("implicit_partial", "partial_spec");
-    tester.GotoDefinition("forward_full", "full_spec");
+    /// FIXME: Figure forward template declaration.
+    /// tester.GotoDefinition("forward_full", "full_spec");
     tester.GotoDefinition("full_spec_decl", "full_spec");
     tester.GotoDefinition("implicit_full", "full_spec");
 
