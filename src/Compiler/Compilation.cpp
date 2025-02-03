@@ -12,7 +12,7 @@ std::unique_ptr<clang::CompilerInvocation> createInvocation(CompilationParams& p
     llvm::SmallString<1024> buffer;
     llvm::SmallVector<const char*, 16> args;
 
-    if(auto error = mangleCommand(params.command, args, buffer)) {
+    if(auto result = mangleCommand(params.command, args, buffer); !result) {
         std::terminate();
     }
 

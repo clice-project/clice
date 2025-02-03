@@ -15,8 +15,6 @@
 #include <type_traits>
 #include <system_error>
 
-#include "Support/Error.h"
-
 namespace clice::async {
 
 /// The default event loop.

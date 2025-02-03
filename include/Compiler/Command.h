@@ -1,8 +1,8 @@
 #pragma once
 
+#include <expected>
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/Support/Error.h"
 
 namespace clice {
 
@@ -14,8 +14,8 @@ namespace clice {
 /// @param command The raw shell-escaped compile command.
 /// @param out A vector to hold pointers to the processed arguments.
 /// @param buffer A storage buffer for the actual argument strings.
-llvm::Error mangleCommand(llvm::StringRef command,
-                          llvm::SmallVectorImpl<const char*>& out,
-                          llvm::SmallVectorImpl<char>& buffer);
+std::expected<void, std::string> mangleCommand(llvm::StringRef command,
+                                               llvm::SmallVectorImpl<const char*>& out,
+                                               llvm::SmallVectorImpl<char>& buffer);
 
 }  // namespace clice
