@@ -41,7 +41,7 @@ std::string scanModuleName(CompilationParams& params);
 
 /// Run the preprocessor to scan the given module unit to
 /// collect its module name and dependencies.
-llvm::Expected<ModuleInfo> scanModule(CompilationParams& params);
+std::expected<ModuleInfo, std::string> scanModule(CompilationParams& params);
 
 
 

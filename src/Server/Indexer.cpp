@@ -306,7 +306,7 @@ async::Task<> Indexer::index(this Self& self, llvm::StringRef file) {
 
     auto info = co_await async::submit([&params] { return compile(params); });
     if(!info) {
-        log::warn("Failed to compile {}: {}", file, info.takeError());
+        log::warn("Failed to compile {}: {}", file, info.error());
         co_return;
     }
 
