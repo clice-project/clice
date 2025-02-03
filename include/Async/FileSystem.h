@@ -13,17 +13,11 @@
 
 namespace clice::async {
 
-struct None {};
+template <typename T>
+using Result = std::expected<T, std::error_code>;
 
 template <typename T>
-using Result = std::conditional_t<std::is_void_v<T>,
-                                  std::expected<None, std::error_code>,
-                                  std::expected<T, std::error_code>>;
-
-template <typename T>
-using AsyncResult = std::conditional_t<std::is_void_v<T>,
-                                       Task<std::expected<None, std::error_code>>,
-                                       Task<std::expected<T, std::error_code>>>;
+using AsyncResult = Task<std::expected<T, std::error_code>>;
 
 namespace fs {
 
