@@ -8,7 +8,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/FunctionExtras.h"
 
-namespace clice::async {
+namespace clice::async::net {
 
 using Callback = llvm::unique_function<Task<void>(json::Value)>;
 
@@ -24,4 +24,5 @@ void spawn(Callback callback, llvm::StringRef path, llvm::ArrayRef<std::string> 
 /// Write a JSON value to the client.
 Task<> write(json::Value value);
 
-}  // namespace clice::async
+}  // namespace clice::async::net
+

@@ -47,9 +47,9 @@ int main(int argc, const char** argv) {
     };
 
     if(cl::pipe && cl::pipe.getValue()) {
-        async::listen(loop);
+        async::net::listen(loop);
     } else {
-        async::listen(loop, "127.0.0.1", 50051);
+        async::net::listen(loop, "127.0.0.1", 50051);
     }
 
     async::run();

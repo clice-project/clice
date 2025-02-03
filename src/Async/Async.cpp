@@ -13,7 +13,7 @@ namespace {
 /// The task queue waiting for resuming.
 std::deque<std::coroutine_handle<>> tasks;
 
-Callback callback = {};
+net::Callback callback = {};
 
 uv_stream_t* writer = {};
 
@@ -21,21 +21,6 @@ uv_stream_t* writer = {};
 bool listened = false;
 
 }  // namespace
-
-/// This function is called by the event loop to resume the tasks.
-static void event_loop(uv_idle_t* handle) {
-    if(tasks.empty()) {
-        return;
-    }
-
-    auto task = tasks.front();
-    tasks.pop_front();
-    task.resume();
-
-    if(tasks.empty() && !listened) {
-        uv_stop(loop);
-    }
-}
 
 void schedule(std::coroutine_handle<> core) {
     uv_async_t* async = new uv_async_t;
@@ -49,9 +34,6 @@ void schedule(std::coroutine_handle<> core) {
 }
 
 void run() {
-    // uv_idle_t idle;
-    // uv_idle_init(loop, &idle);
-    // uv_idle_start(&idle, event_loop);
 #ifdef _WIN32
     _putenv_s("UV_THREADPOOL_SIZE", "20");
 #else
@@ -130,6 +112,8 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 }
 
 }  // namespace
+
+namespace net {
 
 void listen(Callback callback) {
     static uv_pipe_t in;
@@ -317,5 +301,7 @@ Task<> write(json::Value value) {
 
     co_await awaiter;
 }
+
+}  // namespace net
 
 }  // namespace clice::async

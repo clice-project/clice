@@ -79,7 +79,7 @@ async::Task<> Server::onReceive(json::Value value) {
 }
 
 async::Task<> Server::request(llvm::StringRef method, json::Value params) {
-    co_await async::write(json::Object{
+    co_await async::net::write(json::Object{
         {"jsonrpc", "2.0"            },
         {"id",      id += 1          },
         {"method",  method           },
@@ -88,7 +88,7 @@ async::Task<> Server::request(llvm::StringRef method, json::Value params) {
 }
 
 async::Task<> Server::notify(llvm::StringRef method, json::Value params) {
-    co_await async::write(json::Object{
+    co_await async::net::write(json::Object{
         {"jsonrpc", "2.0"            },
         {"method",  method           },
         {"params",  std::move(params)},
@@ -96,7 +96,7 @@ async::Task<> Server::notify(llvm::StringRef method, json::Value params) {
 }
 
 async::Task<> Server::response(json::Value id, json::Value result) {
-    co_await async::write(json::Object{
+    co_await async::net::write(json::Object{
         {"jsonrpc", "2.0"            },
         {"id",      id               },
         {"result",  std::move(result)},
