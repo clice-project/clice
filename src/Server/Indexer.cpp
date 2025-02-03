@@ -3,7 +3,7 @@
 #include "Compiler/Compilation.h"
 #include "Index/SymbolIndex.h"
 #include "Index/FeatureIndex.h"
-#include "Server/Logger.h"
+#include "Support/Logger.h"
 #include "Server/Indexer.h"
 #include "Support/Assert.h"
 #include "llvm/ADT/StringRef.h"

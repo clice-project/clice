@@ -1,4 +1,4 @@
-#include "Server/Logger.h"
+#include "Support/Logger.h"
 #include "Server/Server.h"
 #include "llvm/Support/CommandLine.h"
 
@@ -49,7 +49,7 @@ int main(int argc, const char** argv) {
     if(cl::pipe && cl::pipe.getValue()) {
         async::net::listen(loop);
     } else {
-        async::net::listen(loop, "127.0.0.1", 50051);
+        async::net::listen("127.0.0.1", 50051, loop);
     }
 
     async::run();

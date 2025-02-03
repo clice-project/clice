@@ -2,7 +2,7 @@
 #include <toml++/toml.hpp>
 
 #include <Server/Config.h>
-#include <Server/Logger.h>
+#include <Support/Logger.h>
 #include <Support/Support.h>
 
 namespace clice::config {
