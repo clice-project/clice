@@ -6,6 +6,8 @@
 #include "Support/Logger.h"
 #include "Server/Indexer.h"
 #include "Support/Assert.h"
+#include "Support/Compare.h"
+
 #include "llvm/ADT/StringRef.h"
 
 namespace clice {

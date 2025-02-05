@@ -1,6 +1,5 @@
 #include "Async/Async.h"
 #include "Support/Logger.h"
-#include "Support/Support.h"
 #include "llvm/Support/CommandLine.h"
 
 using namespace clice;
