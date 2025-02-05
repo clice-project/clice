@@ -4,6 +4,7 @@
 #include <array>
 #include <string>
 #include <cstdint>
+#include <cassert>
 #include <string_view>
 #include <source_location>
 

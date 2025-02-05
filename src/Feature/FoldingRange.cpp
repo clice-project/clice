@@ -1,6 +1,7 @@
 #include "Feature/FoldingRange.h"
 #include "Compiler/Compilation.h"
 #include "Index/Shared.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 
 /// Clangd's FoldingRange Implementation:
 /// https://github.com/llvm/llvm-project/blob/main/clang-tools-extra/clangd/SemanticSelection.cpp

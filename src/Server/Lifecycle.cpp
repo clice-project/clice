@@ -1,5 +1,6 @@
 #include "Basic/SourceConverter.h"
 #include "Server/Server.h"
+#include "Support/FileSystem.h"
 
 namespace clice {
 

@@ -3,7 +3,7 @@ project(CLICE_PROJECT)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
 if(NOT DEFINED LLVM_INSTALL_PATH OR LLVM_INSTALL_PATH STREQUAL "")
     message(FATAL_ERROR "Error: The variable LLVM_INSTALL_PATH is not set. Please specify it with -DLLVM_INSTALL_PATH=<value>.")
@@ -70,6 +70,7 @@ endif()
 
 # build clice core part as library
 file(GLOB_RECURSE CLICE_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/AST/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/Async/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/Basic/*.cpp" 
     "${CMAKE_SOURCE_DIR}/src/Compiler/*.cpp" 

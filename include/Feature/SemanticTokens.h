@@ -1,7 +1,7 @@
 #pragma once
 
+#include "AST/SymbolKind.h"
 #include "Basic/Document.h"
-#include "Basic/SymbolKind.h"
 #include "Basic/SourceCode.h"
 #include "Basic/SourceConverter.h"
 #include "Index/Shared.h"

@@ -96,7 +96,7 @@ std::string scanModuleName(CompilationParams& params) {
     return info->name;
 }
 
-llvm::Expected<ModuleInfo> scanModule(CompilationParams& params) {
+std::expected<ModuleInfo, std::string> scanModule(CompilationParams& params) {
     struct ModuleCollector : public clang::PPCallbacks {
         ModuleInfo& info;
 
@@ -115,7 +115,7 @@ llvm::Expected<ModuleInfo> scanModule(CompilationParams& params) {
     auto instance = impl::createInstance(params);
 
     if(!action.BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
-        return error("Failed to begin source file");
+        return std::unexpected("Failed to begin source file");
     }
 
     auto& pp = instance->getPreprocessor();
@@ -123,7 +123,7 @@ llvm::Expected<ModuleInfo> scanModule(CompilationParams& params) {
     pp.addPPCallbacks(std::make_unique<ModuleCollector>(info));
 
     if(auto error = action.Execute()) {
-        return error;
+        return std::unexpected(std::format("{}", error));
     }
 
     if(pp.isInNamedModule()) {

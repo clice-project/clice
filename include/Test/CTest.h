@@ -1,10 +1,7 @@
 #pragma once
 
 #include "Test.h"
-#include "Basic/Location.h"
 #include "Compiler/Compilation.h"
-#include "Support/Support.h"
-#include <llvm/ADT/StringRef.h>
 
 namespace clice::testing {
 
