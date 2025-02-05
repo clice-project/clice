@@ -1,13 +1,12 @@
 #include <numeric>
 
-#include "Index/Index.h"
-
 #include "AST/Semantic.h"
 #include "Basic/SourceCode.h"
+#include "Index/Index.h"
 #include "Index/SymbolIndex.h"
+#include "Index/USR.h"
 #include "Support/Binary.h"
 #include "Support/Compare.h"
-#include "clang/Index/USRGeneration.h"
 
 namespace clice::index {
 
@@ -47,9 +46,9 @@ public:
         if(isMacro) {
             auto def = static_cast<const clang::MacroInfo*>(symbol);
             auto name = getTokenSpelling(srcMgr, def->getDefinitionLoc());
-            clang::index::generateUSRForMacro(name, def->getDefinitionLoc(), srcMgr, USR);
+            generateUSRForMacro(name, def->getDefinitionLoc(), srcMgr, USR);
         } else {
-            clang::index::generateUSRForDecl(static_cast<const clang::Decl*>(symbol), USR);
+            generateUSRForDecl(static_cast<const clang::Decl*>(symbol), USR);
         }
 
         assert(!USR.empty() && "Invalid USR");
