@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Support/Format.h"
-#include "Support/FileSystem.h"
+#include "Format.h"
+#include "FileSystem.h"
 
 namespace clice::log {
 

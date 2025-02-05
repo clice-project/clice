@@ -3,9 +3,11 @@
 #include "Compiler/Compilation.h"
 #include "Index/SymbolIndex.h"
 #include "Index/FeatureIndex.h"
-#include "Server/Logger.h"
+#include "Support/Logger.h"
 #include "Server/Indexer.h"
 #include "Support/Assert.h"
+#include "Support/Compare.h"
+
 #include "llvm/ADT/StringRef.h"
 
 namespace clice {
@@ -306,7 +308,7 @@ async::Task<> Indexer::index(this Self& self, llvm::StringRef file) {
 
     auto info = co_await async::submit([&params] { return compile(params); });
     if(!info) {
-        log::warn("Failed to compile {}: {}", file, info.takeError());
+        log::warn("Failed to compile {}: {}", file, info.error());
         co_return;
     }
 

@@ -8,7 +8,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/FunctionExtras.h"
 
-namespace clice::async {
+namespace clice::async::net {
 
 using Callback = llvm::unique_function<Task<void>(json::Value)>;
 
@@ -16,12 +16,13 @@ using Callback = llvm::unique_function<Task<void>(json::Value)>;
 void listen(Callback callback);
 
 /// Listen on the given ip and port, callback is called when there is a LSP message available.
-void listen(Callback callback, const char* ip, unsigned int port);
+void listen(const char* ip, unsigned int port, Callback callback);
 
 /// Spawn a new process and listen on its stdin/stdout.
-void spawn(Callback callback, llvm::StringRef path, llvm::ArrayRef<std::string> args);
+void spawn(llvm::StringRef path, llvm::ArrayRef<std::string> args, Callback callback);
 
 /// Write a JSON value to the client.
 Task<> write(json::Value value);
 
-}  // namespace clice::async
+}  // namespace clice::async::net
+

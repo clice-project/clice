@@ -1,6 +1,8 @@
 #pragma once
 
-#include "Clang.h"
+#include <deque>
+#include "clang/AST/ASTTypeTraits.h"
+#include "clang/Tooling/Syntax/Tokens.h"
 
 namespace clice {
 

@@ -1,5 +1,5 @@
 #include "Test/Test.h"
-#include "Compiler/Semantic.h"
+#include "AST/Semantic.h"
 
 namespace clice::testing {
 

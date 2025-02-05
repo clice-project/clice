@@ -1,7 +1,6 @@
 #include "Test/Test.h"
-#include "llvm/Support/CommandLine.h"
 #include "llvm/ADT/SmallString.h"
-#include "Support/Support.h"
+#include "llvm/Support/CommandLine.h"
 
 namespace clice {
 

@@ -1,6 +1,13 @@
 #pragma once
 
-#include "Clang.h"
+#include "clang/AST/Type.h"
+#include "clang/AST/ExprCXX.h"
+
+namespace clang {
+
+class Sema;
+
+}
 
 namespace clice {
 
@@ -16,9 +23,9 @@ public:
 
     clang::QualType resolve(clang::QualType type);
 
-    clang::ExprResult resolve(clang::CXXUnresolvedConstructExpr* expr);
+    void resolve(clang::CXXUnresolvedConstructExpr* expr);
 
-    clang::ExprResult resolve(clang::UnresolvedLookupExpr* expr);
+    void resolve(clang::UnresolvedLookupExpr* expr);
 
     // TODO: use a relative clear way to resolve `UnresolvedLookupExpr`.
 
@@ -28,46 +35,48 @@ public:
     /// `decl` should be the declaration that the type is in.
     clang::QualType resugar(clang::QualType type, clang::Decl* decl);
 
+    using lookup_result = clang::DeclContext::lookup_result;
+
     /// Look up the name in the given nested name specifier.
-    clang::lookup_result lookup(const clang::NestedNameSpecifier* NNS, clang::DeclarationName name);
+    lookup_result lookup(const clang::NestedNameSpecifier* NNS, clang::DeclarationName name);
 
-    clang::lookup_result lookup(const clang::DependentNameType* type) {
+    lookup_result lookup(const clang::DependentNameType* type) {
         return lookup(type->getQualifier(), type->getIdentifier());
     }
 
-    clang::lookup_result lookup(const clang::DependentTemplateSpecializationType* type) {
+    lookup_result lookup(const clang::DependentTemplateSpecializationType* type) {
         return lookup(type->getQualifier(), type->getIdentifier());
     }
 
-    clang::lookup_result lookup(const clang::DependentScopeDeclRefExpr* expr) {
+    lookup_result lookup(const clang::DependentScopeDeclRefExpr* expr) {
         return lookup(expr->getQualifier(), expr->getNameInfo().getName());
     }
 
-    clang::lookup_result lookup(const clang::UnresolvedLookupExpr* expr) {
-        /// FIXME: 
+    lookup_result lookup(const clang::UnresolvedLookupExpr* expr) {
+        /// FIXME:
         for(auto decl: expr->decls()) {
             if(auto TD = llvm::dyn_cast<clang::TemplateDecl>(decl)) {
-                return clang::lookup_result(TD);
+                return lookup_result(TD);
             }
         }
 
         return {};
     }
 
-    clang::lookup_result lookup(const clang::UnresolvedMemberExpr* expr) {
+    lookup_result lookup(const clang::UnresolvedMemberExpr* expr) {
         return {};
     }
 
     /// TODO:
-    clang::lookup_result lookup(clang::CXXDependentScopeMemberExpr* expr) {
+    lookup_result lookup(clang::CXXDependentScopeMemberExpr* expr) {
         return {};
     }
 
-    clang::lookup_result lookup(const clang::UnresolvedUsingValueDecl* decl) {
+    lookup_result lookup(const clang::UnresolvedUsingValueDecl* decl) {
         return lookup(decl->getQualifier(), decl->getDeclName());
     }
 
-    clang::lookup_result resolve(const clang::UnresolvedUsingTypenameDecl* decl) {
+    lookup_result resolve(const clang::UnresolvedUsingTypenameDecl* decl) {
         return lookup(decl->getQualifier(), decl->getDeclName());
     }
 

@@ -2,9 +2,9 @@
 
 #include "Shared.h"
 #include "ArrayView.h"
+#include "AST/SymbolKind.h"
+#include "AST/RelationKind.h"
 #include "Basic/SourceCode.h"
-#include "Basic/SymbolKind.h"
-#include "Basic/RelationKind.h"
 #include "Support/JSON.h"
 
 namespace clice {

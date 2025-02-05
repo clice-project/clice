@@ -2,8 +2,12 @@
 
 #include "gtest/gtest.h"
 #include "Basic/Location.h"
+#include "Support/JSON.h"
+#include "Support/Format.h"
+#include "Support/Compare.h"
+#include "Support/FileSystem.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringMap.h"
-#include "Support/Support.h"
 
 namespace clice::testing {
 

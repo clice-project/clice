@@ -1,6 +1,5 @@
 #include "Async/Async.h"
-#include "Server/Logger.h"
-#include "Support/Support.h"
+#include "Support/Logger.h"
 #include "llvm/Support/CommandLine.h"
 
 using namespace clice;
@@ -37,7 +36,7 @@ async::Task<int> request(llvm::StringRef dir, llvm::StringRef file, llvm::String
 
     log::info("Send Request: {0}", method);
 
-    co_await async::write(std::move(request));
+    co_await async::net::write(std::move(request));
 
     co_return 1;
 }
@@ -46,13 +45,12 @@ int main(int argc, const char** argv) {
     llvm::cl::SetVersionPrinter([](llvm::raw_ostream& os) { os << "clice version: 0.0.1\n"; });
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice language server");
 
-    async::spawn(
-        [](json::Value value) -> async::Task<> {
-            print("Receive: {0}", value);
-            co_return;
-        },
-        cl::execute.getValue(),
-        {"--pipe=true", "--config=/home/ykiko/C++/clice2/docs/clice.toml"});
+    async::net::spawn(cl::execute.getValue(),
+                      {"--pipe=true", "--config=/home/ykiko/C++/clice2/docs/clice.toml"},
+                      [](json::Value value) -> async::Task<> {
+                          print("Receive: {0}", value);
+                          co_return;
+                      });
 
     auto p = request("initialize", "input.json", "initialize");
     async::run(p);

@@ -1,6 +1,7 @@
 #include "Basic/SourceConverter.h"
 #include "Compiler/Compilation.h"
 #include "Feature/InlayHint.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice {
 

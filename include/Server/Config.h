@@ -1,6 +1,9 @@
 #pragma once
 
-#include "Support/Support.h"
+#include <vector>
+
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringRef.h"
 
 namespace clice::config {
 

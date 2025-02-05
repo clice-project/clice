@@ -53,7 +53,7 @@ struct fs {
         if constexpr(!std::is_void_v<Ret>) {
             return static_cast<Derived*>(this)->result();
         } else {
-            return None();
+            return Result<void>();
         }
     }
 };
@@ -226,7 +226,7 @@ AsyncResult<void> write(std::string path, char* buffer, std::size_t size, Mode m
         co_return std::unexpected(result.error());
     }
 
-    co_return None();
+    co_return Result<void>();
 }
 
 AsyncResult<Stats> stat(std::string path) {

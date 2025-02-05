@@ -1,8 +1,8 @@
 #pragma once
 
-#include "llvm/ADT/FunctionExtras.h"
+#include "AST/SourceLocation.h"
 #include "clang/Lex/Token.h"
-#include "clang/Basic/SourceLocation.h"
+#include "llvm/ADT/FunctionExtras.h"
 
 namespace clice {
 

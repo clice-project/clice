@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Async/Async.h"
 #include "Config.h"
 #include "Database.h"
 #include "Protocol.h"
-#include "Basic/RelationKind.h"
+#include "Async/Async.h"
+#include "AST/RelationKind.h"
 
 #include "llvm/ADT/DenseSet.h"
 
