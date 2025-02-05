@@ -181,6 +181,13 @@ public:
             return true;
         }
 
+        /// Skip implicit instantiation of template.
+        if(auto VD = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl)) {
+            if(VD->getSpecializationKind() == clang::TSK_ImplicitInstantiation) {
+                return true;
+            }
+        }
+
         decls.push_back(decl);
         auto result = Base::TraverseDecl(decl);
         decls.pop_back();
