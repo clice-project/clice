@@ -1,6 +1,7 @@
 #pragma once
 
-#include "ADT.h"
+#include <vector>
+
 #include "Enum.h"
 #include "Struct.h"
 
