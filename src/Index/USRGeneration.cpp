@@ -44,6 +44,19 @@ static StringRef GetExternalSourceContainer(const NamedDecl* D) {
     return StringRef();
 }
 
+static void appendAssociatedConstraints(auto* TmplDecl, llvm::raw_ostream& Out) {
+    if(TmplDecl->hasAssociatedConstraints()) {
+        Out << ":AC";
+        ODRHash Hash;
+        llvm::SmallVector<const Expr*> ac;
+        TmplDecl->getAssociatedConstraints(ac);
+        for(const Expr* E: ac) {
+            Hash.AddStmt(E);
+        }
+        Out << Hash.CalculateHash();
+    }
+};
+
 namespace {
 class USRGenerator : public ConstDeclVisitor<USRGenerator> {
     SmallVectorImpl<char>& Buf;
@@ -199,6 +212,7 @@ void USRGenerator::VisitFunctionDecl(const FunctionDecl* D) {
         IsTemplate = true;
         Out << "@FT@";
         VisitTemplateParameterList(FunTmpl->getTemplateParameters());
+        appendAssociatedConstraints(FunTmpl, Out);
     } else
         Out << "@F@";
 
@@ -287,10 +301,12 @@ void USRGenerator::VisitVarDecl(const VarDecl* D) {
     if(VarTemplateDecl* VarTmpl = D->getDescribedVarTemplate()) {
         Out << "@VT";
         VisitTemplateParameterList(VarTmpl->getTemplateParameters());
+        appendAssociatedConstraints(VarTmpl, Out);
     } else if(const VarTemplatePartialSpecializationDecl* PartialSpec =
                   dyn_cast<VarTemplatePartialSpecializationDecl>(D)) {
         Out << "@VP";
         VisitTemplateParameterList(PartialSpec->getTemplateParameters());
+        appendAssociatedConstraints(PartialSpec, Out);
     }
 
     // Variables always have simple names.
@@ -387,6 +403,7 @@ void USRGenerator::VisitTagDecl(const TagDecl* D) {
                 case TagTypeKind::Enum: llvm_unreachable("enum template");
             }
             VisitTemplateParameterList(ClassTmpl->getTemplateParameters());
+            appendAssociatedConstraints(ClassTmpl, Out);
         } else if(const ClassTemplatePartialSpecializationDecl* PartialSpec =
                       dyn_cast<ClassTemplatePartialSpecializationDecl>(CXXRecord)) {
             AlreadyStarted = true;
@@ -399,6 +416,7 @@ void USRGenerator::VisitTagDecl(const TagDecl* D) {
                 case TagTypeKind::Enum: llvm_unreachable("enum partial specialization");
             }
             VisitTemplateParameterList(PartialSpec->getTemplateParameters());
+            appendAssociatedConstraints(PartialSpec, Out);
         }
     }
 
@@ -753,10 +771,19 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
     for(TemplateParameterList::const_iterator P = Params->begin(), PEnd = Params->end(); P != PEnd;
         ++P) {
         Out << '#';
-        if(isa<TemplateTypeParmDecl>(*P)) {
-            if(cast<TemplateTypeParmDecl>(*P)->isParameterPack())
+        if(auto p = dyn_cast<TemplateTypeParmDecl>(*P)) {
+            if(p->isParameterPack())
                 Out << 'p';
             Out << 'T';
+            if(p->hasTypeConstraint()) {
+                // We need hash the constraint here because for template template parameters.
+                // For template class and template function, the constraint is already included
+                // in the AssociatedConstraints.
+                Out << ":TC";
+                ODRHash Hash{};
+                Hash.AddStmt(p->getTypeConstraint()->getImmediatelyDeclaredConstraint());
+                Out << Hash.CalculateHash();
+            }
             continue;
         }
 
@@ -805,9 +832,13 @@ void USRGenerator::VisitTemplateArgument(const TemplateArgument& Arg) {
             VisitTemplateName(Arg.getAsTemplateOrTemplatePattern());
             break;
 
-        case TemplateArgument::Expression:
-            // FIXME: Visit expressions.
+        case TemplateArgument::Expression: {
+            Out << 'E';
+            ODRHash Hash{};
+            Hash.AddStmt(Arg.getAsExpr());
+            Out << Hash.CalculateHash();
             break;
+        }
 
         case TemplateArgument::Pack:
             Out << 'p' << Arg.pack_size();
