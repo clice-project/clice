@@ -1,5 +1,7 @@
 #include "Feature/FoldingRange.h"
 #include "Compiler/Compilation.h"
+#include "Index/Shared.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 
 /// Clangd's FoldingRange Implementation:
 /// https://github.com/llvm/llvm-project/blob/main/clang-tools-extra/clangd/SemanticSelection.cpp
@@ -11,22 +13,28 @@ namespace {
 struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCollector> {
 
     using Base = clang::RecursiveASTVisitor<FoldingRangeCollector>;
+    using Storage = index::Shared<feature::folding_range::Result>;
 
     /// The converter used to adapt LSP protocol.
     const SourceConverter& cvtr;
 
     /// The source manager of given AST.
-    clang::SourceManager& src;
+    const clang::SourceManager& src;
 
     /// Token buffer of given AST.
-    clang::syntax::TokenBuffer& tkbuf;
+    const clang::syntax::TokenBuffer& tkbuf;
 
     /// The result of folding ranges.
-    proto::FoldingRangeResult result;
+    Storage result;
+
+    /// True if only main file is involved.
+    const bool onlyMain;
+
+    const clang::FileID mainFileID;
 
     /// Do not produce folding ranges if either range ends is not within the main file.
     bool needFilter(clang::SourceLocation loc) {
-        return loc.isInvalid() || !src.isInMainFile(loc);
+        return loc.isInvalid() || (onlyMain && !src.isInMainFile(loc));
     }
 
     /// Get last column of previous line of a location.
@@ -46,12 +54,9 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
         if(startLine >= endLine)
             return;
 
-        auto range = cvtr.toRange(sr, src);
-        result.push_back({
-            .startLine = range.start.line,
-            .endLine = range.end.line,
-            .startCharacter = range.start.character,
-            .endCharacter = range.end.character,
+        auto& state = onlyMain ? result[mainFileID] : result[src.getFileID(sr.getBegin())];
+        state.push_back({
+            .range = cvtr.toLocalRange(sr, src),
             .kind = kind,
         });
     }
@@ -302,6 +307,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
                 continue;
 
             collectConditionMacro(dirc.conditions);
+            collectPragmaRegion(dirc.pragmas);
 
             /// TODO:
             /// Collect multiline include statement.
@@ -313,7 +319,7 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
 
         // All condition directives have been stored in `conds` variable, ordered by presumed line
         // number increasement, so use a stack to handle the branch structure.
-        llvm::SmallVector<Condition, 8> stack = {};
+        llvm::SmallVector<const Condition*> stack = {};
 
         for(auto& cond: conds) {
             switch(cond.kind) {
@@ -322,24 +328,24 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
                 case Condition::BranchKind::Ifndef:
                 case Condition::BranchKind::Elif:
                 case Condition::BranchKind::Elifndef: {
-                    stack.push_back(cond);
+                    stack.push_back(&cond);
                     break;
                 }
 
                 case Condition::BranchKind::Else: {
                     if(!stack.empty()) {
                         auto last = stack.pop_back_val();
-                        collect({last.loc, prevLineLastColOf(cond.loc)});
+                        collect({last->loc, prevLineLastColOf(cond.loc)});
                     }
 
-                    stack.push_back(cond);
+                    stack.push_back(&cond);
                     break;
                 }
 
                 case Condition::BranchKind::EndIf: {
                     if(!stack.empty()) {
                         auto last = stack.pop_back_val();
-                        collect({last.loc, prevLineLastColOf(cond.loc)});
+                        collect({last->loc, prevLineLastColOf(cond.loc)});
                     }
                     break;
                 }
@@ -348,25 +354,57 @@ struct FoldingRangeCollector : public clang::RecursiveASTVisitor<FoldingRangeCol
             }
         }
     }
+
+    /// Collect all condition macro's block as folding range.
+    void collectPragmaRegion(const std::vector<Pragma>& pragmas) {
+        auto lastLocOfLine = [this](clang::SourceLocation loc) {
+            return src.translateLineCol(src.getMainFileID(),
+                                        src.getPresumedLineNumber(loc),
+                                        std::numeric_limits<unsigned>::max());
+        };
+
+        llvm::SmallVector<const Pragma*> stack = {};
+        for(auto& pragma: pragmas) {
+            switch(pragma.kind) {
+                case Pragma::Kind::Region: stack.push_back(&pragma); break;
+                case Pragma::Kind::EndRegion:
+                    if(!stack.empty()) {
+                        auto last = stack.pop_back_val();
+                        collect({lastLocOfLine(last->loc), prevLineLastColOf(pragma.loc)});
+                    }
+                    break;
+                default: break;
+            }
+        }
+
+        // If there is some region without end pragma, use the end of file as the end region.
+        if(!stack.empty()) {
+            auto eof = src.getLocForEndOfFile(src.getMainFileID());
+            while(!stack.empty()) {
+                auto last = stack.pop_back_val();
+                collect({lastLocOfLine(last->loc), eof});
+            }
+        }
+    }
 };
 
 }  // namespace
 
-namespace feature {
+namespace feature::folding_range {
 
-json::Value foldingRangeCapability(json::Value foldingRangeClientCapabilities) {
+json::Value capability(json::Value clientCapabilities) {
     // Always return empty object.
     // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_foldingRange
     return {};
 }
 
-proto::FoldingRangeResult foldingRange(FoldingRangeParams& _, ASTInfo& info,
-                                       const SourceConverter& converter) {
-
+index::Shared<Result> foldingRange(ASTInfo& info, const SourceConverter& converter) {
     FoldingRangeCollector collector{
         .cvtr = converter,
         .src = info.srcMgr(),
         .tkbuf = info.tokBuf(),
+        .result = FoldingRangeCollector::Storage{},
+        .onlyMain = false,
     };
 
     collector.collectDrectives(info.directives());
@@ -375,6 +413,43 @@ proto::FoldingRangeResult foldingRange(FoldingRangeParams& _, ASTInfo& info,
     return std::move(collector.result);
 }
 
-}  // namespace feature
+Result foldingRange(FoldingRangeParams& _, ASTInfo& info, const SourceConverter& converter) {
+    FoldingRangeCollector collector{
+        .cvtr = converter,
+        .src = info.srcMgr(),
+        .tkbuf = info.tokBuf(),
+        .result = FoldingRangeCollector::Storage{},
+        .onlyMain = true,
+        .mainFileID = info.srcMgr().getMainFileID(),
+    };
+    collector.result.reserve(1);
+
+    collector.collectDrectives(info.directives());
+    collector.TraverseTranslationUnitDecl(info.tu());
+
+    return std::move(collector.result[collector.mainFileID]);
+}
+
+proto::FoldingRangeResult toLspResult(llvm::ArrayRef<FoldingRange> ranges, llvm::StringRef content,
+                                      const SourceConverter& SC) {
+    proto::FoldingRangeResult results;
+    results.reserve(ranges.size());
+
+    for(auto& range: ranges) {
+        auto lspRange = SC.toRange(range.range, content);
+        results.push_back({
+            .startLine = lspRange.start.line,
+            .endLine = lspRange.end.line,
+            .startCharacter = lspRange.start.character,
+            .endCharacter = lspRange.end.character,
+            .kind = range.kind,
+        });
+    }
+
+    results.shrink_to_fit();
+    return results;
+}
+
+}  // namespace feature::folding_range
 
 }  // namespace clice

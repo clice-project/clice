@@ -2,6 +2,21 @@
 
 namespace clice {
 
+const llvm::DenseSet<clang::FileID>& ASTInfo::files() {
+    if(allFiles.empty()) {
+        /// FIXME: handle preamble and embed file id.
+        for(auto& [fid, diretive]: directives()) {
+            for(auto& include: diretive.includes) {
+                if(include.fid.isValid()) {
+                    allFiles.insert(include.fid);
+                }
+            }
+        }
+        allFiles.insert(srcMgr().getMainFileID());
+    }
+    return allFiles;
+}
+
 std::vector<std::string> ASTInfo::deps() {
     llvm::StringSet<> deps;
 

@@ -1,7 +1,7 @@
-#include <Support/Support.h>
-#include <Compiler/Directive.h>
-#include <clang/Lex/MacroInfo.h>
-#include <clang/Lex/MacroArgs.h>
+#include "Compiler/Directive.h"
+#include "clang/Lex/MacroInfo.h"
+#include "clang/Lex/MacroArgs.h"
+#include "clang/Lex/Preprocessor.h"
 
 namespace clice {
 
@@ -60,8 +60,13 @@ struct PPCallback : public clang::PPCallbacks {
     }
 
     void addMacro(const clang::MacroInfo* def, MacroRef::Kind kind, clang::SourceLocation loc) {
+        if(def->isBuiltinMacro()) {
+            return;
+        }
+
         if(PP.getSourceManager().isWrittenInBuiltinFile(loc) ||
-           PP.getSourceManager().isWrittenInCommandLineFile(loc)) {
+           PP.getSourceManager().isWrittenInCommandLineFile(loc) ||
+           PP.getSourceManager().isWrittenInScratchSpace(loc)) {
             return;
         }
 
@@ -114,7 +119,27 @@ struct PPCallback : public clang::PPCallbacks {
     }
 
     void PragmaDirective(clang::SourceLocation Loc,
-                         clang::PragmaIntroducerKind Introducer) override {}
+                         clang::PragmaIntroducerKind Introducer) override {
+        // Ignore other cases except starts with `#pragma`.
+        if(Introducer != clang::PragmaIntroducerKind::PIK_HashPragma)
+            return;
+
+        clang::FileID fid = SM.getFileID(Loc);
+
+        llvm::StringRef textToEnd = SM.getBufferData(fid).substr(SM.getFileOffset(Loc));
+        llvm::StringRef thatLine = textToEnd.take_until([](char ch) { return ch == '\n'; });
+
+        Pragma::Kind kind = thatLine.contains("endregion") ? Pragma::EndRegion
+                            : thatLine.contains("region")  ? Pragma::Region
+                                                           : Pragma::Other;
+
+        auto& directive = directives[fid];
+        directive.pragmas.emplace_back(Pragma{
+            thatLine,
+            kind,
+            Loc,
+        });
+    }
 
     void If(clang::SourceLocation loc,
             clang::SourceRange conditionRange,

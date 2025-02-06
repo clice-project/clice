@@ -1,7 +1,8 @@
 #pragma once
 
-#include "Clang.h"
 #include "Basic/Document.h"
+
+#include <clang/Basic/Diagnostic.h>
 
 namespace clice {
 namespace proto {

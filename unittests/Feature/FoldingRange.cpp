@@ -5,31 +5,43 @@ namespace clice::testing {
 
 namespace {
 
+using namespace clice::feature::folding_range;
+
 struct FoldingRange : public ::testing::Test {
     std::optional<Tester> tester;
-    proto::FoldingRangeResult result;
+    Result result;
 
-    void run(llvm::StringRef code) {
-        tester.emplace("main.cpp", code);
+    void run(llvm::StringRef source) {
+        tester.emplace("main.cpp", source);
+
         tester->run();
         auto& info = tester->info;
 
         FoldingRangeParams param;
         SourceConverter converter;
-        result = feature::foldingRange(param, *info, converter);
+        result = foldingRange(param, *info, converter);
     }
 
-    void EXPECT_RANGE(std::size_t index,
-                      llvm::StringRef begin,
-                      llvm::StringRef end,
+    index::Shared<Result> runWithHeader(llvm::StringRef source, llvm::StringRef header) {
+        tester.emplace("main.cpp", source);
+        tester->addFile(path::join(".", "header.h"), header);
+        tester->run();
+        auto& info = tester->info;
+
+        FoldingRangeParams param;
+        SourceConverter converter;
+        return foldingRange(*info, converter);
+    }
+
+    void EXPECT_RANGE(std::size_t index, llvm::StringRef begin, llvm::StringRef end,
                       std::source_location current = std::source_location::current()) {
         auto& folding = result[index];
-        EXPECT_EQ(tester->pos(begin),
-                  proto::Position{folding.startLine, folding.startCharacter},
-                  current);
-        EXPECT_EQ(tester->pos(end),
-                  proto::Position{folding.endLine, folding.endCharacter},
-                  current);
+
+        auto begOff = tester->offset(begin);
+        EXPECT_EQ(begOff, folding.range.begin);
+
+        auto endOff = tester->offset(end);
+        EXPECT_EQ(endOff, folding.range.end);
     }
 };
 
@@ -370,6 +382,68 @@ $(2)
     EXPECT_RANGE(0, "1", "2");
     EXPECT_RANGE(1, "5", "6");
     EXPECT_RANGE(2, "3", "4");
+}
+
+TEST_F(FoldingRange, PragmaRegion) {
+    run(R"cpp(
+#pragma region level1 $(1)
+    #pragma region level2 $(2)
+        #pragma region level3 $(3)
+
+        //$(4)
+        #pragma endregion level3
+
+    //$(5)
+    #pragma endregion level2
+
+//$(6)
+#pragma endregion level1
+
+#pragma endregion   // mismatch region, skipeed
+
+// broken region, use the end of file as endregion
+#pragma region $(7)
+
+$(eof))cpp");
+
+    EXPECT_EQ(result.size(), 4);
+    EXPECT_RANGE(0, "3", "4");
+    EXPECT_RANGE(1, "2", "5");
+    EXPECT_RANGE(2, "1", "6");
+    EXPECT_RANGE(3, "7", "eof");
+}
+
+TEST_F(FoldingRange, WithHeader) {
+    auto header = R"cpp(
+namespace _1 {
+
+namespace _2 {
+
+}
+
+}
+)cpp";
+
+    auto source = R"cpp(
+#include "header.h"
+
+int main() {$(3)
+
+$(4)
+}
+)cpp";
+
+    auto full = runWithHeader(source, header);
+    EXPECT_EQ(full.size(), 2);
+
+    auto mainID = tester->info->srcMgr().getMainFileID();
+    for(auto& [id, result]: full) {
+        if(id == mainID) {
+            EXPECT_EQ(result.size(), 1);
+        } else {
+            EXPECT_EQ(result.size(), 2);
+        }
+    }
 }
 
 }  // namespace

@@ -34,11 +34,11 @@ add_rules("clice_build_config")
 target("clice-core")
     set_kind("$(kind)")
     add_files("src/**.cpp|Driver/*.cpp")
-    set_pcxxheader("include/Compiler/Clang.h")
     add_includedirs("include", {public = true})
 
     add_packages("libuv", {public = true})
     add_packages("toml++", {public = true})
+    add_defines("CLANG_BUILD_STATIC", {public = true})
     if is_mode("debug") then 
         add_packages("llvm", {
             public = true, 

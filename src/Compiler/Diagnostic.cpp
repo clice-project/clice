@@ -1,11 +1,11 @@
-#include <Support/Support.h>
-#include <Compiler/Diagnostic.h>
+#include "Compiler/Diagnostic.h"
 
+#include <clang/AST/Type.h>
+#include <clang/AST/Decl.h>
+#include <clang/AST/DeclCXX.h>
 #include <clang/Basic/DiagnosticIDs.h>
 #include <clang/Basic/AllDiagnostics.h>
-#include <clang/Basic/SourceLocation.h>
-
-// #include <spdlog/fmt/bundled/color.h>
+#include <clang/Lex/Preprocessor.h>
 
 namespace clice {
 

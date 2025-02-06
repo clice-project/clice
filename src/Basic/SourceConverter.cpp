@@ -1,9 +1,9 @@
 #include "Basic/Location.h"
 #include "Basic/SourceCode.h"
 #include "Basic/SourceConverter.h"
-#include "Support/Support.h"
-
+#include "Support/FileSystem.h"
 #include "clang/Basic/SourceManager.h"
+#include "llvm/ADT/StringExtras.h"
 
 namespace clice {
 
@@ -136,9 +136,24 @@ proto::Range SourceConverter::toRange(clang::SourceRange range,
 
     auto [fileID, offset] = SM.getDecomposedSpellingLoc(end);
     auto content = getFileContent(SM, fileID);
-    return proto::Range{
+    return {
         toPosition(begin, SM),
         toPosition(content, offset + getTokenLength(SM, end)),
+    };
+}
+
+proto::Range SourceConverter::toRange(LocalSourceRange range, llvm::StringRef conent) const {
+    return {
+        .start = toPosition(conent, range.begin),
+        .end = toPosition(conent, range.end),
+    };
+}
+
+LocalSourceRange SourceConverter::toLocalRange(clang::SourceRange range,
+                                               const clang::SourceManager& SM) const {
+    return {
+        .begin = SM.getDecomposedLoc(range.getBegin()).second,
+        .end = SM.getDecomposedLoc(range.getEnd()).second,
     };
 }
 

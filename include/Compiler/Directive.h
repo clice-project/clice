@@ -1,6 +1,8 @@
 #pragma once
 
-#include "Clang.h"
+#include "AST/SourceLocation.h"
+#include "clang/Lex/MacroInfo.h"
+#include "llvm/ADT/DenseMap.h"
 
 namespace clice {
 
@@ -81,8 +83,30 @@ struct MacroRef {
     clang::SourceLocation loc;
 };
 
-/// Do we need to store pragma information?
-struct Pragma {};
+/// Information about `#pragma` directive.
+struct Pragma {
+    enum class Kind : uint8_t {
+        Region,
+        EndRegion,
+
+        // Other unused cases in clice, For example: `#pragma once`.
+        Other,
+    };
+
+    using enum Kind;
+
+    /// The pragma text in that line, for example:
+    ///     "#pragma region"
+    ///     "#pragma once"
+    ///     "#pragma GCC error"
+    llvm::StringRef stmt;
+
+    /// Kind of the pragma.
+    Kind kind;
+
+    /// Location of the pragma token.
+    clang::SourceLocation loc;
+};
 
 struct Directive {
     std::vector<Include> includes;

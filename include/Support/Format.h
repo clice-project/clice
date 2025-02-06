@@ -2,9 +2,9 @@
 
 #include <format>
 
-#include "Support/Error.h"
 #include "Support/JSON.h"
 #include "Support/Ranges.h"
+#include "llvm/Support/Error.h"
 
 namespace clice {
 
@@ -65,6 +65,21 @@ struct std::formatter<llvm::Error> : std::formatter<llvm::StringRef> {
         llvm::raw_svector_ostream os(buffer);
         os << e;
         return Base::format(buffer, ctx);
+    }
+};
+
+template <>
+struct std::formatter<std::error_code> : std::formatter<llvm::StringRef> {
+    using Base = std::formatter<llvm::StringRef>;
+
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext& ctx) {
+        return Base::parse(ctx);
+    }
+
+    template <typename FormatContext>
+    auto format(const std::error_code& e, FormatContext& ctx) const {
+        return Base::format(e.message(), ctx);
     }
 };
 

@@ -4,25 +4,36 @@
 namespace clice {
 
 async::Task<> Server::onGotoDeclaration(json::Value id, const proto::DeclarationParams& params) {
-    co_return;
+    proto::DeclarationResult result =
+        co_await indexer.lookup(params,
+                                RelationKind(RelationKind::Declaration, RelationKind::Definition));
+    co_await response(std::move(id), json::serialize(result));
 }
 
 async::Task<> Server::onGotoDefinition(json::Value id, const proto::DefinitionParams& params) {
-    co_return;
+    proto::DefinitionResult result = co_await indexer.lookup(params, RelationKind::Definition);
+    co_await response(std::move(id), json::serialize(result));
 }
 
 async::Task<> Server::onGotoTypeDefinition(json::Value id,
                                            const proto::TypeDefinitionParams& params) {
-    co_return;
+    proto::TypeDefinitionResult result =
+        co_await indexer.lookup(params, RelationKind::TypeDefinition);
+    co_await response(std::move(id), json::serialize(result));
 }
 
 async::Task<> Server::onGotoImplementation(json::Value id,
                                            const proto::ImplementationParams& params) {
-    co_return;
+    proto::ImplementationResult result =
+        co_await indexer.lookup(params, RelationKind::Implementation);
+    co_await response(std::move(id), json::serialize(result));
 }
 
 async::Task<> Server::onFindReferences(json::Value id, const proto::ReferenceParams& params) {
-    co_return;
+    proto::ReferenceResult result = co_await indexer.lookup(
+        params,
+        RelationKind(RelationKind::Declaration, RelationKind::Definition, RelationKind::Reference));
+    co_await response(std::move(id), json::serialize(result));
 }
 
 async::Task<> Server::onPrepareCallHierarchy(json::Value id,
@@ -80,7 +91,9 @@ async::Task<> Server::onDocumentSymbol(json::Value id, const proto::DocumentSymb
 }
 
 async::Task<> Server::onSemanticTokens(json::Value id, const proto::SemanticTokensParams& params) {
-    co_return;
+    auto path = SourceConverter::toPath(params.textDocument.uri);
+    auto tokens = co_await indexer.semanticTokens(path);
+    co_await response(std::move(id), json::serialize(tokens));
 }
 
 async::Task<> Server::onInlayHint(json::Value id, const proto::InlayHintParams& params) {

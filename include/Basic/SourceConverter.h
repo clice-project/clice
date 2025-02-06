@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Basic/Location.h"
+#include "Basic/SourceCode.h"
 #include "clang/Basic/SourceLocation.h"
 
 namespace clice {
@@ -26,7 +27,7 @@ public:
     /// Measure the length (character count) of the content with the specified encoding kind.
     std::size_t remeasure(llvm::StringRef content) const;
 
-    /// Same as above, but input is raw offset to the content beginning.
+    /// Same as the below, but input is raw offset to the content beginning.
     proto::Position toPosition(llvm::StringRef content, std::uint32_t offset) const;
 
     /// Convert a clang::SourceLocation to a proto::Position according to the
@@ -35,8 +36,14 @@ public:
     proto::Position toPosition(clang::SourceLocation location,
                                const clang::SourceManager& SM) const;
 
-    /// Convert a clang::SourceRange to a proto::Range according to the specified encoding kind.
+    /// Convert a clang::SourceRange to proto::Range according to the specified encoding kind.
     proto::Range toRange(clang::SourceRange range, const clang::SourceManager& SM) const;
+
+    /// Same as the above, but input is a `LocalSourceRange` and the content is provided.
+    proto::Range toRange(LocalSourceRange range, llvm::StringRef conent) const;
+
+    /// Convert a clang::SourceRange to LocalSourceRange.
+    LocalSourceRange toLocalRange(clang::SourceRange range, const clang::SourceManager& SM) const;
 
     /// Convert a proto::Position to a file offset in the content with the specified
     /// encoding kind.

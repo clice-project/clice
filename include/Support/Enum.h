@@ -4,6 +4,7 @@
 #include <array>
 #include <string>
 #include <cstdint>
+#include <cassert>
 #include <string_view>
 #include <source_location>
 
@@ -213,6 +214,10 @@ public:
     template <std::same_as<typename Derived::Kind> Kind>
     constexpr Enum operator& (Kind kind) const {
         return Enum(m_Value & (1 << underlying_value(kind)));
+    }
+
+    constexpr Enum operator& (Enum e) const {
+        return Enum(m_Value & e.value());
     }
 
     template <std::same_as<typename Derived::Kind> Kind>

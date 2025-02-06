@@ -1,9 +1,9 @@
-#include "Server/Logger.h"
+#include "Support/Logger.h"
 #include "Server/Server.h"
 
 namespace clice {
 
-Server::Server() : scheduler(database, {}) {
+Server::Server() : indexer(config::index, database), scheduler(database, {}) {
     addMethod("initialize", &Server::onInitialize);
     addMethod("initialized", &Server::onInitialized);
     addMethod("shutdown", &Server::onShutdown);
@@ -41,6 +41,8 @@ Server::Server() : scheduler(database, {}) {
 
     addMethod("workspace/didChangeWatchedFiles", &Server::onDidChangeWatchedFiles);
 
+    addMethod("index/current", &Server::onIndexCurrent);
+    addMethod("index/all", &Server::onIndexAll);
     addMethod("context/current", &Server::onContextCurrent);
     addMethod("context/switch", &Server::onContextSwitch);
     addMethod("context/all", &Server::onContextAll);
@@ -77,7 +79,7 @@ async::Task<> Server::onReceive(json::Value value) {
 }
 
 async::Task<> Server::request(llvm::StringRef method, json::Value params) {
-    co_await async::write(json::Object{
+    co_await async::net::write(json::Object{
         {"jsonrpc", "2.0"            },
         {"id",      id += 1          },
         {"method",  method           },
@@ -86,7 +88,7 @@ async::Task<> Server::request(llvm::StringRef method, json::Value params) {
 }
 
 async::Task<> Server::notify(llvm::StringRef method, json::Value params) {
-    co_await async::write(json::Object{
+    co_await async::net::write(json::Object{
         {"jsonrpc", "2.0"            },
         {"method",  method           },
         {"params",  std::move(params)},
@@ -94,7 +96,7 @@ async::Task<> Server::notify(llvm::StringRef method, json::Value params) {
 }
 
 async::Task<> Server::response(json::Value id, json::Value result) {
-    co_await async::write(json::Object{
+    co_await async::net::write(json::Object{
         {"jsonrpc", "2.0"            },
         {"id",      id               },
         {"result",  std::move(result)},

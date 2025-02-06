@@ -11,14 +11,15 @@ struct IndexTester : Tester {
 
     IndexTester& run(const char* standard = "-std=c++20") {
         Tester::run(standard);
-        indices = index::test(*info);
+        indices = index::index(*info);
         return *this;
     }
 
     IndexTester& GotoDefinition(llvm::StringRef cursor,
                                 llvm::StringRef target,
                                 std::source_location current = std::source_location::current()) {
-        auto offset = offsets[cursor];
+                                    SourceConverter converter;
+        auto offset = converter.toOffset(sources[0], pos(cursor));
 
         llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
         indices.begin()->second.locateSymbols(offset, symbols);

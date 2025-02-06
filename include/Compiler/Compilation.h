@@ -4,6 +4,7 @@
 #include "Diagnostic.h"
 #include "Module.h"
 #include "Preamble.h"
+#include "Support/FileSystem.h"
 
 namespace clice {
 
@@ -58,19 +59,19 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
 /// Build AST from given file path and content. If pch or pcm provided, apply them to the compiler.
 /// Note this function will not check whether we need to update the PCH or PCM, caller should check
 /// their reusability and update in time.
-llvm::Expected<ASTInfo> compile(CompilationParams& params);
+std::expected<ASTInfo, std::string> compile(CompilationParams& params);
 
 /// Run code completion at the given location.
-llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteConsumer* consumer);
+std::expected<ASTInfo, std::string> compile(CompilationParams& params, clang::CodeCompleteConsumer* consumer);
 
 /// Build PCH from given file path and content.
-llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out);
+std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& out);
 
 /// Build PCM from given file path and content.
-llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out);
+std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCMInfo& out);
 
 /// Get diagnostics from given file path and content.
-llvm::Expected<ASTInfo> compile(CompilationParams& params, std::vector<Diagnostic>& out,
+std::expected<ASTInfo, std::string> compile(CompilationParams& params, std::vector<Diagnostic>& out,
                                 const clang::tidy::ClangTidyContext* tidy = nullptr);
 
 }  // namespace clice

@@ -1,6 +1,8 @@
-#include <Basic/SourceConverter.h>
-#include <Compiler/Semantic.h>
-#include <Feature/CodeCompletion.h>
+#include "AST/SymbolKind.h"
+#include "Basic/SourceConverter.h"
+#include "Compiler/Compilation.h"
+#include "Feature/CodeCompletion.h"
+#include "clang/Sema/CodeCompleteConsumer.h"
 
 namespace clice::feature {
 
@@ -130,41 +132,41 @@ public:
                                     clang::CodeCompletionContext context,
                                     clang::CodeCompletionResult* results,
                                     unsigned count) final {
-        auto loc = sema.getPreprocessor().getCodeCompletionLoc();
-        auto offset = sema.getSourceManager().getFileOffset(loc);
-        auto prefix = CompletionPrefix::from(content, offset);
-
-        for(auto& result: llvm::make_range(results, results + count)) {
-            auto& item = completions.emplace_back();
-            item.kind = proto::CompletionItemKind::Text;
-            switch(result.Kind) {
-                case clang::CodeCompletionResult::RK_Declaration: {
-                    item.label = getName(result.Declaration);
-                    item.kind = kindForDecl(result.Declaration);
-                    item.detail = result.Declaration->getNameAsString();
-                    break;
-                }
-                case clang::CodeCompletionResult::RK_Keyword: {
-                    item.label = result.Keyword;
-                    item.kind = proto::CompletionItemKind::Keyword;
-                    break;
-                }
-                case clang::CodeCompletionResult::RK_Macro: {
-                    item.label = result.Macro->getName();
-                    break;
-                }
-                case clang::CodeCompletionResult::RK_Pattern: {
-                    item.kind = proto::CompletionItemKind::Snippet;
-                    item.label = result.Pattern->getTypedText();
-                    break;
-                }
-            }
-            item.textEdit.newText = item.label;
-            item.textEdit.range = {
-                .start = {line - 1, static_cast<uint32_t>(column - 1 - prefix.name.size())},
-                .end = {line - 1, static_cast<uint32_t>(column + item.label.size()) - 1 },
-            };
-        }
+        // auto loc = sema.getPreprocessor().getCodeCompletionLoc();
+        // auto offset = sema.getSourceManager().getFileOffset(loc);
+        // auto prefix = CompletionPrefix::from(content, offset);
+        //
+        // for(auto& result: llvm::make_range(results, results + count)) {
+        //    auto& item = completions.emplace_back();
+        //    item.kind = proto::CompletionItemKind::Text;
+        //    switch(result.Kind) {
+        //        case clang::CodeCompletionResult::RK_Declaration: {
+        //            item.label = getName(result.Declaration);
+        //            item.kind = kindForDecl(result.Declaration);
+        //            item.detail = result.Declaration->getNameAsString();
+        //            break;
+        //        }
+        //        case clang::CodeCompletionResult::RK_Keyword: {
+        //            item.label = result.Keyword;
+        //            item.kind = proto::CompletionItemKind::Keyword;
+        //            break;
+        //        }
+        //        case clang::CodeCompletionResult::RK_Macro: {
+        //            item.label = result.Macro->getName();
+        //            break;
+        //        }
+        //        case clang::CodeCompletionResult::RK_Pattern: {
+        //            item.kind = proto::CompletionItemKind::Snippet;
+        //            item.label = result.Pattern->getTypedText();
+        //            break;
+        //        }
+        //    }
+        //    item.textEdit.newText = item.label;
+        //    item.textEdit.range = {
+        //        .start = {line - 1, static_cast<uint32_t>(column - 1 - prefix.name.size())},
+        //        .end = {line - 1, static_cast<uint32_t>(column + item.label.size()) - 1 },
+        //    };
+        //}
     }
 
     clang::CodeCompletionAllocator& getAllocator() final {
