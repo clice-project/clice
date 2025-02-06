@@ -37,20 +37,41 @@ using ReferenceParams = TextDocumentPositionParams;
 
 using ReferenceResult = std::vector<Location>;
 
+using CallHierarchyOptions = WorkDoneProgressOptions;
+
 using CallHierarchyPrepareParams = TextDocumentPositionParams;
 
-struct CallHierarchyItem {
+struct HierarchyItem {
     /// The name of this item.
     string name;
 
-    /// FIXME: ...
+    /// The resource identifier of this item.
+    string uri;
+
+    /// The range enclosing this symbol not including leading/trailing whitespace
+    /// but everything else, e.g. comments and code.
+    Range range;
+
+    /// The range that should be selected and revealed when this symbol is being
+    /// picked, e.g. the name of a function. Must be contained by the
+    /// [`range`](#CallHierarchyItem.range).
+    Range selectionRange;
+
+    /// A data entry field that is preserved between a call hierarchy prepare and
+    /// incoming calls or outgoing calls requests.
+    uint64_t data = 0;
 };
+
+struct HierarchyParams {
+    /// The item for which to return the call hierarchy.
+    HierarchyItem item;
+};
+
+using CallHierarchyItem = HierarchyItem;
 
 using CallHierarchyPrepareResult = std::vector<CallHierarchyItem>;
 
-struct CallHierarchyIncomingCallsParams {
-    CallHierarchyItem item;
-};
+using CallHierarchyIncomingCallsParams = HierarchyParams;
 
 struct CallHierarchyIncomingCall {
     /// The item that makes the call.
@@ -63,9 +84,7 @@ struct CallHierarchyIncomingCall {
 
 using CallHierarchyIncomingCallsResult = std::vector<CallHierarchyIncomingCall>;
 
-struct CallHierarchyOutgoingCallsParams {
-    CallHierarchyItem item;
-};
+using CallHierarchyOutgoingCallsParams = HierarchyItem;
 
 struct CallHierarchyOutgoingCall {
     /// The item that is called.
@@ -78,26 +97,19 @@ struct CallHierarchyOutgoingCall {
 
 using CallHierarchyOutgoingCallsResult = std::vector<CallHierarchyOutgoingCall>;
 
-struct TypeHierarchyItem {
-    /// The name of the type.
-    string name;
+using TypeHierarchyOptions = WorkDoneProgressOptions;
 
-    /// FIXME: ...
-};
+using TypeHierarchyItem = HierarchyItem;
 
 using TypeHierarchyPrepareParams = TextDocumentPositionParams;
 
 using TypeHierarchyPrepareResult = std::vector<TypeHierarchyItem>;
 
-struct TypeHierarchySupertypesParams {
-    TypeHierarchyItem item;
-};
+using TypeHierarchySupertypesParams = HierarchyParams;
 
 using TypeHierarchySupertypesResult = std::vector<TypeHierarchyItem>;
 
-struct TypeHierarchySubtypesParams {
-    TypeHierarchyItem item;
-};
+using TypeHierarchySubtypesParams = HierarchyParams;
 
 using TypeHierarchySubtypesResult = std::vector<TypeHierarchyItem>;
 

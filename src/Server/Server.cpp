@@ -19,10 +19,10 @@ Server::Server() : indexer(config::index, database), scheduler(database, {}) {
     addMethod("textDocument/typeDefinition", &Server::onGotoTypeDefinition);
     addMethod("textDocument/implementation", &Server::onGotoImplementation);
     addMethod("textDocument/references", &Server::onFindReferences);
-    addMethod("textDocument/callHierarchy/prepare", &Server::onPrepareCallHierarchy);
+    addMethod("textDocument/callHierarchy/prepare", &Server::onPrepareHierarchy);
     addMethod("textDocument/callHierarchy/incomingCalls", &Server::onIncomingCall);
     addMethod("textDocument/callHierarchy/outgoingCalls", &Server::onOutgoingCall);
-    addMethod("textDocument/typeHierarchy/prepare", &Server::onPrepareTypeHierarchy);
+    addMethod("textDocument/typeHierarchy/prepare", &Server::onPrepareHierarchy);
     addMethod("textDocument/typeHierarchy/supertypes", &Server::onSupertypes);
     addMethod("textDocument/typeHierarchy/subtypes", &Server::onSubtypes);
     addMethod("textDocument/documentHighlight", &Server::onDocumentHighlight);
@@ -115,6 +115,16 @@ async::Task<> Server::registerCapacity(llvm::StringRef id,
                               {"registerOptions", std::move(registerOptions)},
                           }}},
     });
+}
+
+async::Task<std::string> Server::getFileContent(llvm::StringRef file) {
+    /// TODO: Check opened file.
+    auto content = co_await async::fs::read(file.str());
+    if(!content) {
+        log::warn("Failed to read file: {0}", file);
+        co_return "";
+    }
+    co_return std::move(*content);
 }
 
 }  // namespace clice

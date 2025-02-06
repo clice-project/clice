@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include "Config.h"
 #include "Indexer.h"
 #include "Protocol.h"
@@ -56,6 +55,10 @@ private:
     llvm::StringMap<onRequest> requests;
     llvm::StringMap<onNotification> notifications;
 
+    /// Get the content of the file. For opened file, use the in-memory content.
+    /// Otherwise, read the content from disk.
+    async::Task<std::string> getFileContent(llvm::StringRef file);
+
 private:
     /// ============================================================================
     ///                            Lifecycle Message
@@ -85,6 +88,12 @@ private:
     ///                             Language Features
     /// ============================================================================
 
+    async::Task<std::vector<proto::Location>>
+        lookup(const proto::TextDocumentPositionParams& params, RelationKind kind);
+
+    /// The logic for incoming
+    async::Task<> lookup(const proto::HierarchyParams& params, bool isType);
+
     async::Task<> onGotoDeclaration(json::Value id, const proto::DeclarationParams& params);
 
     async::Task<> onGotoDefinition(json::Value id, const proto::DefinitionParams& params);
@@ -95,17 +104,15 @@ private:
 
     async::Task<> onFindReferences(json::Value id, const proto::ReferenceParams& params);
 
-    async::Task<> onPrepareCallHierarchy(json::Value id,
-                                         const proto::CallHierarchyPrepareParams& params);
+    /// The logic for preparing `CallHierarchy` and `TypeHierarchy` are completely the same.
+    async::Task<> onPrepareHierarchy(json::Value id,
+                                     const proto::TextDocumentPositionParams& params);
 
     async::Task<> onIncomingCall(json::Value id,
                                  const proto::CallHierarchyIncomingCallsParams& params);
 
     async::Task<> onOutgoingCall(json::Value id,
                                  const proto::CallHierarchyOutgoingCallsParams& params);
-
-    async::Task<> onPrepareTypeHierarchy(json::Value id,
-                                         const proto::TypeHierarchyPrepareParams& params);
 
     async::Task<> onSupertypes(json::Value id, const proto::TypeHierarchySupertypesParams& params);
 
@@ -162,6 +169,7 @@ private:
     CompilationDatabase database;
     Indexer indexer;
     Scheduler scheduler;
+    SourceConverter SC;
 };
 
 }  // namespace clice

@@ -86,7 +86,7 @@ struct read : fs<read, ssize_t> {
     uv_buf_t bufs[1];
 
     int schedule(uv_fs_cb cb) {
-        return uv_fs_read(async::loop, &request, file, bufs, 1, 0, cb);
+        return uv_fs_read(async::loop, &request, file, bufs, 1, -1, cb);
     }
 
     auto result() {

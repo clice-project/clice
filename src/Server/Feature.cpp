@@ -3,41 +3,106 @@
 
 namespace clice {
 
+async::Task<std::vector<proto::Location>>
+    Server::lookup(const proto::TextDocumentPositionParams& params, RelationKind kind) {
+    auto path = SourceConverter::toPath(params.textDocument.uri);
+    llvm::StringMap<std::vector<LocalSourceRange>> results;
+
+    /// TODO: For opened file, use their im memory context rather than reading from disk.
+    auto content = co_await async::fs::read(path);
+    if(!content) {
+        co_return std::vector<proto::Location>();
+    }
+
+    auto offset = SC.toOffset(*content, params.position);
+    co_await indexer.lookup(path,
+                            offset,
+                            [&](llvm::StringRef path, const index::SymbolIndex::Symbol& symbol) {
+                                for(auto relation: symbol.relations()) {
+                                    if(relation.kind() & kind) {
+                                        results[path].emplace_back(*relation.range());
+                                    }
+                                }
+                            });
+
+    std::vector<proto::Location> locations;
+    for(auto& [path, ranges]: results) {
+        auto content = co_await async::fs::read(path.str());
+        for(auto& range: ranges) {
+            locations.emplace_back(proto::Location{
+                .uri = SourceConverter::toURI(path),
+                .range = SC.toRange(range, *content),
+            });
+        }
+    }
+
+    co_return locations;
+}
+
 async::Task<> Server::onGotoDeclaration(json::Value id, const proto::DeclarationParams& params) {
-    proto::DeclarationResult result =
-        co_await indexer.lookup(params,
-                                RelationKind(RelationKind::Declaration, RelationKind::Definition));
-    co_await response(std::move(id), json::serialize(result));
+    auto locations =
+        co_await lookup(params, RelationKind(RelationKind::Declaration, RelationKind::Definition));
+    co_await response(std::move(id), json::serialize(locations));
+    co_return;
 }
 
 async::Task<> Server::onGotoDefinition(json::Value id, const proto::DefinitionParams& params) {
-    proto::DefinitionResult result = co_await indexer.lookup(params, RelationKind::Definition);
-    co_await response(std::move(id), json::serialize(result));
+    auto locations = co_await lookup(params, RelationKind::Definition);
+    co_await response(std::move(id), json::serialize(locations));
+    co_return;
 }
 
 async::Task<> Server::onGotoTypeDefinition(json::Value id,
                                            const proto::TypeDefinitionParams& params) {
-    proto::TypeDefinitionResult result =
-        co_await indexer.lookup(params, RelationKind::TypeDefinition);
-    co_await response(std::move(id), json::serialize(result));
+    auto locations = co_await lookup(params, RelationKind::TypeDefinition);
+    co_await response(std::move(id), json::serialize(locations));
+    co_return;
 }
 
 async::Task<> Server::onGotoImplementation(json::Value id,
                                            const proto::ImplementationParams& params) {
-    proto::ImplementationResult result =
-        co_await indexer.lookup(params, RelationKind::Implementation);
-    co_await response(std::move(id), json::serialize(result));
+    auto locations = co_await lookup(params, RelationKind::Implementation);
+    co_await response(std::move(id), json::serialize(locations));
+    co_return;
 }
 
 async::Task<> Server::onFindReferences(json::Value id, const proto::ReferenceParams& params) {
-    proto::ReferenceResult result = co_await indexer.lookup(
+    auto locations = co_await lookup(
         params,
         RelationKind(RelationKind::Declaration, RelationKind::Definition, RelationKind::Reference));
-    co_await response(std::move(id), json::serialize(result));
+    co_return;
 }
 
-async::Task<> Server::onPrepareCallHierarchy(json::Value id,
-                                             const proto::CallHierarchyPrepareParams& params) {
+async::Task<> Server::onPrepareHierarchy(json::Value id,
+                                         const proto::CallHierarchyPrepareParams& params) {
+    auto path = SourceConverter::toPath(params.textDocument.uri);
+    auto content = co_await getFileContent(path);
+    if(content.empty()) {
+        response(std::move(id), json::Value(nullptr));
+        co_return;
+    }
+
+    auto offset = SC.toOffset(content, params.position);
+
+    proto::CallHierarchyPrepareResult result;
+
+    co_await indexer.resolve(
+        path,
+        offset,
+        [&](llvm::StringRef path, const index::SymbolIndex::Symbol& symbol) {
+            for(auto relation: symbol.relations()) {
+                if(relation.kind().is_one_of(RelationKind::Declaration, RelationKind::Definition)) {
+                    result.emplace_back(proto::CallHierarchyItem{
+                        .name = symbol.name().str(),
+                        .uri = SourceConverter::toURI(path),
+                        .range = SC.toRange(*relation.range(), content),
+                        .selectionRange = SC.toRange(*relation.symbolRange(), content),
+                        .data = symbol.id(),
+                    });
+                }
+            }
+        });
+
     co_return;
 }
 
@@ -48,11 +113,6 @@ async::Task<> Server::onIncomingCall(json::Value id,
 
 async::Task<> Server::onOutgoingCall(json::Value id,
                                      const proto::CallHierarchyOutgoingCallsParams& params) {
-    co_return;
-}
-
-async::Task<> Server::onPrepareTypeHierarchy(json::Value id,
-                                             const proto::TypeHierarchyPrepareParams& params) {
     co_return;
 }
 

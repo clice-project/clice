@@ -116,9 +116,11 @@ public:
             std::ranges::iota(new2old, 0u);
 
             ranges::sort(views::zip(file.symbols, new2old), refl::less, [](const auto& element) {
-                auto& symbol = std::get<0>(element);
-                return std::tuple(symbol.id, symbol.name, symbol.kind);
+                return std::get<0>(element);
             });
+
+            /// FIXME: Check symbol id equality. In theory, two symbol id should never be the same.
+            /// But because of our wrong implementation(e.g. USR generation), it may happen. 
 
             for(uint32_t i = 0; i < file.symbols.size(); ++i) {
                 symbolMap[new2old[i]] = i;
