@@ -44,19 +44,6 @@ static StringRef GetExternalSourceContainer(const NamedDecl* D) {
     return StringRef();
 }
 
-static void appendAssociatedConstraints(auto* TmplDecl, llvm::raw_ostream& Out) {
-    if(TmplDecl->hasAssociatedConstraints()) {
-        Out << ":AC";
-        ODRHash Hash;
-        llvm::SmallVector<const Expr*> ac;
-        TmplDecl->getAssociatedConstraints(ac);
-        for(const Expr* E: ac) {
-            Hash.AddStmt(E);
-        }
-        Out << Hash.CalculateHash();
-    }
-};
-
 namespace {
 class USRGenerator : public ConstDeclVisitor<USRGenerator> {
     SmallVectorImpl<char>& Buf;
@@ -212,7 +199,6 @@ void USRGenerator::VisitFunctionDecl(const FunctionDecl* D) {
         IsTemplate = true;
         Out << "@FT@";
         VisitTemplateParameterList(FunTmpl->getTemplateParameters());
-        appendAssociatedConstraints(FunTmpl, Out);
     } else
         Out << "@F@";
 
@@ -301,12 +287,10 @@ void USRGenerator::VisitVarDecl(const VarDecl* D) {
     if(VarTemplateDecl* VarTmpl = D->getDescribedVarTemplate()) {
         Out << "@VT";
         VisitTemplateParameterList(VarTmpl->getTemplateParameters());
-        appendAssociatedConstraints(VarTmpl, Out);
     } else if(const VarTemplatePartialSpecializationDecl* PartialSpec =
                   dyn_cast<VarTemplatePartialSpecializationDecl>(D)) {
         Out << "@VP";
         VisitTemplateParameterList(PartialSpec->getTemplateParameters());
-        appendAssociatedConstraints(PartialSpec, Out);
     }
 
     // Variables always have simple names.
@@ -403,7 +387,6 @@ void USRGenerator::VisitTagDecl(const TagDecl* D) {
                 case TagTypeKind::Enum: llvm_unreachable("enum template");
             }
             VisitTemplateParameterList(ClassTmpl->getTemplateParameters());
-            appendAssociatedConstraints(ClassTmpl, Out);
         } else if(const ClassTemplatePartialSpecializationDecl* PartialSpec =
                       dyn_cast<ClassTemplatePartialSpecializationDecl>(CXXRecord)) {
             AlreadyStarted = true;
@@ -416,7 +399,6 @@ void USRGenerator::VisitTagDecl(const TagDecl* D) {
                 case TagTypeKind::Enum: llvm_unreachable("enum partial specialization");
             }
             VisitTemplateParameterList(PartialSpec->getTemplateParameters());
-            appendAssociatedConstraints(PartialSpec, Out);
         }
     }
 
@@ -767,6 +749,13 @@ void USRGenerator::VisitType(QualType T) {
 void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Params) {
     if(!Params)
         return;
+
+    auto appendExprODRHash = [&](const Expr* expr) {
+        ODRHash Hash{};
+        Hash.AddStmt(expr);
+        Out << Hash.CalculateHash();
+    };
+
     Out << '>' << Params->size();
     for(TemplateParameterList::const_iterator P = Params->begin(), PEnd = Params->end(); P != PEnd;
         ++P) {
@@ -776,13 +765,8 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
                 Out << 'p';
             Out << 'T';
             if(p->hasTypeConstraint()) {
-                // We need hash the constraint here because for template template parameters.
-                // For template class and template function, the constraint is already included
-                // in the AssociatedConstraints.
                 Out << ":TC";
-                ODRHash Hash{};
-                Hash.AddStmt(p->getTypeConstraint()->getImmediatelyDeclaredConstraint());
-                Out << Hash.CalculateHash();
+                appendExprODRHash(p->getTypeConstraint()->getImmediatelyDeclaredConstraint());
             }
             continue;
         }
@@ -792,6 +776,10 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
                 Out << 'p';
             Out << 'N';
             VisitType(NTTP->getType());
+            if (auto constraint = NTTP->getPlaceholderTypeConstraint()) {
+                Out << ":PTC";
+                appendExprODRHash(constraint);
+            }
             continue;
         }
 
@@ -800,6 +788,11 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
             Out << 'p';
         Out << 't';
         VisitTemplateParameterList(TTP->getTemplateParameters());
+    }
+
+    if (auto requiresClause = Params->getRequiresClause()) {
+        Out << ":RC";
+        appendExprODRHash(requiresClause);
     }
 }
 
