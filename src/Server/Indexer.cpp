@@ -349,7 +349,7 @@ async::Task<> Indexer::indexAll() {
             if(task.empty() || task.done()) {
                 if(iter != end) {
                     task = each(iter->first());
-                    async::schedule(task.handle());
+                    async::schedule(&task.handle().promise());
                     ++iter;
                 }
             }

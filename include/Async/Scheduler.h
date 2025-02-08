@@ -9,23 +9,29 @@ namespace clice::async {
 
 void run();
 
+namespace awaiter {
+
+template <typename Callback>
+struct suspend {
+    Callback callback;
+
+    bool await_ready() noexcept {
+        return false;
+    }
+
+    template <typename Promise>
+    void await_suspend(std::coroutine_handle<Promise> handle) noexcept {
+        callback(&handle.promise());
+    }
+
+    void await_resume() noexcept {}
+};
+
+}  // namespace awaiter
+
 template <typename Callback>
 auto suspend(Callback&& callback) {
-    struct suspend_awaiter {
-        Callback callback;
-
-        bool await_ready() noexcept {
-            return false;
-        }
-
-        void await_suspend(core_handle handle) noexcept {
-            callback(handle);
-        }
-
-        void await_resume() noexcept {}
-    };
-
-    return suspend_awaiter{std::forward<Callback>(callback)};
+    return awaiter::suspend<std::remove_cvref_t<Callback>>{std::forward<Callback>(callback)};
 }
 
 struct none {};
@@ -36,10 +42,10 @@ using task_value_t = std::conditional_t<std::is_void_v<V>, none, V>;
 template <typename... Tasks>
 auto gather [[gnu::noinline]] (Tasks&&... tasks) -> Task<std::tuple<task_value_t<Tasks>...>> {
     /// FIXME: If remove noinline, the program crashes. Figure out in the future.
-    (async::schedule(tasks.handle()), ...);
+    (async::schedule(&tasks.handle().promise()), ...);
 
     while(!(tasks.done() && ...)) {
-        co_await async::suspend([](core_handle handle) { async::schedule(handle); });
+        co_await async::suspend([](auto handle) { async::schedule(handle); });
     }
 
     /// If all tasks are done, return the results.
@@ -57,7 +63,7 @@ auto gather [[gnu::noinline]] (Tasks&&... tasks) -> Task<std::tuple<task_value_t
 template <typename... Tasks>
 auto run(Tasks&&... tasks) {
     auto core = gather(std::forward<Tasks>(tasks)...);
-    schedule(core.handle());
+    schedule(&core.handle().promise());
     async::run();
     assert(core.done() && "run: not done");
     return core.await_resume();
@@ -89,15 +95,16 @@ struct thread_pool : thread_pool_base<Ret> {
     Function function;
 
     /// The coroutine handle waiting for the result.
-    core_handle waiting;
+    promise_handle* waiting;
 
     bool await_ready() noexcept {
         return false;
     }
 
-    void await_suspend(core_handle waiting) noexcept {
+    template <typename Promise>
+    void await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
         request.data = this;
-        this->waiting = waiting;
+        this->waiting = &waiting.promise();
 
         auto work_cb = [](uv_work_t* work) {
             auto& awaiter = *static_cast<thread_pool*>(work->data);
@@ -131,7 +138,7 @@ public:
 
     Task<void> operator co_await() {
         while(locked) {
-            co_await async::suspend([](core_handle handle) { async::schedule(handle); });
+            co_await async::suspend([](auto handle) { async::schedule(handle); });
         }
         locked = true;
     }

@@ -9,22 +9,23 @@ namespace awaiter {
 template <typename Derived, typename Ret = void>
 struct fs {
     uv_fs_t request;
-    core_handle waiting;
+    promise_handle* continuation;
     int error = 0;
 
     bool await_ready() const noexcept {
         return false;
     }
 
-    void await_suspend(core_handle waiting) noexcept {
+    template <typename Promise>
+    void await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
         request.data = this;
-        this->waiting = waiting;
+        continuation = &waiting.promise();
 
         /// All callbacks for libuv are the same. Resume the waiting coroutine
         /// and cleanup the request.
         auto callback = [](uv_fs_t* req) {
             auto& awaiter = *static_cast<Derived*>(req->data);
-            async::schedule(awaiter.waiting);
+            async::schedule(awaiter.continuation);
             uv_fs_req_cleanup(req);
         };
 
@@ -33,7 +34,7 @@ struct fs {
         /// If the operation is not successful, we need to schedule the waiting
         /// coroutine directly.
         if(error < 0) {
-            async::schedule(waiting);
+            async::schedule(continuation);
         }
     }
 

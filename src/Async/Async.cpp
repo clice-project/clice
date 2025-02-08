@@ -22,12 +22,12 @@ bool listened = false;
 
 }  // namespace
 
-void schedule(std::coroutine_handle<> core) {
+void schedule(struct promise_handle* core) {
     uv_async_t* async = new uv_async_t;
-    async->data = core.address();
+    async->data = core;
     uv_async_init(loop, async, [](uv_async_t* handle) {
-        auto core = std::coroutine_handle<>::from_address(handle->data);
-        core.resume();
+        auto core = static_cast<promise_handle*>(handle->data);
+        core->resume();
         uv_close((uv_handle_t*)handle, [](uv_handle_t* handle) { delete (uv_async_t*)handle; });
     });
     uv_async_send(async);

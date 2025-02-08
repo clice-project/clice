@@ -1,10 +1,14 @@
 #pragma once
 
 #include <cassert>
+#include <cstdint>
 #include <cstdlib>
 #include <optional>
 #include <coroutine>
 #include <source_location>
+
+#include "Support/Format.h"
+#include "llvm/ADT/PointerIntPair.h"
 
 namespace clice::async {
 
@@ -13,25 +17,66 @@ class Task;
 
 using core_handle = std::coroutine_handle<>;
 
-/// Schedule the coroutine to resume in the event loop.
-void schedule(core_handle core);
+void schedule(struct promise_handle* core);
 
-namespace impl {
+struct promise_handle {
+    enum class State : uint8_t {
+        /// The task is waiting to be scheduled.
+        Pending,
+
+        /// The task is running.
+        Running,
+
+        /// The task is finished.
+        Finished,
+
+        /// The task is cancelled.
+        Cancelled,
+    };
+
+    llvm::PointerIntPair<void*, 2, State> data;
+
+    /// The coroutine handle that is waiting for the task to complete.
+    /// If this is a top-level coroutine, it is empty.
+    promise_handle* continuation = nullptr;
+
+    template <typename Promise>
+    void set(std::coroutine_handle<Promise> handle) {
+        data.setInt(State::Pending);
+        data.setPointer(handle.address());
+    }
+
+    core_handle handle() const noexcept {
+        return core_handle::from_address(data.getPointer());
+    }
+
+    bool done() {
+        return handle().done();
+    }
+
+    void resume() {
+        handle().resume();
+    }
+
+    void destroy() {
+        handle().destroy();
+    }
+};
 
 namespace awaiter {
 
 struct final {
-    core_handle waiting;
+    promise_handle* continuation;
 
     bool await_ready() noexcept {
         return false;
     }
 
     void await_suspend(core_handle) noexcept {
-        if(waiting) {
+        if(continuation) {
             /// In the final suspend point, this coroutine is already done.
             /// So try to resume the waiting coroutine if it exists.
-            async::schedule(waiting);
+            async::schedule(continuation);
         }
     }
 
@@ -40,51 +85,50 @@ struct final {
 
 }  // namespace awaiter
 
-template <typename T>
-struct promise_base {
-    std::optional<T> value;
-
-    template <typename U>
-    void return_value(U&& val) noexcept {
-        assert(!value.has_value() && "return_value: value already set");
-        value.emplace(std::forward<U>(val));
-    }
-};
-
-template <>
-struct promise_base<void> {
-    void return_void() noexcept {}
-};
-
-template <typename T>
-struct promise_type : promise_base<T> {
-    /// The coroutine handle that is waiting for the task to complete.
-    /// If this is a top-level coroutine, it is empty.
-    core_handle waiting;
-
-    auto get_return_object() {
-        return Task<T>(std::coroutine_handle<promise_type>::from_promise(*this));
-    }
-
-    void unhandled_exception() {
-        std::abort();
-    }
-
-    auto initial_suspend() {
-        return std::suspend_always();
-    }
-
-    awaiter::final final_suspend() noexcept {
-        return awaiter::final{waiting};
-    }
-};
-
-}  // namespace impl
-
 template <typename T = void>
 class Task {
 public:
-    using promise_type = impl::promise_type<T>;
+    template <typename V>
+    struct promise_result {
+        std::optional<V> value;
+
+        template <typename U>
+        void return_value(U&& val) noexcept {
+            assert(!value.has_value() && "return_value: value already set");
+            value.emplace(std::forward<U>(val));
+        }
+    };
+
+    template <>
+    struct promise_result<void> {
+        void return_void() noexcept {}
+    };
+
+    struct promise_type : promise_handle, promise_result<T> {
+        auto get_return_object() {
+            /// Get the coroutine handle from the promise.
+            auto handle = std::coroutine_handle<promise_type>::from_promise(*this);
+            /// Set the handle to the promise.
+            this->set(handle);
+            return Task<T>(handle);
+        }
+
+        void unhandled_exception() {
+            std::abort();
+        }
+
+        auto initial_suspend() {
+            return std::suspend_always();
+        }
+
+        awaiter::final final_suspend() noexcept {
+            return awaiter::final{continuation};
+        }
+
+        auto handle() {
+            return std::coroutine_handle<promise_type>::from_promise(*this);
+        }
+    };
 
     using coroutine_handle = std::coroutine_handle<promise_type>;
 
@@ -142,14 +186,15 @@ public:
     }
 
     /// Task is also awaitable.
-    void await_suspend(core_handle waiting) noexcept {
+    template <typename Promise>
+    void await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
         /// When another coroutine awaits this task, set the waiting coroutine.
-        assert(!core.promise().waiting && "await_suspend: already waiting");
-        core.promise().waiting = waiting;
+        assert(!core.promise().continuation && "await_suspend: already waiting");
+        core.promise().continuation = &waiting.promise();
 
         /// Schedule the task to run. Note that the waiting coroutine is scheduled
         /// in final_suspend. See `impl::promise_type::final_suspend`.
-        async::schedule(core);
+        async::schedule(&core.promise());
     }
 
     T await_resume() noexcept {
