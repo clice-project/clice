@@ -15,32 +15,29 @@ namespace clice::async {
 template <typename T>
 class Task;
 
-struct promise_handle {
-    enum class State : uint8_t {
-        /// The task is waiting to be scheduled.
-        Pending,
-
-        /// The task is running.
-        Running,
-
-        /// The task is finished.
-        Finished,
+struct promise_base {
+    enum Flags : uint8_t {
+        Empty = 0,
 
         /// The task is cancelled.
-        Cancelled,
+        Cancelled = 1,
+
+        /// The coroutine handle will be destroyed when the task is done or cancelled.
+        Disposable = 1 << 1,
     };
 
-    llvm::PointerIntPair<void*, 2, State> data;
+    /// The address of the actual coroutine handle and flags.
+    llvm::PointerIntPair<void*, 2, Flags> data;
 
     /// The coroutine handle that is waiting for the task to complete.
     /// If this is a top-level coroutine, it is empty.
-    promise_handle* continuation = nullptr;
+    promise_base* continuation = nullptr;
 
     std::source_location location;
 
     template <typename Promise>
     void set(std::coroutine_handle<Promise> handle) {
-        data.setInt(State::Pending);
+        data.setInt(Empty);
         data.setPointer(handle.address());
     }
 
@@ -54,33 +51,42 @@ struct promise_handle {
         return handle().done();
     }
 
-    void resume() {
-        auto state = data.getInt();
-        switch(data.getInt()) {
-            case State::Pending:
-            case State::Running: {
-                data.setInt(State::Running);
-                handle().resume();
-                break;
-            }
-
-            case State::Finished: {
-                assert(false && "resume: already finished");
-                break;
-            }
-
-            case State::Cancelled: {
-                break;
-            }
-        }
-    }
-
     void destroy() {
         handle().destroy();
     }
 
     void cancel() {
-        data.setInt(State::Cancelled);
+        data.setInt(Flags(data.getInt() | Flags::Cancelled));
+    }
+
+    bool cancelled() const noexcept {
+        return data.getInt() & Flags::Cancelled;
+    }
+
+    void dispose() {
+        data.setInt(Flags(data.getInt() | Flags::Disposable));
+    }
+
+    bool disposable() const noexcept {
+        return data.getInt() & Flags::Disposable;
+    }
+
+    std::coroutine_handle<> resume_handle() {
+        auto flags = data.getInt();
+        if(cancelled()) {
+            if(disposable()) {
+                /// If the task is cancelled and disposable, destroy the coroutine handle.
+                destroy();
+            }
+            return std::noop_coroutine();
+        } else {
+            /// Otherwise, resume the coroutine handle.
+            return handle();
+        }
+    }
+
+    void resume() {
+        resume_handle().resume();
     }
 };
 
@@ -88,25 +94,34 @@ namespace awaiter {
 
 /// The awaiter for the final suspend point of `Task`.
 struct final {
-    promise_handle* continuation;
+    promise_base* continuation;
 
     bool await_ready() noexcept {
         return false;
     }
 
     template <typename Promise>
-    auto await_suspend(std::coroutine_handle<Promise> current) noexcept {
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> current) noexcept {
+        std::coroutine_handle<> handle = std::noop_coroutine();
+
         /// In the final suspend point, this coroutine is already done.
         /// So try to resume the waiting coroutine if it exists.
         if(continuation) {
-            continuation->schedule();
+            handle = continuation->resume_handle();
         }
+
+        if(current.promise().disposable()) {
+            /// If this task is disposable, destroy the coroutine handle.
+            current.destroy();
+        }
+
+        return handle;
     }
 
     void await_resume() noexcept {}
 };
 
-/// We want `Task` to be awaitable.
+/// The awaiter for the `Task` type.
 template <typename T, typename P>
 struct task {
     std::coroutine_handle<P> handle;
@@ -117,14 +132,14 @@ struct task {
 
     template <typename Promise>
     auto await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
-        /// If this `Task` is awaited from another coroutine, we should schedule
-        /// the this task first.
-        handle.promise().schedule();
-
         /// Store the waiting coroutine in the promise for later scheduling.
         /// It will be scheduled in the final suspend point.
         assert(!handle.promise().continuation && "await_suspend: already waiting");
         handle.promise().continuation = &waiting.promise();
+
+        /// If this `Task` is awaited from another coroutine, we should schedule
+        /// the this task first.
+        return handle.promise().resume_handle();
     }
 
     T await_resume() noexcept {
@@ -156,7 +171,7 @@ public:
         void return_void() noexcept {}
     };
 
-    struct promise_type : promise_handle, promise_result<T> {
+    struct promise_type : promise_base, promise_result<T> {
         promise_type(std::source_location location = std::source_location::current()) {
             set(handle());
             this->location = location;
@@ -238,28 +253,35 @@ public:
         core.promise().schedule();
     }
 
-    void stacktrace() {
-        promise_handle* handle = core;
-        while(handle) {
-            println("{}:{}:{}",
-                    handle->location.file_name(),
-                    handle->location.line(),
-                    handle->location.function_name());
-            handle = handle->continuation;
-        }
-    }
-
+    /// Cancel the task, the suspend point after the current one will be skipped.
     void cancel() {
         core.promise().cancel();
+    }
+
+    /// Dispose the task, it will be destroyed when finished or cancelled.
+    void dispose() {
+        core.promise().dispose();
+        core = nullptr;
+    }
+
+    T result() {
+        if constexpr(!std::is_void_v<T>) {
+            return std::move(core.promise().value.value());
+        }
     }
 
     auto operator co_await() const noexcept {
         return awaiter::task<T, promise_type>{core};
     }
 
-    T result() {
-        if constexpr(!std::is_void_v<T>) {
-            return std::move(core.promise().value.value());
+    void stacktrace() {
+        promise_base* handle = core;
+        while(handle) {
+            println("{}:{}:{}",
+                    handle->location.file_name(),
+                    handle->location.line(),
+                    handle->location.function_name());
+            handle = handle->continuation;
         }
     }
 

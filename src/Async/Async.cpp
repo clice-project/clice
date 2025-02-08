@@ -22,11 +22,11 @@ bool listened = false;
 
 }  // namespace
 
-void promise_handle::schedule() {
+void promise_base::schedule() {
     uv_async_t* async = new uv_async_t;
     async->data = this;
     uv_async_init(loop, async, [](uv_async_t* handle) {
-        auto core = static_cast<promise_handle*>(handle->data);
+        auto core = static_cast<promise_base*>(handle->data);
         core->resume();
         uv_close((uv_handle_t*)handle, [](uv_handle_t* handle) { delete (uv_async_t*)handle; });
     });

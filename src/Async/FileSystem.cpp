@@ -9,7 +9,7 @@ namespace awaiter {
 template <typename Derived, typename Ret = void>
 struct fs {
     uv_fs_t request;
-    promise_handle* continuation;
+    promise_base* continuation;
     int error = 0;
 
     bool await_ready() const noexcept {

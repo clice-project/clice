@@ -205,7 +205,7 @@ struct write {
     uv_buf_t buf[2];
     llvm::SmallString<128> header;
     llvm::SmallString<4096> message;
-    promise_handle* continuation = nullptr;
+    promise_base* continuation = nullptr;
 
     bool await_ready() const noexcept {
         return false;

@@ -4,7 +4,7 @@
 #include <tuple>
 
 #include "libuv.h"
-#include "Coroutine.h"
+#include "Task.h"
 
 namespace clice::async {
 
@@ -96,7 +96,7 @@ struct thread_pool : thread_pool_base<Ret> {
     Function function;
 
     /// The coroutine handle waiting for the result.
-    promise_handle* waiting;
+    promise_base* waiting;
 
     bool await_ready() noexcept {
         return false;
@@ -137,7 +137,7 @@ namespace awaiter {
 
 struct sleep {
     uv_timer_t timer;
-    promise_handle* continuation;
+    promise_base* continuation;
     std::chrono::milliseconds duration;
 
     bool await_ready() const noexcept {
@@ -153,7 +153,7 @@ struct sleep {
             &timer,
             [](uv_timer_t* handle) {
                 auto& awaiter = *static_cast<sleep*>(handle->data);
-                awaiter.continuation->schedule();
+                awaiter.continuation->resume();
                 uv_timer_stop(handle);
             },
             duration.count(),

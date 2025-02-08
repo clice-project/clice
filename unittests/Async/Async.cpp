@@ -41,7 +41,9 @@ TEST(Async, Sleep) {
         co_return 1;
     }();
 
-    async::run(task);
+    task.schedule();
+    ///task.cancel();
+    async::run();
 }
 
 TEST(Async, Submit) {
