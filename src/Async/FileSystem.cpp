@@ -25,7 +25,7 @@ struct fs {
         /// and cleanup the request.
         auto callback = [](uv_fs_t* req) {
             auto& awaiter = *static_cast<Derived*>(req->data);
-            async::schedule(awaiter.continuation);
+            awaiter.continuation->schedule();
             uv_fs_req_cleanup(req);
         };
 
@@ -34,7 +34,7 @@ struct fs {
         /// If the operation is not successful, we need to schedule the waiting
         /// coroutine directly.
         if(error < 0) {
-            async::schedule(continuation);
+            continuation->schedule();
         }
     }
 

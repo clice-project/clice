@@ -15,10 +15,6 @@ namespace clice::async {
 template <typename T>
 class Task;
 
-using core_handle = std::coroutine_handle<>;
-
-void schedule(struct promise_handle* core);
-
 struct promise_handle {
     enum class State : uint8_t {
         /// The task is waiting to be scheduled.
@@ -40,31 +36,57 @@ struct promise_handle {
     /// If this is a top-level coroutine, it is empty.
     promise_handle* continuation = nullptr;
 
+    std::source_location location;
+
     template <typename Promise>
     void set(std::coroutine_handle<Promise> handle) {
         data.setInt(State::Pending);
         data.setPointer(handle.address());
     }
 
-    core_handle handle() const noexcept {
-        return core_handle::from_address(data.getPointer());
+    auto handle() const noexcept {
+        return std::coroutine_handle<>::from_address(data.getPointer());
     }
 
-    bool done() {
+    void schedule();
+
+    bool done() const noexcept {
         return handle().done();
     }
 
     void resume() {
-        handle().resume();
+        auto state = data.getInt();
+        switch(data.getInt()) {
+            case State::Pending:
+            case State::Running: {
+                data.setInt(State::Running);
+                handle().resume();
+                break;
+            }
+
+            case State::Finished: {
+                assert(false && "resume: already finished");
+                break;
+            }
+
+            case State::Cancelled: {
+                break;
+            }
+        }
     }
 
     void destroy() {
         handle().destroy();
     }
+
+    void cancel() {
+        data.setInt(State::Cancelled);
+    }
 };
 
 namespace awaiter {
 
+/// The awaiter for the final suspend point of `Task`.
 struct final {
     promise_handle* continuation;
 
@@ -72,15 +94,45 @@ struct final {
         return false;
     }
 
-    void await_suspend(core_handle) noexcept {
+    template <typename Promise>
+    auto await_suspend(std::coroutine_handle<Promise> current) noexcept {
+        /// In the final suspend point, this coroutine is already done.
+        /// So try to resume the waiting coroutine if it exists.
         if(continuation) {
-            /// In the final suspend point, this coroutine is already done.
-            /// So try to resume the waiting coroutine if it exists.
-            async::schedule(continuation);
+            continuation->schedule();
         }
     }
 
     void await_resume() noexcept {}
+};
+
+/// We want `Task` to be awaitable.
+template <typename T, typename P>
+struct task {
+    std::coroutine_handle<P> handle;
+
+    bool await_ready() noexcept {
+        return false;
+    }
+
+    template <typename Promise>
+    auto await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
+        /// If this `Task` is awaited from another coroutine, we should schedule
+        /// the this task first.
+        handle.promise().schedule();
+
+        /// Store the waiting coroutine in the promise for later scheduling.
+        /// It will be scheduled in the final suspend point.
+        assert(!handle.promise().continuation && "await_suspend: already waiting");
+        handle.promise().continuation = &waiting.promise();
+    }
+
+    T await_resume() noexcept {
+        if constexpr(!std::is_void_v<T>) {
+            assert(handle.promise().value.has_value() && "await_resume: value not set");
+            return std::move(*handle.promise().value);
+        }
+    }
 };
 
 }  // namespace awaiter
@@ -105,24 +157,25 @@ public:
     };
 
     struct promise_type : promise_handle, promise_result<T> {
-        auto get_return_object() {
-            /// Get the coroutine handle from the promise.
-            auto handle = std::coroutine_handle<promise_type>::from_promise(*this);
-            /// Set the handle to the promise.
-            this->set(handle);
-            return Task<T>(handle);
-        }
+        promise_type(std::source_location location = std::source_location::current()) {
+            set(handle());
+            this->location = location;
+        };
 
-        void unhandled_exception() {
-            std::abort();
+        auto get_return_object() {
+            return Task<T>(handle());
         }
 
         auto initial_suspend() {
             return std::suspend_always();
         }
 
-        awaiter::final final_suspend() noexcept {
+        auto final_suspend() noexcept {
             return awaiter::final{continuation};
+        }
+
+        void unhandled_exception() {
+            std::abort();
         }
 
         auto handle() {
@@ -181,26 +234,32 @@ public:
         return core.done();
     }
 
-    bool await_ready() const noexcept {
-        return false;
+    void schedule() {
+        core.promise().schedule();
     }
 
-    /// Task is also awaitable.
-    template <typename Promise>
-    void await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
-        /// When another coroutine awaits this task, set the waiting coroutine.
-        assert(!core.promise().continuation && "await_suspend: already waiting");
-        core.promise().continuation = &waiting.promise();
-
-        /// Schedule the task to run. Note that the waiting coroutine is scheduled
-        /// in final_suspend. See `impl::promise_type::final_suspend`.
-        async::schedule(&core.promise());
+    void stacktrace() {
+        promise_handle* handle = core;
+        while(handle) {
+            println("{}:{}:{}",
+                    handle->location.file_name(),
+                    handle->location.line(),
+                    handle->location.function_name());
+            handle = handle->continuation;
+        }
     }
 
-    T await_resume() noexcept {
+    void cancel() {
+        core.promise().cancel();
+    }
+
+    auto operator co_await() const noexcept {
+        return awaiter::task<T, promise_type>{core};
+    }
+
+    T result() {
         if constexpr(!std::is_void_v<T>) {
-            assert(core.promise().value.has_value() && "await_resume: value not set");
-            return std::move(*core.promise().value);
+            return std::move(core.promise().value.value());
         }
     }
 

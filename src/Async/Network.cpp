@@ -62,7 +62,8 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
                 auto core = callback(std::move(*json));
                 /// It will be destroyed in final suspend point.
                 /// So we release it here.
-                async::schedule(&core.handle().promise());
+                core.schedule();
+                core.release();
                 buffer.consume();
             } else {
                 log::fatal("An error occurred while parsing JSON: {0}", json.takeError());
@@ -224,7 +225,7 @@ struct write {
             }
 
             auto& awaiter = uv_cast<struct write>(req);
-            async::schedule(awaiter.continuation);
+            awaiter.continuation->schedule();
         });
     }
 

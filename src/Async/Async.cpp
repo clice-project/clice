@@ -22,9 +22,9 @@ bool listened = false;
 
 }  // namespace
 
-void schedule(struct promise_handle* core) {
+void promise_handle::schedule() {
     uv_async_t* async = new uv_async_t;
-    async->data = core;
+    async->data = this;
     uv_async_init(loop, async, [](uv_async_t* handle) {
         auto core = static_cast<promise_handle*>(handle->data);
         core->resume();

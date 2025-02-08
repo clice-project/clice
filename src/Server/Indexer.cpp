@@ -35,9 +35,6 @@ async::Task<Indexer::TranslationUnit*> Indexer::check(this Self& self, llvm::Str
 
     auto tu = iter->second;
 
-    async::Lock lock(self.locked);
-    co_await lock;
-
     /// Otherwise, we need to check whether the file needs to be updated.
     auto stats = co_await async::fs::stat(tu->srcPath);
     if(stats.has_value() && stats->mtime > tu->mtime) {
@@ -185,9 +182,6 @@ async::Task<> Indexer::updateIndices(this Self& self,
 
         return indices;
     });
-
-    async::Lock lock(self.locked);
-    co_await lock;
 
     auto& SM = info.srcMgr();
 
@@ -349,13 +343,13 @@ async::Task<> Indexer::indexAll() {
             if(task.empty() || task.done()) {
                 if(iter != end) {
                     task = each(iter->first());
-                    async::schedule(&task.handle().promise());
+                    task.schedule();
                     ++iter;
                 }
             }
         }
 
-        co_await async::suspend([&](auto handle) { async::schedule(handle); });
+        co_await async::suspend([&](auto handle) { handle->schedule(); });
     }
 }
 

@@ -27,6 +27,23 @@ TEST(Async, Task) {
     EXPECT_EQ(result, std::tuple{1, 2, 3});
 }
 
+TEST(Async, Nested) {
+    auto task = []() -> async::Task<int> {
+        co_return 1;
+    }();
+}
+
+TEST(Async, Sleep) {
+    auto task = []() -> async::Task<int> {
+        println("Sleeping start");
+        co_await async::sleep(std::chrono::seconds(1));
+        println("Sleeping end");
+        co_return 1;
+    }();
+
+    async::run(task);
+}
+
 TEST(Async, Submit) {
     auto task = []() -> async::Task<std::thread::id> {
         co_return co_await async::submit([]() {
