@@ -37,9 +37,8 @@ target("clice-core")
     add_files("src/**.cpp|Driver/*.cpp")
     add_includedirs("include", {public = true})
 
-    add_packages("libuv", {public = true})
-    add_packages("toml++", {public = true})
-    add_defines("CLANG_BUILD_STATIC", {public = true})
+    add_packages("libuv", "toml++", {public = true})
+
     if is_mode("debug") then 
         add_packages("llvm", {
             public = true, 
@@ -124,7 +123,7 @@ package("llvm")
             add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
             add_versions("20.0.0", "4ef335845ebb52f8237bda3bcc7246b06085fdf5edc5cc6cf7f3a7c9ef655c09")
         else
-        end 
+        end
     elseif is_plat("linux") then
         if is_mode("debug") then
             add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-debug.tar.xz")
@@ -148,6 +147,10 @@ package("llvm")
     end
 
     on_install(function (package)
+        if not package:config("shared") then
+            package:add("defines", "CLANG_BUILD_STATIC")
+        end
+
         os.mv("bin", package:installdir())
         os.mv("lib", package:installdir())
         os.mv("include", package:installdir())
