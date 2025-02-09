@@ -720,6 +720,13 @@ void USRGenerator::VisitType(QualType T) {
                 VisitTemplateArgument(Arg);
             return;
         }
+        if(const auto* DeducedSpec = T->getAs<DeducedTemplateSpecializationType>()) {
+            // TODO(sakria9): double check this
+            Out << "D";
+            VisitTemplateName(DeducedSpec->getTemplateName());
+            assert(DeducedSpec->getDeducedType().isNull());
+            return;
+        }
         if(const DependentNameType* DNT = T->getAs<DependentNameType>()) {
             Out << '^';
             printQualifier(Out, LangOpts, DNT->getQualifier());
