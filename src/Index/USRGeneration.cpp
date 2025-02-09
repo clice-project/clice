@@ -92,6 +92,7 @@ public:
     void VisitUnresolvedUsingTypenameDecl(const UnresolvedUsingTypenameDecl* D);
     void VisitConceptDecl(const ConceptDecl* D);
     void VisitTemplateParamObjectDecl(const TemplateParamObjectDecl* D);
+
     void VisitLinkageSpecDecl(const LinkageSpecDecl* D) {
         IgnoreResults = true;  // No USRs for linkage specs themselves.
     }
@@ -205,7 +206,7 @@ void USRGenerator::VisitFunctionDecl(const FunctionDecl* D) {
         IsTemplate = true;
         Out << "@FT@";
         VisitTemplateParameterList(FunTmpl->getTemplateParameters());
-        if (auto RC = D->getTrailingRequiresClause()) {
+        if(auto RC = D->getTrailingRequiresClause()) {
             Out << ":RC";
             AppendExprODRHash(RC, Out);
         }
