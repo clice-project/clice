@@ -25,7 +25,8 @@ if has_config("dev") then
     end
 end
 
-add_requires("llvm", "libuv", "toml++")
+add_requires("llvm", "toml++")
+add_requires("libuv", {configs = {shared = is_mode("debug")}})
 
 add_rules("mode.release", "mode.debug")
 set_languages("c++23")
@@ -121,7 +122,7 @@ package("llvm")
     if is_plat("windows") then
         if is_mode("release") then
             add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
-            add_versions("20.0.0", "ba3fcd482340b8f892f02b9fc2a233a3ba0e0931fdf4e84a3e2a2ec47283d096")
+            add_versions("20.0.0", "4ef335845ebb52f8237bda3bcc7246b06085fdf5edc5cc6cf7f3a7c9ef655c09")
         else
         end 
     elseif is_plat("linux") then
@@ -130,7 +131,7 @@ package("llvm")
             add_versions("20.0.0", "7dc045424a9667f20845dec058d211476b84300ebcfc8c3a3aabf41bff37cfd9")
         elseif is_mode("release") then
             add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
-            add_versions("20.0.0", "76de8585494955090c79976d8e71bd719f68fc6dc8d06687284cff19266e4c11")
+            add_versions("20.0.0", "30ba7357eb40000f1d13d92242f7d87c3ff623e62205a41d10334d605739af89")
         end
     end
 
