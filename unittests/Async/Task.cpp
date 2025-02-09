@@ -35,7 +35,7 @@ TEST(Async, TaskDispose) {
 
     auto my_task = [&]() -> async::Task<> {
         X x;
-        co_await async::sleep(std::chrono::milliseconds(500));
+        co_await async::sleep(std::chrono::milliseconds(1000));
     };
 
     auto task = my_task();
@@ -49,7 +49,7 @@ TEST(Async, TaskDispose) {
     auto main = [&]() -> async::Task<> {
         auto task = my_task();
         task.schedule();
-        co_await async::sleep(std::chrono::milliseconds(100));
+        co_await async::sleep(std::chrono::milliseconds(500));
         task.cancel();
         task.dispose();
     };
