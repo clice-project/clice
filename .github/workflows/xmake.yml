@@ -97,7 +97,7 @@ jobs:
       - name: Xmake configure
         run: |
           xmake config --yes --toolchain=clang
-          xmake require -f
+          xmake require -f -y
 
       - name: Build clice
         run: |
