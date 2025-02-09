@@ -62,7 +62,8 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
                 auto core = callback(std::move(*json));
                 /// It will be destroyed in final suspend point.
                 /// So we release it here.
-                async::schedule(core.release());
+                core.schedule();
+                core.release();
                 buffer.consume();
             } else {
                 log::fatal("An error occurred while parsing JSON: {0}", json.takeError());
@@ -197,43 +198,48 @@ void spawn(llvm::StringRef path, llvm::ArrayRef<std::string> args, Callback call
     uv_log(uv_read_start((uv_stream_t*)&err, net::on_alloc, on_read));
 }
 
+namespace awaiter {
+
+struct write {
+    uv_write_t req;
+    uv_buf_t buf[2];
+    llvm::SmallString<128> header;
+    llvm::SmallString<4096> message;
+    promise_base* continuation = nullptr;
+
+    bool await_ready() const noexcept {
+        return false;
+    }
+
+    template <typename Promise>
+    void await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
+        req.data = this;
+
+        continuation = &waiting.promise();
+        buf[0] = uv_buf_init(header.data(), header.size());
+        buf[1] = uv_buf_init(message.data(), message.size());
+
+        uv_check_call(uv_write, &req, writer, buf, 2, [](uv_write_t* req, int status) {
+            if(status < 0) {
+                log::fatal("An error occurred while writing: {0}", uv_strerror(status));
+            }
+
+            auto& awaiter = uv_cast<struct write>(req);
+            awaiter.continuation->schedule();
+        });
+    }
+
+    void await_resume() noexcept {}
+};
+
+}  // namespace awaiter
+
 /// Write a JSON value to the client.
 Task<> write(json::Value value) {
-    struct awaiter {
-        uv_write_t write;
-        uv_buf_t buf[2];
-        llvm::SmallString<128> header;
-        llvm::SmallString<4096> message;
-        core_handle waiting;
-
-        bool await_ready() const noexcept {
-            return false;
-        }
-
-        void await_suspend(core_handle waiting) noexcept {
-            write.data = this;
-
-            this->waiting = waiting;
-            buf[0] = uv_buf_init(header.data(), header.size());
-            buf[1] = uv_buf_init(message.data(), message.size());
-
-            uv_check_call(uv_write, &write, writer, buf, 2, [](uv_write_t* req, int status) {
-                if(status < 0) {
-                    log::fatal("An error occurred while writing: {0}", uv_strerror(status));
-                }
-
-                auto& awaiter = uv_cast<struct awaiter>(req);
-                async::schedule(awaiter.waiting);
-            });
-        }
-
-        void await_resume() noexcept {}
-    } awaiter;
-
+    awaiter::write awaiter;
     llvm::raw_svector_ostream(awaiter.message) << value;
     llvm::raw_svector_ostream(awaiter.header)
         << "Content-Length: " << awaiter.message.size() << "\r\n\r\n";
-
     co_await awaiter;
 }
 

@@ -1,31 +1,38 @@
 #pragma once
 
+#include <chrono>
 #include <tuple>
 
 #include "libuv.h"
-#include "Coroutine.h"
+#include "Task.h"
 
 namespace clice::async {
 
 void run();
 
+namespace awaiter {
+
+template <typename Callback>
+struct suspend {
+    Callback callback;
+
+    bool await_ready() noexcept {
+        return false;
+    }
+
+    template <typename Promise>
+    void await_suspend(std::coroutine_handle<Promise> handle) noexcept {
+        callback(&handle.promise());
+    }
+
+    void await_resume() noexcept {}
+};
+
+}  // namespace awaiter
+
 template <typename Callback>
 auto suspend(Callback&& callback) {
-    struct suspend_awaiter {
-        Callback callback;
-
-        bool await_ready() noexcept {
-            return false;
-        }
-
-        void await_suspend(core_handle handle) noexcept {
-            callback(handle);
-        }
-
-        void await_resume() noexcept {}
-    };
-
-    return suspend_awaiter{std::forward<Callback>(callback)};
+    return awaiter::suspend<std::remove_cvref_t<Callback>>{std::forward<Callback>(callback)};
 }
 
 struct none {};
@@ -36,10 +43,10 @@ using task_value_t = std::conditional_t<std::is_void_v<V>, none, V>;
 template <typename... Tasks>
 auto gather [[gnu::noinline]] (Tasks&&... tasks) -> Task<std::tuple<task_value_t<Tasks>...>> {
     /// FIXME: If remove noinline, the program crashes. Figure out in the future.
-    (async::schedule(tasks.handle()), ...);
+    (tasks.schedule(), ...);
 
     while(!(tasks.done() && ...)) {
-        co_await async::suspend([](core_handle handle) { async::schedule(handle); });
+        co_await async::suspend([](auto handle) { handle->schedule(); });
     }
 
     /// If all tasks are done, return the results.
@@ -47,7 +54,7 @@ auto gather [[gnu::noinline]] (Tasks&&... tasks) -> Task<std::tuple<task_value_t
         if constexpr(std::is_void_v<typename Task::value_type>) {
             return none{};
         } else {
-            return task.await_resume();
+            return task.result();
         }
     };
     co_return std::tuple{getResult(tasks)...};
@@ -57,10 +64,10 @@ auto gather [[gnu::noinline]] (Tasks&&... tasks) -> Task<std::tuple<task_value_t
 template <typename... Tasks>
 auto run(Tasks&&... tasks) {
     auto core = gather(std::forward<Tasks>(tasks)...);
-    schedule(core.handle());
+    core.schedule();
     async::run();
     assert(core.done() && "run: not done");
-    return core.await_resume();
+    return core.result();
 }
 
 namespace impl::awaiter {
@@ -89,15 +96,16 @@ struct thread_pool : thread_pool_base<Ret> {
     Function function;
 
     /// The coroutine handle waiting for the result.
-    core_handle waiting;
+    promise_base* waiting;
 
     bool await_ready() noexcept {
         return false;
     }
 
-    void await_suspend(core_handle waiting) noexcept {
+    template <typename Promise>
+    void await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
         request.data = this;
-        this->waiting = waiting;
+        this->waiting = &waiting.promise();
 
         auto work_cb = [](uv_work_t* work) {
             auto& awaiter = *static_cast<thread_pool*>(work->data);
@@ -110,7 +118,7 @@ struct thread_pool : thread_pool_base<Ret> {
 
         auto after_work_cb = [](uv_work_t* work, int status) {
             auto& awaiter = *static_cast<thread_pool*>(work->data);
-            async::schedule(awaiter.waiting);
+            awaiter.waiting->schedule();
         };
 
         uv_queue_work(uv_default_loop(), &request, work_cb, after_work_cb);
@@ -125,27 +133,41 @@ auto submit(Callback&& callback) {
     return impl::awaiter::thread_pool<C, R>{{}, {}, std::forward<Callback>(callback)};
 }
 
-class Lock {
-public:
-    Lock(bool& locked) : locked(locked) {}
+namespace awaiter {
 
-    Task<void> operator co_await() {
-        while(locked) {
-            co_await async::suspend([](core_handle handle) { async::schedule(handle); });
-        }
-        locked = true;
+struct sleep {
+    uv_timer_t timer;
+    promise_base* continuation;
+    std::chrono::milliseconds duration;
+
+    bool await_ready() const noexcept {
+        return false;
     }
 
-    void unlock() {
-        locked = false;
+    template <typename Promise>
+    void await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
+        continuation = &waiting.promise();
+        timer.data = this;
+        uv_timer_init(async::loop, &timer);
+        uv_timer_start(
+            &timer,
+            [](uv_timer_t* handle) {
+                auto& awaiter = *static_cast<sleep*>(handle->data);
+                awaiter.continuation->resume();
+                uv_timer_stop(handle);
+            },
+            duration.count(),
+            0);
     }
 
-    ~Lock() {
-        locked = false;
-    }
-
-private:
-    bool& locked;
+    void await_resume() noexcept {}
 };
 
-}  // namespace clice::async
+}  // namespace awaiter
+
+inline auto sleep(std::chrono::milliseconds duration) {
+    return awaiter::sleep{{}, {}, duration};
+}
+
+};  // namespace clice::async
+
