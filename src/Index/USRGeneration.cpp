@@ -749,6 +749,10 @@ void USRGenerator::VisitType(QualType T) {
             T = AT->getElementType();
             continue;
         }
+        if(const auto* AT = dyn_cast<AutoType>(T)) {
+            Out << 'a';
+            return;
+        }
 
         // Unhandled type.
         Out << ' ';
