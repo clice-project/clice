@@ -121,16 +121,16 @@ package("llvm")
     if is_plat("windows") then
         if is_mode("release") then
             add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
-            add_versions("20.0.0", "75e0353ae1ad60ff4fb5b9767de09533d410f655")
+            add_versions("20.0.0", "4ef335845ebb52f8237bda3bcc7246b06085fdf5edc5cc6cf7f3a7c9ef655c09")
         else
         end 
     elseif is_plat("linux") then
         if is_mode("debug") then
             add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-debug.tar.xz")
-            add_versions("20.0.0", "75e0353ae1ad60ff4fb5b9767de09533d410f655")
+            add_versions("20.0.0", "7dc045424a9667f20845dec058d211476b84300ebcfc8c3a3aabf41bff37cfd9")
         elseif is_mode("release") then
             add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
-            add_versions("20.0.0", "75e0353ae1ad60ff4fb5b9767de09533d410f655")
+            add_versions("20.0.0", "30ba7357eb40000f1d13d92242f7d87c3ff623e62205a41d10334d605739af89")
         end
     end
 
