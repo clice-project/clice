@@ -91,7 +91,7 @@ public:
     void VisitUnresolvedUsingValueDecl(const UnresolvedUsingValueDecl* D);
     void VisitUnresolvedUsingTypenameDecl(const UnresolvedUsingTypenameDecl* D);
     void VisitConceptDecl(const ConceptDecl* D);
-
+    void VisitTemplateParamObjectDecl(const TemplateParamObjectDecl* D);
     void VisitLinkageSpecDecl(const LinkageSpecDecl* D) {
         IgnoreResults = true;  // No USRs for linkage specs themselves.
     }
@@ -897,6 +897,13 @@ void USRGenerator::VisitConceptDecl(const ConceptDecl* D) {
     VisitDeclContext(D->getDeclContext());
     Out << "@CT@";
     EmitDeclName(D);
+}
+
+void USRGenerator::VisitTemplateParamObjectDecl(const TemplateParamObjectDecl* D) {
+    VisitType(D->getType());
+    ODRHash Hash{};
+    Hash.AddStructuralValue(D->getValue());
+    Out << Hash.CalculateHash();
 }
 
 void USRGenerator::VisitMSGuidDecl(const MSGuidDecl* D) {
