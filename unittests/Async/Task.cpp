@@ -5,7 +5,7 @@ namespace clice::testing {
 
 namespace {
 
-TEST(Task, Cancel) {
+TEST(Async, Cancel) {
     int x = 1;
 
     auto my_task = [&]() -> async::Task<> {
