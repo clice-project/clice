@@ -44,6 +44,12 @@ static StringRef GetExternalSourceContainer(const NamedDecl* D) {
     return StringRef();
 }
 
+void AppendExprODRHash(const Expr* expr, llvm::raw_ostream& Out) {
+    ODRHash Hash{};
+    Hash.AddStmt(expr);
+    Out << Hash.CalculateHash();
+};
+
 namespace {
 class USRGenerator : public ConstDeclVisitor<USRGenerator> {
     SmallVectorImpl<char>& Buf;
@@ -199,6 +205,10 @@ void USRGenerator::VisitFunctionDecl(const FunctionDecl* D) {
         IsTemplate = true;
         Out << "@FT@";
         VisitTemplateParameterList(FunTmpl->getTemplateParameters());
+        if (auto RC = D->getTrailingRequiresClause()) {
+            Out << ":RC";
+            AppendExprODRHash(RC, Out);
+        }
     } else
         Out << "@F@";
 
@@ -750,12 +760,6 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
     if(!Params)
         return;
 
-    auto appendExprODRHash = [&](const Expr* expr) {
-        ODRHash Hash{};
-        Hash.AddStmt(expr);
-        Out << Hash.CalculateHash();
-    };
-
     Out << '>' << Params->size();
     for(TemplateParameterList::const_iterator P = Params->begin(), PEnd = Params->end(); P != PEnd;
         ++P) {
@@ -766,7 +770,7 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
             Out << 'T';
             if(p->hasTypeConstraint()) {
                 Out << ":TC";
-                appendExprODRHash(p->getTypeConstraint()->getImmediatelyDeclaredConstraint());
+                AppendExprODRHash(p->getTypeConstraint()->getImmediatelyDeclaredConstraint(), Out);
             }
             continue;
         }
@@ -776,9 +780,9 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
                 Out << 'p';
             Out << 'N';
             VisitType(NTTP->getType());
-            if (auto constraint = NTTP->getPlaceholderTypeConstraint()) {
+            if(auto constraint = NTTP->getPlaceholderTypeConstraint()) {
                 Out << ":PTC";
-                appendExprODRHash(constraint);
+                AppendExprODRHash(constraint, Out);
             }
             continue;
         }
@@ -790,9 +794,9 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
         VisitTemplateParameterList(TTP->getTemplateParameters());
     }
 
-    if (auto requiresClause = Params->getRequiresClause()) {
+    if(auto requiresClause = Params->getRequiresClause()) {
         Out << ":RC";
-        appendExprODRHash(requiresClause);
+        AppendExprODRHash(requiresClause, Out);
     }
 }
 
