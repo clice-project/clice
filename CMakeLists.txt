@@ -112,7 +112,7 @@ else()
 endif()
 
 target_include_directories(clice-core PUBLIC "${CMAKE_SOURCE_DIR}/include")
-target_link_libraries(clice-core PUBLIC uv tomlplusplus::tomlplusplus)
+target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus)
 
 # clice executable
 add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")

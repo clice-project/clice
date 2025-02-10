@@ -62,7 +62,7 @@ auto gather [[gnu::noinline]] (Tasks&&... tasks) -> Task<std::tuple<task_value_t
 
 /// Run the tasks in parallel and return the results.
 template <typename... Tasks>
-auto run(Tasks&&... tasks) {
+auto run [[gnu::noinline]] (Tasks&&... tasks) {
     auto core = gather(std::forward<Tasks>(tasks)...);
     core.schedule();
     async::run();
@@ -153,8 +153,8 @@ struct sleep {
             &timer,
             [](uv_timer_t* handle) {
                 auto& awaiter = *static_cast<sleep*>(handle->data);
-                awaiter.continuation->resume();
                 uv_timer_stop(handle);
+                awaiter.continuation->resume();
             },
             duration.count(),
             0);

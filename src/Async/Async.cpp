@@ -25,12 +25,20 @@ bool listened = false;
 void promise_base::schedule() {
     uv_async_t* async = new uv_async_t;
     async->data = this;
-    uv_async_init(loop, async, [](uv_async_t* handle) {
+    auto err = uv_async_init(loop, async, [](uv_async_t* handle) {
         auto core = static_cast<promise_base*>(handle->data);
-        core->resume();
         uv_close((uv_handle_t*)handle, [](uv_handle_t* handle) { delete (uv_async_t*)handle; });
+        core->resume();
     });
-    uv_async_send(async);
+
+    if(err < 0) {
+        log::warn("{}", uv_strerror(err));
+    }
+
+    err = uv_async_send(async);
+    if(err < 0) {
+        log::warn("{}", uv_strerror(err));
+    }
 }
 
 void run() {
