@@ -1,5 +1,7 @@
 #include "Test/Test.h"
-#include "Async/Async.h"
+#include "Async/Task.h"
+#include "Async/Event.h"
+#include "Async/Scheduler.h"
 
 namespace clice::testing {
 
@@ -25,62 +27,47 @@ TEST(Async, TaskAwait) {
 }
 
 TEST(Async, TaskDispose) {
-    // static int x = 1;
-    //
-    // struct X {
-    //    ~X() {
-    //        x += 1;
-    //    }
-    //};
-    //
-    // auto my_task = [&]() -> async::Task<> {
-    //    X x;
-    //    co_await async::sleep(std::chrono::milliseconds(300));
-    //};
-    //
-    // auto task = my_task();
-    // task.schedule();
-    // task.dispose();
-    //
-    // async::run();
-    //
-    // EXPECT_EQ(x, 2);
-    //
-    // auto main = [&]() -> async::Task<> {
-    //    auto task = my_task();
-    //    task.schedule();
-    //    co_await async::sleep(std::chrono::milliseconds(100));
-    //    task.cancel();
-    //    task.dispose();
-    //};
-    //
-    // auto p = main();
-    // p.schedule();
-    //
-    // async::run();
-    //
-    // EXPECT_EQ(x, 3);
+    static int x = 1;
+
+    struct X {
+        ~X() {
+            x += 1;
+        }
+    };
+
+    auto my_task = [&]() -> async::Task<> {
+        X x;
+        co_await async::sleep(std::chrono::milliseconds(100));
+    };
+
+    auto task = my_task();
+    task.schedule();
+    task.dispose();
+
+    async::run();
+
+    EXPECT_EQ(x, 2);
 }
 
 TEST(Async, TaskCancel) {
     // int x = 1;
     //
-    // auto my_task = [&]() -> async::Task<> {
+    // auto task_func = [&]() -> async::Task<> {
     //    x = 2;
     //    co_await async::sleep(std::chrono::milliseconds(300));
     //    x = 3;
     //};
     //
-    // auto main = [&]() -> async::Task<> {
-    //    auto task = my_task();
-    //    task.schedule();
+    // auto task = task_func();
+    // task.schedule();
+    //
+    // auto main_func = [&]() -> async::Task<> {
     //    co_await async::sleep(std::chrono::milliseconds(100));
     //    task.cancel();
-    //    task.dispose();
     //};
     //
-    // auto p = main();
-    // p.schedule();
+    // auto main = main_func();
+    // main.schedule();
     //
     // async::run();
     //

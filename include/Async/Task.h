@@ -250,6 +250,8 @@ public:
     }
 
     void schedule() {
+        assert(core && "schedule: empty task");
+        assert(!done() && "schedule: done task");
         core.promise().schedule();
     }
 
