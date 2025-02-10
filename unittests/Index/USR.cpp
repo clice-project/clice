@@ -1,5 +1,6 @@
 #include "Test/CTest.h"
 #include "Index/USR.h"
+#include "clang/AST/ODRHash.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice::testing {
@@ -7,20 +8,42 @@ namespace clice::testing {
 namespace {
 
 struct ASTVisitor : public clang::RecursiveASTVisitor<ASTVisitor> {
-    bool VisitDecl(clang::Decl* decl) {
+    bool VisitClassTemplatePartialSpecializationDecl(
+        clang::ClassTemplatePartialSpecializationDecl* TD) {
         llvm::SmallString<128> buffer;
-        if(!clice::index::generateUSRForDecl(decl, buffer)) {
+        if(!clice::index::generateUSRForDecl(TD, buffer)) {
             llvm::outs() << buffer << "\n";
         }
+
         return true;
     }
+
+    // bool VisitDecl(const clang::Decl* decl){
+    //     llvm::SmallString<128> buffer;
+    //     if(!clice::index::generateUSRForDecl(decl, buffer)) {
+    //         llvm::outs() << buffer << "\n";
+    //     }
+    //
+    //    return true;
+    //}
 };
 
 TEST(Index, USR) {
     const char* content = R"cpp(
-int main() {
-    return 0;
-}    
+template <typename T, typename U>
+struct function;
+
+template <typename T, typename U>
+    requires(__is_same(U, int))
+struct function<T, U> {
+    void foo();
+};
+
+template <typename T, typename U>
+    requires(__is_same(U, float))
+struct function<T, U> {
+    void foo();
+};
 )cpp";
 
     Tester tester("main.cpp", content);

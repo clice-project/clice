@@ -1,13 +1,12 @@
 #include <numeric>
 
-#include "Index/Index.h"
-
 #include "AST/Semantic.h"
 #include "Basic/SourceCode.h"
+#include "Index/Index.h"
 #include "Index/SymbolIndex.h"
+#include "Index/USR.h"
 #include "Support/Binary.h"
 #include "Support/Compare.h"
-#include "clang/Index/USRGeneration.h"
 
 namespace clice::index {
 
@@ -47,9 +46,9 @@ public:
         if(isMacro) {
             auto def = static_cast<const clang::MacroInfo*>(symbol);
             auto name = getTokenSpelling(srcMgr, def->getDefinitionLoc());
-            clang::index::generateUSRForMacro(name, def->getDefinitionLoc(), srcMgr, USR);
+            generateUSRForMacro(name, def->getDefinitionLoc(), srcMgr, USR);
         } else {
-            clang::index::generateUSRForDecl(static_cast<const clang::Decl*>(symbol), USR);
+            generateUSRForDecl(static_cast<const clang::Decl*>(symbol), USR);
         }
 
         assert(!USR.empty() && "Invalid USR");
@@ -117,9 +116,11 @@ public:
             std::ranges::iota(new2old, 0u);
 
             ranges::sort(views::zip(file.symbols, new2old), refl::less, [](const auto& element) {
-                auto& symbol = std::get<0>(element);
-                return std::tuple(symbol.id, symbol.name, symbol.kind);
+                return std::get<0>(element);
             });
+
+            /// FIXME: Check symbol id equality. In theory, two symbol id should never be the same.
+            /// But because of our wrong implementation(e.g. USR generation), it may happen. 
 
             for(uint32_t i = 0; i < file.symbols.size(); ++i) {
                 symbolMap[new2old[i]] = i;

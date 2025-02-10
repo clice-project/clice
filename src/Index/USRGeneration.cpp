@@ -122,6 +122,7 @@ public:
     /// itself.
 
     void VisitType(QualType T);
+    void VisitExpr(const Expr* E);
     void VisitTemplateParameterList(const TemplateParameterList* Params);
     void VisitTemplateName(TemplateName Name);
     void VisitTemplateArgument(const TemplateArgument& Arg);
@@ -746,6 +747,13 @@ void USRGenerator::VisitType(QualType T) {
     } while(true);
 }
 
+void USRGenerator::VisitExpr(const Expr* E) {
+    ODRHash Hash{};
+    Hash.AddStmt(E);
+    Out << 'E';
+    Out << Hash.CalculateHash();
+}
+
 void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Params) {
     if(!Params)
         return;
@@ -753,10 +761,14 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
     for(TemplateParameterList::const_iterator P = Params->begin(), PEnd = Params->end(); P != PEnd;
         ++P) {
         Out << '#';
-        if(isa<TemplateTypeParmDecl>(*P)) {
-            if(cast<TemplateTypeParmDecl>(*P)->isParameterPack())
+        if(auto TP = llvm::dyn_cast<TemplateTypeParmDecl>(*P)) {
+            if(TP->isParameterPack())
                 Out << 'p';
             Out << 'T';
+            if(TP->hasTypeConstraint()){
+                Out << 'c';
+                VisitExpr(TP->getTypeConstraint()->getImmediatelyDeclaredConstraint());
+            }
             continue;
         }
 
@@ -765,6 +777,10 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
                 Out << 'p';
             Out << 'N';
             VisitType(NTTP->getType());
+            if(auto expr = NTTP->getPlaceholderTypeConstraint()){
+                Out << 'c';
+                VisitExpr(expr);
+            }
             continue;
         }
 
@@ -773,6 +789,11 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
             Out << 'p';
         Out << 't';
         VisitTemplateParameterList(TTP->getTemplateParameters());
+    }
+
+    if(auto clause = Params->getRequiresClause()){
+        Out << 'r';
+        VisitExpr(clause);
     }
 }
 
@@ -805,9 +826,12 @@ void USRGenerator::VisitTemplateArgument(const TemplateArgument& Arg) {
             VisitTemplateName(Arg.getAsTemplateOrTemplatePattern());
             break;
 
-        case TemplateArgument::Expression:
+        case TemplateArgument::Expression: {
             // FIXME: Visit expressions.
+            VisitExpr(Arg.getAsExpr());
             break;
+        }
+            
 
         case TemplateArgument::Pack:
             Out << 'p' << Arg.pack_size();
