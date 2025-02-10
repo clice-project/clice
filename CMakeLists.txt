@@ -23,6 +23,10 @@ message(STATUS "Found LLVM ${LLVM_INCLUDE_DIRS}")
 
 if(CLICE_DEV)
     include(FetchContent)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+        # libuv option
+        set(ASAN ON CACHE BOOL "" FORCE)
+    endif()
 
     FetchContent_Declare(
         tomlplusplus   
