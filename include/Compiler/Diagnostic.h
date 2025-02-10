@@ -191,6 +191,8 @@ class DiagnosticCollector : public clang::DiagnosticConsumer {
 public:
     using Diagnostics = std::vector<Diagnostic>;
 
+    DiagnosticCollector(const DiagOption& options) : option(options) {}
+
     void BeginSourceFile(const clang::LangOptions& Opts, const clang::Preprocessor* PP) override;
 
     void HandleDiagnostic(clang::DiagnosticsEngine::Level DiagLevel,
@@ -209,6 +211,9 @@ public:
 private:
     const clang::SourceManager* originSrcMgr = nullptr;
     const clang::LangOptions* langOpts = nullptr;
+
+    DiagOption option;
+
     Diagnostics diags;
 };
 

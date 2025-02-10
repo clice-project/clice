@@ -241,8 +241,9 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCMInfo& 
 
 std::expected<ASTInfo, std::string> compile(CompilationParams& params,
                                             std::vector<Diagnostic>& out,
+                                            const DiagOption& options,
                                             const clang::tidy::ClangTidyContext* tidy) {
-    DiagnosticCollector* collector = new DiagnosticCollector();
+    DiagnosticCollector* collector = new DiagnosticCollector(options);
     auto instance = impl::createInstance(params, collector, true);
 
     if(auto info =

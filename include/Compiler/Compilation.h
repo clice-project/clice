@@ -71,7 +71,7 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& 
 std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCMInfo& out);
 
 /// Get diagnostics from given file path and content.
-std::expected<ASTInfo, std::string> compile(CompilationParams& params, std::vector<Diagnostic>& out,
+std::expected<ASTInfo, std::string> compile(CompilationParams& params, std::vector<Diagnostic>& out, const DiagOption& options,
                                 const clang::tidy::ClangTidyContext* tidy = nullptr);
 
 }  // namespace clice

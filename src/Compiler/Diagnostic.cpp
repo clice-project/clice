@@ -3,8 +3,8 @@
 #include <clang/AST/Type.h>
 #include <clang/AST/Decl.h>
 #include <clang/AST/DeclCXX.h>
-#include <clang/Basic/DiagnosticIDs.h>
 #include <clang/Basic/AllDiagnostics.h>
+#include <clang/Basic/Diagnostic.h>
 #include <clang/Lex/Preprocessor.h>
 
 namespace clice {
@@ -52,7 +52,8 @@ const char* findDiagName(unsigned ID) {
     }
 }
 
-llvm::SmallVector<DiagTag, 2> findDiagTags(unsigned diagID, llvm::StringRef diagName,
+llvm::SmallVector<DiagTag, 2> findDiagTags(unsigned diagID,
+                                           llvm::StringRef diagName,
                                            DiagSource source) {
     llvm::SmallVector<DiagTag, 2> tags;
 
@@ -199,6 +200,8 @@ clang::SourceRange takeDiagRange(const clang::Diagnostic& diagnostic,
                                  const clang::LangOptions& options) {
     /// TODO:
     /// Fix source range in some cases.
+    assert(diagnostic.getNumRanges() == 1 && "Figure out how to handle multi ranges");
+    clang::StoredDiagnostic d;
     auto charRange = diagnostic.getRange(0);
     if(charRange.isTokenRange()) {
         return clang::SourceRange(charRange.getBegin(), charRange.getEnd());
@@ -228,15 +231,21 @@ void DiagnosticCollector::BeginSourceFile(const clang::LangOptions& option,
 // llvm::outs() << diagnostic.getDiags()->getDiagnosticIDs()->getDescription(id) << "\n";
 // dumpArg(diagnostic.getArgKind(0), diagnostic.getRawArg(0));
 
-llvm::StringRef takeDiagCategoryName(unsigned diagID) {
-    unsigned categoryNumber = clang::DiagnosticIDs::getCategoryNumberForDiag(diagID);
-    return clang::DiagnosticIDs::getCategoryNameFromID(categoryNumber);
+llvm::StringRef findDiagCategoryName(unsigned diagID) {
+    unsigned categoryID = clang::DiagnosticIDs::getCategoryNumberForDiag(diagID);
+    return clang::DiagnosticIDs::getCategoryNameFromID(categoryID);
 }
 
 /// Put the diagnostic at the start of MainFileID if it has a invalid location.
-Diagnostic handleInvalidLocDiag(const clang::LangOptions& options,
-                                clang::DiagnosticsEngine::Level level) {
-    assert(false && "TODO");
+Diagnostic handleInvalidLocDiag(const clang::LangOptions* langOpts,
+                                clang::DiagnosticsEngine::Level level,
+                                unsigned diagID,
+                                const clang::Diagnostic& dgsc) {
+    assert(false && "TODO: Figure out how generate a diagnostic with a invalid location");
+    /// For a diag that comes from headers, skip it if not an error.
+    if(clang::DiagnosticIDs::isDefaultMappingAsError(diagID)) {
+        // Implement logic to create a diagnostic or handle it accordingly
+    }
     return {};
 }
 
@@ -250,6 +259,12 @@ DiagnosticBase extractDiagnosticBase(const clang::Diagnostic& diagnostic,
         .isInMainFile = true,
         .severity = toSeverity(level),
     };
+}
+
+bool shouldIgnore(unsigned diagID) {
+    // clang will always fail parsing MS ASM, we don't link in desc + asm parser.
+    return diagID == clang::diag::err_msasm_unable_to_create_target ||
+           diagID == clang::diag::err_msasm_unsupported_arch;
 }
 
 void DiagnosticCollector::HandleDiagnostic(clang::DiagnosticsEngine::Level level,
@@ -266,38 +281,43 @@ void DiagnosticCollector::HandleDiagnostic(clang::DiagnosticsEngine::Level level
     unsigned diagID = dgsc.getID();
     auto location = dgsc.getLocation();
 
-    /// TODO:
-    /// Figure out how generate a diagnostic with a invalid location.
-    assert(location.isValid());
-    // if(location.isInvalid()) {
-    //     /// For a diag comes from headers, skip it if not an error.
-    //     if(clang::DiagnosticIDs::isDefaultMappingAsError(diagID))
-    //         diags.push_back(handleHeaderFileDiagnostic(*langOpts, level));
-    //     return;
-    // }
-
-    llvm::SmallString<128> message;
-    dgsc.FormatDiagnostic(message);
-
     Diagnostic diag;
-    diag.message = message.str().str();
-    diag.range = takeDiagRange(dgsc, *langOpts);
-    diag.isInMainFile = originSrcMgr->isInMainFile(location);
-    diag.source = DiagSource::Clang;
-    diag.ID = diagID;
-    if(auto* name = findDiagName(diag.ID))
-        diag.name = name;
-    diag.category = takeDiagCategoryName(diagID);
-    diag.severity = toSeverity(level);
-    diag.tag = findDiagTags(diagID, diag.name, diag.source);
+    if(location.isInvalid()) {
+        diag = handleInvalidLocDiag(langOpts, level, diagID, dgsc);
+    } else {
+        llvm::SmallString<128> message;
+        dgsc.FormatDiagnostic(message);
+
+        diag.message = message.str().str();
+        diag.range = takeDiagRange(dgsc, *langOpts);
+        diag.isInMainFile = originSrcMgr->isInMainFile(location);
+        diag.source = DiagSource::Clang;
+        diag.ID = diagID;
+        if(const char* name = findDiagName(diagID))
+            diag.name = name;
+        diag.category = findDiagCategoryName(diagID);
+        diag.severity = shouldIgnore(diagID) ? DiagSeverity::Ignore : toSeverity(level);
+        diag.tag = findDiagTags(diagID, diag.name, diag.source);
+    }
+
+    if(level == clang::DiagnosticsEngine::Remark || level == clang::DiagnosticsEngine::Note) {
+        /// TODO:
+        /// Collect notes
+        // assert(!diags.empty() && "Note should have a parent diagnostic");
+    }
+
+    for(auto& fix: dgsc.getFixItHints()) {
+        if(fix.isNull())
+            continue;
+
+        /// TODO:
+        /// Impl fix-it
+        // diag.fixes.push_back(Fix{
+        //     .message = "",
+        // });
+    }
 
     diags.push_back(std::move(diag));
-
-    /// TODO:
-    /// Impl fix-it
-
-    /// TODO:
-    /// Collect notes
 
     /// FIXME:
     /// use DiagnosticEngine::SetArgToStringFn to set a custom function to convert arguments to
@@ -313,6 +333,10 @@ void DiagnosticCollector::EndSourceFile() {
 auto DiagnosticCollector::takeWithTidyContext(const clang::tidy::ClangTidyContext* tidy)
     -> std::vector<Diagnostic> {
     assert(tidy == nullptr && "Don't supoort tidy now");
+
+    /// TODO:
+    /// support tidy
+
     return std::move(this->diags);
 }
 
