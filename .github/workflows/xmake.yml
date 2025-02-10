@@ -60,7 +60,7 @@ jobs:
 
       - name: Xmake configure
         run: |
-          xmake config --yes --mode=${{ matrix.build_type }} --toolchain=clang-20
+          xmake config --yes -vD --mode=${{ matrix.build_type }} --toolchain=clang-20
 
       - name: Build clice
         run: |
@@ -100,7 +100,6 @@ jobs:
       - name: Xmake configure
         run: |
           xmake config --yes --toolchain=clang
-          xmake require -y -f -vD libuv
 
       - name: Build clice
         run: |
