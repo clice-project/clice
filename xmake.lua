@@ -25,7 +25,7 @@ if has_config("dev") then
     end
 end
 
-add_requires("llvm", "libuv", "toml++")
+add_requires("llvm", "libuv v1.x", "toml++")
 
 add_rules("mode.release", "mode.debug")
 set_languages("c++23")
