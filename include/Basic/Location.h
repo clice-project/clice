@@ -23,6 +23,8 @@ struct Position {
     /// Character offset on a line in a document (zero-based).
     /// The meaning of this offset is determined by the negotiated `PositionEncodingKind`.
     uinteger character;
+
+    auto operator<=> (const Position&) const = default;
 };
 
 struct Range {
