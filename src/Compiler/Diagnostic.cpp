@@ -1,18 +1,28 @@
 #include "Compiler/Diagnostic.h"
-#include "clang/AST/Type.h"
-#include "clang/AST/Decl.h"
-#include "clang/AST/DeclCXX.h"
-#include "clang/Basic/DiagnosticIDs.h"
-#include "clang/Basic/AllDiagnostics.h"
+
+#include <clang/AST/Type.h>
+#include <clang/AST/Decl.h>
+#include <clang/AST/DeclCXX.h>
+#include <clang/Basic/AllDiagnostics.h>
+#include <clang/Basic/Diagnostic.h>
+#include <clang/Lex/Preprocessor.h>
 
 namespace clice {
 
-void DiagnosticCollector::BeginSourceFile(const clang::LangOptions& Opts,
-                                          const clang::Preprocessor* PP) {
+DiagSeverity toSeverity(clang::DiagnosticsEngine::Level level) {
+    using Eng = clang::DiagnosticsEngine;
+    switch(level) {
+        case Eng::Remark: return DiagSeverity::Hint;
+        case Eng::Note: return DiagSeverity::Info;
+        case Eng::Warning: return DiagSeverity::Warning;
+        case Eng::Fatal:
+        case Eng::Error: return DiagSeverity::Error;
+        case Eng::Ignored: return DiagSeverity::Ignore;
+    }
+    llvm_unreachable("Unknown diagnostic level!");
+}
 
-};
-
-const char* getDiagnosticCode(unsigned ID) {
+const char* findDiagName(unsigned ID) {
     switch(ID) {
 #define DIAG(ENUM,                                                                                 \
              CLASS,                                                                                \
@@ -40,6 +50,80 @@ const char* getDiagnosticCode(unsigned ID) {
 #undef DIAG
         default: return nullptr;
     }
+}
+
+llvm::SmallVector<DiagTag, 2> findDiagTags(unsigned diagID,
+                                           llvm::StringRef diagName,
+                                           DiagSource source) {
+    llvm::SmallVector<DiagTag, 2> tags;
+
+    bool hasDep = false, hasUnused = false;
+
+    using namespace clang;
+    constexpr std::array DeprecatedDiags = {
+        diag::warn_access_decl_deprecated,
+        diag::warn_atl_uuid_deprecated,
+        diag::warn_deprecated,
+        diag::warn_deprecated_altivec_src_compat,
+        diag::warn_deprecated_comma_subscript,
+        diag::warn_deprecated_copy,
+        diag::warn_deprecated_copy_with_dtor,
+        diag::warn_deprecated_copy_with_user_provided_copy,
+        diag::warn_deprecated_copy_with_user_provided_dtor,
+        diag::warn_deprecated_def,
+        diag::warn_deprecated_increment_decrement_volatile,
+        diag::warn_deprecated_message,
+        diag::warn_deprecated_redundant_constexpr_static_def,
+        diag::warn_deprecated_register,
+        diag::warn_deprecated_simple_assign_volatile,
+        diag::warn_deprecated_string_literal_conversion,
+        diag::warn_deprecated_this_capture,
+        diag::warn_deprecated_volatile_param,
+        diag::warn_deprecated_volatile_return,
+        diag::warn_deprecated_volatile_structured_binding,
+        diag::warn_opencl_attr_deprecated_ignored,
+        diag::warn_property_method_deprecated,
+        diag::warn_vector_mode_deprecated,
+    };
+
+    if(auto it = std::ranges::find(DeprecatedDiags, diagID); it != DeprecatedDiags.end()) {
+        tags.push_back(DiagTag::Deprecated);
+        hasDep = true;
+    }
+
+    constexpr std::array UnusedDiags = {
+        diag::warn_opencl_attr_deprecated_ignored,
+        diag::warn_pragma_attribute_unused,
+        diag::warn_unused_but_set_parameter,
+        diag::warn_unused_but_set_variable,
+        diag::warn_unused_comparison,
+        diag::warn_unused_const_variable,
+        diag::warn_unused_exception_param,
+        diag::warn_unused_function,
+        diag::warn_unused_label,
+        diag::warn_unused_lambda_capture,
+        diag::warn_unused_local_typedef,
+        diag::warn_unused_member_function,
+        diag::warn_unused_parameter,
+        diag::warn_unused_private_field,
+        diag::warn_unused_property_backing_ivar,
+        diag::warn_unused_template,
+        diag::warn_unused_variable,
+    };
+
+    if(auto it = std::ranges::find(UnusedDiags, diagID); it != UnusedDiags.end()) {
+        tags.push_back(DiagTag::Unnecessary);
+        hasUnused = true;
+    }
+
+    if(source == DiagSource::ClangTidy && tags.size() < 2) {
+        if(!hasUnused && llvm::StringRef(diagName).starts_with("misc-unused-"))
+            tags.push_back(DiagTag::Unnecessary);
+        if(!hasDep && llvm::StringRef(diagName).starts_with("modernize-"))
+            tags.push_back(DiagTag::Deprecated);
+    }
+
+    return tags;
 }
 
 // see llvm/clang/include/clang/AST/ASTDiagnostic.h
@@ -112,31 +196,148 @@ void dumpArg(clang::DiagnosticsEngine::ArgumentKind kind, std::uint64_t value) {
     llvm::outs() << "\n";
 }
 
+clang::SourceRange takeDiagRange(const clang::Diagnostic& diagnostic,
+                                 const clang::LangOptions& options) {
+    /// TODO:
+    /// Fix source range in some cases.
+    assert(diagnostic.getNumRanges() == 1 && "Figure out how to handle multi ranges");
+    clang::StoredDiagnostic d;
+    auto charRange = diagnostic.getRange(0);
+    if(charRange.isTokenRange()) {
+        return clang::SourceRange(charRange.getBegin(), charRange.getEnd());
+    } else {
+        return clang::SourceRange(charRange.getBegin(), charRange.getEnd().getLocWithOffset(-1));
+    }
+}
+
+void DiagnosticCollector::BeginSourceFile(const clang::LangOptions& option,
+                                          const clang::Preprocessor* pp) {
+    langOpts = &option;
+    if(pp)
+        originSrcMgr = &pp->getSourceManager();
+};
+
+// llvm::SmallString<128> message;
+// diagnostic.FormatDiagnostic(message);
+// diagnostic.getLocation();
+// fmt::print(fg(fmt::color::red),
+//           "[Diagnostic, kind: {}, message: {}]\n",
+//           refl::enum_name(level),
+//           message.str().str());
+// diagnostic.getLocation().dump(diagnostic.getDiags()->getSourceManager());
+// get diagnostic text.
+// auto id = diagnostic.getID();
+// llvm::outs() << getDiagnosticCode(id) << "\n";
+// llvm::outs() << diagnostic.getDiags()->getDiagnosticIDs()->getDescription(id) << "\n";
+// dumpArg(diagnostic.getArgKind(0), diagnostic.getRawArg(0));
+
+llvm::StringRef findDiagCategoryName(unsigned diagID) {
+    unsigned categoryID = clang::DiagnosticIDs::getCategoryNumberForDiag(diagID);
+    return clang::DiagnosticIDs::getCategoryNameFromID(categoryID);
+}
+
+/// Put the diagnostic at the start of MainFileID if it has a invalid location.
+Diagnostic handleInvalidLocDiag(const clang::LangOptions* langOpts,
+                                clang::DiagnosticsEngine::Level level,
+                                unsigned diagID,
+                                const clang::Diagnostic& dgsc) {
+    assert(false && "TODO: Figure out how generate a diagnostic with a invalid location");
+    /// For a diag that comes from headers, skip it if not an error.
+    if(clang::DiagnosticIDs::isDefaultMappingAsError(diagID)) {
+        // Implement logic to create a diagnostic or handle it accordingly
+    }
+    return {};
+}
+
+DiagnosticBase extractDiagnosticBase(const clang::Diagnostic& diagnostic,
+                                     const clang::LangOptions& options,
+                                     clang::DiagnosticsEngine::Level level) {
+    return {
+        .range = takeDiagRange(diagnostic, options),
+
+        /// FIXME: check is in main file
+        .isInMainFile = true,
+        .severity = toSeverity(level),
+    };
+}
+
+bool shouldIgnore(unsigned diagID) {
+    // clang will always fail parsing MS ASM, we don't link in desc + asm parser.
+    return diagID == clang::diag::err_msasm_unable_to_create_target ||
+           diagID == clang::diag::err_msasm_unsupported_arch;
+}
+
 void DiagnosticCollector::HandleDiagnostic(clang::DiagnosticsEngine::Level level,
-                                           const clang::Diagnostic& diagnostic) {
-    llvm::SmallString<128> message;
-    diagnostic.FormatDiagnostic(message);
-    // diagnostic.getLocation();
-    // fmt::print(fg(fmt::color::red),
-    //           "[Diagnostic, kind: {}, message: {}]\n",
-    //           refl::enum_name(level),
-    //           message.str().str());
-    diagnostic.getLocation().dump(diagnostic.getDiags()->getSourceManager());
-    // get diagnostic text.
-    auto id = diagnostic.getID();
-    llvm::outs() << getDiagnosticCode(id) << "\n";
-    // llvm::outs() << diagnostic.getDiags()->getDiagnosticIDs()->getDescription(id) << "\n";
+                                           const clang::Diagnostic& dgsc) {
+    assert(this->langOpts != nullptr && "Just check behaviour of clang::DiagnosticConsumer");
 
-    // dumpArg(diagnostic.getArgKind(0), diagnostic.getRawArg(0));
+    // If the diagnostic was generated for a different SourceManager, skip it.
+    // This happens when a module is imported and needs to be implicitly built.
+    // The compilation of that module will use the same StoreDiags, but different
+    // SourceManager.
+    if(originSrcMgr && dgsc.hasSourceManager() && originSrcMgr != &dgsc.getSourceManager())
+        return;
 
-    // FIXME:
-    // use DiagnosticEngine::SetArgToStringFn to set a custom function to convert arguments to
-    // strings. Support markdown diagnostic in LSP 3.18. allow complex type to display in markdown
-    // code block.
+    unsigned diagID = dgsc.getID();
+    auto location = dgsc.getLocation();
+
+    Diagnostic diag;
+    if(location.isInvalid()) {
+        diag = handleInvalidLocDiag(langOpts, level, diagID, dgsc);
+    } else {
+        llvm::SmallString<128> message;
+        dgsc.FormatDiagnostic(message);
+
+        diag.message = message.str().str();
+        diag.range = takeDiagRange(dgsc, *langOpts);
+        diag.isInMainFile = originSrcMgr->isInMainFile(location);
+        diag.source = DiagSource::Clang;
+        diag.ID = diagID;
+        if(const char* name = findDiagName(diagID))
+            diag.name = name;
+        diag.category = findDiagCategoryName(diagID);
+        diag.severity = shouldIgnore(diagID) ? DiagSeverity::Ignore : toSeverity(level);
+        diag.tag = findDiagTags(diagID, diag.name, diag.source);
+    }
+
+    if(level == clang::DiagnosticsEngine::Remark || level == clang::DiagnosticsEngine::Note) {
+        /// TODO:
+        /// Collect notes
+        // assert(!diags.empty() && "Note should have a parent diagnostic");
+    }
+
+    for(auto& fix: dgsc.getFixItHints()) {
+        if(fix.isNull())
+            continue;
+
+        /// TODO:
+        /// Impl fix-it
+        // diag.fixes.push_back(Fix{
+        //     .message = "",
+        // });
+    }
+
+    diags.push_back(std::move(diag));
+
+    /// FIXME:
+    /// use DiagnosticEngine::SetArgToStringFn to set a custom function to convert arguments to
+    /// strings. Support markdown diagnostic in LSP 3.18. allow complex type to display in markdown
+    /// code block.
 };
 
 void DiagnosticCollector::EndSourceFile() {
-
+    langOpts = nullptr;
+    originSrcMgr = nullptr;
 };
+
+auto DiagnosticCollector::takeWithTidyContext(const clang::tidy::ClangTidyContext* tidy)
+    -> std::vector<Diagnostic> {
+    assert(tidy == nullptr && "Don't supoort tidy now");
+
+    /// TODO:
+    /// support tidy
+
+    return std::move(this->diags);
+}
 
 }  // namespace clice
