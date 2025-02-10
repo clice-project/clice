@@ -2,9 +2,9 @@ name: xmake
 
 on:
   push:
-    branches: [ main ]
+    branches: [ non-existent-branch ]
   pull_request:
-    branches: [ main ]
+    branches: [ non-existent-branch ]
     paths-ignore:
           - '.clang-format'
           - '.clangd'
