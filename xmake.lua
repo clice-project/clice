@@ -154,3 +154,40 @@ package("llvm")
         os.mv("lib", package:installdir())
         os.mv("include", package:installdir())
     end)
+
+package("libuv")
+    set_homepage("http://libuv.org/")
+    set_description("A multi-platform support library with a focus on asynchronous I/O.")
+    set_license("MIT")
+
+    set_urls("https://github.com/libuv/libuv/archive/refs/tags/$(version).zip",
+             "https://github.com/libuv/libuv.git")
+
+    add_versions("v1.50.0", "038f48e48b3d15c9341dfe1fa5099b83b52ac30f15c97a67269163f8f8ab99ac")
+
+    if is_plat("macosx", "iphoneos") then
+        add_frameworks("CoreFoundation")
+    elseif is_plat("linux", "bsd") then
+        add_syslinks("pthread", "dl")
+    elseif is_plat("windows", "mingw") then
+        add_syslinks("advapi32", "iphlpapi", "psapi", "user32", "userenv", "ws2_32", "shell32", "ole32", "uuid", "dbghelp")
+    end
+
+    on_load(function (package)
+        package:add("deps", "cmake")
+        if package:config("shared") then
+            package:add("defines", "USING_UV_SHARED")
+        end
+    end)
+
+    on_install(function (package)
+        local configs = {"-DLIBUV_BUILD_TESTS=OFF", "-DLIBUV_BUILD_BENCH=OFF"}
+        table.insert(configs, "-DCMAKE_BUILD_TYPE=" .. (package:is_debug() and "Debug" or "Release"))
+        table.insert(configs, "-DLIBUV_BUILD_SHARED=" .. (package:config("shared") and "ON" or "OFF"))
+        table.insert(configs, "-DASAN=" .. (package:config("asan") and "ON" or "OFF"))
+        import("package.tools.cmake").install(package, configs)
+    end)
+
+    on_test(function (package)
+        assert(package:has_cfuncs("uv_tcp_init", {includes = "uv.h"}))
+    end)
