@@ -48,7 +48,7 @@ struct thread_pool : value<Ret>, uv<thread_pool<Work, Ret>, uv_work_t, Ret, int>
 
 template <typename Work, typename Ret = decltype(std::declval<Work>()())>
 auto submit(Work&& work) {
-    return awaiter::thread_pool<Work, Ret>{{}, {}, std::forward<Work>(work)};
+    return awaiter::thread_pool<std::remove_cvref_t<Work>, Ret>{{}, {}, std::forward<Work>(work)};
 }
 
 }  // namespace clice::async

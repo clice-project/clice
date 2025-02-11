@@ -64,6 +64,9 @@ void run() {
     UV_CHECK_RESULT(uv_run(loop, UV_RUN_DEFAULT));
 
     uv_close(reinterpret_cast<uv_handle_t*>(&idle), nullptr);
+
+    /// Run agian to cleanup the loop.
+    UV_CHECK_RESULT(uv_run(loop, UV_RUN_DEFAULT));
     UV_CHECK_RESULT(uv_loop_close(loop));
 }
 

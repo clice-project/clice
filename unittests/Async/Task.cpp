@@ -6,8 +6,22 @@ namespace clice::testing {
 
 namespace {
 
-TEST(Async, TaskAwait) {
+TEST(Async, Run) {
     async::run();
+}
+
+TEST(Async, TaskSchedule) {
+    auto task_gen = []() -> async::Task<int> {
+        co_return 1;
+    };
+
+    auto task = task_gen();
+    task.schedule();
+
+    async::run();
+
+    EXPECT_TRUE(task.done());
+    EXPECT_EQ(task.result(), 1);
 }
 
 TEST(Async, TaskDispose) {
