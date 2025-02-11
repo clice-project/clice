@@ -27,10 +27,10 @@ TEST(clice, Command) {
         " -o CMakeFiles/clice-core.dir/src/Basic/URI.cpp.o"
         " -c /home/ykiko/C++/clice2/src/Basic/URI.cpp";
 
-    auto error = mangleCommand(command, args, buffer);
-    ASSERT_FALSE(bool(error));
+    auto result = mangleCommand(command, args, buffer);
+    ASSERT_FALSE(bool(!result));
 }
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing

@@ -1,70 +1,47 @@
-#include "Index.h"
+#include "Index/Index.h"
+#include "Support/Binary.h"
+#include "Support/Format.h"
 
 namespace clice::index {
 
-struct SymbolIndexVisitor : binary::SymbolIndex {
-    llvm::StringRef getString(binary::String string) const {
-        return {reinterpret_cast<const char*>(this) + string.offset, string.size};
-    }
-
-    template <typename T>
-    llvm::ArrayRef<T> getArray(binary::Array<T> array) const {
-        return {reinterpret_cast<const T*>(reinterpret_cast<const char*>(this) + array.offset),
-                array.size};
-    }
-
-    llvm::ArrayRef<binary::Symbol> getSymbols() const {
-        return getArray(symbols);
-    }
-
-    llvm::ArrayRef<binary::Occurrence> getOccurrences() const {
-        return getArray(occurrences);
-    }
-
-    llvm::ArrayRef<LocalSourceRange> getLocations() const {
-        return getArray(ranges);
-    }
-
-    template <typename To, typename From>
-    ArrayView<To> getArrayView(binary::Array<From> array) const {
-        auto base = reinterpret_cast<const char*>(this);
-        return {base, base + array.offset, array.size, sizeof(From)};
-    }
-};
-
 RelationKind SymbolIndex::Relation::kind() const {
-    return static_cast<const binary::Relation*>(data)->kind;
+    auto relation = binary::Proxy<memory::Relation>{base, data};
+    return relation->kind;
 }
 
 /// FIXME: check relation ...
 
 std::optional<LocalSourceRange> SymbolIndex::Relation::range() const {
-    auto index = static_cast<const SymbolIndexVisitor*>(base);
-    auto relation = static_cast<const binary::Relation*>(data);
+    binary::Proxy<memory::Relation> relation{base, data};
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+
     if(kind().is_one_of(RelationKind::Definition,
                         RelationKind::Declaration,
                         RelationKind::Reference,
                         RelationKind::WeakReference)) {
-        return index->getLocations()[relation->data[0]];
+        return index.get<"ranges">()[relation->data];
     } else if(kind().is_one_of(RelationKind::Caller, RelationKind::Callee)) {
-        return index->getLocations()[relation->data[1]];
+        return index.get<"ranges">()[relation->data1];
     }
 
     return {};
 }
 
 std::optional<LocalSourceRange> SymbolIndex::Relation::symbolRange() const {
-    if(kind().is_one_of(RelationKind::Definition, RelationKind::Declaration) &&
-       "Invalid relation kind") {
-        auto index = static_cast<const SymbolIndexVisitor*>(base);
-        auto relation = static_cast<const binary::Relation*>(data);
-        return index->getLocations()[relation->data[1]];
+    binary::Proxy<memory::Relation> relation{base, data};
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+
+    if(kind().is_one_of(RelationKind::Definition, RelationKind::Declaration)) {
+        return index.get<"ranges">()[relation->data1];
     }
 
     return {};
 }
 
 std::optional<SymbolIndex::Symbol> SymbolIndex::Relation::symbol() const {
+    binary::Proxy<memory::Relation> relation{base, data};
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+
     if(kind().is_one_of(RelationKind::Interface,
                         RelationKind::Implementation,
                         RelationKind::TypeDefinition,
@@ -74,86 +51,109 @@ std::optional<SymbolIndex::Symbol> SymbolIndex::Relation::symbol() const {
                         RelationKind::Destructor,
                         RelationKind::Caller,
                         RelationKind::Callee)) {
-        auto index = static_cast<const SymbolIndexVisitor*>(base);
-        auto relation = static_cast<const binary::Relation*>(data);
-        return SymbolIndex::Symbol{base, &index->getSymbols()[relation->data[0]]};
+        auto symbol = index.get<"symbols">()[relation->data];
+        return Symbol{base, symbol.data};
     }
 
     return {};
 }
 
 uint64_t SymbolIndex::SymbolID::id() const {
-    return static_cast<const binary::Symbol*>(data)->id;
+    binary::Proxy<memory::Symbol> symbol{base, data};
+    return symbol.get<"id">();
 }
 
 llvm::StringRef SymbolIndex::SymbolID::name() const {
-    auto index = static_cast<const SymbolIndexVisitor*>(base);
-    auto symbol = static_cast<const binary::Symbol*>(data);
-    return index->getString(symbol->name);
+    binary::Proxy<memory::Symbol> symbol{base, data};
+    return symbol.get<"name">().as_string();
 }
 
 SymbolKind SymbolIndex::Symbol::kind() const {
-    return static_cast<const binary::Symbol*>(data)->kind;
+    binary::Proxy<memory::Symbol> symbol{base, data};
+    return symbol.get<"kind">();
 }
 
 ArrayView<SymbolIndex::Relation> SymbolIndex::Symbol::relations() const {
-    auto index = static_cast<const SymbolIndexVisitor*>(base);
-    auto symbol = static_cast<const binary::Symbol*>(data);
-    return index->getArrayView<SymbolIndex::Relation>(symbol->relations);
+    binary::Proxy<memory::Symbol> symbol{base, data};
+    auto relations = symbol.get<"relations">().as_array();
+    return ArrayView<SymbolIndex::Relation>{
+        base,
+        relations.data(),
+        relations.size(),
+        sizeof(decltype(relations)::value_type),
+    };
 }
 
 LocalSourceRange SymbolIndex::Occurrence::range() const {
-    auto index = static_cast<const SymbolIndexVisitor*>(base);
-    auto occurrence = static_cast<const binary::Occurrence*>(data);
+    binary::Proxy<memory::Occurrence> occurrence{base, data};
+    binary::Proxy<memory::SymbolIndex> index{base, base};
     assert(occurrence->location.valid() && "Invalid occurrence reference");
-    return index->getLocations()[occurrence->location];
+    return index.get<"ranges">()[occurrence->location];
 }
 
 SymbolIndex::Symbol SymbolIndex::Occurrence::symbol() const {
-    auto index = static_cast<const SymbolIndexVisitor*>(base);
-    auto occurrence = static_cast<const binary::Occurrence*>(data);
+    binary::Proxy<memory::Occurrence> occurrence{base, data};
+    binary::Proxy<memory::SymbolIndex> index{base, base};
     assert(occurrence->symbol.valid() && "Invalid symbol reference");
-    return {base, &index->getSymbols()[occurrence->symbol]};
+    return Symbol{base, index.get<"symbols">()[occurrence->symbol].data};
 }
 
 ArrayView<SymbolIndex::Symbol> SymbolIndex::symbols() const {
-    auto index = static_cast<const SymbolIndexVisitor*>(base);
-    return index->getArrayView<SymbolIndex::Symbol>(index->symbols);
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    auto symbols = index.get<"symbols">().as_array();
+    return ArrayView<SymbolIndex::Symbol>{
+        base,
+        symbols.data(),
+        symbols.size(),
+        sizeof(decltype(symbols)::value_type),
+    };
 }
 
 ArrayView<SymbolIndex::Occurrence> SymbolIndex::occurrences() const {
-    auto index = static_cast<const SymbolIndexVisitor*>(base);
-    return index->getArrayView<SymbolIndex::Occurrence>(index->occurrences);
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    auto occurrences = index.get<"occurrences">().as_array();
+    return ArrayView<SymbolIndex::Occurrence>{
+        base,
+        occurrences.data(),
+        occurrences.size(),
+        sizeof(decltype(occurrences)::value_type),
+    };
 }
 
 /// Locate symbols at the given position.
 void SymbolIndex::locateSymbols(uint32_t position,
                                 llvm::SmallVectorImpl<SymbolIndex::Symbol>& symbols) const {
-    auto index = static_cast<const SymbolIndexVisitor*>(base);
-    auto occurrences = index->getOccurrences();
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+
+    auto ranges = index.get<"ranges">().as_array();
+    auto occurrences = index.get<"occurrences">().as_array();
+
     auto iter = std::ranges::lower_bound(occurrences, position, {}, [&](const auto& occurrence) {
-        return index->getLocations()[occurrence.location].end;
+        return ranges[occurrence.location].end;
     });
 
     for(; iter != occurrences.end(); ++iter) {
         auto occurrence = *iter;
-        if(index->getLocations()[occurrence.location].begin > position) {
+        if(ranges[occurrence.location].begin > position) {
             break;
         }
 
-        symbols.emplace_back(SymbolIndex::Symbol{base, &index->getSymbols()[occurrence.symbol]});
+        symbols.emplace_back(
+            SymbolIndex::Symbol{base, index.get<"symbols">()[occurrence.symbol].data});
     }
 }
 
 std::optional<SymbolIndex::Symbol> SymbolIndex::locateSymbol(uint64_t id,
                                                              llvm::StringRef name) const {
-    auto index = static_cast<const SymbolIndexVisitor*>(base);
-    auto symbols = index->getSymbols();
-    auto range =
-        std::ranges::equal_range(symbols, id, {}, [&](const auto& symbol) { return symbol.id; });
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    auto symbols = index.get<"symbols">().as_array();
+    auto range = std::ranges::equal_range(symbols, id, {}, [&](const auto& symbol) {
+        return std::get<0>(symbol);
+    });
 
     for(auto& symbol: range) {
-        if(index->getString(symbol.name) == name) {
+        binary::Proxy<memory::Symbol> symbolProxy{base, &symbol};
+        if(symbolProxy.get<"name">().as_string() == name) {
             return SymbolIndex::Symbol{base, &symbol};
         }
     }

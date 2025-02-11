@@ -2,9 +2,9 @@
 
 #include "Shared.h"
 #include "ArrayView.h"
+#include "AST/SymbolKind.h"
+#include "AST/RelationKind.h"
 #include "Basic/SourceCode.h"
-#include "Basic/SymbolKind.h"
-#include "Basic/RelationKind.h"
 #include "Support/JSON.h"
 
 namespace clice {
@@ -17,7 +17,7 @@ namespace clice::index {
 
 class SymbolIndex {
 public:
-    SymbolIndex(void* base, std::size_t size, bool own = true) : base(base), size(size), own(own) {}
+    SymbolIndex(char* base, std::size_t size, bool own = true) : base(base), size(size), own(own) {}
 
     SymbolIndex(SymbolIndex&& other) noexcept : base(other.base), size(other.size), own(other.own) {
         other.base = nullptr;
@@ -85,7 +85,7 @@ public:
     json::Value toJSON() const;
 
 public:
-    void* base;
+    char* base;
     std::size_t size;
     bool own;
 };

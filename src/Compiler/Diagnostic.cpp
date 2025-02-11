@@ -1,30 +1,30 @@
-#include <Support/Support.h>
-#include <Compiler/Diagnostic.h>
-
-#include <clang/Basic/DiagnosticIDs.h>
-#include <clang/Basic/AllDiagnostics.h>
-
-// #include <spdlog/fmt/bundled/color.h>
+#include "Compiler/Diagnostic.h"
+#include "clang/AST/Type.h"
+#include "clang/AST/Decl.h"
+#include "clang/AST/DeclCXX.h"
+#include "clang/Basic/DiagnosticIDs.h"
+#include "clang/Basic/AllDiagnostics.h"
 
 namespace clice {
 
-void DiagnosticCollector::BeginSourceFile(const clang::LangOptions& Opts, const clang::Preprocessor* PP) {
+void DiagnosticCollector::BeginSourceFile(const clang::LangOptions& Opts,
+                                          const clang::Preprocessor* PP) {
 
 };
 
 const char* getDiagnosticCode(unsigned ID) {
     switch(ID) {
-#define DIAG(ENUM,                                                                                                     \
-             CLASS,                                                                                                    \
-             DEFAULT_MAPPING,                                                                                          \
-             DESC,                                                                                                     \
-             GROPU,                                                                                                    \
-             SFINAE,                                                                                                   \
-             NOWERROR,                                                                                                 \
-             SHOWINSYSHEADER,                                                                                          \
-             SHOWINSYSMACRO,                                                                                           \
-             DEFERRABLE,                                                                                               \
-             CATEGORY)                                                                                                 \
+#define DIAG(ENUM,                                                                                 \
+             CLASS,                                                                                \
+             DEFAULT_MAPPING,                                                                      \
+             DESC,                                                                                 \
+             GROPU,                                                                                \
+             SFINAE,                                                                               \
+             NOWERROR,                                                                             \
+             SHOWINSYSHEADER,                                                                      \
+             SHOWINSYSMACRO,                                                                       \
+             DEFERRABLE,                                                                           \
+             CATEGORY)                                                                             \
     case clang::diag::ENUM: return #ENUM;
 #include "clang/Basic/DiagnosticASTKinds.inc"
 #include "clang/Basic/DiagnosticAnalysisKinds.inc"
@@ -58,15 +58,18 @@ void dumpArg(clang::DiagnosticsEngine::ArgumentKind kind, std::uint64_t value) {
         }
 
         case clang::DiagnosticsEngine::ak_qualtype: {
-            clang::QualType type = clang::QualType::getFromOpaquePtr(reinterpret_cast<void*>(value));
+            clang::QualType type =
+                clang::QualType::getFromOpaquePtr(reinterpret_cast<void*>(value));
             llvm::outs() << type.getAsString();
             break;
         }
 
         case clang::DiagnosticsEngine::ak_qualtype_pair: {
             clang::TemplateDiffTypes& TDT = *reinterpret_cast<clang::TemplateDiffTypes*>(value);
-            clang::QualType type1 = clang::QualType::getFromOpaquePtr(reinterpret_cast<void*>(TDT.FromType));
-            clang::QualType type2 = clang::QualType::getFromOpaquePtr(reinterpret_cast<void*>(TDT.ToType));
+            clang::QualType type1 =
+                clang::QualType::getFromOpaquePtr(reinterpret_cast<void*>(TDT.FromType));
+            clang::QualType type2 =
+                clang::QualType::getFromOpaquePtr(reinterpret_cast<void*>(TDT.ToType));
             llvm::outs() << type1.getAsString() << " -> " << type2.getAsString();
             break;
         }
@@ -109,7 +112,8 @@ void dumpArg(clang::DiagnosticsEngine::ArgumentKind kind, std::uint64_t value) {
     llvm::outs() << "\n";
 }
 
-void DiagnosticCollector::HandleDiagnostic(clang::DiagnosticsEngine::Level level, const clang::Diagnostic& diagnostic) {
+void DiagnosticCollector::HandleDiagnostic(clang::DiagnosticsEngine::Level level,
+                                           const clang::Diagnostic& diagnostic) {
     llvm::SmallString<128> message;
     diagnostic.FormatDiagnostic(message);
     // diagnostic.getLocation();
@@ -126,8 +130,9 @@ void DiagnosticCollector::HandleDiagnostic(clang::DiagnosticsEngine::Level level
     // dumpArg(diagnostic.getArgKind(0), diagnostic.getRawArg(0));
 
     // FIXME:
-    // use DiagnosticEngine::SetArgToStringFn to set a custom function to convert arguments to strings.
-    // Support markdown diagnostic in LSP 3.18. allow complex type to display in markdown code block.
+    // use DiagnosticEngine::SetArgToStringFn to set a custom function to convert arguments to
+    // strings. Support markdown diagnostic in LSP 3.18. allow complex type to display in markdown
+    // code block.
 };
 
 void DiagnosticCollector::EndSourceFile() {

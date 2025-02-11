@@ -1,6 +1,8 @@
 #pragma once
 
-#include "Clang.h"
+#include "AST/SourceLocation.h"
+#include "clang/Lex/MacroInfo.h"
+#include "llvm/ADT/DenseMap.h"
 
 namespace clice {
 

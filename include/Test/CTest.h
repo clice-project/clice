@@ -1,10 +1,7 @@
 #pragma once
 
 #include "Test.h"
-#include "Basic/Location.h"
 #include "Compiler/Compilation.h"
-#include "Support/Support.h"
-#include <llvm/ADT/StringRef.h>
 
 namespace clice::testing {
 
@@ -82,7 +79,7 @@ public:
     }
 
     Tester& run(const char* standard = "-std=c++20") {
-        params.command = std::format("clang++ {} {}", standard, params.srcPath);
+        params.command = std::format("clang++ {} {} -fms-extensions", standard, params.srcPath);
 
         auto info = compile(params);
         if(!info) {

@@ -12,7 +12,7 @@ std::unique_ptr<clang::CompilerInvocation> createInvocation(CompilationParams& p
     llvm::SmallString<1024> buffer;
     llvm::SmallVector<const char*, 16> args;
 
-    if(auto error = mangleCommand(params.command, args, buffer)) {
+    if(auto result = mangleCommand(params.command, args, buffer); !result) {
         std::terminate();
     }
 
@@ -45,7 +45,11 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
         new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()),
         true);
 
-    instance->createFileManager(params.vfs);
+    if(auto remapping = clang::createVFSFromCompilerInvocation(instance->getInvocation(),
+                                                               instance->getDiagnostics(),
+                                                               params.vfs)) {
+        instance->createFileManager(std::move(remapping));
+    }
 
     /// Add remapped files, if bounds is provided, cut off the content.
     std::size_t size = params.bound.has_value() ? params.bound.value() : params.content.size();
@@ -92,27 +96,27 @@ namespace {
 
 /// Execute given action with the on the given instance. `callback` is called after
 /// `BeginSourceFile`. Beacuse `BeginSourceFile` may create new preprocessor.
-llvm::Error ExecuteAction(clang::CompilerInstance& instance,
-                          clang::FrontendAction& action,
-                          auto&& callback) {
+std::expected<void, std::string> ExecuteAction(clang::CompilerInstance& instance,
+                                               clang::FrontendAction& action,
+                                               auto&& callback) {
     if(!action.BeginSourceFile(instance, instance.getFrontendOpts().Inputs[0])) {
-        return error("Failed to begin source file");
+        return std::unexpected("Failed to begin source file");
     }
 
     callback();
 
     if(auto error = action.Execute()) {
-        return error;
+        return std::unexpected(std::format("Failed to execute action, because {} ", error));
     }
 
-    return llvm::Error::success();
+    return {};
 }
 
-llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> instance,
-                                      std::unique_ptr<clang::FrontendAction> action) {
+std::expected<ASTInfo, std::string> ExecuteAction(std::unique_ptr<clang::CompilerInstance> instance,
+                                                  std::unique_ptr<clang::FrontendAction> action) {
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
-        return error("Failed to begin source file");
+        return std::unexpected("Failed to begin source file");
     }
 
     auto& pp = instance->getPreprocessor();
@@ -135,7 +139,7 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
     }
 
     if(auto error = action->Execute()) {
-        return clice::error("Failed to execute action, because {} ", error);
+        return std::unexpected(std::format("Failed to execute action, because {} ", error));
     }
 
     std::optional<clang::syntax::TokenBuffer> tokBuf;
@@ -161,13 +165,14 @@ llvm::Expected<ASTInfo> ExecuteAction(std::unique_ptr<clang::CompilerInstance> i
 
 }  // namespace
 
-llvm::Expected<ASTInfo> compile(CompilationParams& params) {
+std::expected<ASTInfo, std::string> compile(CompilationParams& params) {
     auto instance = impl::createInstance(params);
 
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
 
-llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteConsumer* consumer) {
+std::expected<ASTInfo, std::string> compile(CompilationParams& params,
+                                            clang::CodeCompleteConsumer* consumer) {
     auto instance = impl::createInstance(params);
 
     /// Set options to run code completion.
@@ -179,7 +184,7 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, clang::CodeCompleteCo
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
 
-llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
+std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& out) {
     assert(params.bound.has_value() && "Preamble bounds is required to build PCH");
 
     auto instance = impl::createInstance(params);
@@ -201,11 +206,11 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, PCHInfo& out) {
 
         return std::move(*info);
     } else {
-        return info.takeError();
+        return std::unexpected(info.error());
     }
 }
 
-llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out) {
+std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCMInfo& out) {
     auto instance = impl::createInstance(params);
 
     /// Set options to generate PCM.
@@ -226,7 +231,7 @@ llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out) {
         out.srcPath = params.srcPath.str();
         return std::move(*info);
     } else {
-        return info.takeError();
+        return std::unexpected(info.error());
     }
 }
 

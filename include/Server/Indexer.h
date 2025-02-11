@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Async.h"
 #include "Config.h"
 #include "Database.h"
 #include "Protocol.h"
-#include "Basic/RelationKind.h"
+#include "Async/Async.h"
+#include "AST/RelationKind.h"
 
 #include "llvm/ADT/DenseSet.h"
 
@@ -21,28 +21,45 @@ public:
 
     struct TranslationUnit;
 
-    struct Context {
+    struct HeaderIndex {
         /// The index file path(not include suffix, e.g. `.sidx` and `.fidx`).
-        std::string indexPath;
+        std::string path;
 
+        /// The hash of the symbol index.
+        llvm::XXH128_hash_t symbolHash;
+
+        /// The hash of the feature index.
+        llvm::XXH128_hash_t featureHash;
+    };
+
+    struct Context {
         /// The include chain that introduces this context.
-        uint32_t include;
+        uint32_t include = -1;
+
+        /// The index information of this context.
+        uint32_t index = -1;
     };
 
     struct IncludeLocation {
         /// The location of the include directive.
-        uint32_t line;
+        uint32_t line = -1;
 
         /// The index of the file that includes this header.
         uint32_t include = -1;
 
-        /// The file name of the header.
-        std::string filename;
+        /// The file name of the header in the string pool. Beacuse
+        /// a header may be included by multiple files, so we use
+        /// a string pool to cache the file name to reduce the memory
+        /// usage.
+        uint32_t filename = -1;
     };
 
     struct Header {
         /// The path of the header file.
         std::string srcPath;
+
+        /// All indices of this header.
+        std::vector<HeaderIndex> indices;
 
         /// All header contexts of this header.
         llvm::DenseMap<TranslationUnit*, std::vector<Context>> contexts;
@@ -68,18 +85,30 @@ public:
         std::vector<IncludeLocation> locations;
     };
 
-    /// Check whether the index file is outdated.
-    async::Task<bool> needUpdate(TranslationUnit* tu);
+    using Self = Indexer;
 
-    /// Try to merge the index file with same content for the given header.
-    async::Task<> merge(Header* header);
+    /// Check whether the given file needs to be updated and return the translation unit.
+    /// If not need to update, return nullptr.
+    async::Task<TranslationUnit*> check(this Self& self, llvm::StringRef file);
 
-    async::Task<> merge(llvm::StringRef header);
+    uint32_t addIncludeChain(std::vector<Indexer::IncludeLocation>& locations,
+                             llvm::DenseMap<clang::FileID, uint32_t>& files,
+                             clang::SourceManager& SM,
+                             clang::FileID fid);
 
-    async::Task<> mergeAll();
+    /// Add all possible header contexts for the AST info.
+    void addContexts(this Self& self,
+                     ASTInfo& info,
+                     TranslationUnit* tu,
+                     llvm::DenseMap<clang::FileID, uint32_t>& files);
 
-    /// Index the given file(for unopened file).
-    async::Task<> index(llvm::StringRef file);
+    /// Index the given AST, write the index information to disk.
+    async::Task<> updateIndices(this Self& self,
+                                ASTInfo& info,
+                                TranslationUnit* tu,
+                                llvm::DenseMap<clang::FileID, uint32_t>& files);
+
+    async::Task<> index(this Self& self, llvm::StringRef file);
 
     /// Index the given file(for opened file).
     async::Task<> index(llvm::StringRef file, ASTInfo& info);
@@ -91,6 +120,8 @@ public:
 
     /// Dump the index information to JSON.
     json::Value dumpToJSON();
+
+    async::Task<proto::SemanticTokens> semanticTokens(llvm::StringRef file);
 
     /// Dump all index information of the given file for test.
     void dumpForTest(llvm::StringRef file);
@@ -111,8 +142,11 @@ private:
 
     async::Task<std::unique_ptr<llvm::MemoryBuffer>> read(llvm::StringRef path);
 
-    async::Task<> lookup(llvm::ArrayRef<SymbolID> ids, RelationKind kind, llvm::StringRef srcPath,
-                         llvm::StringRef content, std::string indexPath,
+    async::Task<> lookup(llvm::ArrayRef<SymbolID> ids,
+                         RelationKind kind,
+                         llvm::StringRef srcPath,
+                         llvm::StringRef content,
+                         std::string indexPath,
                          std::vector<proto::Location>& result);
 
 public:
@@ -136,6 +170,11 @@ private:
     CompilationDatabase& database;
     llvm::StringMap<Header*> headers;
     llvm::StringMap<TranslationUnit*> tus;
+
+    bool locked = false;
+
+    std::vector<std::string> pathPool;
+    llvm::StringMap<std::uint32_t> pathIndices;
 };
 
 }  // namespace clice

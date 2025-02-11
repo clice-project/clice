@@ -1,6 +1,7 @@
+#include "AST/Semantic.h"
 #include "Index/Shared.h"
-#include "Compiler/Semantic.h"
 #include "Feature/SemanticTokens.h"
+#include "Support/Compare.h"
 
 namespace clice::feature {
 
@@ -66,6 +67,17 @@ public:
         auto callback = [&](const clang::Token& token) -> bool {
             SymbolKind kind = SymbolKind::Invalid;
 
+            /// Clear the all states.
+            if(token.isAtStartOfLine()) {
+                isInHeader = false;
+                isInDirectiveLine = false;
+            }
+
+            if(isInHeader) {
+                addToken(fid, token, SymbolKind::Header);
+                return true;
+            }
+
             switch(token.getKind()) {
                 case clang::tok::comment: {
                     kind = SymbolKind::Comment;
@@ -87,12 +99,7 @@ public:
                 }
 
                 case clang::tok::string_literal: {
-                    if(isInHeader) {
-                        isInHeader = false;
-                        kind = SymbolKind::Header;
-                    } else {
-                        kind = SymbolKind::String;
-                    }
+                    kind = SymbolKind::String;
                     break;
                 }
 
@@ -109,21 +116,6 @@ public:
                         isAfterHash = true;
                         isInDirectiveLine = true;
                         kind = SymbolKind::Directive;
-                    }
-                    break;
-                }
-
-                case clang::tok::less: {
-                    if(isInHeader) {
-                        kind = SymbolKind::Header;
-                    }
-                    break;
-                }
-
-                case clang::tok::greater: {
-                    if(isInHeader) {
-                        isInHeader = false;
-                        kind = SymbolKind::Header;
                     }
                     break;
                 }
@@ -153,11 +145,6 @@ public:
                 }
             }
 
-            /// Clear the directive line flag.
-            if(token.isAtStartOfLine() && token.isNot(clang::tok::hash)) {
-                isInDirectiveLine = false;
-            }
-
             if(kind != SymbolKind::Invalid) {
                 addToken(fid, token, kind);
             }
@@ -182,11 +169,60 @@ public:
         addToken(location, SymbolKind::Macro, {});
     }
 
+    void handleAttrOccurrence(const clang::Attr* attr, clang::SourceRange range) {
+        /// Render `final` and `override` attributes. We cannot determine only by
+        /// lexer, so we need to render them here.
+        auto [begin, end] = range;
+        if(auto FA = clang::dyn_cast<clang::FinalAttr>(attr)) {
+            assert(begin == end && "Invalid range");
+            addToken(begin, SymbolKind::Keyword, {});
+        } else if(auto OA = clang::dyn_cast<clang::OverrideAttr>(attr)) {
+            assert(begin == end && "Invalid range");
+            addToken(begin, SymbolKind::Keyword, {});
+        }
+    }
+
     /// FIXME: handle module name.
 
     void merge(std::vector<SemanticToken>& tokens) {
         ranges::sort(tokens, refl::less, [](const auto& token) { return token.range; });
-        /// FIXME: Resolve the overlapped tokens.
+
+        std::vector<SemanticToken> merged;
+
+        std::size_t i = 0;
+        while(i < tokens.size()) {
+            LocalSourceRange range = tokens[i].range;
+            auto begin = i;
+
+            /// Find all tokens with same range.
+            while(i < tokens.size() && refl::equal(tokens[i].range, range)) {
+                i++;
+            }
+
+            auto end = i;
+
+            /// Merge all tokens with same range.
+            /// FIXME: Determine SymbolKind properly.
+
+            SymbolKind kind = tokens[begin].kind;
+            SymbolModifiers modifiers = tokens[begin].modifiers;
+
+            if(!merged.empty()) {
+                auto& last = merged.back();
+                if(last.kind == kind && last.range.end == range.begin) {
+                    last.range.end = range.end;
+                    continue;
+                }
+            }
+
+            merged.emplace_back(SemanticToken{
+                .range = range,
+                .kind = kind,
+                .modifiers = modifiers,
+            });
+        }
+
+        tokens = std::move(merged);
     }
 
     auto buildForFile() {
@@ -227,12 +263,31 @@ proto::SemanticTokens toSemanticTokens(llvm::ArrayRef<SemanticToken> tokens,
                                        llvm::StringRef content,
                                        const config::SemanticTokensOption& option) {
 
+    proto::SemanticTokens result;
+
     std::size_t lastLine = 0;
     std::size_t lastColumn = 0;
 
-    for(auto& token: tokens) {}
+    for(auto& token: tokens) {
+        auto [begin, end] = token.range;
+        auto [line, column] = SC.toPosition(content, begin);
 
-    return {};
+        if(line != lastLine) {
+            /// FIXME: Cut off content to improve performance.
+            lastColumn = 0;
+        }
+
+        result.data.emplace_back(line - lastLine);
+        result.data.emplace_back(column - lastColumn);
+        result.data.emplace_back(end - begin);
+        result.data.emplace_back(token.kind.value());
+        result.data.emplace_back(token.modifiers.value());
+
+        lastLine = line;
+        lastColumn = column;
+    }
+
+    return result;
 }
 
 proto::SemanticTokens semanticTokens(ASTInfo& info,

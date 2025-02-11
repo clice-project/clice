@@ -1,6 +1,7 @@
 #include "Basic/SourceConverter.h"
 #include "Compiler/Compilation.h"
 #include "Feature/InlayHint.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice {
 
@@ -16,39 +17,39 @@ proto::MarkupContent blank() {
     };
 }
 
-/// Like clang::SourceRange but represents as a pair of offset (offset of the begin of main file).
-struct OffsetRange {
-    size_t begin;
-    size_t end;
+using Kind = feature::inlay_hint::InlayHintKind;
+using feature::inlay_hint::Lable;
+using feature::inlay_hint::InlayHint;
+using feature::inlay_hint::Result;
 
-    /// Check if the range is not a `point` and end is after begin.
-    bool isValid() {
-        return end > begin;
-    }
-};
-
-/// Compute inlay hints for a document in given range and config.
+/// Compute inlay hints for a AST. There is two kind of collection:
+///     A. Only collect hints in MainFileID.
+///     B. Collect hints in each files, used for header context.
+/// The result is always stored in a densmap<FileID, vector<InlayHint>>, and return as needed.
 struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
 
     using Base = clang::RecursiveASTVisitor<InlayHintCollector>;
+
+    /// The result of inlay hints for given AST.
+    using Storage = llvm::DenseMap<clang::FileID, Result>;
 
     const clang::SourceManager& src;
 
     const SourceConverter& cvtr;
 
+    /// The restrict range of request.
+    const LocalSourceRange limit;
+
     /// The config of inlay hints collector.
     const config::InlayHintOption config;
 
-    /// The restrict range of request.
-    const OffsetRange limit;
+    /// Indicate that only hints in main file should be collected (mode A).
+    const bool onlyMain;
 
     /// The result of inlay hints.
-    proto::InlayHintsResult result;
+    Storage result;
 
-    /// Current file's uri.
-    const proto::DocumentUri docuri;
-
-    /// The printing policy of clang.
+    /// The printing policy of AST.
     const clang::PrintingPolicy policy;
 
     /// Whole source code text in main file.
@@ -59,6 +60,9 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         // skip invalid range or not in main file
         if(range.isInvalid())
             return true;
+
+        if(!onlyMain)
+            return false;
 
         if(!src.isInMainFile(range.getBegin()) || !src.isInMainFile(range.getEnd()))
             return true;
@@ -73,18 +77,23 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     }
 
     /// Shrink the hint text to the max length.
-    std::string shrinkText(std::string text) {
-        if(text.size() >= config.maxLength)
-            text.resize(config.maxLength - 3), text.append("...");
+    static std::string shrinkHintText(std::string text, size_t maxLength) {
+        if(text.size() > maxLength)
+            text.resize(maxLength - 3), text.append("...");
+
+        text.shrink_to_fit();
         return text;
+    }
+
+    std::string tryShrinkHintText(std::string text) {
+        return onlyMain ? shrinkHintText(text, config.maxLength) : text;
     }
 
     /// Collect hint for variable declared with `auto` keywords.
     /// The hint string wiil be placed at the right side of identifier, starting with ':' character.
     /// The `originDeclRange` will be used as the link of hint string.
-    void collectAutoDeclHint(clang::QualType deduced,
-                             clang::SourceRange identRange,
-                             std::optional<clang::SourceRange> linkDeclRange) {
+    void collectAutoDeclTypeHint(clang::QualType deduced, clang::SourceRange identRange,
+                                 std::optional<clang::SourceRange> linkDeclRange, Kind kind) {
 
         // For lambda expression, `getAsString` return a text like `(lambda at main.cpp:2:10)`
         //      auto lambda = [](){ return 1; };
@@ -93,21 +102,21 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         if(typeName.contains("lambda"))
             typeName = "(lambda)";
 
-        proto::InlayHintLablePart lable{
-            .value = shrinkText(std::format(": {}", typeName)),
-            .tooltip = blank(),
+        Lable lable{
+            .value = tryShrinkHintText(std::format(": {}", typeName)),
         };
 
         if(linkDeclRange.has_value())
-            lable.Location = {.uri = docuri, .range = cvtr.toRange(*linkDeclRange, src)};
+            lable.location = cvtr.toLocalRange(*linkDeclRange, src);
 
-        proto::InlayHint hint{
-            .position = cvtr.toPosition(identRange.getEnd(), src),
-            .lable = {std::move(lable)},
-            .kind = proto::InlayHintKind::Type,
+        InlayHint hint{
+            .kind = kind,
+            .offset = src.getDecomposedLoc(identRange.getEnd()).second,
+            .lable = lable,
         };
 
-        result.push_back(std::move(hint));
+        clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(identRange.getBegin());
+        result[fid].push_back(std::move(hint));
     }
 
     // If `expr` spells a single unqualified identifier, return that name, otherwise, return an
@@ -123,22 +132,28 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         return {};
     }
 
-    /// Check if there is any comment like /*paramName*/ in given range.
-    bool hasHandWriteComment(clang::SourceRange range) {
-        auto firstChar = src.getCharacterData(range.getBegin());
-        auto length = static_cast<size_t>(src.getCharacterData(range.getEnd()) - firstChar);
+    /// Check if there is any comment like /*paramName*/ before a argument.
+    bool hasHandWriteComment(clang::SourceRange argument) {
+        auto [fid, offset] = src.getDecomposedLoc(argument.getBegin());
+        if(fid != src.getMainFileID())
+            return false;
 
-        llvm::StringRef text{firstChar, length};
-        return text.contains("/*") && text.contains("*/");
+        // Get source text until the argument and drop end whitespace.
+        llvm::StringRef content = code.substr(0, offset).rtrim();
+
+        // Any comment ends with `*/` is considered meaningful.
+        return content.ends_with("*/");
     }
 
     bool needHintArgument(const clang::ParmVarDecl* param, const clang::Expr* arg) {
+        auto name = param->getName();
+
         // Skip anonymous parameters.
-        if(param->getName().empty())
+        if(name.empty())
             return false;
 
         // Skip if the argument is a single name and it matches the parameter exactly.
-        if(param->getName().equals_insensitive(takeExprIdentifier(arg)))
+        if(name.equals_insensitive(takeExprIdentifier(arg)))
             return false;
 
         // Skip if the argument is preceded by any hand-written hint /*paramName*/.
@@ -154,7 +169,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     }
 
     void collectArgumentHint(llvm::ArrayRef<const clang::ParmVarDecl*> params,
-                             llvm::ArrayRef<const clang::Expr*> args) {
+                             llvm::ArrayRef<const clang::Expr*> args, Kind kind) {
         for(size_t i = 0; i < params.size() && i < args.size(); ++i) {
             // Pack expansion and default argument is always the tail of arguments.
             if(llvm::isa<clang::PackExpansionExpr>(args[i]) ||
@@ -166,21 +181,22 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
 
             // Only hint reference for mutable lvalue reference.
             const bool hintRef = isPassedAsMutableLValueRef(params[i]);
-            proto::InlayHintLablePart lable{
-                .value = shrinkText(std::format("{}{}:", params[i]->getName(), hintRef ? "&" : "")),
-                .tooltip = blank(),
-                .Location =
-                    proto::Location{.uri = docuri,
-                                    .range = cvtr.toRange(params[i]->getSourceRange(), src)}
+
+            auto parmName = std::format("{}{}:", params[i]->getName(), hintRef ? "&" : "");
+            Lable lable{
+                .value = tryShrinkHintText(std::move(parmName)),
+                .location = cvtr.toLocalRange(params[i]->getSourceRange(), src),
             };
 
-            proto::InlayHint hint{
-                .position = cvtr.toPosition(args[i]->getSourceRange().getBegin(), src),
-                .lable = {std::move(lable)},
-                .kind = proto::InlayHintKind::Parameter,
+            auto argBeginLoc = args[i]->getSourceRange().getBegin();
+            InlayHint hint{
+                .kind = kind,
+                .offset = src.getDecomposedLoc(argBeginLoc).second,
+                .lable = std::move(lable),
             };
 
-            result.push_back(std::move(hint));
+            clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(argBeginLoc);
+            result[fid].push_back(std::move(hint));
         }
     }
 
@@ -206,9 +222,10 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
                 if(auto type = binding->getType(); !type.isNull() && !type->isDependentType()) {
                     // Hint at the end position of identifier.
                     auto name = binding->getName();
-                    collectAutoDeclHint(type.getCanonicalType(),
-                                        binding->getBeginLoc().getLocWithOffset(name.size()),
-                                        decl->getSourceRange());
+                    collectAutoDeclTypeHint(type.getCanonicalType(),
+                                            binding->getBeginLoc().getLocWithOffset(name.size()),
+                                            decl->getSourceRange(),
+                                            Kind::StructureBinding);
                 }
             }
             return true;
@@ -228,7 +245,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
                 originDeclRange = mrd->getSourceRange();
 
             auto tailOfIdentifier = decl->getLocation().getLocWithOffset(decl->getName().size());
-            collectAutoDeclHint(qty, tailOfIdentifier, originDeclRange);
+            collectAutoDeclTypeHint(qty, tailOfIdentifier, originDeclRange, Kind::AutoDecl);
         }
         return true;
     }
@@ -280,7 +297,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     }
 
     bool VisitCallExpr(const clang::CallExpr* call) {
-        if(!config.argumentName)
+        if(!config.paramName)
             return true;
 
         // Don't hint for UDL operator like `operaotr ""_str` , and builtin funtion.
@@ -303,18 +320,19 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         else if(auto tfndecl = llvm::dyn_cast<clang::FunctionTemplateDecl>(calleeDecl))
             fndecl = tfndecl->getTemplatedDecl();
 
+        llvm::ArrayRef<const clang::Expr*> arguments = {call->getArgs(), call->getNumArgs()};
         if(fndecl)
             // free function
-            collectArgumentHint(fndecl->parameters(), {call->getArgs(), call->getNumArgs()});
+            collectArgumentHint(fndecl->parameters(), arguments, Kind::Parameter);
         else if(auto proto = detectCallViaFnPointer(call->getCallee()); proto.has_value())
             // function pointer
-            collectArgumentHint(proto->getParams(), {call->getArgs(), call->getNumArgs()});
+            collectArgumentHint(proto->getParams(), arguments, Kind::Parameter);
 
         return true;
     }
 
     bool VisitCXXOperatorCallExpr(const clang::CXXOperatorCallExpr* call) {
-        if(!config.argumentName)
+        if(!config.paramName)
             return true;
 
         // Do not hint paramters for operator overload except `operator()`, and `operator[]` with
@@ -330,7 +348,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             if(!method->hasCXXExplicitFunctionObjectParameter())
                 args = args.drop_front();
 
-            collectArgumentHint(params, args);
+            collectArgumentHint(params, args, Kind::Parameter);
         }
 
         return true;
@@ -362,7 +380,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     }
 
     bool VisitCXXMemberCallExpr(const clang::CXXMemberCallExpr* call) {
-        if(!config.argumentName)
+        if(!config.paramName)
             return true;
 
         auto callee = llvm::dyn_cast<clang::FunctionDecl>(call->getCalleeDecl());
@@ -385,12 +403,12 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             if(md->hasCXXExplicitFunctionObjectParameter())
                 args = args.drop_front();
 
-        collectArgumentHint(params, args);
+        collectArgumentHint(params, args, Kind::Parameter);
         return true;
     }
 
     bool VisitCXXConstructExpr(const clang::CXXConstructExpr* ctor) {
-        if(!config.argumentName)
+        if(!config.paramName)
             return true;
 
         // Skip constructor call without an argument list, by checking the validity of
@@ -399,47 +417,46 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             return true;
 
         if(const auto decl = ctor->getConstructor())
-            collectArgumentHint(decl->parameters(), {ctor->getArgs(), ctor->getNumArgs()});
+            collectArgumentHint(decl->parameters(),
+                                {ctor->getArgs(), ctor->getNumArgs()},
+                                Kind::Constructor);
 
         return true;
     }
 
-    void collectReturnTypeHint(clang::SourceLocation hintLoc,
-                               clang::QualType retType,
-                               clang::SourceRange retTypeDeclRange) {
-        proto::InlayHintLablePart lable{
-            .value = shrinkText(std::format("-> {}", retType.getAsString(policy))),
-            .tooltip = blank(),
-            .Location =
-                proto::Location{.uri = docuri, .range = cvtr.toRange(retTypeDeclRange, src)}
+    void collectReturnTypeHint(clang::SourceLocation hintLoc, clang::QualType retType,
+                               clang::SourceRange retTypeDeclRange, Kind kind) {
+        Lable lable{
+            .value = tryShrinkHintText(std::format("-> {}", retType.getAsString(policy))),
+            .location = cvtr.toLocalRange(retTypeDeclRange, src),
+        };
+        InlayHint hint{
+            .kind = kind,
+            .offset = src.getDecomposedLoc(hintLoc).second,
+            .lable = std::move(lable),
         };
 
-        proto::InlayHint hint{
-            .position = cvtr.toPosition(hintLoc, src),
-            .lable = {std::move(lable)},
-            .kind = proto::InlayHintKind::Type,
-        };
-
-        result.push_back(std::move(hint));
+        clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(hintLoc);
+        result[fid].push_back(std::move(hint));
     }
-
-    // bool TraverseFunctionDecl(clang::FunctionDecl* decl) {
-    //     return config.returnType ? Base::TraverseFunctionDecl(decl) : true;
-    // }
 
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
         // 1. Hint block end.
-        if(config.blockEnd && decl->isThisDeclarationADefinition()) {
+        if(config.blockEnd && decl->isThisDeclarationADefinition() &&
+           isMultiLineRange(decl->getSourceRange())) {
             /// FIXME:
             /// Use a proper name such as simplified signature of funtion.
             auto typeLoc = decl->getTypeSourceInfo()->getTypeLoc().getSourceRange();
             auto begin = src.getCharacterData(typeLoc.getBegin());
             auto end = src.getCharacterData(typeLoc.getEnd());
             llvm::StringRef piece{begin, static_cast<size_t>(end - begin) + 1};
+
+            // Right side of '}'
             collectBlockEndHint(decl->getBodyRBrace().getLocWithOffset(1),
                                 std::format("// {}", piece),
                                 decl->getSourceRange(),
-                                /*checkDuplicatedHint=*/true);
+                                Kind::FunctionEnd,
+                                DecideDuplicated::Ignore);
         }
 
         // 2. Hint return type.
@@ -456,19 +473,21 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
                 // Right side of ')' in parameter list.
                 collectReturnTypeHint(fnTypeLoc.getRParenLoc().getLocWithOffset(1),
                                       decl->getReturnType(),
-                                      decl->getSourceRange());
+                                      decl->getSourceRange(),
+                                      Kind::FunctionReturnType);
 
         return true;
     }
 
     bool VisitLambdaExpr(const clang::LambdaExpr* expr) {
         // 1. Hint block end.
-        if(config.blockEnd)
+        if(config.blockEnd && isMultiLineRange(expr->getBody()->getSourceRange()))
             collectBlockEndHint(
-                expr->getEndLoc(),
+                expr->getEndLoc().getLocWithOffset(1),
                 std::format("// lambda #{}", expr->getLambdaClass()->getLambdaManglingNumber()),
                 expr->getSourceRange(),
-                /*checkDuplicatedHint=*/true);
+                Kind::LambdaBodyEnd,
+                DecideDuplicated::Replace);
 
         // 2. Hint return type.
         if(!config.returnType)
@@ -481,31 +500,35 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         // where to place the hint position, in default it is an invalid value.
         clang::SourceLocation hintLoc = {};
         if(!expr->hasExplicitParameters())
-            // left side of '{' before the lambda body.
-            hintLoc = expr->getCompoundStmtBody()->getLBracLoc();
+            // right side of ']' after the capture list.
+            hintLoc = expr->getIntroducerRange().getEnd().getLocWithOffset(1);
         else if(auto fnTypeLoc = decl->getFunctionTypeLoc())
             // right side of ')'.
             hintLoc = fnTypeLoc.getRParenLoc().getLocWithOffset(1);
 
         if(hintLoc.isValid())
-            collectReturnTypeHint(hintLoc, decl->getReturnType(), decl->getSourceRange());
+            collectReturnTypeHint(hintLoc,
+                                  decl->getReturnType(),
+                                  decl->getSourceRange(),
+                                  Kind::LambdaReturnType);
 
         return true;
     }
 
     void collectArrayElemIndexHint(int index, clang::SourceLocation location) {
-        proto::InlayHintLablePart lable{
+        Lable lable{
             .value = std::format("[{}]=", index),  // This shouldn't be shrinked.
-            .tooltip = blank(),
+            .location = cvtr.toLocalRange(location, src),
         };
 
-        proto::InlayHint hint{
-            .position = cvtr.toPosition(location, src),
-            .lable = {std::move(lable)},
-            .kind = proto::InlayHintKind::Parameter,
+        InlayHint hint{
+            .kind = Kind::ArrayIndex,
+            .offset = src.getDecomposedLoc(location).second,
+            .lable = std::move(lable),
         };
 
-        result.push_back(std::move(hint));
+        clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(location);
+        result[fid].push_back(std::move(hint));
     }
 
     bool VisitInitListExpr(const clang::InitListExpr* Syn) {
@@ -535,37 +558,55 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         return remain.ltrim();
     }
 
-    void collectBlockEndHint(clang::SourceLocation location,
-                             std::string text,
-                             clang::SourceRange linkRange,
-                             bool checkDuplicatedHint) {
+    /// This enum decide how to handle the duplicated block-end hint in the same line.
+    enum class DecideDuplicated {
+        // Accept all hints.
+        AcceptBoth,
+
+        // Drop the old hint, and accept the new hint. Commonly use the inner one.
+        //      namespace out::in {
+        //      } |// namespace in|
+        Replace,
+
+        // Ignore the new hint, and keep the old hint. Commonly use the outer one.
+        //      struct Out {
+        //          struct In {
+        //      }} |// struct Out|;
+        Ignore,
+    };
+
+    void collectBlockEndHint(clang::SourceLocation location, std::string text,
+                             clang::SourceRange linkRange, Kind kind, DecideDuplicated decision) {
         // Already has a comment in that line.
         if(auto remain = remainTextOfThatLine(location);
            remain.starts_with("/*") || remain.starts_with("//"))
             return;
 
-        // Already has a duplicated hint in that location, use the newer hint instead.
-        // e.g. Drop outer hint for nested namspace declaration.
-        //      namespace out::in {}
-        const auto lspPosition = cvtr.toPosition(location, src);
-        if(checkDuplicatedHint && !result.empty())
-            if(const auto& last = result.back().position;
-               last.line == lspPosition.line && last.character == lspPosition.character)
-                result.pop_back();  // drop old hint.
+        auto& state = result[onlyMain ? src.getMainFileID() : src.getFileID(location)];
+        if(decision != DecideDuplicated::AcceptBoth && !state.empty()) {
+            // Already has a duplicated hint in that line, use the newer hint instead.
+            auto lastHintLine = cvtr.toPosition(code, state.back().offset).line;
+            auto thatLine = cvtr.toPosition(location, src).line;
+            if(lastHintLine == thatLine) {
+                if(decision == DecideDuplicated::Replace)
+                    state.pop_back();
+                else
+                    return;  // use the old one.
+            }
+        }
 
-        proto::InlayHintLablePart lable{
-            .value = shrinkText(std::move(text)),
-            .tooltip = blank(),
-            .Location = {.uri = docuri, .range = cvtr.toRange(linkRange, src)},
+        Lable lable{
+            .value = tryShrinkHintText(std::move(text)),
+            .location = cvtr.toLocalRange(linkRange, src),
         };
 
-        proto::InlayHint hint{
-            .position = lspPosition,
-            .lable = {std::move(lable)},
-            .kind = proto::InlayHintKind::Parameter,
+        InlayHint hint{
+            .kind = kind,
+            .offset = src.getDecomposedLoc(location).second,
+            .lable = std::move(lable),
         };
 
-        result.push_back(std::move(hint));
+        state.push_back(std::move(hint));
     }
 
     bool VisitNamespaceDecl(const clang::NamespaceDecl* decl) {
@@ -579,7 +620,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         collectBlockEndHint(decl->getRBraceLoc().getLocWithOffset(1),
                             std::format("// namespace {}", decl->getName()),
                             range,
-                            /*checkDuplicatedHint=*/true);
+                            Kind::NamespaceEnd,
+                            DecideDuplicated::Replace);
         return true;
     }
 
@@ -593,28 +635,28 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         auto size = ctx.getTypeSizeInChars(qual).getQuantity();
         auto align = ctx.getTypeAlignInChars(qual).getQuantity();
 
-        proto::InlayHintLablePart lable{
-            .value = shrinkText(std::format("size: {}, align: {}", size, align)),
-            .tooltip = blank(),
-            .Location = {.uri = docuri, .range = cvtr.toRange(decl->getSourceRange(), src)},
+        Lable lable{
+            .value = tryShrinkHintText(std::format("size: {}, align: {}", size, align)),
+            .location = cvtr.toLocalRange(decl->getSourceRange(), src),
         };
 
         // right side of identifier.
         auto tail = decl->getLocation().getLocWithOffset(decl->getName().size());
-        proto::InlayHint hint{
-            .position = cvtr.toPosition(tail, src),
-            .lable = {std::move(lable)},
-            .kind = proto::InlayHintKind::Parameter,
+        InlayHint hint{
+            .kind = Kind::StructSizeAndAlign,
+            .offset = src.getDecomposedLoc(tail).second,
+            .lable = std::move(lable),
         };
 
-        result.push_back(std::move(hint));
+        auto fid = onlyMain ? src.getMainFileID() : src.getFileID(tail);
+        result[fid].push_back(std::move(hint));
     }
 
     bool VisitTagDecl(const clang::TagDecl* decl) {
         if(!decl->isThisDeclarationADefinition())
             return true;
 
-        if(config.blockEnd) {
+        if(config.blockEnd && isMultiLineRange(decl->getBraceRange())) {
             std::string hintText = std::format("// {}", decl->getKindName().str());
             // Add a tail flag for enum declaration as clangd's do.
             if(const auto* enumDecl = llvm::dyn_cast<clang::EnumDecl>(decl);
@@ -626,7 +668,8 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             collectBlockEndHint(decl->getBraceRange().getEnd().getLocWithOffset(1),
                                 std::move(hintText),
                                 decl->getSourceRange(),
-                                /*checkDuplicatedHint=*/false);
+                                Kind::TagDeclEnd,
+                                DecideDuplicated::Ignore);
         }
 
         if(config.structSizeAndAlign)
@@ -641,12 +684,12 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     //     if(!config.implicitCast)
     //         return true;
     //     if(auto* expr = llvm::dyn_cast<clang::ImplicitCastExpr>(stmt)) {
-    //         proto::InlayHintLablePart lable{
+    //         Lable lable{
     //             .value = shrinkText(std::format("as {}", expr->getType().getAsString(policy))),
     //             .tooltip = blank(),
     //         };
     //         // right side of that expr.
-    //         proto::InlayHint hint{
+    //         InlayHint hint{
     //             .position = cvtr.toPosition(stmt->getEndLoc()),
     //             .lable = {std::move(lable)},
     //             .kind = proto::InlayHintKind::Parameter,
@@ -657,31 +700,90 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     // }
 };
 
+using feature::inlay_hint::InlayHintKind;
+
+bool isAvailableWithOption(InlayHintKind kind, const config::InlayHintOption& config) {
+    using enum InlayHintKind::Kind;
+
+    switch(kind.kind()) {
+        case Invalid: return false;
+
+        case AutoDecl:
+        case StructureBinding: return config.dedcucedType;
+
+        case Parameter:
+        case Constructor: return config.paramName;
+
+        case FunctionReturnType:
+        case LambdaReturnType: return config.returnType;
+
+        case IfBlockEnd:
+        case SwitchBlockEnd:
+        case WhileBlockEnd:
+        case ForBlockEnd:
+        case NamespaceEnd:
+        case TagDeclEnd:
+        case FunctionEnd:
+        case LambdaBodyEnd: return config.blockEnd;
+
+        case ArrayIndex: return config.maxArrayElements > 0;
+        case StructSizeAndAlign: return config.structSizeAndAlign;
+        case MemberSizeAndOffset: return config.memberSizeAndOffset;
+        case ImplicitCast: return config.implicitCast;
+        case ChainCall: return config.chainCall;
+        case NumberLiteralToHex: return config.numberLiteralToHex;
+        case CStrLength: return config.cstrLength;
+    }
+}
+
 }  // namespace
 
-namespace feature {
+namespace feature::inlay_hint {
 
 json::Value inlayHintCapability(json::Value InlayHintClientCapabilities) {
     return {};
 }
 
-/// Compute inlay hints for a document in given range and config.
-proto::InlayHintsResult inlayHints(proto::InlayHintParams param,
-                                   ASTInfo& info,
-                                   const SourceConverter& converter,
-                                   const config::InlayHintOption& config) {
+/// Convert `Lable` to `proto:":InlayHintLablePart`. the hint text will be shrinked to the
+/// `maxHintLength` if it's not zero.
+proto::InlayHintLablePart toLspType(const Lable& lable, size_t maxHintLength,
+                                    llvm::StringRef docuri, llvm::StringRef content,
+                                    const SourceConverter& SC) {
+    proto::InlayHintLablePart lspLable;
+    lspLable.value = InlayHintCollector::shrinkHintText(lable.value, maxHintLength);
+    lspLable.tooltip = blank();
+    lspLable.Location = {
+        .uri = docuri.str(),
+        .range = SC.toRange(lable.location, content),
+    };
+    return lspLable;
+}
+
+/// Convert `InlayHint` to `proto::proto::InlayHint`.
+proto::InlayHint toLspType(const InlayHint& hint, size_t maxHintLength, llvm::StringRef docuri,
+                           llvm::StringRef content, const SourceConverter& SC) {
+    proto::InlayHint lspHint;
+    /// Use hint.lable as the only element of `proto::InlayHint::lable`.
+    lspHint.lable = {toLspType(hint.lable, maxHintLength, docuri, content, SC)};
+    lspHint.kind = toLspType(hint.kind);
+    lspHint.position = SC.toPosition(content, hint.offset);
+    return lspHint;
+}
+
+Result inlayHints(proto::InlayHintParams param, ASTInfo& info, const SourceConverter& converter,
+                  const config::InlayHintOption& config) {
     const clang::SourceManager& src = info.srcMgr();
 
     llvm::StringRef codeText = src.getBufferData(src.getMainFileID());
 
     // Take 0-0 based Lsp Location from `param.range` and convert it to offset pair.
-    OffsetRange requestRange{
-        .begin = converter.toOffset(codeText, param.range.start),
-        .end = converter.toOffset(codeText, param.range.end),
+    LocalSourceRange requestRange{
+        .begin = static_cast<uint32_t>(converter.toOffset(codeText, param.range.start)),
+        .end = static_cast<uint32_t>(converter.toOffset(codeText, param.range.end)),
     };
 
-    // In default, use the whole main file as the restrict range.
-    if(!requestRange.isValid()) {
+    // If request range is invalid, use the whole main file as the restrict range.
+    if(requestRange.begin >= requestRange.end) {
         clang::FileID main = src.getMainFileID();
         requestRange.begin = src.getDecomposedSpellingLoc(src.getLocForStartOfFile(main)).second;
         requestRange.end = src.getDecomposedSpellingLoc(src.getLocForEndOfFile(main)).second;
@@ -692,18 +794,68 @@ proto::InlayHintsResult inlayHints(proto::InlayHintParams param,
     InlayHintCollector collector{
         .src = src,
         .cvtr = converter,
-        .config = config,
         .limit = requestRange,
-        .docuri = std::move(param.textDocument.uri),
+        .config = config,
+        .onlyMain = true,
+        .result = InlayHintCollector::Storage{},
         .policy = info.context().getPrintingPolicy(),
         .code = codeText,
     };
 
     collector.TraverseTranslationUnitDecl(info.tu());
 
+    return std::move(collector.result[src.getMainFileID()]);
+}
+
+index::Shared<Result> inlayHints(proto::DocumentUri uri, ASTInfo& info,
+                                 const SourceConverter& converter) {
+    const clang::SourceManager& src = info.srcMgr();
+
+    config::InlayHintOption enableAll;
+    enableAll.maxLength = 0;
+    enableAll.maxArrayElements = 0;
+    enableAll.blockEnd = true;
+    enableAll.implicitCast = true;
+    enableAll.chainCall = true;
+    enableAll.numberLiteralToHex = true;
+    enableAll.cstrLength = true;
+
+    InlayHintCollector collector{
+        .src = src,
+        .cvtr = converter,
+        .config = enableAll,
+        .onlyMain = false,
+        .result = InlayHintCollector::Storage{},
+        .policy = info.context().getPrintingPolicy(),
+        .code = src.getBufferData(src.getMainFileID()),
+    };
+
+    collector.TraverseTranslationUnitDecl(info.tu());
     return std::move(collector.result);
 }
 
-}  // namespace feature
+proto::InlayHintsResult toLspType(llvm::ArrayRef<InlayHint> result, llvm::StringRef docuri,
+                                  std::optional<config::InlayHintOption> config,
+                                  llvm::StringRef content, const SourceConverter& SC) {
+    proto::InlayHintsResult lspRes;
+    lspRes.reserve(result.size());
+
+    /// NOTICE:
+    /// During converting hints from `InlayHint` to `proto::InlayHint`, the
+    /// `config::maxArrayElements` will be ignored because we can't recover the parent-child
+    /// relationship of AST node from `InlayHint`.
+
+    for(auto& hint: result) {
+        if(config.has_value() && !isAvailableWithOption(hint.kind, *config))
+            continue;
+
+        lspRes.push_back(toLspType(hint, config->maxLength, docuri, content, SC));
+    }
+
+    lspRes.shrink_to_fit();
+    return lspRes;
+}
+
+}  // namespace feature::inlay_hint
 
 }  // namespace clice

@@ -1,4 +1,5 @@
 #include "Basic/SourceCode.h"
+#include "llvm/ADT/FunctionExtras.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Lex/Lexer.h"
 

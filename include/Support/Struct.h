@@ -142,6 +142,9 @@ template <typename T>
 using member_types =
     tuple_to_list_t<decltype(Struct<T>::collect_members(std::declval<T>())), std::remove_pointer_t>;
 
+template <typename T, std::size_t I>
+using member_type = std::tuple_element_t<I, typename member_types<T>::to_tuple>;
+
 /// Specialize for aggregate class.
 template <typename T>
     requires std::is_aggregate_v<T>
@@ -305,8 +308,12 @@ struct Struct<Inheritance<Ts...>> {
     }
 
     constexpr inline static auto member_names = []<std::size_t... Is>(std::index_sequence<Is...>) {
-        constexpr auto members = collect_members(impl::storage<Inheritance<Ts...>>.value);
-        return std::array{impl::member_name<std::get<Is>(members)>()...};
+        if constexpr(member_count == 0) {
+            return std::array<std::string_view, 1>{};
+        } else {
+            constexpr auto members = collect_members(impl::storage<Inheritance<Ts...>>.value);
+            return std::array{impl::member_name<std::get<Is>(members)>()...};
+        }
     }(std::make_index_sequence<member_count>{});
 };
 
@@ -323,7 +330,11 @@ struct Struct<TupleLike> {
     }
 
     constexpr inline static auto member_names = []<std::size_t... Is>(std::index_sequence<Is...>) {
-        return std::array{to_string_literal<Is>()...};
+        if constexpr(member_count == 0) {
+            return std::array<std::string_view, 1>{};
+        } else {
+            return std::array{to_string_literal<Is>()...};
+        }
     }(std::make_index_sequence<member_count>{});
 };
 

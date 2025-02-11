@@ -1,10 +1,9 @@
 #include "Basic/Location.h"
 #include "Basic/SourceCode.h"
 #include "Basic/SourceConverter.h"
-#include "Support/Support.h"
-
+#include "Support/FileSystem.h"
 #include "clang/Basic/SourceManager.h"
-#include "Compiler/Clang.h"
+#include "llvm/ADT/StringExtras.h"
 
 namespace clice {
 
