@@ -26,6 +26,18 @@ T& uv_cast(U* u) {
     return *static_cast<std::remove_cvref_t<T>*>(u->data);
 }
 
+#define UV_TYPE_ITER(_, name) || std::is_same_v<T, uv_##name##_t>
+
+/// Check if the type `T` is a libuv handle.
+template <typename T>
+constexpr bool is_uv_handle_v = false UV_HANDLE_TYPE_MAP(UV_TYPE_ITER);
+
+/// Check if the type `T` is a libuv request.
+template <typename T>
+constexpr bool is_uv_req_v = false UV_REQ_TYPE_MAP(UV_TYPE_ITER);
+
+#undef UV_TYPE_ITER
+
 const std::error_category& category();
 
 }  // namespace clice::async

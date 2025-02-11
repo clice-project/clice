@@ -7,12 +7,39 @@
 
 namespace clice::async::awaiter {
 
+template <typename Request>
+struct uv_base;
+
+template <typename Request>
+    requires (is_uv_handle_v<Request>)
+struct uv_base<Request> {
+    Request& request;
+
+    uv_base() : request(*static_cast<Request*>(std::malloc(sizeof(Request)))) {}
+
+    ~uv_base() {
+        /// For libuv handles, we must call uv_close to release resources.
+        /// However, uv_close is a async operation, if we store the handle in the promise object,
+        /// it may be destroyed before the uv_close operation is finished.
+        /// We decide to alloc for it separately and free it in the callback function.
+        uv_close(reinterpret_cast<uv_handle_t*>(&request),
+                 [](uv_handle_t* handle) { std::free(handle); });
+    }
+};
+
+template <typename Request>
+    requires (is_uv_req_v<Request>)
+struct uv_base<Request> {
+    /// For libuv requests, we don't need to release resources, so we can store it in the promise
+    /// object.
+    Request request;
+};
+
 /// The CRTP base class for the awaiter of libuv async operations. The Derived should
 /// implement the `start` and `cleanup` functions.
 template <typename Derived, typename Request, typename Ret, typename... Extras>
-struct uv {
+struct uv : uv_base<Request> {
     int error = 0;
-    Request request;
     promise_base* continuation;
 
     bool await_ready() const noexcept {
@@ -36,7 +63,7 @@ struct uv {
     template <typename Promise>
     std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
         continuation = &waiting.promise();
-        request.data = static_cast<Derived*>(this);
+        this->request.data = static_cast<Derived*>(this);
 
         auto& self = *static_cast<Derived*>(this);
 

@@ -20,7 +20,6 @@ struct sleep : uv<sleep, uv_timer_t, void> {
 
     void cleanup() {
         uv_timer_stop(&request);
-        uv_close(reinterpret_cast<uv_handle_t*>(&request), nullptr);
     }
 };
 
