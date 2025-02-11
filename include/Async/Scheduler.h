@@ -70,41 +70,5 @@ auto run(Tasks&&... tasks) {
     return core.result();
 }
 
-namespace awaiter {
-
-struct sleep {
-    uv_timer_t timer;
-    promise_base* continuation;
-    std::chrono::milliseconds duration;
-
-    bool await_ready() const noexcept {
-        return false;
-    }
-
-    template <typename Promise>
-    void await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
-        continuation = &waiting.promise();
-        timer.data = this;
-        uv_timer_init(async::loop, &timer);
-        uv_timer_start(
-            &timer,
-            [](uv_timer_t* handle) {
-                auto& awaiter = *static_cast<sleep*>(handle->data);
-                awaiter.continuation->resume();
-                uv_timer_stop(handle);
-            },
-            duration.count(),
-            0);
-    }
-
-    void await_resume() noexcept {}
-};
-
-}  // namespace awaiter
-
-inline auto sleep(std::chrono::milliseconds duration) {
-    return awaiter::sleep{{}, {}, duration};
-}
-
 };  // namespace clice::async
 
