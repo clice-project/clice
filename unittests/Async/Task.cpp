@@ -7,22 +7,7 @@ namespace clice::testing {
 namespace {
 
 TEST(Async, TaskAwait) {
-    static auto my_task1 = []() -> async::Task<int> {
-        co_return 1;
-    };
-
-    static auto my_task2 = []() -> async::Task<int> {
-        auto result = co_await my_task1();
-        co_return result + 1;
-    };
-
-    static auto my_task3 = []() -> async::Task<int> {
-        auto result = co_await my_task2();
-        co_return result + 1;
-    };
-
-    /// auto [result] = async::run(my_task3());
-    /// EXPECT_EQ(result, 3);
+    async::run();
 }
 
 TEST(Async, TaskDispose) {

@@ -5,41 +5,66 @@
 
 namespace clice::async {
 
+#define UV_CHECK_RESULT(expr)                                                                      \
+    do {                                                                                           \
+        int err = (expr);                                                                          \
+        if(err < 0) {                                                                              \
+            log::warn("lib uv error: {}", uv_strerror(err));                                       \
+            auto location = std::source_location::current();                                       \
+            log::warn("At {}:{}:{}",                                                               \
+                      location.file_name(),                                                        \
+                      location.line(),                                                             \
+                      location.function_name());                                                   \
+        }                                                                                          \
+    } while(0)
+
 /// The default event loop.
-uv_loop_t* loop = uv_default_loop();
+uv_loop_t* loop = nullptr;
 
 namespace {
 
-/// The task queue waiting for resuming.
-std::deque<std::coroutine_handle<>> tasks;
+uv_loop_t instance;
+uv_idle_t idle;
+bool idle_running = false;
+std::deque<promise_base*> tasks;
 
-net::Callback callback = {};
+void each(uv_idle_t* idle) {
+    if(idle_running && tasks.empty()) {
+        idle_running = false;
+        UV_CHECK_RESULT(uv_idle_stop(idle));
+    }
 
-uv_stream_t* writer = {};
-
-/// Whether the server is listening.
-bool listened = false;
+    /// Resume may create new tasks, we want to run them in the next iteration.
+    auto all = std::move(tasks);
+    for(auto& task: all) {
+        task->resume();
+    }
+}
 
 }  // namespace
 
 void promise_base::schedule() {
-    uv_async_t* async = new uv_async_t;
-    async->data = this;
-    uv_async_init(loop, async, [](uv_async_t* handle) {
-        auto core = static_cast<promise_base*>(handle->data);
-        core->resume();
-        uv_close((uv_handle_t*)handle, [](uv_handle_t* handle) { delete (uv_async_t*)handle; });
-    });
-    uv_async_send(async);
+    if(loop && !idle_running && tasks.empty()) {
+        idle_running = true;
+        UV_CHECK_RESULT(uv_idle_start(&idle, each));
+    }
+
+    tasks.push_back(this);
 }
 
 void run() {
-#ifdef _WIN32
-    _putenv_s("UV_THREADPOOL_SIZE", "20");
-#else
-    setenv("UV_THREADPOOL_SIZE", "20", 1);
-#endif
-    uv_run(loop, UV_RUN_DEFAULT);
+    loop = &instance;
+
+    UV_CHECK_RESULT(uv_loop_init(loop));
+
+    idle_running = true;
+    UV_CHECK_RESULT(uv_idle_init(loop, &idle));
+    UV_CHECK_RESULT(uv_idle_start(&idle, each));
+
+    UV_CHECK_RESULT(uv_run(loop, UV_RUN_DEFAULT));
+
+    uv_close(reinterpret_cast<uv_handle_t*>(&idle), nullptr);
+    UV_CHECK_RESULT(uv_loop_close(loop));
 }
 
 }  // namespace clice::async
