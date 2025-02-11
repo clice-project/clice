@@ -13,15 +13,16 @@ struct uv_base;
 template <typename Request>
     requires (is_uv_handle_v<Request>)
 struct uv_base<Request> {
+    /// For libuv handles, `uv_close` must be called to release resources.
+    /// However, `uv_close` can only be async operation. When close is actually called,
+    /// the promise object may have already been destroyed, leading to undefined behavior
+    /// such as use-after-free. To avoid this situation, we allocate memory separately
+    /// for the handle and destroy it in the callback function.
     Request& request;
 
     uv_base() : request(*static_cast<Request*>(std::malloc(sizeof(Request)))) {}
 
     ~uv_base() {
-        /// For libuv handles, we must call uv_close to release resources.
-        /// However, uv_close is a async operation, if we store the handle in the promise object,
-        /// it may be destroyed before the uv_close operation is finished.
-        /// We decide to alloc for it separately and free it in the callback function.
         uv_close(reinterpret_cast<uv_handle_t*>(&request),
                  [](uv_handle_t* handle) { std::free(handle); });
     }
@@ -30,8 +31,8 @@ struct uv_base<Request> {
 template <typename Request>
     requires (is_uv_req_v<Request>)
 struct uv_base<Request> {
-    /// For libuv requests, we don't need to release resources, so we can store it in the promise
-    /// object.
+    /// For libuv requests, they don't need to be closed. We can lay them on the promise
+    /// object directly.
     Request request;
 };
 
