@@ -6,9 +6,7 @@ namespace clice::testing {
 namespace {
 
 TEST(Async, ThreadPool) {
-    using result = async::AsyncResult<std::thread::id>;
-
-    auto task_gen = []() -> result {
+    auto task_gen = []() -> async::Result<std::thread::id> {
         co_return co_await async::submit([]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             return std::this_thread::get_id();

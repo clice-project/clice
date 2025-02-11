@@ -38,6 +38,12 @@ constexpr bool is_uv_req_v = false UV_REQ_TYPE_MAP(UV_TYPE_ITER);
 
 #undef UV_TYPE_ITER
 
+template <typename T>
+class Task;
+
+template <typename T>
+using Result = Task<std::expected<T, std::error_code>>;
+
 const std::error_category& category();
 
 }  // namespace clice::async

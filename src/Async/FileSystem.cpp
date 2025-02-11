@@ -42,7 +42,7 @@ struct fs {
         return std::unexpected(std::error_code(code, async::category()));
     }
 
-    Result<Ret> await_resume() {
+    std::expected<Ret, std::error_code> await_resume() {
         if(error < 0) {
             return make_error(error);
         }
@@ -54,7 +54,7 @@ struct fs {
         if constexpr(!std::is_void_v<Ret>) {
             return static_cast<Derived*>(this)->result();
         } else {
-            return Result<void>();
+            return std::expected<Ret, std::error_code>();
         }
     }
 };
@@ -156,25 +156,25 @@ static int transformFlags(Mode mode) {
     return flags;
 }
 
-AsyncResult<handle> open(std::string path, Mode mode) {
+Result<handle> open(std::string path, Mode mode) {
     co_return co_await awaiter::open{
         .path = path.c_str(),
         .flags = transformFlags(mode),
     };
 }
 
-AsyncResult<void> close(handle file) {
+Result<void> close(handle file) {
     co_return co_await awaiter::close{.file = file};
 }
 
-AsyncResult<ssize_t> read(handle file, char* buffer, std::size_t size) {
+Result<ssize_t> read(handle file, char* buffer, std::size_t size) {
     co_return co_await awaiter::read{
         .file = file,
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
 
-AsyncResult<std::string> read(std::string path, Mode mode) {
+Result<std::string> read(std::string path, Mode mode) {
     /// Open the file.
     auto file = co_await open(path, mode);
     if(!file) {
@@ -206,14 +206,14 @@ AsyncResult<std::string> read(std::string path, Mode mode) {
     co_return content;
 }
 
-AsyncResult<void> write(handle file, char* buffer, std::size_t size) {
+Result<void> write(handle file, char* buffer, std::size_t size) {
     co_return co_await awaiter::write{
         .file = file,
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
 
-AsyncResult<void> write(std::string path, char* buffer, std::size_t size, Mode mode) {
+Result<void> write(std::string path, char* buffer, std::size_t size, Mode mode) {
     auto file = co_await open(path, mode);
     if(!file) {
         co_return std::unexpected(file.error());
@@ -227,10 +227,10 @@ AsyncResult<void> write(std::string path, char* buffer, std::size_t size, Mode m
         co_return std::unexpected(result.error());
     }
 
-    co_return Result<void>();
+    co_return std::expected<void, std::error_code>();
 }
 
-AsyncResult<Stats> stat(std::string path) {
+Result<Stats> stat(std::string path) {
     co_return co_await awaiter::stat{.path = path.c_str()};
 }
 
