@@ -68,6 +68,8 @@ void run() {
     /// Run agian to cleanup the loop.
     UV_CHECK_RESULT(uv_run(loop, UV_RUN_DEFAULT));
     UV_CHECK_RESULT(uv_loop_close(loop));
+
+    loop = nullptr;
 }
 
 }  // namespace clice::async
