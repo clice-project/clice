@@ -6,12 +6,15 @@ on:
   pull_request:
     branches: [ main ]
     paths-ignore:
+          - 'docs'
+          - 'scripts'
           - '.clang-format'
           - '.clangd'
           - '.gitignore'
           - 'LICENSE'
           - 'README.md'
           - '.github/workflows/xmake.yml'
+          - 'xmake.lua'
 
 jobs:
   build:
@@ -71,7 +74,7 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         run: |
           cmake --preset debug
-          cmake --build --preset debug
+          cmake --build --preset debug -v
 
       - name: Build clice (release)
         if: matrix.os == 'windows-2022'

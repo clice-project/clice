@@ -2,16 +2,21 @@ name: xmake
 
 on:
   push:
-    branches: [ non-existent-branch ]
+    branches: [ main ]
   pull_request:
-    branches: [ non-existent-branch ]
+    branches: [ main ]
     paths-ignore:
+          - 'docs'
+          - 'scripts'
           - '.clang-format'
           - '.clangd'
           - '.gitignore'
           - 'LICENSE'
           - 'README.md'
           - '.github/workflows/cmake.yml'
+          - 'CMakeLists.txt'
+          - 'CMakePresets.json'
+          - 'cmake'
 
 jobs:
   linux:
