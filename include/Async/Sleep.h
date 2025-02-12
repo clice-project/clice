@@ -19,7 +19,7 @@ struct sleep : uv<sleep, uv_timer_t, void> {
     }
 
     void cleanup() {
-        uv_timer_stop(&request);
+        error = uv_timer_stop(&request);
     }
 };
 

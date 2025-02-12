@@ -1,0 +1,60 @@
+#pragma once
+
+#include <tuple>
+
+#include "Task.h"
+#include "Event.h"
+
+namespace clice::async {
+
+struct none {};
+
+template <typename Task, typename V = typename std::remove_cvref_t<Task>::value_type>
+using task_value_t = std::conditional_t<std::is_void_v<V>, none, V>;
+
+template <typename... Tasks>
+auto gather [[gnu::noinline]] (Tasks&&... tasks) -> Task<std::tuple<task_value_t<Tasks>...>> {
+    constexpr static std::size_t count = sizeof...(Tasks);
+
+    Event event;
+    std::size_t finished = 0;
+
+    auto run_task = [&](auto& task) -> Task<task_value_t<decltype(task)>> {
+        using V = typename std::remove_cvref_t<decltype(task)>::value_type;
+        if constexpr(std::is_void_v<V>) {
+            co_await task;
+            /// Check if all tasks are finished. If so, set the event to
+            /// resume the gather handle.
+            finished += 1;
+            if(finished == count) {
+                event.set();
+            }
+            co_return none{};
+        } else {
+            auto result = co_await task;
+            finished += 1;
+            if(finished == count) {
+                event.set();
+            }
+            co_return std::move(result);
+        }
+    };
+
+    auto schedule_task = [&](auto& task) {
+        auto core = run_task(task);
+        core.schedule();
+        return core;
+    };
+
+    std::tuple all = {schedule_task(tasks)...};
+
+    /// Wait for all tasks to finish.
+    co_await event;
+
+    /// Return the results of all tasks.
+    co_return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+        return std::make_tuple(std::get<Is>(all).result()...);
+    }(std::make_index_sequence<count>{});
+}
+
+}  // namespace clice::async
