@@ -28,8 +28,10 @@ struct InlayHintLablePart {
     /// this property late using the resolve request.
     MarkupContent tooltip;
 
-    /// An optional source code location that represents this label part.
-    Location Location;
+    /// An optional source code location that represents this label part. This part will become a
+    /// clickable link that resolves to the definition of the symbol at the given location (not
+    /// necessarily the location itself), it shows the hover that shows at the given location,
+    std::optional<Location> location;
 
     /// TODO:
     // Command command;
@@ -54,7 +56,7 @@ struct InlayHint {
     Position position;
 
     /// The label of this hint.
-    std::vector<InlayHintLablePart> lable;
+    std::vector<InlayHintLablePart> lables;
 
     /// The kind of this hint.
     InlayHintKind kind;
@@ -104,13 +106,16 @@ struct InlayHintOption {
     ///     f(|a:|1, |b:|2);
     bool paramName : 1 = true;
 
-    /// Diaplay the value of `sizeof()` and `alignof()` for a struct/class defination. e.g.
+    /// If true, the type hint text is clickable to jump to the declaration.
+    bool typeLink : 1 = true;
+
+    /// Display the value of `sizeof()` and `alignof()` for a struct/class definition. e.g.
     ///    struct Example |size: 4, align: 4| { int x; };
     bool structSizeAndAlign : 1 = true;
 
     /// TODO:
     /// Display the value of `sizeof()` and `offsetof()` for a non-static member for a struct/class
-    /// defination. e.g.
+    /// definition. e.g.
     ///     struct Example {
     ///         int x; |size: 4, offset: 0|
     ///         int y: |size: 4, offset: 4|
@@ -121,8 +126,7 @@ struct InlayHintOption {
     /// Hint for implicit cast like `1 |as int|`.
     bool implicitCast : 1 = false;
 
-    /// TODO:
-    /// Hint for function return type in multiline chaind-call. e.g.
+    /// Hint for function return type in multiline chain-call. e.g.
     ///     a()
     ///     .to_b() |ClassB|
     ///     .to_c() |ClassC|
@@ -213,9 +217,10 @@ constexpr proto::InlayHintKind toLspType(InlayHintKind kind) {
 
 /// We don't store the document URI in each `Lable` object, it's always same in the given document
 /// of `ASTInfo`.
-struct Lable {
+struct LablePart {
     std::string value;
-    LocalSourceRange location;
+
+    std::optional<LocalSourceRange> location;
 
     /// TODO: Should we store tooltip field in index ?
     /// MarkupContent tooltip;
@@ -230,27 +235,31 @@ struct InlayHint {
     /// The offset of hint position.
     std::uint32_t offset;
 
-    /// Currently, there is only 1 lable is recorded during the collection of InlayHints. If it's
-    /// necessary to store multiple lable parts, replace typpe of `lable` with `std::vector<Lable>`.
-    Lable lable;
+    /// Currently, there can be multiple lable parts recorded during the collection of InlayHints.
+    std::vector<LablePart> labels;
 };
 
 using Result = std::vector<InlayHint>;
 
 /// Compute inlay hints for MainfileID in given range and config.
-Result inlayHints(proto::InlayHintParams param, ASTInfo& info, const SourceConverter& converter,
-                  const config::InlayHintOption& config);
+Result inlayHints(proto::InlayHintParams param,
+                  ASTInfo& info,
+                  const SourceConverter& converter,
+                  const config::InlayHintOption& option);
 
 /// Same with `inlayHints` but including all fileID, and all options in `config::InlayHintOption`
 /// will be enabled to support index.
-index::Shared<Result> inlayHints(proto::DocumentUri uri, ASTInfo& info,
+index::Shared<Result> inlayHints(proto::DocumentUri uri,
+                                 ASTInfo& info,
                                  const SourceConverter& converter);
 
 /// Convert `Result` to `proto::InlayHintResult`.  If an option is provided, use the option to
 /// filter result. By default, all hints will be converted.
-proto::InlayHintsResult toLspType(llvm::ArrayRef<InlayHint> result, llvm::StringRef docuri,
+proto::InlayHintsResult toLspType(llvm::ArrayRef<InlayHint> result,
+                                  llvm::StringRef docuri,
                                   std::optional<config::InlayHintOption> config,
-                                  llvm::StringRef content, const SourceConverter& SC);
+                                  llvm::StringRef content,
+                                  const SourceConverter& SC);
 
 }  // namespace feature::inlay_hint
 
