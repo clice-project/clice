@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: [ main ]
     paths-ignore:
+          - 'docs'
+          - 'scripts'
           - '.clang-format'
           - '.clangd'
           - '.gitignore'

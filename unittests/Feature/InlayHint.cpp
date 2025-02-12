@@ -9,6 +9,7 @@ namespace {
 constexpr config::InlayHintOption LikeClangd{
     .maxLength = 20,
     .maxArrayElements = 10,
+    .typeLink = false,
     .structSizeAndAlign = false,
     .memberSizeAndOffset = false,
     .implicitCast = false,
@@ -30,7 +31,8 @@ protected:
     std::optional<Tester> tester;
     Result result;
 
-    void run(llvm::StringRef code, proto::Range range = {},
+    void run(llvm::StringRef code,
+             proto::Range range = {},
              const config::InlayHintOption& option = LikeClangd) {
         tester.emplace("main.cpp", code);
         tester->run();
@@ -49,22 +51,36 @@ protected:
         return std::distance(result.begin(), iter);
     }
 
+    std::string joinLabels(const InlayHint& hint) {
+        std::string text;
+        for(auto& lable: hint.labels) {
+            text += lable.value;
+        }
+        return text;
+    }
+
     void EXPECT_AT(llvm::StringRef key, llvm::StringRef text) {
         auto index = indexOf(key);
-        EXPECT_EQ(result[index].lable.value, text);
+        EXPECT_EQ(text, joinLabels(result[index]));
+    }
+
+    void EXPECT_AT(llvm::StringRef key, llvm::function_ref<bool(const InlayHint&)> checker) {
+        auto index = indexOf(key);
+        EXPECT_TRUE(checker(result[index]));
     }
 
     void EXPECT_ALL_KEY_IS_TEXT() {
         EXPECT_EQ(tester->locations.size(), result.size());
 
         for(auto& hint: result) {
-            auto text = hint.lable.value;
+            auto text = joinLabels(hint);
             auto expect = tester->offset(text);
             EXPECT_EQ(expect, hint.offset);
         }
     }
 
-    void EXPECT_HINT_COUNT(size_t count, llvm::StringRef startKey = "",
+    void EXPECT_HINT_COUNT(size_t count,
+                           llvm::StringRef startKey = "",
                            llvm::StringRef endKey = "") {
         size_t begin = 0;
         size_t end = result.size();
@@ -97,6 +113,7 @@ TEST_F(InlayHints, MaxLength) {
         {},
         {
             .maxLength = 7,
+            .typeLink = false,
             .structSizeAndAlign = false,
         });
 
@@ -117,9 +134,7 @@ auto x4$(3) = 1;$(request_range_end)
             // $(request_range_end)
             .end = {4, 12},
     },
-        {
-            .implicitCast = true,
-        });
+        LikeClangd);
 
     // 3: x2, x3, x4 is included in the request range.
     EXPECT_HINT_COUNT(3, "request_range_start", "request_range_end");
@@ -375,7 +390,7 @@ auto l$(1) = []$(2) {
 }$(3);
 )cpp",
         {},
-        {.returnType = true, .blockEnd = true});
+        {.returnType = true, .blockEnd = true, .typeLink = false});
 
     EXPECT_HINT_COUNT(3);
 
@@ -475,6 +490,151 @@ namespace _2 {
             auto lspRes = toLspType(result, "", fixOption, header, cvtr);
             EXPECT_EQ(lspRes.size(), 2);
         }
+    }
+}
+
+TEST_F(InlayHints, TypeLinkSimple) {
+    config::InlayHintOption option = LikeClangd;
+    option.typeLink = true;
+    option.blockEnd = false;
+
+    run(R"cpp(
+struct A { int x; };
+        
+
+auto lambda$(1) = []()$(2){
+    return A();
+    };
+    
+auto var$(3) = lambda();
+)cpp",
+        {},
+        option);
+
+    EXPECT_HINT_COUNT(3);
+
+    // EXPECT_ALL_KEY_IS_TEXT();
+    EXPECT_AT("1", ": (lambda)");
+    EXPECT_AT("2", "-> A");
+    EXPECT_AT("3", ": A");
+}
+
+TEST_F(InlayHints, TypeLinkIgnoredCase) {
+    config::InlayHintOption option = LikeClangd;
+    option.typeLink = true;
+    option.blockEnd = false;
+
+    run(R"cpp(    
+
+
+auto var1$(1) = 1;
+
+#include <vector>
+
+auto var2$(2) = std::vector<int>{};
+
+)cpp",
+        {},
+        option);
+
+    EXPECT_HINT_COUNT(2);
+
+    EXPECT_AT("1", [this](const InlayHint& hint) {
+        EXPECT_EQ(2, hint.labels.size());
+
+        bool textOnly = !hint.labels[1].location.has_value();
+        EXPECT_TRUE(textOnly);
+
+        return textOnly && joinLabels(hint) == ": int";
+    });
+
+    EXPECT_AT("2", [this](const InlayHint& hint) {
+        EXPECT_EQ(2, hint.labels.size());
+
+        EXPECT_EQ(hint.labels[0].value, ": ");
+        EXPECT_EQ(hint.labels[1].value, "std::vector<int>");
+
+        bool textOnly = !hint.labels[1].location.has_value();
+        EXPECT_TRUE(textOnly);
+
+        return textOnly;
+    });
+}
+
+TEST_F(InlayHints, TypeLinkWithScope) {
+    config::InlayHintOption option = LikeClangd;
+    option.typeLink = true;
+    option.blockEnd = false;
+
+    {
+        run(R"cpp(
+        namespace A {
+            namespace B {
+                struct X { int x; };
+            }
+        }
+        
+        auto lambda$(1) = []()$(2){
+            return A::B::X();
+        };
+        
+        auto var$(3) = lambda();
+        )cpp",
+            {},
+            option);
+
+        EXPECT_HINT_COUNT(3);
+
+        // EXPECT_ALL_KEY_IS_TEXT();
+        EXPECT_AT("1", ": (lambda)");
+        EXPECT_AT("2", "-> A::B::X");
+        EXPECT_AT("3", ": A::B::X");
+
+        auto namespace_has_link = [this](const InlayHint& hint) {
+            EXPECT_EQ(6, hint.labels.size());
+            EXPECT_TRUE(hint.labels[1].location.has_value());
+            EXPECT_TRUE(hint.labels[3].location.has_value());
+            return true;
+        };
+
+        EXPECT_AT("2", namespace_has_link);
+        EXPECT_AT("3", namespace_has_link);
+    }
+
+    {
+        run(R"cpp(
+        struct A {
+            class B {
+            public:
+                struct X { int x; };
+            };
+        };
+        
+        auto lambda$(1) = []()$(2){
+            return A::B::X();
+        };
+        
+        auto var$(3) = lambda();
+        )cpp",
+            {},
+            option);
+
+        EXPECT_HINT_COUNT(3);
+
+        // EXPECT_ALL_KEY_IS_TEXT();
+        EXPECT_AT("1", ": (lambda)");
+        EXPECT_AT("2", "-> A::B::X");
+        EXPECT_AT("3", ": A::B::X");
+
+        auto nested_struct_has_link = [this](const InlayHint& hint) {
+            EXPECT_EQ(6, hint.labels.size());
+            EXPECT_TRUE(hint.labels[1].location.has_value());
+            EXPECT_TRUE(hint.labels[3].location.has_value());
+            return true;
+        };
+
+        EXPECT_AT("2", nested_struct_has_link);
+        EXPECT_AT("3", nested_struct_has_link);
     }
 }
 
