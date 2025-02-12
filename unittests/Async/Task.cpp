@@ -41,7 +41,6 @@ TEST(Async, TaskDispose) {
     auto task = my_task();
     task.schedule();
     task.dispose();
-
     async::run();
 
     EXPECT_EQ(x, 2);
@@ -54,10 +53,7 @@ TEST(Async, TaskDispose) {
         task.dispose();
     };
 
-    auto p = main();
-    p.schedule();
-
-    async::run();
+    async::run(main());
 
     EXPECT_EQ(x, 3);
 }
@@ -79,10 +75,7 @@ TEST(Async, TaskCancel) {
         task.dispose();
     };
 
-    auto p = main();
-    p.schedule();
-
-    async::run();
+    async::run(main());
 
     EXPECT_EQ(x, 2);
 }

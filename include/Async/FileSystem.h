@@ -59,9 +59,9 @@ struct Mode : refl::Enum<Mode, true> {
 [[nodiscard]] Result<void> write(handle file, char* buffer, std::size_t size);
 
 [[nodiscard]] Result<void> write(std::string path,
-                                      char* buffer,
-                                      std::size_t size,
-                                      Mode mode = Mode(Mode::Write, Mode::Create, Mode::Truncate));
+                                 char* buffer,
+                                 std::size_t size,
+                                 Mode mode = Mode(Mode::Write, Mode::Create, Mode::Truncate));
 
 struct Stats {
     std::chrono::milliseconds mtime;

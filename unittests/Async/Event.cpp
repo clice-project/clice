@@ -35,11 +35,7 @@ TEST(Async, Event) {
     auto task2 = task_func2();
     auto main = main_func();
 
-    task1.schedule();
-    task2.schedule();
-    main.schedule();
-
-    async::run();
+    async::run(task1, task2, main);
 }
 
 }  // namespace

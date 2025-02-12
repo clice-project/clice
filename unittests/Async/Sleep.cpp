@@ -14,9 +14,7 @@ TEST(Async, Sleep) {
     };
 
     auto task = task_gen();
-    task.schedule();
-
-    async::run();
+    async::run(task);
 
     EXPECT_EQ(x, 3);
 }

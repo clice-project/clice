@@ -14,7 +14,7 @@ template <typename Task, typename V = typename std::remove_cvref_t<Task>::value_
 using task_value_t = std::conditional_t<std::is_void_v<V>, none, V>;
 
 template <typename... Tasks>
-auto gather [[gnu::noinline]] (Tasks&&... tasks) -> Task<std::tuple<task_value_t<Tasks>...>> {
+auto gather(Tasks&&... tasks) -> Task<std::tuple<task_value_t<Tasks>...>> {
     constexpr static std::size_t count = sizeof...(Tasks);
 
     Event event;

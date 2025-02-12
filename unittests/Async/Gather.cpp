@@ -24,7 +24,7 @@ TEST(Async, GatherPack) {
 TEST(Async, GatherRange) {
     std::vector<int> args;
     args.resize(30);
-    ranges::iota(args, 0);
+    std::ranges::iota(args, 0);
 
     std::vector<int> results;
 
