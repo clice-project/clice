@@ -1,6 +1,7 @@
 #pragma once
 
 #include <tuple>
+#include <thread>
 
 #include "Task.h"
 #include "Event.h"
@@ -55,6 +56,61 @@ auto gather [[gnu::noinline]] (Tasks&&... tasks) -> Task<std::tuple<task_value_t
     co_return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
         return std::make_tuple(std::get<Is>(all).result()...);
     }(std::make_index_sequence<count>{});
+}
+
+/// Run the tasks in parallel and return the results.
+template <typename... Tasks>
+auto run(Tasks&&... tasks) {
+    auto core = gather(std::forward<Tasks>(tasks)...);
+    core.schedule();
+    async::run();
+    assert(core.done() && "run: not done");
+    return core.result();
+}
+
+template <ranges::input_range Range, typename Coroutine>
+Task<> gather(Range&& range,
+              Coroutine&& coroutine,
+              std::size_t concurrency = std::thread::hardware_concurrency()) {
+    std::vector<Task<>> tasks;
+    tasks.reserve(concurrency);
+
+    auto iter = ranges::begin(range);
+    auto end = ranges::end(range);
+
+    Event event;
+    std::size_t finished = 0;
+
+    auto run_task = [&](auto& value) -> async::Task<> {
+        /// Execute the first task.
+        auto task = coroutine(value);
+        co_await task;
+        finished += 1;
+
+        /// Check if still have tasks to run. If so, run the next task.
+        while(iter != end) {
+            auto task = coroutine(*iter);
+            iter++;
+            finished -= 1;
+            co_await task;
+            finished += 1;
+        }
+
+        /// Check if all tasks are finished. If so, set the event to
+        /// resume the gather handle.
+        if(finished == tasks.size()) {
+            event.set();
+        }
+    };
+
+    /// Fill tasks.
+    while(iter != end && tasks.size() < concurrency) {
+        tasks.emplace_back(run_task(*iter));
+        tasks.back().schedule();
+        iter++;
+    }
+
+    co_await event;
 }
 
 }  // namespace clice::async

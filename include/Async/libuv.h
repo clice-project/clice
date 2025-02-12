@@ -46,4 +46,6 @@ using Result = Task<std::expected<T, std::error_code>>;
 
 const std::error_category& category();
 
+void run();
+
 }  // namespace clice::async

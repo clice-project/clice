@@ -1,6 +1,5 @@
 #include "Test/Test.h"
-#include "Async/Event.h"
-#include "Async/Scheduler.h"
+#include "Async/Async.h"
 
 namespace clice::testing {
 

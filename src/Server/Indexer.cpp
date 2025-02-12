@@ -328,29 +328,16 @@ async::Task<> Indexer::indexAll() {
         co_await index(file);
     };
 
-    auto iter = database.begin();
-    auto end = database.end();
+    std::vector<std::string> files;
+    files.reserve(database.size());
 
-    std::vector<async::Task<>> tasks;
-    /// TODO: Use threads count in the future.
-    tasks.resize(20);
+    for(auto& [file, _]: database) {
+        files.emplace_back(file);
+    }
 
     log::info("Start indexing all files");
 
-    while(iter != end ||
-          ranges::any_of(tasks, [](auto& task) { return !task.empty() && !task.done(); })) {
-        for(auto& task: tasks) {
-            if(task.empty() || task.done()) {
-                if(iter != end) {
-                    task = each(iter->first());
-                    task.schedule();
-                    ++iter;
-                }
-            }
-        }
-
-        co_await async::suspend([&](auto handle) { handle->schedule(); });
-    }
+    co_await async::gather(files, each);
 }
 
 std::string Indexer::getIndexPath(llvm::StringRef file) {
