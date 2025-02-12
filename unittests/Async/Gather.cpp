@@ -23,8 +23,9 @@ TEST(Async, GatherPack) {
 
 TEST(Async, GatherRange) {
     std::vector<int> args;
-    args.resize(30);
-    std::ranges::iota(args, 0);
+    for(int i = 0; i < 30; ++i) {
+        args.push_back(i);
+    }
 
     std::vector<int> results;
 
