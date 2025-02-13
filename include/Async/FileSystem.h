@@ -4,6 +4,7 @@
 
 #include "libuv.h"
 #include "Task.h"
+#include "Awaiter.h"
 
 #include "Support/JSON.h"
 #include "Support/Enum.h"

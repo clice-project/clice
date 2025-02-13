@@ -42,13 +42,40 @@ inline llvm::Error init_resource_dir(llvm::StringRef execute) {
     llvm::SmallString<128> path;
     path::append(path, path::parent_path(execute), "..");
     path::append(path, "lib", "clang", "20");
-
     if(auto error = real_path(path, path)) {
         return llvm::make_error<llvm::StringError>(error.message(), error);
     }
-
     resource_dir = path.str();
     return llvm::Error::success();
+}
+
+inline std::expected<std::string, std::error_code> createTemporaryFile(llvm::StringRef prefix,
+                                                                       llvm::StringRef suffix) {
+    llvm::SmallString<128> path;
+    auto error = llvm::sys::fs::createTemporaryFile(prefix, suffix, path);
+    if(error) {
+        return std::unexpected(error);
+    }
+    return path.str().str();
+}
+
+inline std::expected<void, std::error_code> write(llvm::StringRef path, llvm::StringRef content) {
+    std::error_code EC;
+    llvm::raw_fd_ostream os(path, EC, llvm::sys::fs::OF_None);
+    if(EC) {
+        return std::unexpected(EC);
+    }
+    os << content;
+    os.flush();
+    return std::expected<void, std::error_code>();
+}
+
+inline std::expected<std::string, std::error_code> read(llvm::StringRef path) {
+    auto buffer = llvm::MemoryBuffer::getFile(path);
+    if(!buffer) {
+        return std::unexpected(buffer.getError());
+    }
+    return buffer.get()->getBuffer().str();
 }
 
 }  // namespace fs
