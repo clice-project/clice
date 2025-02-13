@@ -76,20 +76,20 @@ namespace feature::hover {
 //     // Find reference
 // };
 
-struct HoverResult {
+struct Result {
     std::string markdown;
 };
 
 /// Get the hover information of a declaration with given option.
-HoverResult hover(const clang::Decl* decl, const config::HoverOption& option);
+Result hover(const clang::Decl* decl, const config::HoverOption& option);
 
 /// Compute inlay hints for MainfileID in given param and config.
-HoverResult hover(proto::HoverParams param,
-                  ASTInfo& info,
-                  const SourceConverter& converter,
-                  const config::HoverOption& option);
+Result hover(proto::HoverParams param,
+             ASTInfo& info,
+             const SourceConverter& converter,
+             const config::HoverOption& option);
 
-proto::MarkupContent toLspType(HoverResult hover);
+proto::MarkupContent toLspType(Result hover);
 
 }  // namespace feature::hover
 

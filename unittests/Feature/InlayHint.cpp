@@ -16,14 +16,6 @@ constexpr config::InlayHintOption LikeClangd{
     .chainCall = false,
 };
 
-bool operator== (const proto::Position& lhs, const proto::Position rhs) {
-    return lhs.character == rhs.character && lhs.line == rhs.line;
-}
-
-auto operator<=> (const proto::Position& lhs, const proto::Position rhs) {
-    return std::tie(lhs.line, lhs.character) <=> std::tie(rhs.line, rhs.character);
-}
-
 using namespace feature::inlay_hint;
 
 struct InlayHints : public ::testing::Test {
