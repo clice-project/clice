@@ -46,23 +46,23 @@ struct Mode : refl::Enum<Mode, true> {
 };
 
 /// Open the file asynchronously.
-[[nodiscard]] Result<handle> open(std::string path, Mode mode);
+Result<handle> open(std::string path, Mode mode);
 
 /// Close the file asynchronously.
-[[nodiscard]] Result<void> close(handle file);
+Result<void> close(handle file);
 
 /// Read the file asynchronously, make sure the buffer is valid until the task is done.
-[[nodiscard]] Result<ssize_t> read(handle file, char* buffer, std::size_t size);
+Result<ssize_t> read(handle file, char* buffer, std::size_t size);
 
-[[nodiscard]] Result<std::string> read(std::string path, Mode mode = Mode::Read);
+Result<std::string> read(std::string path, Mode mode = Mode::Read);
 
 /// Write the file asynchronously, make sure the buffer is valid until the task is done.
-[[nodiscard]] Result<void> write(handle file, char* buffer, std::size_t size);
+Result<void> write(handle file, char* buffer, std::size_t size);
 
-[[nodiscard]] Result<void> write(std::string path,
-                                 char* buffer,
-                                 std::size_t size,
-                                 Mode mode = Mode(Mode::Write, Mode::Create, Mode::Truncate));
+Result<void> write(std::string path,
+                   char* buffer,
+                   std::size_t size,
+                   Mode mode = Mode(Mode::Write, Mode::Create, Mode::Truncate));
 
 struct Stats {
     std::chrono::milliseconds mtime;
