@@ -15,6 +15,8 @@
 #include <type_traits>
 #include <system_error>
 
+#include "Support/TypeTraits.h"
+
 namespace clice::async {
 
 /// The default event loop.
@@ -36,7 +38,25 @@ constexpr bool is_uv_handle_v = false UV_HANDLE_TYPE_MAP(UV_TYPE_ITER);
 template <typename T>
 constexpr bool is_uv_req_v = false UV_REQ_TYPE_MAP(UV_TYPE_ITER);
 
+template <typename T>
+constexpr bool is_uv_stream_v = std::is_same_v<T, uv_stream_t> || std::is_same_v<T, uv_tcp_t> ||
+                                std::is_same_v<T, uv_pipe_t> || std::is_same_v<T, uv_tty_t>;
+
 #undef UV_TYPE_ITER
+
+template <typename T, typename U>
+T* uv_cast(U& u) {
+    if constexpr(std::is_same_v<T, uv_handle_t>) {
+        static_assert(is_uv_handle_v<std::remove_cvref_t<U>>, "uv_cast: invalid uv handle");
+    } else if constexpr(std::is_same_v<T, uv_req_t>) {
+        static_assert(is_uv_req_v<std::remove_cvref_t<U>>, "uv_cast: invalid uv request");
+    } else if constexpr(std::is_same_v<T, uv_stream_t>) {
+        static_assert(is_uv_stream_v<std::remove_cvref_t<U>>, "uv_cast: invalid uv stream");
+    } else {
+        static_assert(dependent_false<U>, "uv_cast: invalid type");
+    }
+    return reinterpret_cast<T*>(&u);
+}
 
 template <typename T>
 class Task;
@@ -45,6 +65,8 @@ template <typename T>
 using Result = Task<std::expected<T, std::error_code>>;
 
 const std::error_category& category();
+
+void init();
 
 void run();
 

@@ -52,7 +52,7 @@ void promise_base::schedule() {
     tasks.push_back(this);
 }
 
-void run() {
+void init() {
     loop = &instance;
 
     UV_CHECK_RESULT(uv_loop_init(loop));
@@ -60,6 +60,12 @@ void run() {
     idle_running = true;
     UV_CHECK_RESULT(uv_idle_init(loop, &idle));
     UV_CHECK_RESULT(uv_idle_start(&idle, each));
+}
+
+void run() {
+    if(!loop) {
+        init();
+    }
 
     UV_CHECK_RESULT(uv_run(loop, UV_RUN_DEFAULT));
 
