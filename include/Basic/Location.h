@@ -25,6 +25,14 @@ struct Position {
     uinteger character;
 };
 
+constexpr bool operator== (const proto::Position& lhs, const proto::Position rhs) {
+    return lhs.character == rhs.character && lhs.line == rhs.line;
+}
+
+constexpr auto operator<=> (const proto::Position& lhs, const proto::Position rhs) {
+    return std::tie(lhs.line, lhs.character) <=> std::tie(rhs.line, rhs.character);
+}
+
 struct Range {
     /// The range's start position.
     Position start;

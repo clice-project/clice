@@ -142,10 +142,10 @@ proto::Range SourceConverter::toRange(clang::SourceRange range,
     };
 }
 
-proto::Range SourceConverter::toRange(LocalSourceRange range, llvm::StringRef conent) const {
+proto::Range SourceConverter::toRange(LocalSourceRange range, llvm::StringRef content) const {
     return {
-        .start = toPosition(conent, range.begin),
-        .end = toPosition(conent, range.end),
+        .start = toPosition(content, range.begin),
+        .end = toPosition(content, range.end),
     };
 }
 
