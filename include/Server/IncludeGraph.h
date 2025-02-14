@@ -4,6 +4,7 @@
 #include "Database.h"
 #include "Async/Async.h"
 #include "Compiler/Compilation.h"
+#include "Support/JSON.h"
 
 namespace clice {
 
@@ -79,6 +80,13 @@ public:
 
     ~IncludeGraph();
 
+    async::Task<> index(llvm::StringRef file, CompilationDatabase& database);
+
+    json::Value dump();
+
+    void load(const json::Value& json);
+
+private:
     std::string getIndexPath(llvm::StringRef file);
 
     /// Check whether the given file needs to be updated. If so,
@@ -98,8 +106,6 @@ public:
     async::Task<> updateIndices(ASTInfo& info,
                                 TranslationUnit* tu,
                                 llvm::DenseMap<clang::FileID, uint32_t>& files);
-
-    async::Task<> index(llvm::StringRef file, CompilationDatabase& database);
 
 private:
     const config::IndexOptions& options;

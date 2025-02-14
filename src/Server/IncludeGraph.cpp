@@ -9,15 +9,6 @@
 
 namespace clice {
 
-std::string IncludeGraph::getIndexPath(llvm::StringRef file) {
-    auto now = std::chrono::system_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, 1000);
-    return path::join(options.dir, path::filename(file) + "." + llvm::Twine(ms + dis(gen)));
-}
-
 IncludeGraph::~IncludeGraph() {
     for(auto& [_, header]: headers) {
         delete header;
@@ -26,6 +17,128 @@ IncludeGraph::~IncludeGraph() {
     for(auto& [_, tu]: tus) {
         delete tu;
     }
+}
+
+json::Value IncludeGraph::dump() {
+    json::Array headers;
+    for(auto& [_, header]: this->headers) {
+        json::Array contexts;
+        for(auto& [tu, context]: header->contexts) {
+            contexts.emplace_back(json::Object{
+                {"tu",       tu->srcPath             },
+                {"contexts", json::serialize(context)},
+            });
+        }
+
+        headers.emplace_back(json::Object{
+            {"srcPath",  header->srcPath                 },
+            {"contexts", std::move(contexts)             },
+            {"indices",  json::serialize(header->indices)},
+        });
+    }
+
+    json::Array tus;
+    for(auto& [_, tu]: this->tus) {
+        tus.emplace_back(json::Object{
+            {"srcPath",   tu->srcPath                   },
+            {"indexPath", tu->indexPath                 },
+            {"mtime",     tu->mtime.count()             },
+            {"locations", json::serialize(tu->locations)},
+        });
+    }
+
+    return json::Object{
+        {"headers", std::move(headers)       },
+        {"tus",     std::move(tus)           },
+        {"paths",   json::serialize(pathPool)},
+    };
+}
+
+void IncludeGraph::load(const json::Value& json) {
+    auto object = json.getAsObject();
+
+    for(auto& value: *object->getArray("tus")) {
+        auto object = value.getAsObject();
+        auto tu = new TranslationUnit{
+            .srcPath = object->getString("srcPath")->str(),
+            .indexPath = object->getString("indexPath")->str(),
+            .mtime = std::chrono::milliseconds(*object->getInteger("mtime")),
+            .locations = json::deserialize<std::vector<IncludeLocation>>(*object->get("locations")),
+        };
+        tus.try_emplace(tu->srcPath, tu);
+    }
+
+    /// All headers must be already initialized.
+    for(auto& value: *object->getArray("headers")) {
+        auto object = value.getAsObject();
+        llvm::StringRef srcPath = *object->getString("srcPath");
+
+        Header* header = nullptr;
+        if(auto iter = headers.find(srcPath); iter != headers.end()) {
+            header = iter->second;
+        } else {
+            header = new Header;
+            header->srcPath = srcPath;
+            headers.try_emplace(srcPath, header);
+        }
+
+        header->indices = json::deserialize<std::vector<HeaderIndex>>(*object->get("indices"));
+
+        for(auto& value: *object->getArray("contexts")) {
+            auto object = value.getAsObject();
+            auto tu = tus[*object->getString("tu")];
+            header->contexts[tu] =
+                json::deserialize<std::vector<Context>>(*object->get("contexts"));
+            tu->headers.insert(header);
+        }
+    }
+
+    pathPool = json::deserialize<std::vector<std::string>>(*object->get("paths"));
+    for(std::size_t i = 0; i < pathPool.size(); i++) {
+        pathIndices.try_emplace(pathPool[i], i);
+    }
+}
+
+async::Task<> IncludeGraph::index(llvm::StringRef file, CompilationDatabase& database) {
+    auto path = path::real_path(file);
+    file = path;
+
+    auto tu = co_await check(file);
+    if(!tu) {
+        log::info("No need to update index for file: {}", file);
+        co_return;
+    }
+
+    auto command = database.getCommand(file);
+    if(command.empty()) {
+        log::warn("No command found for file: {}", file);
+        co_return;
+    }
+
+    CompilationParams params;
+    params.command = command;
+
+    auto info = co_await async::submit([&params] { return compile(params); });
+    if(!info) {
+        log::warn("Failed to compile {}: {}", file, info.error());
+        co_return;
+    }
+
+    llvm::DenseMap<clang::FileID, uint32_t> files;
+
+    /// Otherwise, we need to update all header contexts.
+    addContexts(**info, tu, files);
+
+    co_await updateIndices(**info, tu, files);
+}
+
+std::string IncludeGraph::getIndexPath(llvm::StringRef file) {
+    auto now = std::chrono::system_clock::now();
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 1000);
+    return path::join(options.dir, path::filename(file) + "." + llvm::Twine(ms + dis(gen)));
 }
 
 async::Task<TranslationUnit*> IncludeGraph::check(llvm::StringRef file) {
@@ -282,39 +395,6 @@ async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
                                       index.feature->size);
         }
     }
-}
-
-async::Task<> IncludeGraph::index(llvm::StringRef file, CompilationDatabase& database) {
-    auto path = path::real_path(file);
-    file = path;
-
-    auto tu = co_await check(file);
-    if(!tu) {
-        log::info("No need to update index for file: {}", file);
-        co_return;
-    }
-
-    auto command = database.getCommand(file);
-    if(command.empty()) {
-        log::warn("No command found for file: {}", file);
-        co_return;
-    }
-
-    CompilationParams params;
-    params.command = command;
-
-    auto info = co_await async::submit([&params] { return compile(params); });
-    if(!info) {
-        log::warn("Failed to compile {}: {}", file, info.error());
-        co_return;
-    }
-
-    llvm::DenseMap<clang::FileID, uint32_t> files;
-
-    /// Otherwise, we need to update all header contexts.
-    addContexts(**info, tu, files);
-
-    co_await updateIndices(**info, tu, files);
 }
 
 }  // namespace clice

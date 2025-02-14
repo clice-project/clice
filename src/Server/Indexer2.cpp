@@ -59,6 +59,32 @@ void Indexer2::indexAll() {
     }
 }
 
+void Indexer2::save() {
+    auto json = graph->dump();
+    auto result = fs::write(path::join(options.dir, "index.json"), std::format("{}", json));
+    if(result) {
+        log::info("Successfully saved index to disk");
+    } else {
+        log::warn("Failed to save index to disk: {}", result.error());
+    }
+}
+
+void Indexer2::load() {
+    auto path = path::join(options.dir, "index.json");
+    auto file = fs::read(path);
+    if(!file) {
+        log::warn("Failed to open index file: {}", file.error());
+        return;
+    }
+
+    if(auto result = json::parse(file.value())) {
+        graph->load(*result);
+        log::info("Successfully loaded index from disk");
+    } else {
+        log::warn("Failed to parse index file: {}", result.takeError());
+    }
+}
+
 async::Task<> Indexer2::index(std::string file) {
     assert(!pending.contains(file) && "file should not be in the pending list");
     assert(tasks.contains(file) && "file should not be in the tasks list");

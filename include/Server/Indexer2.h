@@ -23,6 +23,10 @@ public:
 
     void indexAll();
 
+    void save();
+
+    void load();
+
 private:
     async::Task<> index(std::string file);
 
