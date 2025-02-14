@@ -185,7 +185,7 @@ async::Task<> Indexer::updateIndices(this Self& self,
 
     auto& SM = info.srcMgr();
 
-    for(auto& [fid, index]: indices) {
+    for(auto& [fid, index]: *indices) {
         if(fid == SM.getMainFileID()) {
             if(tu->indexPath.empty()) {
                 tu->indexPath = self.getIndexPath(tu->srcPath);
@@ -309,9 +309,9 @@ async::Task<> Indexer::index(this Self& self, llvm::StringRef file) {
     llvm::DenseMap<clang::FileID, uint32_t> files;
 
     /// Otherwise, we need to update all header contexts.
-    self.addContexts(*info, tu, files);
+    self.addContexts(**info, tu, files);
 
-    co_await self.updateIndices(*info, tu, files);
+    co_await self.updateIndices(**info, tu, files);
 }
 
 async::Task<> Indexer::index(llvm::StringRef file, ASTInfo& info) {
@@ -328,29 +328,16 @@ async::Task<> Indexer::indexAll() {
         co_await index(file);
     };
 
-    auto iter = database.begin();
-    auto end = database.end();
+    std::vector<std::string> files;
+    files.reserve(database.size());
 
-    std::vector<async::Task<>> tasks;
-    /// TODO: Use threads count in the future.
-    tasks.resize(20);
+    for(auto& [file, _]: database) {
+        files.emplace_back(file);
+    }
 
     log::info("Start indexing all files");
 
-    while(iter != end ||
-          ranges::any_of(tasks, [](auto& task) { return !task.empty() && !task.done(); })) {
-        for(auto& task: tasks) {
-            if(task.empty() || task.done()) {
-                if(iter != end) {
-                    task = each(iter->first());
-                    task.schedule();
-                    ++iter;
-                }
-            }
-        }
-
-        co_await async::suspend([&](auto handle) { handle->schedule(); });
-    }
+    co_await async::gather(files, each);
 }
 
 std::string Indexer::getIndexPath(llvm::StringRef file) {
@@ -513,11 +500,18 @@ void Indexer::loadFromDisk() {
 }
 
 async::Task<std::unique_ptr<llvm::MemoryBuffer>> Indexer::read(llvm::StringRef path) {
-    co_return co_await async::submit([path] {
+    auto result = co_await async::submit([path] {
         auto file = llvm::MemoryBuffer::getFile(path);
         ASSERT(file, "Failed to open file: {}, because: {}", path, file.getError());
         return std::move(file.get());
     });
+
+    if(!result) {
+        log::warn("Failed to read file: {}", path);
+        co_return nullptr;
+    }
+
+    co_return std::move(*result);
 }
 
 async::Task<> Indexer::lookup(llvm::ArrayRef<Indexer::SymbolID> ids,
