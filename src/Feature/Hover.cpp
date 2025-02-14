@@ -3,6 +3,8 @@
 
 #include <clang/AST/DeclVisitor.h>
 
+#include <variant>
+
 template <class... Ts>
 struct Match : Ts... {
     using Ts::operator()...;
