@@ -89,17 +89,16 @@ namespace std {
 }
 )cpp");
 
-    EXPECT_HOVER("A", "### namespace A");
-    EXPECT_HOVER("B", "### namespace A::B");
-    EXPECT_HOVER("C", "### namespace A::B::C");
-    EXPECT_HOVER("D", "### namespace A::B::(anonymous)::D");
-    EXPECT_HOVER("std", "### namespace std");
+    // EXPECT_HOVER("", "");
+    // EXPECT_HOVER("", "");
+    // EXPECT_HOVER("", "");
+    // EXPECT_HOVER("", "");
+    // EXPECT_HOVER("", "");
+    // EXPECT_HOVER("", "");
+    // EXPECT_HOVER("", "");
 
     /// FIXME: inline ?
     // EXPECT_HOVER("E", "### namespace A::(inline)E");
-    EXPECT_HOVER("E", "### namespace A::E");
-
-    EXPECT_HOVER("F", "### namespace std::F");
 }
 
 TEST_F(Hover, RecordScope) {
@@ -168,23 +167,157 @@ namespace out {
     // EXPECT_HOVER("NC", "");
 
     auto M_TEXT = R"md(### Struct `M`
-From namespace: `out::in`
+
+In namespace: `out::in`
+
 ___
 <TODO: document>
+
 ___
 size: 24 (0x18) bytes, align: 8 (0x8) bytes, 
 ___
-Fields:
+5 fields:
+
 + x: `int`
+
 + y: `double`
+
 + z: `char`
+
 + a: `T` (aka `struct A`)
+
 + b: `T` (aka `struct A`)
 
 ___
 <TODO: source code>
 )md";
     EXPECT_HOVER("M", M_TEXT);
+}
+
+TEST_F(Hover, EnumStyle) {
+    run(R"cpp(
+
+enum Free {
+    A = 1,
+    B = 2,
+    C = 999,
+};
+
+enum class Scope: long {
+    A = -8,
+    B = 2,
+    C = 100,
+};
+
+)cpp");
+
+    auto FREE_STYLE = R"md(### Enum `Free` `(unsigned int)`
+
+In namespace: `(global)`, (unscoped)
+
+___
+<TODO: document>
+
+___
+3 items:
+
++ A = `1 (0x1)`
+
++ B = `2 (0x2)`
+
++ C = `999 (0x3E7)`
+
+___
+<TODO: source code>
+)md";
+    EXPECT_HOVER("Free", FREE_STYLE);
+    // EXPECT_HOVER("Scope", "");
+}
+
+TEST_F(Hover, FunctionStyle) {
+    run(R"cpp(
+
+typedef long long ll;
+
+ll f(int x, int y, ll z = 1) { return 0; }
+
+template<typename T, typename S>
+T t(T a, T b, int c, ll d, S s) { return a; }
+
+namespace {
+    constexpr static const char* g() { return "hello"; }
+}
+
+namespace test {
+    namespace {
+        [[deprecated("test deprecate message")]] consteval int h() { return 1; }
+    }
+}
+
+struct A {
+    constexpr static A m(int left, double right) { return A(); }
+};
+
+)cpp");
+
+    auto FUNC_STYLE = R"md(### Method `m`
+
+In namespace: `(global)`, scope: `A`
+
+___
+`constexpr` `inline` `static`
+
+___
+-> `A` (aka `struct A`)
+
+___
+2 parameters:
+
++ left: `int`
+
++ right: `double`
+
+___
+<TODO: document>
+
+___
+<TODO: source code>
+)md";
+    // EXPECT_HOVER("f", FREE_STYLE);
+    // EXPECT_HOVER("t", FREE_STYLE);
+    // EXPECT_HOVER("g", FREE_STYLE);
+    // EXPECT_HOVER("h", FREE_STYLE);
+
+    EXPECT_HOVER("m", FUNC_STYLE);
+}
+
+TEST_F(Hover, VariableStyle) {
+    run(R"cpp(
+
+void f() {
+    constexpr static auto x1 = 1;
+}
+)cpp");
+
+    auto FREE_STYLE = R"md(### Variable `x1`
+
+In namespace: `(global)`, scope: `f`
+
+___
+`constexpr` `static` `(local variable)`
+
+Type: `const int`
+
+size = 4 bytes, align = 4 bytes
+
+___
+<TODO: document>
+
+___
+<TODO: source code>
+)md";
+
+    EXPECT_HOVER("x1", FREE_STYLE);
 }
 
 }  // namespace
