@@ -3,7 +3,8 @@
 #include <chrono>
 
 #include "libuv.h"
-#include "Coroutine.h"
+#include "Task.h"
+#include "Awaiter.h"
 
 #include "Support/JSON.h"
 #include "Support/Enum.h"
@@ -12,12 +13,6 @@
 #include "llvm/ADT/FunctionExtras.h"
 
 namespace clice::async {
-
-template <typename T>
-using Result = std::expected<T, std::error_code>;
-
-template <typename T>
-using AsyncResult = Task<std::expected<T, std::error_code>>;
 
 namespace fs {
 
@@ -51,29 +46,29 @@ struct Mode : refl::Enum<Mode, true> {
 };
 
 /// Open the file asynchronously.
-[[nodiscard]] AsyncResult<handle> open(std::string path, Mode mode);
+Result<handle> open(std::string path, Mode mode);
 
 /// Close the file asynchronously.
-[[nodiscard]] AsyncResult<void> close(handle file);
+Result<void> close(handle file);
 
 /// Read the file asynchronously, make sure the buffer is valid until the task is done.
-[[nodiscard]] AsyncResult<ssize_t> read(handle file, char* buffer, std::size_t size);
+Result<ssize_t> read(handle file, char* buffer, std::size_t size);
 
-[[nodiscard]] AsyncResult<std::string> read(std::string path, Mode mode = Mode::Read);
+Result<std::string> read(std::string path, Mode mode = Mode::Read);
 
 /// Write the file asynchronously, make sure the buffer is valid until the task is done.
-[[nodiscard]] AsyncResult<void> write(handle file, char* buffer, std::size_t size);
+Result<void> write(handle file, char* buffer, std::size_t size);
 
-[[nodiscard]] AsyncResult<void> write(std::string path,
-                                      char* buffer,
-                                      std::size_t size,
-                                      Mode mode = Mode(Mode::Write, Mode::Create, Mode::Truncate));
+Result<void> write(std::string path,
+                   char* buffer,
+                   std::size_t size,
+                   Mode mode = Mode(Mode::Write, Mode::Create, Mode::Truncate));
 
 struct Stats {
     std::chrono::milliseconds mtime;
 };
 
-AsyncResult<Stats> stat(std::string path);
+Result<Stats> stat(std::string path);
 
 }  // namespace fs
 

@@ -23,6 +23,10 @@ message(STATUS "Found LLVM ${LLVM_INCLUDE_DIRS}")
 
 if(CLICE_DEV)
     include(FetchContent)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+        # libuv option
+        set(ASAN ON CACHE BOOL "" FORCE)
+    endif()
 
     FetchContent_Declare(
         tomlplusplus   
@@ -44,9 +48,9 @@ else()
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -g -O0 -fsanitize=address -fsanitize=undefined -Wno-deprecated-declarations")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address -fsanitize=undefined")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address -fsanitize=undefined")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -g -O0 -fsanitize=address -Wno-deprecated-declarations")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address")
 elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -fsanitize=thread -Wno-deprecated-declarations")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fsanitize=thread -fuse-ld=lld")
@@ -112,7 +116,7 @@ else()
 endif()
 
 target_include_directories(clice-core PUBLIC "${CMAKE_SOURCE_DIR}/include")
-target_link_libraries(clice-core PUBLIC uv tomlplusplus::tomlplusplus)
+target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus)
 
 # clice executable
 add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")

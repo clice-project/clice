@@ -1,60 +1,23 @@
 #include "Async/FileSystem.h"
 
-namespace clice::async::fs {
+namespace clice::async::awaiter {}
 
-namespace {
+namespace clice::async::fs {
 
 namespace awaiter {
 
 template <typename Derived, typename Ret = void>
-struct fs {
-    uv_fs_t request;
-    core_handle waiting;
-    int error = 0;
-
-    bool await_ready() const noexcept {
-        return false;
+struct fs : async::awaiter::uv<fs<Derived, Ret>, uv_fs_t, Ret> {
+    int start(auto callback) {
+        return static_cast<Derived*>(this)->start(callback);
     }
 
-    void await_suspend(core_handle waiting) noexcept {
-        request.data = this;
-        this->waiting = waiting;
-
-        /// All callbacks for libuv are the same. Resume the waiting coroutine
-        /// and cleanup the request.
-        auto callback = [](uv_fs_t* req) {
-            auto& awaiter = *static_cast<Derived*>(req->data);
-            async::schedule(awaiter.waiting);
-            uv_fs_req_cleanup(req);
-        };
-
-        error = static_cast<Derived*>(this)->schedule(callback);
-
-        /// If the operation is not successful, we need to schedule the waiting
-        /// coroutine directly.
-        if(error < 0) {
-            async::schedule(waiting);
-        }
+    void cleanup() {
+        uv_fs_req_cleanup(&this->request);
     }
 
-    auto make_error(int code) {
-        return std::unexpected(std::error_code(code, async::category()));
-    }
-
-    Result<Ret> await_resume() {
-        if(error < 0) {
-            return make_error(error);
-        }
-
-        if(request.result < 0) {
-            return make_error(request.result);
-        }
-
-        if constexpr(!std::is_void_v<Ret>) {
-            return static_cast<Derived*>(this)->result();
-        } else {
-            return Result<void>();
-        }
+    auto result() {
+        return static_cast<Derived*>(this)->result();
     }
 };
 
@@ -62,7 +25,7 @@ struct open : fs<open, handle> {
     const char* path;
     int flags;
 
-    int schedule(uv_fs_cb cb) {
+    int start(uv_fs_cb cb) {
         /// `uv_fs_open` will copy the path, so we don't need to worry about the
         /// lifetime of the path.
         return uv_fs_open(async::loop, &request, path, flags, 0666, cb);
@@ -76,7 +39,7 @@ struct open : fs<open, handle> {
 struct close : fs<close> {
     handle file;
 
-    int schedule(uv_fs_cb cb) {
+    int start(uv_fs_cb cb) {
         return uv_fs_close(async::loop, &request, file, cb);
     }
 };
@@ -85,8 +48,8 @@ struct read : fs<read, ssize_t> {
     handle file;
     uv_buf_t bufs[1];
 
-    int schedule(uv_fs_cb cb) {
-        return uv_fs_read(async::loop, &request, file, bufs, 1, 0, cb);
+    int start(uv_fs_cb cb) {
+        return uv_fs_read(async::loop, &request, file, bufs, 1, -1, cb);
     }
 
     auto result() {
@@ -98,7 +61,7 @@ struct write : fs<write> {
     handle file;
     uv_buf_t bufs[1];
 
-    int schedule(uv_fs_cb cb) {
+    int start(uv_fs_cb cb) {
         return uv_fs_write(async::loop, &request, file, bufs, 1, 0, cb);
     }
 };
@@ -106,7 +69,7 @@ struct write : fs<write> {
 struct stat : fs<stat, Stats> {
     const char* path;
 
-    int schedule(uv_fs_cb cb) {
+    int start(uv_fs_cb cb) {
         return uv_fs_stat(async::loop, &request, path, cb);
     }
 
@@ -118,8 +81,6 @@ struct stat : fs<stat, Stats> {
 };
 
 }  // namespace awaiter
-
-}  // namespace
 
 static int transformFlags(Mode mode) {
     int flags = 0;
@@ -155,25 +116,25 @@ static int transformFlags(Mode mode) {
     return flags;
 }
 
-AsyncResult<handle> open(std::string path, Mode mode) {
+Result<handle> open(std::string path, Mode mode) {
     co_return co_await awaiter::open{
         .path = path.c_str(),
         .flags = transformFlags(mode),
     };
 }
 
-AsyncResult<void> close(handle file) {
+Result<void> close(handle file) {
     co_return co_await awaiter::close{.file = file};
 }
 
-AsyncResult<ssize_t> read(handle file, char* buffer, std::size_t size) {
+Result<ssize_t> read(handle file, char* buffer, std::size_t size) {
     co_return co_await awaiter::read{
         .file = file,
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
 
-AsyncResult<std::string> read(std::string path, Mode mode) {
+Result<std::string> read(std::string path, Mode mode) {
     /// Open the file.
     auto file = co_await open(path, mode);
     if(!file) {
@@ -205,14 +166,14 @@ AsyncResult<std::string> read(std::string path, Mode mode) {
     co_return content;
 }
 
-AsyncResult<void> write(handle file, char* buffer, std::size_t size) {
+Result<void> write(handle file, char* buffer, std::size_t size) {
     co_return co_await awaiter::write{
         .file = file,
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
 
-AsyncResult<void> write(std::string path, char* buffer, std::size_t size, Mode mode) {
+Result<void> write(std::string path, char* buffer, std::size_t size, Mode mode) {
     auto file = co_await open(path, mode);
     if(!file) {
         co_return std::unexpected(file.error());
@@ -226,10 +187,10 @@ AsyncResult<void> write(std::string path, char* buffer, std::size_t size, Mode m
         co_return std::unexpected(result.error());
     }
 
-    co_return Result<void>();
+    co_return std::expected<void, std::error_code>();
 }
 
-AsyncResult<Stats> stat(std::string path) {
+Result<Stats> stat(std::string path) {
     co_return co_await awaiter::stat{.path = path.c_str()};
 }
 

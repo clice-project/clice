@@ -6,32 +6,29 @@ on:
   pull_request:
     branches: [ main ]
     paths-ignore:
+          - 'docs'
+          - 'scripts'
           - '.clang-format'
           - '.clangd'
           - '.gitignore'
           - 'LICENSE'
           - 'README.md'
           - '.github/workflows/cmake.yml'
+          - 'CMakeLists.txt'
+          - 'CMakePresets.json'
+          - 'cmake'
 
 jobs:
-  build:
+  linux:
     strategy:
       matrix:
-        os: [ubuntu-24.04, windows-2022]
+        os: [ubuntu-24.04]
         build_type: [release, debug]
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Setup llvm
-        if: matrix.os == 'windows-2022'
-        uses: MinoruSekine/setup-scoop@v4.0.1
-        with:
-          buckets: main
-          apps: llvm
-
       - name: Setup llvm & libstdc++ & cmake & ninja
-        if: matrix.os == 'ubuntu-24.04'
         run: |
           sudo apt update
           sudo apt install -y software-properties-common
@@ -64,12 +61,45 @@ jobs:
           build-cache-key: ${{ matrix.os }}-${{ matrix.build_type }}
 
       - name: Xmake configure
-        if: matrix.os == 'ubuntu-24.04'
         run: |
           xmake config --yes --mode=${{ matrix.build_type }} --toolchain=clang-20
 
+      - name: Build clice
+        run: |
+          xmake build --verbose --diagnosis --all
+
+      - name: Run tests
+        run: xmake test --verbose
+
+  windows:
+    strategy:
+      matrix:
+        os: [windows-2022]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Setup llvm
+        uses: MinoruSekine/setup-scoop@v4.0.1
+        with:
+          buckets: main
+          apps: llvm
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: branch@master
+          actions-cache-folder: '.xmake-cache'
+          actions-cache-key: ${{ matrix.os }}
+          package-cache: true
+          package-cache-key: ${{ matrix.os }}
+          build-cache: true
+          build-cache-key: ${{ matrix.os }}-${{ matrix.build_type }}
+
       - name: Xmake configure
-        if: matrix.os == 'windows-2022'
         run: |
           xmake config --yes --toolchain=clang
 
