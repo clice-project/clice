@@ -9,6 +9,7 @@ void Indexer2::add(std::string file) {
         auto& task = it->second;
         assert(!task.done() && "if task is done, it should be removed from the map");
         task.cancel();
+        task.dispose();
         task = index(file);
         task.schedule();
         return;
