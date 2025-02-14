@@ -4,6 +4,7 @@
 #include <clang/AST/DeclVisitor.h>
 
 #include <variant>
+#include <format>
 
 template <class... Ts>
 struct Match : Ts... {
