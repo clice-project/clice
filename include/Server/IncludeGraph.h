@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Config.h"
 #include "Database.h"
 #include "Async/Async.h"
 #include "Compiler/Compilation.h"
@@ -74,7 +75,11 @@ struct TranslationUnit {
 
 class IncludeGraph {
 public:
+    IncludeGraph(const config::IndexOptions& options) : options(options) {}
+
     ~IncludeGraph();
+
+    std::string getIndexPath(llvm::StringRef file);
 
     /// Check whether the given file needs to be updated. If so,
     /// return the translation unit. Otherwise, return nullptr.
@@ -97,6 +102,7 @@ public:
     async::Task<> index(llvm::StringRef file, CompilationDatabase& database);
 
 private:
+    const config::IndexOptions& options;
     llvm::StringMap<Header*> headers;
     llvm::StringMap<TranslationUnit*> tus;
     std::vector<std::string> pathPool;

@@ -4,8 +4,9 @@
 
 namespace clice {
 
-Indexer2::Indexer2(CompilationDatabase& database) : database(database) {
-    graph = new IncludeGraph;
+Indexer2::Indexer2(CompilationDatabase& database, const config::IndexOptions& options) :
+    database(database), options(options) {
+    graph = new IncludeGraph(options);
 }
 
 Indexer2::~Indexer2() {
@@ -62,7 +63,7 @@ async::Task<> Indexer2::index(std::string file) {
     assert(!pending.contains(file) && "file should not be in the pending list");
     assert(tasks.contains(file) && "file should not be in the tasks list");
 
-    auto task = indexOnly(file);
+    auto task = graph->index(file, database);
     co_await task;
 
     log::info("index process: [running: {}, pending :{}], finish {}",
@@ -90,11 +91,6 @@ async::Task<> Indexer2::index(std::string file) {
     /// Remove the file from the pending list and add it to the tasks list.
     pending.erase(pending.begin());
     tasks.try_emplace(file, std::move(next));
-}
-
-async::Task<> Indexer2::indexOnly(std::string file) {
-    co_await async::sleep(std::chrono::seconds(2));
-    co_return;
 }
 
 }  // namespace clice

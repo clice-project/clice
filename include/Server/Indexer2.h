@@ -11,7 +11,7 @@ class IncludeGraph;
 
 class Indexer2 {
 public:
-    Indexer2(CompilationDatabase& database);
+    Indexer2(CompilationDatabase& database, const config::IndexOptions& options);
 
     ~Indexer2();
 
@@ -24,12 +24,11 @@ public:
     void indexAll();
 
 private:
-    async::Task<> indexOnly(std::string file);
-
     async::Task<> index(std::string file);
 
 private:
     CompilationDatabase& database;
+    const config::IndexOptions& options;
 
     llvm::StringMap<async::Task<>> tasks;
     llvm::StringSet<> pending;

@@ -1,3 +1,5 @@
+#include <random>
+
 #include "Server/IncludeGraph.h"
 #include "Index/SymbolIndex.h"
 #include "Index/FeatureIndex.h"
@@ -6,6 +8,15 @@
 #include "llvm/Support/xxhash.h"
 
 namespace clice {
+
+std::string IncludeGraph::getIndexPath(llvm::StringRef file) {
+    auto now = std::chrono::system_clock::now();
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 1000);
+    return path::join(options.dir, path::filename(file) + "." + llvm::Twine(ms + dis(gen)));
+}
 
 IncludeGraph::~IncludeGraph() {
     for(auto& [_, header]: headers) {
@@ -16,7 +27,6 @@ IncludeGraph::~IncludeGraph() {
         delete tu;
     }
 }
-
 
 async::Task<TranslationUnit*> IncludeGraph::check(llvm::StringRef file) {
     auto iter = tus.find(file);
@@ -47,7 +57,6 @@ async::Task<TranslationUnit*> IncludeGraph::check(llvm::StringRef file) {
     /// If no need to update, just return nullptr.
     co_return nullptr;
 }
-
 
 uint32_t IncludeGraph::addIncludeChain(std::vector<IncludeLocation>& locations,
                                        llvm::DenseMap<clang::FileID, uint32_t>& files,
@@ -183,7 +192,7 @@ async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
     for(auto& [fid, index]: *indices) {
         if(fid == SM.getMainFileID()) {
             if(tu->indexPath.empty()) {
-                /// tu->indexPath = getIndexPath(tu->srcPath);
+                tu->indexPath = getIndexPath(tu->srcPath);
             }
 
             if(index.symbol) {
@@ -220,7 +229,6 @@ async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
 
         /// Found whether the we already have the same index. If so, use it directly.
         /// Otherwise, we need to create a new index.
-
         auto& indices = header->indices;
 
         bool existed = false;
@@ -239,7 +247,7 @@ async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
 
         iter->index = static_cast<uint32_t>(indices.size());
         indices.emplace_back(HeaderIndex{
-            .path = "",
+            .path = getIndexPath(header->srcPath),
             .symbolHash = index.symbolHash,
             .featureHash = index.featureHash,
         });
