@@ -33,6 +33,8 @@ struct promise_base {
     /// If this is a top-level coroutine, it is empty.
     promise_base* continuation = nullptr;
 
+    promise_base* next = nullptr;
+
     std::source_location location;
 
     template <typename Promise>
@@ -56,7 +58,11 @@ struct promise_base {
     }
 
     void cancel() {
-        data.setInt(Flags(data.getInt() | Flags::Cancelled));
+        auto p = this;
+        while(p) {
+            p->data.setInt(Flags(data.getInt() | Flags::Cancelled));
+            p = p->next;
+        }
     }
 
     bool cancelled() const noexcept {
@@ -72,11 +78,15 @@ struct promise_base {
     }
 
     std::coroutine_handle<> resume_handle() {
-        auto flags = data.getInt();
         if(cancelled()) {
-            if(disposable()) {
-                /// If the task is cancelled and disposable, destroy the coroutine handle.
-                destroy();
+            /// If the task is cancelled and disposable, destroy the coroutine handle.
+            auto p = this;
+            while(p && p->cancelled()) {
+                auto con = p->continuation;
+                if(p->disposable()) {
+                    p->destroy();
+                }
+                p = con;
             }
             return std::noop_coroutine();
         } else {
@@ -136,6 +146,7 @@ struct task {
         /// It will be scheduled in the final suspend point.
         assert(!handle.promise().continuation && "await_suspend: already waiting");
         handle.promise().continuation = &waiting.promise();
+        waiting.promise().next = &handle.promise();
 
         /// If this `Task` is awaited from another coroutine, we should schedule
         /// the this task first.
