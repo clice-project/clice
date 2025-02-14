@@ -7,9 +7,13 @@
 
 namespace clice {
 
+class IncludeGraph;
+
 class Indexer2 {
 public:
-    Indexer2(CompilationDatabase& database) : database(database) {}
+    Indexer2(CompilationDatabase& database);
+
+    ~Indexer2();
 
     /// Add a file to wait for indexing.
     void add(std::string file);
@@ -29,6 +33,8 @@ private:
 
     llvm::StringMap<async::Task<>> tasks;
     llvm::StringSet<> pending;
+
+    IncludeGraph* graph = nullptr;
 
     std::size_t concurrency = std::thread::hardware_concurrency();
 };

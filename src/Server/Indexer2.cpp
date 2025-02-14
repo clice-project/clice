@@ -1,7 +1,16 @@
 #include "Server/Indexer2.h"
+#include "Server/IncludeGraph.h"
 #include "Support/Logger.h"
 
 namespace clice {
+
+Indexer2::Indexer2(CompilationDatabase& database) : database(database) {
+    graph = new IncludeGraph;
+}
+
+Indexer2::~Indexer2() {
+    delete graph;
+}
 
 void Indexer2::add(std::string file) {
     /// If the file is already indexed, cancel and start a new indexing task.
