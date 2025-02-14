@@ -230,7 +230,12 @@ ___
 ___
 <TODO: source code>
 )md";
+
+#ifndef _WIN32
+    // The underlying type of `Free` is `int` on Windows.
     EXPECT_HOVER("Free", FREE_STYLE);
+#endif
+
     // EXPECT_HOVER("Scope", "");
 }
 
