@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Basic/Location.h>
-
+#include "Basic/Location.h"
+#include "Basic/SourceCode.h"
 #include "clang/Basic/SourceLocation.h"
 
 namespace clice {
@@ -14,7 +14,8 @@ public:
     using SourceDirMapping = std::vector<std::pair<std::string, std::string>>;
 
     /// Construct a `SourceConverter` with the specified encoding kind and empty source map.
-    explicit SourceConverter(proto::PositionEncodingKind kind) : kind(kind), sourceMap() {}
+    explicit SourceConverter(proto::PositionEncodingKind kind = proto::PositionEncodingKind::UTF8) :
+        kind(kind), sourceMap() {}
 
     SourceConverter(proto::PositionEncodingKind kind, SourceDirMapping sourceMap) :
         kind(kind), sourceMap(std::move(sourceMap)) {}
@@ -26,18 +27,23 @@ public:
     /// Measure the length (character count) of the content with the specified encoding kind.
     std::size_t remeasure(llvm::StringRef content) const;
 
+    /// Same as the below, but input is raw offset to the content beginning.
+    proto::Position toPosition(llvm::StringRef content, std::uint32_t offset) const;
+
     /// Convert a clang::SourceLocation to a proto::Position according to the
     /// specified encoding kind. Note that `SourceLocation` in clang is 1-based and
     /// is always encoded in UTF-8.
-    proto::Position toPosition(llvm::StringRef content, clang::SourceLocation location,
-                               const clang::SourceManager& SM) const;
-
-    /// Same as above, but content is retrieved from the `SourceManager`.
     proto::Position toPosition(clang::SourceLocation location,
                                const clang::SourceManager& SM) const;
 
-    /// Convert a clang::SourceRange to a proto::Range according to the specified encoding kind.
+    /// Convert a clang::SourceRange to proto::Range according to the specified encoding kind.
     proto::Range toRange(clang::SourceRange range, const clang::SourceManager& SM) const;
+
+    /// Same as the above, but input is a `LocalSourceRange` and the content is provided.
+    proto::Range toRange(LocalSourceRange range, llvm::StringRef conent) const;
+
+    /// Convert a clang::SourceRange to LocalSourceRange.
+    LocalSourceRange toLocalRange(clang::SourceRange range, const clang::SourceManager& SM) const;
 
     /// Convert a proto::Position to a file offset in the content with the specified
     /// encoding kind.

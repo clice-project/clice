@@ -1,7 +1,9 @@
 #include "Basic/Location.h"
+#include "Basic/SourceCode.h"
 #include "Basic/SourceConverter.h"
-
-#include "clang/Lex/Lexer.h"
+#include "Support/FileSystem.h"
+#include "clang/Basic/SourceManager.h"
+#include "llvm/ADT/StringExtras.h"
 
 namespace clice {
 
@@ -89,34 +91,70 @@ std::size_t SourceConverter::remeasure(llvm::StringRef content) const {
     std::unreachable();
 }
 
-proto::Position SourceConverter::toPosition(llvm::StringRef content, clang::SourceLocation location,
-                                            const clang::SourceManager& SM) const {
-    assert(location.isValid() && location.isFileID() &&
-           "SourceLocation must be valid and not a macro location");
-    auto [fileID, offset] = SM.getDecomposedSpellingLoc(location);
+proto::Position SourceConverter::toPosition(llvm::StringRef content, std::uint32_t offset) const {
+    assert(offset <= content.size() && "Offset is out of range");
+    proto::Position position = {0, 0};
 
-    /// Line and column in LSP are 0-based but clang's SourceLocation is 1-based.
-    auto line = SM.getLineNumber(fileID, offset) - 1;
-    auto column = SM.getColumnNumber(fileID, offset) - 1;
+    std::uint32_t line = 0;
+    std::uint32_t column = 0;
+    for(std::uint32_t i = 0; i < offset; i++) {
+        auto c = content[i];
+        if(c == '\n') {
+            line += 1;
+            column = 0;
+        } else {
+            column += 1;
+        }
+    }
 
-    proto::Position position;
-    /// Line doesn't need to be adjusted. It is encoding-dependent.
+    /// Line doesn't need to be adjusted.
     position.line = line;
 
     /// Column needs to be adjusted based on the encoding.
-    if(auto word = content.substr(offset - column, column); !word.empty())
+    if(column > 0) {
+        auto word = content.substr(offset - column, column);
         position.character = remeasure(word);
-    else
-        position.character = column;  // word is the last column of that line.
+    }
+
     return position;
 }
 
 proto::Position SourceConverter::toPosition(clang::SourceLocation location,
                                             const clang::SourceManager& SM) const {
-    bool isInvalid = false;
-    llvm::StringRef content = SM.getCharacterData(location, &isInvalid);
-    assert(!isInvalid && "Invalid SourceLocation");
-    return toPosition(content, location, SM);
+    assert(location.isValid() && location.isFileID() &&
+           "SourceLocation must be valid and not a macro location");
+    auto [fid, offset] = SM.getDecomposedSpellingLoc(location);
+    auto content = getFileContent(SM, fid);
+    return toPosition(content, offset);
+}
+
+proto::Range SourceConverter::toRange(clang::SourceRange range,
+                                      const clang::SourceManager& SM) const {
+    auto [begin, end] = range;
+    assert(begin.isValid() && end.isValid() && "Invalid SourceRange");
+    assert(begin.isFileID() && end.isFileID() && "SourceRange must be FileID");
+
+    auto [fileID, offset] = SM.getDecomposedSpellingLoc(end);
+    auto content = getFileContent(SM, fileID);
+    return {
+        toPosition(begin, SM),
+        toPosition(content, offset + getTokenLength(SM, end)),
+    };
+}
+
+proto::Range SourceConverter::toRange(LocalSourceRange range, llvm::StringRef content) const {
+    return {
+        .start = toPosition(content, range.begin),
+        .end = toPosition(content, range.end),
+    };
+}
+
+LocalSourceRange SourceConverter::toLocalRange(clang::SourceRange range,
+                                               const clang::SourceManager& SM) const {
+    return {
+        .begin = SM.getDecomposedLoc(range.getBegin()).second,
+        .end = SM.getDecomposedLoc(range.getEnd()).second,
+    };
 }
 
 std::uint32_t SourceConverter::toOffset(llvm::StringRef content, proto::Position position) const {
@@ -159,22 +197,6 @@ std::uint32_t SourceConverter::toOffset(llvm::StringRef content, proto::Position
     }
 
     std::unreachable();
-}
-
-proto::Range SourceConverter::toRange(clang::SourceRange range,
-                                      const clang::SourceManager& SM) const {
-    /// FIXME:
-    /// The language option should be a member of SourceConverter and be initialized by the
-    /// server for whole project? Or store the language option in the ASTInfo?.
-
-    // https://zh.cppreference.com/w/cpp/keyword
-    clang::LangOptions cxx20Option;
-    cxx20Option.CPlusPlus20 = 1;
-    auto len = clang::Lexer::MeasureTokenLength(range.getEnd(), SM, cxx20Option);
-    return {
-        .start = toPosition(range.getBegin(), SM),
-        .end = toPosition(range.getEnd().getLocWithOffset(len), SM),
-    };
 }
 
 namespace {
@@ -240,16 +262,16 @@ std::string SourceConverter::toPath(llvm::StringRef uri) {
     llvm::StringRef cloned = uri;
 
 #if defined(_WIN32)
-    if (cloned.starts_with("file:///")) {
-      cloned = cloned.drop_front(8);
+    if(cloned.starts_with("file:///")) {
+        cloned = cloned.drop_front(8);
     } else {
-      std::terminate();
+        std::terminate();
     }
 #elif defined(__unix__)
-    if (cloned.starts_with("file://")) {
-      cloned = cloned.drop_front(7);
+    if(cloned.starts_with("file://")) {
+        cloned = cloned.drop_front(7);
     } else {
-      std::terminate();
+        std::terminate();
     }
 #else
 #error "Unsupported platform"
@@ -258,7 +280,7 @@ std::string SourceConverter::toPath(llvm::StringRef uri) {
     auto decoded = decodePercent(cloned);
 
     llvm::SmallString<128> result;
-    if(auto err = fs::real_path(decoded, result)){
+    if(auto err = fs::real_path(decoded, result)) {
         print("Failed to get real path: {}, Input is {}\n", err.message(), decoded);
         std::terminate();
     }

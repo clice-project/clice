@@ -1,7 +1,13 @@
 #pragma once
 
-#include "Async.h"
+
+#include "Config.h"
+#include "Indexer.h"
 #include "Protocol.h"
+#include "Database.h"
+#include "Scheduler.h"
+
+#include "Async/Async.h"
 
 namespace clice {
 
@@ -142,11 +148,20 @@ private:
     ///                                 Extension
     /// ============================================================================
 
+    async::Task<> onIndexCurrent(const proto::TextDocumentIdentifier& params);
+
+    async::Task<> onIndexAll(const proto::None&);
+
     async::Task<> onContextCurrent(const proto::TextDocumentIdentifier& params);
 
     async::Task<> onContextAll(const proto::TextDocumentIdentifier& params);
 
     async::Task<> onContextSwitch(const proto::TextDocumentIdentifier& params);
+
+    SourceConverter converter;
+    CompilationDatabase database;
+    Indexer indexer;
+    Scheduler scheduler;
 };
 
 }  // namespace clice

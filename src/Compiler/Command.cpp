@@ -1,12 +1,12 @@
 #include "Compiler/Command.h"
-#include "llvm/Support/Program.h"
-#include "llvm/Support/raw_ostream.h"
+#include "Support/FileSystem.h"
+#include "Support/Format.h"
 
 namespace clice {
 
-llvm::Error mangleCommand(llvm::StringRef command,
-                          llvm::SmallVectorImpl<const char*>& out,
-                          llvm::SmallVectorImpl<char>& buffer) {
+std::expected<void, std::string> mangleCommand(llvm::StringRef command,
+                                               llvm::SmallVectorImpl<const char*>& out,
+                                               llvm::SmallVectorImpl<char>& buffer) {
     llvm::SmallString<128> current;
     llvm::SmallVector<uint32_t> indices;
     bool inSingleQuote = false;
@@ -67,7 +67,7 @@ llvm::Error mangleCommand(llvm::StringRef command,
         out.push_back(arg.data());
     }
 
-    return llvm::Error::success();
+    return {};
 }
 
 }  // namespace clice

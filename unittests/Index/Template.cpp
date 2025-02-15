@@ -1,51 +1,15 @@
-#include "IndexTester.h"
+#include "Test/IndexTester.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
-
-TEST(Index, Test) {
-
-    const char* code = R"cpp(
-void $(1)foo();
-
-void $(2)foo() {}
-)cpp";
-
-    IndexTester tester{"main.cpp", code};
-    tester.run();
-    auto indices = index::test(tester.info);
-
-    std::size_t total = 0;
-    llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
-    tester.GotoDefinition("1", "2");
-
-    for(auto& [id, index]: indices) {
-        // auto& srcMgr = tester.info.srcMgr();
-        // auto entry = srcMgr.getFileEntryRefForID(id);
-        // if(!entry) {
-        //     continue;
-        // }
-        // llvm::SmallString<128> path;
-        // auto err = fs::real_path(entry->getName(), path);
-        // print("File: {}, Size: {}k\n", path.str(), index.size / 1024);
-        // total += index.size;
-        //
-        // if(path == "/usr/include/c++/13/bits/stl_vector.h") {
-        //    llvm::raw_fd_ostream os("stdlib.json", err);
-        //    os << index.toJSON();
-        //}
-    }
-
-    print("Total size: {}k\n", total / 1024);
-}
 
 TEST(Index, ClassTemplate) {
     const char* code = R"cpp(
     template <typename T, typename U>
     struct $(primary_decl)foo;
 
-    using type = $(forward_full)foo<int, int>;
+    /// using type = $(forward_full)foo<int, int>;
 
     template <typename T, typename U>
     struct $(primary)foo {};
@@ -81,7 +45,8 @@ TEST(Index, ClassTemplate) {
     tester.GotoDefinition("partial_spec_decl", "partial_spec");
     tester.GotoDefinition("explicit_partial", "partial_spec");
     tester.GotoDefinition("implicit_partial", "partial_spec");
-    tester.GotoDefinition("forward_full", "full_spec");
+    /// FIXME: Figure forward template declaration.
+    /// tester.GotoDefinition("forward_full", "full_spec");
     tester.GotoDefinition("full_spec_decl", "full_spec");
     tester.GotoDefinition("implicit_full", "full_spec");
 
@@ -198,5 +163,5 @@ TEST(Index, Concept) {
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing
 

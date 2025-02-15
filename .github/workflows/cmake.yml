@@ -5,47 +5,35 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    paths-ignore:
+          - 'docs'
+          - 'scripts'
+          - '.clang-format'
+          - '.clangd'
+          - '.gitignore'
+          - 'LICENSE'
+          - 'README.md'
+          - '.github/workflows/xmake.yml'
+          - 'xmake.lua'
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Setup llvm & ninja
+        if: matrix.os == 'windows-2022'
+        uses: MinoruSekine/setup-scoop@v4.0.1
+        with:
+          buckets: main
+          apps: llvm ninja
 
-      - name: Cache Submodules
-        id: cache-submodules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ./deps
-            .git/modules/deps/
-          key: submodules-${{ github.sha }}
-          restore-keys: |
-            submodules-
-      
-      - name: Cache Clice 
-        id: cache-clice
-        uses: actions/cache@v4
-        with:
-          path: |
-            ./build/CMakeFiles/**/*.o
-          key: clice-${{ github.sha }}
-          restore-keys: |
-            clice-
-      
-      - name: Update Submodules
-        run: |
-          git submodule init 
-          git submodule update --recursive --depth 1
-
-      - name: Install python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9' 
-                    
-      - name: Install gcc
+      - name: Setup llvm & libstdc++ & cmake & ninja
+        if: matrix.os == 'ubuntu-24.04'
         run: |
           sudo apt update
           sudo apt install -y software-properties-common
@@ -57,26 +45,43 @@ jobs:
           sudo update-alternatives --set gcc /usr/bin/gcc-14
           sudo update-alternatives --set g++ /usr/bin/g++-14
 
-      - name: Install clang
-        run: |
-          sudo apt update
-          sudo apt install -y wget
-          wget -O - https://apt.llvm.org/llvm.sh | sudo bash
-          sudo apt install -y llvm-18 llvm-18-tools clang-18 libclang-rt-18-dev lld-18
-          sudo ln -s /usr/bin/llvm-ar-18 /usr/bin/llvm-ar
-          sudo ln -s /usr/bin/llvm-ranlib-18 /usr/bin/llvm-ranlib
-      
-      - name: Install cmake and ninja
-        run: |
-          sudo apt install -y cmake ninja-build 
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 20 all
 
-      - name: Build LLVM
-        run: |
-          python3 ./scripts/build-llvm-dev.py
+          sudo apt install -y cmake ninja-build
 
-      - name: Build clice
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup llvm binary
+        if: matrix.os == 'ubuntu-24.04'
         run: |
-          bash ./scripts/build-dev-test.sh && cmake --build build
+          mkdir -p ./.llvm
+          curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x86_64-linux-gnu-debug.tar.xz" | tar -xJ -C ./.llvm
+
+      - name: Setup llvm binary
+        if: matrix.os == 'windows-2022'
+        run: |
+          curl -O -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x64-windows-msvc-release.7z"
+          7z x x64-windows-msvc-release.7z "-o.llvm"
+
+      - name: Setup msvc sysroot for cmake
+        if: matrix.os == 'windows-2022'
+        uses: ilammy/msvc-dev-cmd@v1
       
+      - name: Build clice (debug)
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          cmake --preset debug
+          cmake --build --preset debug -v
+
+      - name: Build clice (release)
+        if: matrix.os == 'windows-2022'
+        run: |
+          cmake --preset release
+          cmake --build --preset release
+
       - name: Run tests
-        run: ./build/bin/unit_tests --test-dir=./tests
+        run: |
+          ./build/bin/unit_tests --test-dir="./tests" --resource-dir="./.llvm/lib/clang/20"

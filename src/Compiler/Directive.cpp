@@ -1,28 +1,27 @@
-#include <Support/Support.h>
-#include <Compiler/Directive.h>
-#include <clang/Lex/MacroInfo.h>
-#include <clang/Lex/MacroArgs.h>
+#include "Compiler/Directive.h"
+#include "clang/Lex/MacroInfo.h"
+#include "clang/Lex/MacroArgs.h"
+#include "clang/Lex/Preprocessor.h"
 
 namespace clice {
 
 namespace {
 
-class PPCallback : public clang::PPCallbacks {
-public:
-    PPCallback(clang::Preprocessor& pp, llvm::DenseMap<clang::FileID, Directive>& directives) :
-        pp(pp), directives(directives) {}
+struct PPCallback : public clang::PPCallbacks {
+    clang::FileID prevFID;
+    clang::Preprocessor& PP;
+    clang::SourceManager& SM;
+    llvm::DenseMap<clang::FileID, Directive>& directives;
+    llvm::DenseMap<clang::MacroInfo*, std::size_t> macroCache;
 
-private:
-    void addInclude(llvm::StringRef path, clang::SourceLocation loc, clang::SourceRange range) {
-        auto& directive = directives[pp.getSourceManager().getFileID(loc)];
-        directive.includes.emplace_back(Include{path, loc, range});
-    }
+    PPCallback(clang::Preprocessor& PP, llvm::DenseMap<clang::FileID, Directive>& directives) :
+        PP(PP), SM(PP.getSourceManager()), directives(directives) {}
 
     void addCondition(clang::SourceLocation loc,
                       Condition::BranchKind kind,
                       Condition::ConditionValue value,
                       clang::SourceRange conditionRange) {
-        auto& directive = directives[pp.getSourceManager().getFileID(loc)];
+        auto& directive = directives[PP.getSourceManager().getFileID(loc)];
         directive.conditions.emplace_back(Condition{kind, value, loc, conditionRange});
     }
 
@@ -61,37 +60,86 @@ private:
     }
 
     void addMacro(const clang::MacroInfo* def, MacroRef::Kind kind, clang::SourceLocation loc) {
-        if(pp.getSourceManager().isWrittenInBuiltinFile(loc) ||
-           pp.getSourceManager().isWrittenInCommandLineFile(loc)) {
+        if(def->isBuiltinMacro()) {
             return;
         }
 
-        auto& directive = directives[pp.getSourceManager().getFileID(loc)];
+        if(PP.getSourceManager().isWrittenInBuiltinFile(loc) ||
+           PP.getSourceManager().isWrittenInCommandLineFile(loc) ||
+           PP.getSourceManager().isWrittenInScratchSpace(loc)) {
+            return;
+        }
+
+        auto& directive = directives[PP.getSourceManager().getFileID(loc)];
         directive.macros.emplace_back(MacroRef{def, kind, loc});
     }
 
-private:
-    void FileChanged(clang::SourceLocation loc,
-                     clang::PPCallbacks::FileChangeReason reason,
-                     clang::SrcMgr::CharacteristicKind fileType,
-                     clang::FileID) override {}
+    /// ============================================================================
+    ///                         Rewritten Preprocessor Callbacks
+    /// ============================================================================
+
+    void LexedFileChanged(clang::FileID currFID,
+                          LexedFileChangeReason reason,
+                          clang::SrcMgr::CharacteristicKind,
+                          clang::FileID prevFID,
+                          clang::SourceLocation) override {
+        if(reason == LexedFileChangeReason::EnterFile && currFID.isValid() && prevFID.isValid() &&
+           this->prevFID.isValid() && prevFID == this->prevFID) {
+            directives[prevFID].includes.back().fid = currFID;
+        }
+    }
 
     void InclusionDirective(clang::SourceLocation hashLoc,
                             const clang::Token& includeTok,
-                            llvm::StringRef filename,
-                            bool isAngled,
-                            clang::CharSourceRange filenameRange,
-                            clang::OptionalFileEntryRef file,
-                            llvm::StringRef searchPath,
-                            llvm::StringRef relativePath,
-                            const clang::Module* suggestedModule,
-                            bool moduleImported,
-                            clang::SrcMgr::CharacteristicKind fileType) override {
-        addInclude(filename, includeTok.getLocation(), filenameRange.getAsRange());
+                            llvm::StringRef,
+                            bool,
+                            clang::CharSourceRange,
+                            clang::OptionalFileEntryRef,
+                            llvm::StringRef,
+                            llvm::StringRef,
+                            const clang::Module*,
+                            bool,
+                            clang::SrcMgr::CharacteristicKind) override {
+        prevFID = SM.getFileID(hashLoc);
+        directives[prevFID].includes.emplace_back(Include{
+            {},
+            includeTok.getLocation(),
+        });
+    }
+
+    void HasInclude(clang::SourceLocation location,
+                    llvm::StringRef,
+                    bool,
+                    clang::OptionalFileEntryRef file,
+                    clang::SrcMgr::CharacteristicKind) override {
+        directives[SM.getFileID(location)].hasIncludes.emplace_back(clice::HasInclude{
+            file ? file->getName() : "",
+            location,
+        });
     }
 
     void PragmaDirective(clang::SourceLocation Loc,
-                         clang::PragmaIntroducerKind Introducer) override {}
+                         clang::PragmaIntroducerKind Introducer) override {
+        // Ignore other cases except starts with `#pragma`.
+        if(Introducer != clang::PragmaIntroducerKind::PIK_HashPragma)
+            return;
+
+        clang::FileID fid = SM.getFileID(Loc);
+
+        llvm::StringRef textToEnd = SM.getBufferData(fid).substr(SM.getFileOffset(Loc));
+        llvm::StringRef thatLine = textToEnd.take_until([](char ch) { return ch == '\n'; });
+
+        Pragma::Kind kind = thatLine.contains("endregion") ? Pragma::EndRegion
+                            : thatLine.contains("region")  ? Pragma::Region
+                                                           : Pragma::Other;
+
+        auto& directive = directives[fid];
+        directive.pragmas.emplace_back(Pragma{
+            thatLine,
+            kind,
+            Loc,
+        });
+    }
 
     void If(clang::SourceLocation loc,
             clang::SourceRange conditionRange,
@@ -178,11 +226,6 @@ private:
             addMacro(def, MacroRef::Undef, name.getLocation());
         }
     }
-
-private:
-    clang::Preprocessor& pp;
-    llvm::DenseMap<clang::FileID, Directive>& directives;
-    llvm::DenseMap<clang::MacroInfo*, std::size_t> macroCache;
 };
 
 }  // namespace

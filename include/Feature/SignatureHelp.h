@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Basic/Location.h>
+#include "Basic/Location.h"
 
 namespace clice::proto {
 

@@ -2,9 +2,9 @@
 
 #include <string>
 #include <vector>
+#include <expected>
 
 #include "Support/Struct.h"
-#include "Support/Error.h"
 
 namespace clice {
 
@@ -41,9 +41,6 @@ std::string scanModuleName(CompilationParams& params);
 
 /// Run the preprocessor to scan the given module unit to
 /// collect its module name and dependencies.
-llvm::Expected<ModuleInfo> scanModule(CompilationParams& params);
-
-/// Build PCM from given file path and content.
-llvm::Expected<ASTInfo> compile(CompilationParams& params, PCMInfo& out);
+std::expected<ModuleInfo, std::string> scanModule(CompilationParams& params);
 
 }  // namespace clice

@@ -1,8 +1,7 @@
 #pragma once
 
-#include "llvm/Support/HashBuilder.h"
-
 #include "Struct.h"
+#include "llvm/Support/HashBuilder.h"
 
 namespace clice::refl {
 
@@ -30,12 +29,11 @@ struct Hash<std::vector<T>> {
     };
 };
 
-template <reflectable T>
+template <reflectable_struct T>
 struct Hash<T> {
     static llvm::hash_code hash(const T& value) {
         llvm::SmallVector<llvm::hash_code, 8> hashes;
-        foreach(value,
-                [&](auto, const auto& member) { hashes.emplace_back(refl::hash(member)); });
+        foreach(value, [&](auto, const auto& member) { hashes.emplace_back(refl::hash(member)); });
         return llvm::hash_combine_range(hashes.begin(), hashes.end());
     }
 };

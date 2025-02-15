@@ -1,7 +1,7 @@
-#include "gtest/gtest.h"
+#include "Test/Test.h"
 #include "Support/Compare.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
 

@@ -1,8 +1,12 @@
 #include "Basic/Document.h"
+#include "Basic/SourceCode.h"
 #include "Basic/SourceConverter.h"
-#include "Compiler/Compiler.h"
+#include "Index/Shared.h"
+#include "Support/JSON.h"
 
 namespace clice {
+
+class ASTInfo;
 
 struct FoldingRangeParams {};
 
@@ -66,14 +70,28 @@ using FoldingRangeResult = std::vector<FoldingRange>;
 
 }  // namespace proto
 
-namespace feature {
+namespace feature::folding_range {
 
-json::Value foldingRangeCapability(json::Value foldingRangeClientCapabilities);
+json::Value capability(json::Value clientCapabilities);
 
-/// Return folding range in given file.
-proto::FoldingRangeResult foldingRange(FoldingRangeParams& params, ASTInfo& ast,
-                                       const SourceConverter& converter);
+struct FoldingRange {
+    LocalSourceRange range;
+    proto::FoldingRangeKind kind;
+    /// We don't record the coallaesced text for a range, because it's rarely useful.
+};
 
-}  // namespace feature
+using Result = std::vector<FoldingRange>;
+
+/// Generate folding range for all files.
+index::Shared<Result> foldingRange(ASTInfo& info, const SourceConverter& converter);
+
+/// Return folding range in main file.
+Result foldingRange(FoldingRangeParams& params, ASTInfo& info, const SourceConverter& converter);
+
+/// Convert folding range to LSP format.
+proto::FoldingRangeResult toLspResult(llvm::ArrayRef<FoldingRange> ranges, llvm::StringRef content,
+                                      const SourceConverter& SC);
+
+}  // namespace feature::folding_range
 
 }  // namespace clice

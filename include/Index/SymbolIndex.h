@@ -1,32 +1,34 @@
 #pragma once
 
+#include "Shared.h"
 #include "ArrayView.h"
-#include "Basic/RelationKind.h"
-#include "Basic/SymbolKind.h"
-#include "Compiler/Compiler.h"
+#include "AST/SymbolKind.h"
+#include "AST/RelationKind.h"
+#include "Basic/SourceCode.h"
 #include "Support/JSON.h"
+
+namespace clice {
+
+class ASTInfo;
+
+}
 
 namespace clice::index {
 
-struct LocalSourceRange {
-    /// The begin position offset to the source file.
-    uint32_t begin;
-
-    /// The end position offset to the source file.
-    uint32_t end;
-};
-
 class SymbolIndex {
 public:
-    SymbolIndex(void* base, std::size_t size) : base(base), size(size) {}
+    SymbolIndex(char* base, std::size_t size, bool own = true) : base(base), size(size), own(own) {}
 
-    SymbolIndex(SymbolIndex&& other) : base(other.base), size(other.size) {
+    SymbolIndex(SymbolIndex&& other) noexcept : base(other.base), size(other.size), own(other.own) {
         other.base = nullptr;
         other.size = 0;
+        other.own = false;
     }
 
     ~SymbolIndex() {
-        std::free(base);
+        if(own) {
+            std::free(base);
+        }
     }
 
     struct Symbol;
@@ -78,15 +80,16 @@ public:
     void locateSymbols(uint32_t position, llvm::SmallVectorImpl<Symbol>& symbols) const;
 
     /// Locate symbol with the given id(usually from another index).
-    Symbol locateSymbol(SymbolID ID) const;
+    std::optional<Symbol> locateSymbol(uint64_t id, llvm::StringRef name) const;
 
     json::Value toJSON() const;
 
 public:
-    void* base;
+    char* base;
     std::size_t size;
+    bool own;
 };
 
-llvm::DenseMap<clang::FileID, SymbolIndex> test(ASTInfo& info);
+Shared<SymbolIndex> index(ASTInfo& info);
 
 }  // namespace clice::index

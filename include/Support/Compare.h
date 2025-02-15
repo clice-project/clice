@@ -1,6 +1,8 @@
 #pragma once
 
-#include "Support/ADT.h"
+#include <vector>
+
+#include "Enum.h"
 #include "Struct.h"
 
 namespace clice::refl {
@@ -38,7 +40,14 @@ struct Equal<std::vector<T>> {
     }
 };
 
-template <reflectable T>
+template <reflectable_enum E>
+struct Equal<E> {
+    constexpr static bool equal(E lhs, E rhs) {
+        return lhs.value() == rhs.value();
+    }
+};
+
+template <reflectable_struct T>
     requires (!requires(T lhs, T rhs) {
         { lhs == rhs } -> std::convertible_to<bool>;
     })
@@ -83,7 +92,14 @@ struct Less<std::vector<T>> {
     }
 };
 
-template <reflectable T>
+template <reflectable_enum E>
+struct Less<E> {
+    constexpr static bool less(E lhs, E rhs) {
+        return lhs.value() < rhs.value();
+    }
+};
+
+template <reflectable_struct T>
     requires (!requires(T lhs, T rhs) {
         { lhs < rhs } -> std::convertible_to<bool>;
     })

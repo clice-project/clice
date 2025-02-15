@@ -11,6 +11,11 @@ if has_config("dev") then
     set_policy("compatibility.version", "3.0")
     if is_plat("windows") then
         set_runtimes("MD")
+        if is_mode("debug") then
+            print("Clice does not support build in debug mode with pre-compiled llvm binary on windows.\n"
+                .."See https://github.com/clice-project/clice/issues/42 for more information.")
+            os.raise()
+        end
     elseif is_plat("linux") and is_mode("debug") then
         set_policy("build.sanitizer.address", true)
     end
@@ -20,8 +25,7 @@ if has_config("dev") then
     end
 end
 
-add_requires("toml++", "libuv")
-add_requires("llvm")
+add_requires("llvm", "libuv", "toml++")
 
 add_rules("mode.release", "mode.debug")
 set_languages("c++23")
@@ -30,16 +34,47 @@ add_rules("clice_build_config")
 target("clice-core")
     set_kind("$(kind)")
     add_files("src/**.cpp|Driver/*.cpp")
-    set_pcxxheader("include/Compiler/Clang.h")
     add_includedirs("include", {public = true})
 
-    add_packages("llvm", "libuv", {public = true})
+    add_packages("libuv", "toml++", {public = true})
+
+    if is_mode("debug") then 
+        add_packages("llvm", {
+            public = true, 
+            links = {
+                "LLVMSupport",
+                "LLVMFrontendOpenMP",
+                "clangAST",
+                "clangASTMatchers",
+                "clangBasic",
+                "clangDependencyScanning",
+                "clangDriver",
+                "clangFormat",
+                "clangFrontend",
+                "clangIndex",
+                "clangLex",
+                "clangSema",
+                "clangSerialization",
+                "clangTooling",
+                "clangToolingCore",
+                "clangToolingInclusions",
+                "clangToolingInclusionsStdlib",
+                "clangToolingSyntax",
+        }})
+    elseif is_mode("release") then 
+        add_packages("llvm", {public = true})
+        add_ldflags("-Wl,--gc-sections")
+    end 
 
 target("clice")
     set_kind("binary")
     add_files("src/Driver/clice.cc")
 
     add_deps("clice-core")
+
+    on_config(function (target)
+        target:add("rpathdirs", path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib"))
+    end)
 
 target("integration_tests")
     set_default(false)
@@ -62,6 +97,7 @@ target("unit_tests")
     add_tests("default")
     
     on_config(function (target)
+        target:add("rpathdirs", path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib"))
         target:set("runargs", 
             "--test-dir=" .. path.absolute("tests"),
             "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
@@ -70,32 +106,40 @@ target("unit_tests")
 
 rule("clice_build_config")
     on_load(function (target)
-        target:set("toolchains", "clang")
-
         target:add("cxflags", "-fno-rtti", {tools = {"clang", "gcc"}})
         target:add("cxflags", "/GR-", {tools = {"clang_cl", "cl"}})
         target:set("exceptions", "no-cxx")
         if target:is_plat("windows") then
             target:add("ldflags", "-fuse-ld=lld-link")
         elseif target:is_plat("linux") then
-            -- gnu ld will cause link order
+            -- gnu ld need to fix link order
             target:add("ldflags", "-fuse-ld=lld")
         end
     end)
 
 package("llvm")
     if is_plat("windows") then
-        add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
-
-        add_versions("20.0.0", "6dc78ca012fa5cc365394b72371b7aaff24a5b1a92fc204ea634f9d360bef694")
+        if is_mode("release") then
+            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
+            add_versions("20.0.0", "4ef335845ebb52f8237bda3bcc7246b06085fdf5edc5cc6cf7f3a7c9ef655c09")
+        else
+        end
     elseif is_plat("linux") then
-        add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
-
-        add_versions("20.0.0", "4c8a52ee3ac8ae34e4fa4ae49a6488f6ff8454386ef0e5617dc90a09e8032f74")
+        if is_mode("debug") then
+            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-debug.tar.xz")
+            add_versions("20.0.0", "7dc045424a9667f20845dec058d211476b84300ebcfc8c3a3aabf41bff37cfd9")
+        elseif is_mode("release") then
+            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
+            add_versions("20.0.0", "30ba7357eb40000f1d13d92242f7d87c3ff623e62205a41d10334d605739af89")
+        end
     end
 
     if is_plat("windows") then
         add_configs("runtimes", {description = "Set compiler runtimes.", default = "MD", readonly = true})
+    elseif is_plat("linux") then
+        if is_mode("debug") then
+            add_configs("shared", {description = "Build shared library.", default = true, type = "boolean", readonly = true})
+        end
     end
 
     if is_plat("windows", "mingw") then
@@ -103,6 +147,10 @@ package("llvm")
     end
 
     on_install(function (package)
+        if not package:config("shared") then
+            package:add("defines", "CLANG_BUILD_STATIC")
+        end
+
         os.mv("bin", package:installdir())
         os.mv("lib", package:installdir())
         os.mv("include", package:installdir())

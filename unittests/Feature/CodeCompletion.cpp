@@ -1,7 +1,7 @@
-#include "Test/Test.h"
+#include "Test/CTest.h"
 #include "Feature/CodeCompletion.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
 
@@ -32,5 +32,5 @@ int main() {
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing
 

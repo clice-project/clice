@@ -1,5 +1,6 @@
 #include "Basic/SourceConverter.h"
 #include "Server/Server.h"
+#include "Support/FileSystem.h"
 
 namespace clice {
 
@@ -8,7 +9,27 @@ async::Task<> Server::onInitialize(json::Value id, const proto::InitializeParams
     result.serverInfo.name = "clice";
     result.serverInfo.version = "0.0.1";
 
+    /// Set `SemanticTokensOptions`
+    for(auto kind: SymbolKind::all()) {
+        std::string name{kind};
+        name[0] = std::tolower(name[0]);
+        result.capabilities.semanticTokensProvider.legend.tokenTypes.emplace_back(std::move(name));
+    }
+
+    result.capabilities.semanticTokensProvider.legend.tokenModifiers = {
+
+    };
+
     co_await response(std::move(id), json::serialize(result));
+
+    auto workplace = SourceConverter::toPath(params.workspaceFolders[0].uri);
+    config::init(workplace);
+
+    for(auto& dir: config::server.compile_commands_dirs) {
+        llvm::SmallString<128> path = {dir};
+        path::append(path, "compile_commands.json");
+        database.updateCommands(path);
+    }
 }
 
 async::Task<> Server::onInitialized(const proto::InitializedParams& params) {

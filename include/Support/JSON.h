@@ -2,9 +2,10 @@
 
 #include <array>
 #include <vector>
+#include <ranges>
 #include <string_view>
 
-#include "ADT.h"
+#include "Ranges.h"
 #include "TypeTraits.h"
 #include "Enum.h"
 #include "Struct.h"
@@ -87,6 +88,11 @@ T deserialize(const json::Value& value, Serdes&&... serdes) {
 }
 
 template <>
+struct Serde<json::Value> {
+    /// Never use json::Value as a serde.
+};
+
+template <>
 struct Serde<std::nullptr_t> {
     static json::Value serialize(std::nullptr_t) {
         return json::Value(nullptr);
@@ -99,16 +105,14 @@ struct Serde<std::nullptr_t> {
 };
 
 template <>
-struct Serde<std::string> {
-    using V = std::string;
-
-    static json::Value serialize(const V& v) {
-        return json::Value(v);
+struct Serde<std::nullopt_t> {
+    static json::Value serialize(std::nullopt_t) {
+        return json::Value(nullptr);
     }
 
-    static V deserialize(const json::Value& value) {
-        assert(value.kind() == json::Value::String && "Expect a string");
-        return value.getAsString().value().str();
+    static std::nullopt_t deserialize(const json::Value& value) {
+        assert(value.kind() == json::Value::Null && "Expect null");
+        return std::nullopt;
     }
 };
 
@@ -162,14 +166,9 @@ struct Serde<F> {
 };
 
 template <>
-struct Serde<double> {
-    static json::Value serialize(float v) {
-        return json::Value(v);
-    }
-
-    static float deserialize(const json::Value& value) {
-        assert(value.kind() == json::Value::Number && "Expect number");
-        return value.getAsNumber().value();
+struct Serde<const char*> {
+    static json::Value serialize(const char* v) {
+        return json::Value(llvm::StringRef(v));
     }
 };
 
@@ -181,16 +180,16 @@ struct Serde<char[N]> {
 };
 
 template <>
-struct Serde<llvm::StringRef> {
-    using V = llvm::StringRef;
+struct Serde<std::string> {
+    using V = std::string;
 
     static json::Value serialize(const V& v) {
-        return json::Value(v.str());
+        return json::Value(v);
     }
 
     static V deserialize(const json::Value& value) {
-        assert(value.kind() == json::Value::String && "Expect string");
-        return value.getAsString().value();
+        assert(value.kind() == json::Value::String && "Expect a string");
+        return value.getAsString().value().str();
     }
 };
 
@@ -208,78 +207,132 @@ struct Serde<std::string_view> {
     }
 };
 
-template <typename T, std::size_t N>
-struct Serde<std::array<T, N>> {
-    using V = std::array<T, N>;
+template <>
+struct Serde<llvm::StringRef> {
+    using V = llvm::StringRef;
 
-    constexpr inline static bool stateful = stateful_serde<T>;
-
-    template <typename... Serdes>
-    static json::Value serialize(const V& v, Serdes&&... serdes) {
-        json::Array array;
-        for(const auto& element: v) {
-            array.push_back(json::serialize(element, std::forward<Serdes>(serdes)...));
-        }
-        return array;
+    static json::Value serialize(const V& v) {
+        return json::Value(v.str());
     }
 
-    template <typename... Serdes>
-    static V deserialize(const json::Value& value, Serdes&&... serdes) {
-        assert(value.kind() == json::Value::Array && "Expect array");
-        V array;
-        for(std::size_t i = 0; i < N; ++i) {
-            array[i] =
-                json::deserialize<T>((*value.getAsArray())[i], std::forward<Serdes>(serdes)...);
-        }
-        return array;
+    static V deserialize(const json::Value& value) {
+        assert(value.kind() == json::Value::String && "Expect string");
+        return value.getAsString().value();
     }
 };
 
-template <typename T>
-struct Serde<std::vector<T>> {
-    using V = std::vector<T>;
+template <std::size_t N>
+struct Serde<llvm::SmallString<N>> {
+    using V = llvm::SmallString<N>;
 
-    constexpr inline static bool stateful = stateful_serde<T>;
-
-    template <typename... Serdes>
-    static json::Value serialize(const V& v, Serdes&&... serdes) {
-        json::Array array;
-        for(const auto& element: v) {
-            array.push_back(json::serialize(element, std::forward<Serdes>(serdes)...));
-        }
-        return array;
+    static json::Value serialize(const V& v) {
+        return json::Value(v.str());
     }
 
-    template <typename... Serdes>
-    static V deserialize(const json::Value& value, Serdes&&... serdes) {
-        assert(value.kind() == json::Value::Array && "Expect array");
-        V array;
-        for(const auto& element: *value.getAsArray()) {
-            array.emplace_back(json::deserialize<T>(element, std::forward<Serdes>(serdes)...));
-        }
-        return array;
+    static V deserialize(const json::Value& value) {
+        assert(value.kind() == json::Value::String && "Expect string");
+        return V{value.getAsString().value().str()};
     }
 };
 
-template <typename T>
-struct Serde<llvm::ArrayRef<T>> {
-    using V = llvm::ArrayRef<T>;
+template <map_range Range>
+struct Serde<Range> {
+    using key_type = typename Range::key_type;
+    using mapped_type = typename Range::mapped_type;
 
-    constexpr inline static bool stateful = stateful_serde<T>;
+    constexpr inline static bool stateful = stateful_serde<key_type> || stateful_serde<mapped_type>;
 
-    /// Only refl serialization.
     template <typename... Serdes>
-    static json::Value serialize(const V& v, Serdes&&... serdes) {
-        json::Array array;
-        for(const auto& element: v) {
-            array.push_back(json::serialize(element, std::forward<Serdes>(serdes)...));
+    static json::Value serialize(const Range& range, Serdes&&... serdes) {
+        json::Object object;
+        for(const auto& [key, value]: range) {
+            if constexpr(std::is_constructible_v<json::Object::key_type, decltype(key)>) {
+                object.try_emplace(key, json::serialize(value, std::forward<Serdes>(serdes)...));
+            } else {
+                object.try_emplace(
+                    llvm::formatv("{}", json::serialize(key, std::forward<Serdes>(serdes)...)),
+                    json::serialize(value, std::forward<Serdes>(serdes)...));
+            }
         }
-        return array;
+        return object;
+    }
+
+    template <typename... Serdes>
+    static Range deserialize(const json::Value& value, Serdes&&... serdes) {
+        assert(value.kind() == json::Value::Object && "JSON must be object");
+        Range range;
+        for(auto& [name, value]: *value.getAsObject()) {
+            if constexpr(std::is_constructible_v<key_type, decltype(name)>) {
+                range.try_emplace(
+                    name,
+                    json::deserialize<mapped_type>(value, std::forward<Serdes>(serdes)...));
+            } else {
+                if(auto key = json::parse(name)) {
+                    range.try_emplace(
+                        json::deserialize<key_type>(std::move(*key),
+                                                    std::forward<Serdes>(serdes)...),
+                        json::deserialize<mapped_type>(value, std::forward<Serdes>(serdes)...));
+                }
+            }
+        }
+        return range;
     }
 };
 
-template <typename E>
-    requires refl::special_enum<E>
+template <set_range Range>
+struct Serde<Range> {
+    using key_type = typename Range::key_type;
+
+    constexpr inline static bool stateful = stateful_serde<key_type>;
+
+    template <typename... Serdes>
+    static json::Value serialize(const Range& range, Serdes&&... serdes) {
+        json::Array array;
+        for(const auto& element: range) {
+            array.emplace_back(json::serialize(element, std::forward<Serdes>(serdes)...));
+        }
+        return array;
+    }
+
+    template <typename... Serdes>
+    static Range deserialize(const json::Value& value, Serdes&&... serdes) {
+        assert(value.kind() == json::Value::Array && "JSON must be array");
+        Range range;
+        for(auto& element: *value.getAsArray()) {
+            range.emplace(json::deserialize<key_type>(element, std::forward<Serdes>(serdes)...));
+        }
+        return range;
+    }
+};
+
+template <sequence_range Range>
+struct Serde<Range> {
+    using value_type = typename Range::value_type;
+
+    constexpr inline static bool stateful = stateful_serde<value_type>;
+
+    template <typename... Serdes>
+    static json::Value serialize(const Range& range, Serdes&&... serdes) {
+        json::Array array;
+        for(const auto& element: range) {
+            array.emplace_back(json::serialize(element, std::forward<Serdes>(serdes)...));
+        }
+        return array;
+    }
+
+    template <typename... Serdes>
+    static Range deserialize(const json::Value& value, Serdes&&... serdes) {
+        assert(value.kind() == json::Value::Array && "JSON must be array");
+        Range range;
+        for(auto& element: *value.getAsArray()) {
+            range.emplace_back(
+                json::deserialize<value_type>(element, std::forward<Serdes>(serdes)...));
+        }
+        return range;
+    }
+};
+
+template <refl::reflectable_enum E>
 struct Serde<E> {
     static json::Value serialize(const E& e) {
         return json::Value(e.value());
@@ -290,7 +343,7 @@ struct Serde<E> {
     }
 };
 
-template <refl::reflectable T>
+template <refl::reflectable_struct T>
 struct Serde<T> {
     constexpr inline static bool stateful =
         refl::member_types<T>::apply([]<typename... Ts> { return (stateful_serde<Ts> || ...); });

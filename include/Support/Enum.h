@@ -1,15 +1,14 @@
 #pragma once
 
 #include <bit>
-#include <tuple>
 #include <array>
 #include <string>
 #include <cstdint>
-#include <algorithm>
+#include <cassert>
 #include <string_view>
 #include <source_location>
 
-#include "TypeTraits.h"
+#include "Support/TypeTraits.h"
 
 namespace clice::refl {
 
@@ -64,7 +63,7 @@ template <typename Derived, bool is_bitmask = false, typename underlying = uint8
 class Enum {
 public:
     /// Tag to indicate this is a special enum.
-    constexpr inline static bool is_special_enum_v = true;
+    constexpr inline static bool reflectable_enum = true;
 
     using underlying_type = underlying;
 
@@ -89,10 +88,20 @@ public:
         return m_Value;
     }
 
+    /// Get the enum value.
+    constexpr auto kind() const {
+        return static_cast<typename Derived::Kind>(m_Value);
+    }
+
     /// Get the name of the enum.
     constexpr std::string_view name() const {
         using E = typename Derived::Kind;
         return refl::enum_name<E, begin(), end()>(static_cast<E>(m_Value));
+    }
+
+    template <std::same_as<typename Derived::Kind>... Kinds>
+    constexpr bool is_one_of(Kinds... kinds) const {
+        return ((m_Value == underlying_value(kinds)) || ...);
     }
 
     constexpr explicit operator bool () const {
@@ -138,7 +147,7 @@ template <typename Derived, typename underlying>
 class Enum<Derived, true, underlying> {
 public:
     /// Tag to indicate this is a special enum.
-    constexpr inline static bool is_special_enum_v = true;
+    constexpr inline static bool reflectable_enum = true;
 
     using underlying_type = underlying;
 
@@ -207,6 +216,10 @@ public:
         return Enum(m_Value & (1 << underlying_value(kind)));
     }
 
+    constexpr Enum operator& (Enum e) const {
+        return Enum(m_Value & e.value());
+    }
+
     template <std::same_as<typename Derived::Kind> Kind>
     constexpr Enum& operator|= (Kind kind) {
         m_Value |= (1 << underlying_value(kind));
@@ -250,7 +263,7 @@ template <typename Derived, typename underlying>
 class Enum<Derived, false, underlying> {
 public:
     /// Tag to indicate this is a special enum.
-    constexpr inline static bool is_special_enum_v = true;
+    constexpr inline static bool reflectable_enum = true;
 
     using underlying_type = underlying;
 
@@ -259,8 +272,16 @@ public:
             requires { Derived::All; },
             "Derived enum must define all possible enum values.");
 
-        assert(std::ranges::any_of(Derived::All, [&](auto v) { return v == value; }) &&
-               "Invalid enum value.");
+        auto check = [](auto value) {
+            for(auto kind: Derived::All) {
+                if(kind == value) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        assert(check(value) && "Invalid enum value.");
     }
 
     constexpr Enum(const Enum&) = default;
@@ -276,9 +297,9 @@ private:
 };
 
 template <typename T>
-concept special_enum = requires {
-    T::is_special_enum_v;
-    requires T::is_special_enum_v;
+concept reflectable_enum = requires {
+    T::reflectable_enum;
+    requires T::reflectable_enum;
 };
 
 }  // namespace clice::refl

@@ -1,42 +1,135 @@
-#include "Test/Test.h"
-#include "Compiler/Compiler.h"
+#include "Test/CTest.h"
+#include "Basic/SourceConverter.h"
 
-namespace clice {
+namespace clice::testing {
 
 namespace {
 
-TEST(Directive, Include) {
+struct Directive : ::testing::Test, Tester {
+    clang::SourceManager* SM;
+    llvm::ArrayRef<Include> includes;
+    llvm::ArrayRef<HasInclude> hasIncludes;
+    llvm::ArrayRef<Condition> conditions;
+    llvm::ArrayRef<MacroRef> macros;
+    llvm::ArrayRef<Pragma> pragmas;
+
+    void run(const char* standard = "-std=c++20") {
+        Tester::run("-std=c++23");
+        SM = &info->srcMgr();
+        auto fid = SM->getMainFileID();
+        includes = info->directives()[fid].includes;
+        hasIncludes = info->directives()[fid].hasIncludes;
+        conditions = info->directives()[fid].conditions;
+        macros = info->directives()[fid].macros;
+        pragmas = info->directives()[fid].pragmas;
+    }
+
+    void EXPECT_INCLUDE(std::size_t index, llvm::StringRef position, llvm::StringRef path,
+                        std::source_location current = std::source_location::current()) {
+        auto& include = includes[index];
+        auto entry = SM->getFileEntryRefForID(include.fid);
+        EXPECT_EQ(SourceConverter().toPosition(include.location, *SM), pos(position), current);
+        EXPECT_EQ(entry ? entry->getName() : "", path, current);
+    }
+
+    void EXPECT_HAS_INCLUDE(std::size_t index, llvm::StringRef position, llvm::StringRef path,
+                            std::source_location current = std::source_location::current()) {
+        auto& hasInclude = hasIncludes[index];
+        EXPECT_EQ(SourceConverter().toPosition(hasInclude.location, *SM), pos(position), current);
+        EXPECT_EQ(hasInclude.path, path, current);
+    }
+
+    void EXPECT_CON(std::size_t index, Condition::BranchKind kind, llvm::StringRef position,
+                    std::source_location current = std::source_location::current()) {
+        auto& condition = conditions[index];
+        EXPECT_EQ(condition.kind, kind, current);
+        EXPECT_EQ(SourceConverter().toPosition(condition.loc, *SM), pos(position), current);
+    }
+
+    void EXPECT_MACRO(std::size_t index, MacroRef::Kind kind, llvm::StringRef position,
+                      std::source_location current = std::source_location::current()) {
+        auto& macro = macros[index];
+        EXPECT_EQ(macro.kind, kind, current);
+        EXPECT_EQ(SourceConverter().toPosition(macro.loc, *SM), pos(position), current);
+    }
+
+    void EXPECT_PRAGMA(std::size_t index, Pragma::Kind kind, llvm::StringRef position,
+                       llvm::StringRef text,
+                       std::source_location current = std::source_location::current()) {
+        auto& pragma = pragmas[index];
+        EXPECT_EQ(pragma.kind, kind, current);
+        EXPECT_EQ(pragma.stmt, text, current);
+        EXPECT_EQ(SourceConverter().toPosition(pragma.loc, *SM), pos(position), current);
+    }
+};
+
+TEST_F(Directive, Include) {
     const char* test = "";
 
     const char* test2 = R"cpp(
 #include "test.h"
 )cpp";
 
-    const char* main = R"cpp(
-#$(0)include "test.h"
-#$(1)include "test2.h"
-#$(2)include "test3.h"
+    const char* pragma_once = R"cpp(
+#pragma once
 )cpp";
 
-    Tester tester("main.cpp", main);
-    tester.addFile("./test.h", test);
-    tester.addFile("./test2.h", test2);
-    tester.addFile("./test3.h", "");
-    tester.run();
+    const char* guard_macro = R"cpp(
+#ifndef TEST3_H
+#define TEST3_H
+#endif
+)cpp";
 
-    auto& info = tester.info;
-    auto& includes = info.directive(info.srcMgr().getMainFileID()).includes;
+    const char* main = R"cpp(
+#$(0)include "test.h"
+#$(1)include "test.h"
+#$(2)include "pragma_once.h"
+#$(3)include "pragma_once.h"
+#$(4)include "guard_macro.h"
+#$(5)include "guard_macro.h"
+)cpp";
 
-    tester.equal(includes.size(), 3)
-        .expect("0", includes[0].loc)
-        .equal("test.h", includes[0].path)
-        .expect("1", includes[1].loc)
-        .equal("test2.h", includes[1].path)
-        .expect("2", includes[2].loc)
-        .equal("test3.h", includes[2].path);
+    addMain("main.cpp", main);
+
+    auto ptest = path::join(".", "test.h");
+    auto ppragma_once = path::join(".", "pragma_once.h");
+    auto pguard_macro = path::join(".", "guard_macro.h");
+
+    addFile(ptest, test);
+    addFile(ppragma_once, pragma_once);
+    addFile(pguard_macro, guard_macro);
+    run();
+
+    EXPECT_EQ(includes.size(), 6);
+    EXPECT_INCLUDE(0, "0", ptest);
+    EXPECT_INCLUDE(1, "1", ptest);
+    EXPECT_INCLUDE(2, "2", ppragma_once);
+    EXPECT_INCLUDE(3, "3", "");
+    EXPECT_INCLUDE(4, "4", pguard_macro);
+    EXPECT_INCLUDE(5, "5", "");
 }
 
-TEST(Directive, Condition) {
+TEST_F(Directive, HasInclude) {
+    const char* test = "";
+
+    const char* main = R"cpp(
+#if __has_include($(0)"test.h")
+#endif
+)cpp";
+
+    addMain("main.cpp", main);
+
+    llvm::SmallString<128> path;
+    path::append(path, ".", "test.h");
+    addFile(path, test);
+
+    run();
+
+    EXPECT_EQ(hasIncludes.size(), 1);
+    EXPECT_HAS_INCLUDE(0, "0", path);
+}
+
+TEST_F(Directive, Condition) {
     const char* code = R"cpp(
 #$(0)if 0
 
@@ -55,31 +148,21 @@ TEST(Directive, Condition) {
 #$(7)endif
 )cpp";
 
-    Tester tester("main.cpp", code);
-    tester.run("-std=c++23");
-    auto& info = tester.info;
-    auto& conditions = info.directive(info.srcMgr().getMainFileID()).conditions;
+    addMain("main.cpp", code);
+    run("-std=c++23");
 
-    tester.equal(conditions.size(), 8)
-        .equal(conditions[0].kind, Condition::BranchKind::If)
-        .expect("0", conditions[0].loc)
-        .equal(conditions[1].kind, Condition::BranchKind::Elif)
-        .expect("1", conditions[1].loc)
-        .equal(conditions[2].kind, Condition::BranchKind::Else)
-        .expect("2", conditions[2].loc)
-        .equal(conditions[3].kind, Condition::BranchKind::EndIf)
-        .expect("3", conditions[3].loc)
-        .equal(conditions[4].kind, Condition::BranchKind::Ifdef)
-        .expect("4", conditions[4].loc)
-        .equal(conditions[5].kind, Condition::BranchKind::Elifdef)
-        .expect("5", conditions[5].loc)
-        .equal(conditions[6].kind, Condition::BranchKind::Else)
-        .expect("6", conditions[6].loc)
-        .equal(conditions[7].kind, Condition::BranchKind::EndIf)
-        .expect("7", conditions[7].loc);
+    EXPECT_EQ(conditions.size(), 8);
+    EXPECT_CON(0, Condition::BranchKind::If, "0");
+    EXPECT_CON(1, Condition::BranchKind::Elif, "1");
+    EXPECT_CON(2, Condition::BranchKind::Else, "2");
+    EXPECT_CON(3, Condition::BranchKind::EndIf, "3");
+    EXPECT_CON(4, Condition::BranchKind::Ifdef, "4");
+    EXPECT_CON(5, Condition::BranchKind::Elifdef, "5");
+    EXPECT_CON(6, Condition::BranchKind::Else, "6");
+    EXPECT_CON(7, Condition::BranchKind::EndIf, "7");
 }
 
-TEST(Directive, Macro) {
+TEST_F(Directive, Macro) {
     const char* code = R"cpp(
 #define $(0)expr(v) v
 
@@ -99,32 +182,37 @@ int y = $(6)expr($(7)expr(1));
 
 )cpp";
 
-    Tester tester("main.cpp", code);
-    tester.run();
-    auto& info = tester.info;
-    auto& macros = info.directive(info.srcMgr().getMainFileID()).macros;
+    addMain("main.cpp", code);
+    run();
 
-    tester.equal(macros.size(), 9)
-        .equal(macros[0].kind, MacroRef::Kind::Def)
-        .expect("0", macros[0].loc)
-        .equal(macros[1].kind, MacroRef::Kind::Ref)
-        .expect("1", macros[1].loc)
-        .equal(macros[2].kind, MacroRef::Kind::Ref)
-        .expect("2", macros[2].loc)
-        .equal(macros[3].kind, MacroRef::Kind::Undef)
-        .expect("3", macros[3].loc)
-        .equal(macros[4].kind, MacroRef::Kind::Def)
-        .expect("4", macros[4].loc)
-        .equal(macros[5].kind, MacroRef::Kind::Ref)
-        .expect("5", macros[5].loc)
-        .equal(macros[6].kind, MacroRef::Kind::Ref)
-        .expect("6", macros[6].loc)
-        .equal(macros[7].kind, MacroRef::Kind::Ref)
-        .expect("7", macros[7].loc)
-        .equal(macros[8].kind, MacroRef::Kind::Undef)
-        .expect("8", macros[8].loc);
+    EXPECT_EQ(macros.size(), 9);
+    EXPECT_MACRO(0, MacroRef::Kind::Def, "0");
+    EXPECT_MACRO(1, MacroRef::Kind::Ref, "1");
+    EXPECT_MACRO(2, MacroRef::Kind::Ref, "2");
+    EXPECT_MACRO(3, MacroRef::Kind::Undef, "3");
+    EXPECT_MACRO(4, MacroRef::Kind::Def, "4");
+    EXPECT_MACRO(5, MacroRef::Kind::Ref, "5");
+    EXPECT_MACRO(6, MacroRef::Kind::Ref, "6");
+    EXPECT_MACRO(7, MacroRef::Kind::Ref, "7");
+    EXPECT_MACRO(8, MacroRef::Kind::Undef, "8");
+}
+
+TEST_F(Directive, Pragma) {
+    const char* code = R"cpp(
+$(0)#pragma GCC poison printf sprintf fprintf
+$(1)#pragma region
+$(2)#pragma endregion
+)cpp";
+
+    addMain("main.cpp", code);
+    run();
+
+    EXPECT_EQ(3, pragmas.size());
+    EXPECT_PRAGMA(0, Pragma::Kind::Other, "0", "#pragma GCC poison printf sprintf fprintf");
+    EXPECT_PRAGMA(1, Pragma::Kind::Region, "1", "#pragma region");
+    EXPECT_PRAGMA(2, Pragma::Kind::EndRegion, "2", "#pragma endregion");
 }
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing

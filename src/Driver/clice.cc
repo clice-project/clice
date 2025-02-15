@@ -1,4 +1,4 @@
-#include "Server/Logger.h"
+#include "Support/Logger.h"
 #include "Server/Server.h"
 #include "llvm/Support/CommandLine.h"
 
@@ -10,7 +10,7 @@ llvm::cl::opt<std::string> config("config",
                                   llvm::cl::desc("The path of the config file"),
                                   llvm::cl::value_desc("path"));
 
-llvm::cl::opt<bool> pipe("pipe", llvm::cl::desc("Use pipe mode"));
+llvm::cl::opt<std::string> mode("mode", llvm::cl::desc("Use pipe mode"));
 
 llvm::cl::opt<std::string> resource_dir("resource-dir", llvm::cl::desc("Resource dir path"));
 
@@ -18,7 +18,7 @@ llvm::cl::opt<std::string> resource_dir("resource-dir", llvm::cl::desc("Resource
 
 int main(int argc, const char** argv) {
     for(int i = 0; i < argc; ++i) {
-        log::warn("argv[{0}] = {1}", i, argv[i]);
+        log::info("argv[{0}] = {1}", i, argv[i]);
     }
 
     llvm::cl::SetVersionPrinter([](llvm::raw_ostream& os) { os << "clice version: 0.0.1\n"; });
@@ -27,7 +27,7 @@ int main(int argc, const char** argv) {
     if(cl::config.empty()) {
         log::warn("No config file specified; using default configuration.");
     } else {
-        /// config::load(argv[0], cl::config.getValue());
+        config::load(argv[0], cl::config.getValue());
         log::info("Successfully loaded configuration file from {0}.", cl::config.getValue());
     }
 
@@ -46,10 +46,14 @@ int main(int argc, const char** argv) {
         co_await server.onReceive(value);
     };
 
-    if(cl::pipe && cl::pipe.getValue()) {
-        async::listen(loop);
-    } else {
-        async::listen(loop, "127.0.0.1", 50051);
+    async::init();
+
+    if(cl::mode == "pipe") {
+        async::net::listen(loop);
+        log::info("Server starts listening on stdin/stdout");
+    } else if(cl::mode == "socket") {
+        async::net::listen("127.0.0.1", 50051, loop);
+        log::info("Server starts listening on {}:{}", "127.0.0.1", 50051);
     }
 
     async::run();

@@ -14,7 +14,6 @@
 #include "Feature/SignatureHelp.h"
 #include "Feature/CodeAction.h"
 #include "Feature/Formatting.h"
-#include "Support/Support.h"
 
 namespace clice::proto {
 
@@ -70,6 +69,30 @@ struct ServerCapabilities {
     ///
     /// If omitted it defaults to 'utf-16'.
     PositionEncodingKind positionEncoding = PositionEncodingKind::UTF16;
+
+    /// Defines how text documents are synced. Is either a detailed structure
+    /// defining each notification or for backwards compatibility the
+    /// TextDocumentSyncKind number. If omitted it defaults to
+    /// `TextDocumentSyncKind.None`.
+    TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::None;
+
+    /// The server provides go to declaration support.
+    DeclarationOptions declarationProvider = {};
+
+    /// The server provides goto definition support.
+    DefinitionOptions definitionProvider = {};
+
+    /// The server provides goto type definition support.
+    TypeDefinitionOptions typeDefinitionProvider = {};
+
+    /// The server provides goto implementation support.
+    ImplementationOptions implementationProvider = {};
+
+    /// The server provides find references support.
+    ReferenceOptions referencesProvider = {};
+
+    /// The server provides semantic tokens support.
+    SemanticTokensOptions semanticTokensProvider;
 };
 
 struct InitializeResult {
