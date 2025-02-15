@@ -52,6 +52,9 @@ struct Header {
 
     /// All header contexts of this header.
     llvm::DenseMap<TranslationUnit*, std::vector<Context>> contexts;
+
+    /// The active translation unit and the index of the context.
+    std::pair<TranslationUnit*, uint32_t> active = {nullptr, -1};
 };
 
 struct TranslationUnit {
@@ -72,19 +75,67 @@ struct TranslationUnit {
     /// Note that if a file has guard macro or pragma once, we will
     /// record it at most once.
     std::vector<IncludeLocation> locations;
+
+    /// The version of the translation unit.
+    uint32_t version = 0;
 };
 
+namespace proto {
+
+struct IncludeLocation {
+    /// The line number of the include directive.
+    uint32_t line;
+
+    /// The filename of the included header.
+    std::string filename;
+};
+
+struct HeaderContext {
+    /// The path of the source file.
+    std::string srcFile;
+
+    /// The path of the context file.
+    std::string contextFile;
+
+    /// The index of the context.
+    uint32_t index = -1;
+
+    /// The version of the context.
+    uint32_t version = 0;
+};
+
+using HeaderContextGroups = std::vector<std::vector<HeaderContext>>;
+
+}  // namespace proto
+
 class IncludeGraph {
-public:
+protected:
     IncludeGraph(const config::IndexOptions& options) : options(options) {}
 
     ~IncludeGraph();
 
-    async::Task<> index(llvm::StringRef file, CompilationDatabase& database);
+    void load(const json::Value& json);
 
     json::Value dump();
 
-    void load(const json::Value& json);
+    async::Task<> index(llvm::StringRef file, CompilationDatabase& database);
+
+public:
+    /// Return all header context of the given file.
+    /// FIXME: The results are grouped by the index file. And a header actually
+    /// may have thousands of contexts, of course, users don't want to see all
+    /// of them. For each index file, we return the first 10 contexts. In the future
+    /// we may add a parameter to control the number of contexts or set filter.
+    proto::HeaderContextGroups contextAll(llvm::StringRef file);
+
+    /// Return current header context of the given file.
+    std::optional<proto::HeaderContext> contextCurrent(llvm::StringRef file);
+
+    /// Switch to the given header context.
+    void contextSwitch(const proto::HeaderContext& context);
+
+    /// Resolve the header context to the include chain.
+    std::vector<proto::IncludeLocation> contextResolve(const proto::HeaderContext& context);
 
 private:
     std::string getIndexPath(llvm::StringRef file);

@@ -5,13 +5,7 @@
 namespace clice {
 
 Indexer2::Indexer2(CompilationDatabase& database, const config::IndexOptions& options) :
-    database(database), options(options) {
-    graph = new IncludeGraph(options);
-}
-
-Indexer2::~Indexer2() {
-    delete graph;
-}
+    IncludeGraph(options), database(database), options(options) {}
 
 void Indexer2::add(std::string file) {
     /// If the file is already indexed, cancel and start a new indexing task.
@@ -60,7 +54,7 @@ void Indexer2::indexAll() {
 }
 
 void Indexer2::save() {
-    auto json = graph->dump();
+    auto json = IncludeGraph::dump();
     auto result = fs::write(path::join(options.dir, "index.json"), std::format("{}", json));
     if(result) {
         log::info("Successfully saved index to disk");
@@ -78,7 +72,7 @@ void Indexer2::load() {
     }
 
     if(auto result = json::parse(file.value())) {
-        graph->load(*result);
+        IncludeGraph::load(*result);
         log::info("Successfully loaded index from disk");
     } else {
         log::warn("Failed to parse index file: {}", result.takeError());
@@ -89,7 +83,7 @@ async::Task<> Indexer2::index(std::string file) {
     assert(!pending.contains(file) && "file should not be in the pending list");
     assert(tasks.contains(file) && "file should not be in the tasks list");
 
-    auto task = graph->index(file, database);
+    auto task = IncludeGraph::index(file, database);
     co_await task;
 
     log::info("index process: [running: {}, pending :{}], finish {}",
