@@ -2,9 +2,11 @@
 
 #include "Config.h"
 #include "Database.h"
+#include "Protocol.h"
 #include "Async/Async.h"
 #include "Compiler/Compilation.h"
 #include "Support/JSON.h"
+#include "Index/SymbolIndex.h"
 
 namespace clice {
 
@@ -136,6 +138,9 @@ public:
 
     /// Resolve the header context to the include chain.
     std::vector<proto::IncludeLocation> contextResolve(const proto::HeaderContext& context);
+
+    /// According to the given file and offset, resolve the symbol at the offset.
+    async::Task<> resolve(llvm::StringRef file, uint32_t offset);
 
 private:
     std::string getIndexPath(llvm::StringRef file);
