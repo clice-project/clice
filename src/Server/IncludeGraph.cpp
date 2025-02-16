@@ -243,6 +243,53 @@ std::vector<proto::IncludeLocation>
     return locations;
 }
 
+std::vector<std::string> IncludeGraph::indices(TranslationUnit* tu) {
+    std::vector<std::string> indices;
+    if(tu) {
+        indices.emplace_back(tu->indexPath);
+        for(auto& header: tu->headers) {
+            for(auto& context: header->contexts[tu]) {
+                indices.emplace_back(header->indices[context.index].path);
+            }
+        }
+    } else {
+        for(auto& [_, tu]: tus) {
+            indices.emplace_back(tu->indexPath);
+        }
+
+        for(auto& [_, header]: headers) {
+            for(auto& index: header->indices) {
+                indices.emplace_back(index.path);
+            }
+        }
+    }
+    return indices;
+}
+
+async::Task<std::vector<IncludeGraph::SymbolID>>
+    IncludeGraph::resolve(const proto::TextDocumentPositionParams& params) {
+    std::vector<SymbolID> symbols;
+    auto path = SourceConverter::toPath(params.textDocument.uri);
+
+    std::uint32_t offset = 0;
+    {
+        auto content = co_await async::fs::read(path);
+        if(!content) {
+            co_return symbols;
+        }
+        offset = SC.toOffset(*content, params.position);
+    }
+
+    std::vector<std::string> indices;
+    if(auto iter = tus.find(path); iter != tus.end()) {
+        indices.emplace_back(iter->second->indexPath);
+    } else if(auto iter = headers.find(path); iter != headers.end()) {
+        for(auto& index: iter->second->indices) {
+            indices.emplace_back(index.path);
+        }
+    }
+}
+
 async::Task<proto::ReferenceResult> IncludeGraph::lookup(const proto::ReferenceParams& params,
                                                          RelationKind kind) {
     auto path = SourceConverter::toPath(params.textDocument.uri);

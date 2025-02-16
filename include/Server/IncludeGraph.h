@@ -139,6 +139,27 @@ public:
     /// Resolve the header context to the include chain.
     std::vector<proto::IncludeLocation> contextResolve(const proto::HeaderContext& context);
 
+private:
+    struct SymbolID {
+        std::string name;
+        uint64_t hash;
+    };
+
+    /// Return all indices of the given translation unit. If the translation unit
+    /// is nullptr, return all indices of the whole project.
+    std::vector<std::string> indices(TranslationUnit* tu = nullptr);
+
+    /// Resolve the symbol at the given position.
+    async::Task<std::vector<SymbolID>> resolve(const proto::TextDocumentPositionParams& params);
+
+    using LookupCallback = llvm::unique_function<void(llvm::StringRef content,
+                                                      const index::SymbolIndex::Symbol& symbol)>;
+
+    async::Task<> lookup(llvm::ArrayRef<SymbolID> targets,
+                         llvm::ArrayRef<std::string> files,
+                         LookupCallback callback);
+
+public:
     /// Lookup the reference information according to the given position.
     async::Task<proto::ReferenceResult> lookup(const proto::ReferenceParams& params,
                                                RelationKind kind);

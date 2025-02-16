@@ -69,9 +69,12 @@ auto run(Tasks&&... tasks) {
 }
 
 template <ranges::input_range Range, typename Coroutine>
-Task<> gather(Range&& range,
-              Coroutine&& coroutine,
-              std::size_t concurrency = std::thread::hardware_concurrency()) {
+    requires requires(Coroutine coroutine, ranges::range_value_t<Range> value) {
+        { coroutine(value) } -> std::same_as<Task<bool>>;
+    }
+Task<bool> gather(Range&& range,
+                    Coroutine&& coroutine,
+                    std::size_t concurrency = std::thread::hardware_concurrency()) {
     std::vector<Task<>> tasks;
     tasks.reserve(concurrency);
 
@@ -80,11 +83,22 @@ Task<> gather(Range&& range,
 
     Event event;
     std::size_t finished = 0;
+    bool cancelled = false;
 
     auto run_task = [&](auto& value) -> async::Task<> {
         /// Execute the first task.
         auto task = coroutine(value);
-        co_await task;
+
+        /// If any task fails, cancel all tasks and return false.
+        if(auto result = co_await task; !result) {
+            for(auto& task: tasks) {
+                task.cancel();
+            }
+            cancelled = true;
+            event.set();
+            co_return;
+        }
+
         finished += 1;
 
         /// Check if still have tasks to run. If so, run the next task.
@@ -92,7 +106,16 @@ Task<> gather(Range&& range,
             auto task = coroutine(*iter);
             iter++;
             finished -= 1;
-            co_await task;
+
+            if(auto result = co_await task; !result) {
+                for(auto& task: tasks) {
+                    task.cancel();
+                }
+                cancelled = true;
+                event.set();
+                co_return;
+            }
+
             finished += 1;
         }
 
@@ -111,6 +134,8 @@ Task<> gather(Range&& range,
     }
 
     co_await event;
+
+    co_return !cancelled;
 }
 
 }  // namespace clice::async
