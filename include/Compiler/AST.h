@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Directive.h"
+#include "Basic/SourceCode.h"
 #include "AST/Resolver.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
@@ -66,10 +67,18 @@ public:
         return instance->getASTContext().getTranslationUnitDecl();
     }
 
+    clang::FileID mainFileID() {
+        return srcMgr().getMainFileID();
+    }
+
     /// The interested file ID. For file without header context, it is the main file ID.
     /// For file with header context, it is the file ID of header file.
     clang::FileID getInterestedFile() {
         return interested;
+    }
+
+    llvm::StringRef getMainFileContent() {
+        return getFileContent(srcMgr(), mainFileID());
     }
 
     /// All files involved in building the AST.

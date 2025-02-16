@@ -2,6 +2,8 @@
 #include "Feature/Hover.h"
 #include "Basic/SourceConverter.h"
 
+#include "src/Feature/Hover.cpp"
+
 #include <clang/AST/RecursiveASTVisitor.h>
 
 namespace clice::testing {
@@ -24,6 +26,8 @@ struct DeclCollector : public clang::RecursiveASTVisitor<DeclCollector> {
 };
 
 struct Hover : public ::testing::Test {
+    using HoverChecker = llvm::function_ref<bool(std::optional<HoverInfo>&)>;
+
 protected:
     std::optional<Tester> tester;
 
@@ -37,6 +41,19 @@ protected:
 
         auto& info = tester->info;
 
+        DeclCollector collector;
+        collector.TraverseTranslationUnitDecl(info->tu());
+        decls = std::move(collector.decls);
+    }
+
+    void runWithHeader(llvm::StringRef source,
+                       llvm::StringRef header,
+                       const config::HoverOption& option = DefaultOption) {
+        tester.emplace("main.cpp", source);
+        tester->addFile(path::join(".", "header.h"), header);
+        tester->run();
+
+        auto& info = tester->info;
         DeclCollector collector;
         collector.TraverseTranslationUnitDecl(info->tu());
         decls = std::move(collector.decls);
@@ -64,6 +81,26 @@ protected:
 
         // llvm::outs() << result.markdown << '\n';
         EXPECT_EQ(mdText, result.markdown);
+    }
+
+    template <typename T>
+    static bool is(std::optional<HoverInfo>& hover) {
+        EXPECT_TRUE(hover.has_value());
+        if(hover.has_value()) {
+            return std::holds_alternative<T>(*hover);
+        }
+        return false;
+    }
+
+    void EXPECT_HOVER_TYPE(llvm::StringRef key,
+                           HoverChecker checker,
+                           config::HoverOption option = DefaultOption) {
+        SourceConverter cvtr{};
+        auto position = tester->locations.at(key);
+        auto hoverInfo = hover(position, *tester->info, cvtr, option);
+
+        bool res = checker(hoverInfo);
+        EXPECT_TRUE(res);
     }
 };
 
@@ -323,6 +360,56 @@ ___
 )md";
 
     EXPECT_HOVER("x1", FREE_STYLE);
+}
+
+TEST_F(Hover, HoverCase) {
+    auto header = R"cpp(
+int f();
+
+namespace n {
+    int f(int x);
+}
+
+)cpp";
+
+    auto code = R"cpp($(e1)
+#in$(custom_include)clude "head$(cus_header_name)er.h"$(header_name_end)
+#in$(std_include)clude <stddef.h$(std_header_name)>
+
+$(e2)
+
+int f() { 
+    return 0; 
+}
+
+namespace n {
+    int f(int x) {
+        return x;
+    }
+}
+
+)cpp";
+
+    runWithHeader(code, header);
+
+    auto emptys = {"e1", "e2"};
+    for(auto empty: emptys) {
+        auto isNone = [](std::optional<HoverInfo>& hover) -> bool {
+            return !hover.has_value();
+        };
+        EXPECT_HOVER_TYPE(empty, isNone);
+    }
+
+    auto headers = {
+        "custom_include",
+        "std_include",
+        "cus_header_name",
+        "header_name_end",
+        "std_header_name",
+    };
+    for(auto header: headers) {
+        EXPECT_HOVER_TYPE(header, is<Header>);
+    }
 }
 
 }  // namespace

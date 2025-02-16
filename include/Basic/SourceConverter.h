@@ -40,7 +40,7 @@ public:
     proto::Range toRange(clang::SourceRange range, const clang::SourceManager& SM) const;
 
     /// Same as the above, but input is a `LocalSourceRange` and the content is provided.
-    proto::Range toRange(LocalSourceRange range, llvm::StringRef conent) const;
+    proto::Range toRange(LocalSourceRange range, llvm::StringRef content) const;
 
     /// Convert a clang::SourceRange to LocalSourceRange.
     LocalSourceRange toLocalRange(clang::SourceRange range, const clang::SourceManager& SM) const;

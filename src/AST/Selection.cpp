@@ -278,4 +278,11 @@ void SelectionTree::dump(llvm::raw_ostream& os, clang::ASTContext& context) cons
         dumpImpl(os, root, context);
 }
 
+SelectionTree SelectionTree::selectToken(const clang::syntax::Token& token,
+                                         clang::ASTContext& context,
+                                         clang::syntax::TokenBuffer& tokens) {
+    auto range = token.range(context.getSourceManager());
+    return SelectionTree(range.beginOffset(), range.endOffset(), context, tokens);
+}
+
 }  // namespace clice

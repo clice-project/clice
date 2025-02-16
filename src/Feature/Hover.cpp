@@ -1,17 +1,22 @@
-
 #include "Feature/Hover.h"
 
+#include "AST/Selection.h"
+#include "Basic/SourceConverter.h"
+#include "Compiler/AST.h"
+#include "Support/FileSystem.h"
+
+#include <clang/Lex/LiteralSupport.h>
 #include <clang/AST/DeclVisitor.h>
 
+#ifdef _WIN32
 #include <variant>
 #include <format>
+#endif
 
 template <class... Ts>
 struct Match : Ts... {
     using Ts::operator()...;
 };
-
-using LocalStr = std::pmr::string;
 
 namespace clice {
 
@@ -217,6 +222,76 @@ struct Var : HoverBase, WithDocument, WithScope {
     }
 };
 
+/// Include directive.
+struct Header : HoverBase {
+
+    std::string absPath;
+
+    /// TODO: symbols provided by the header
+    /// std::vector<std::string> provides;
+
+    size_t estimated_size() const {
+        return HoverBase::estimated_size() + absPath.size();
+    }
+};
+
+struct Numeric {
+    SymbolKind symbol = SymbolKind::Number;
+
+    llvm::StringRef rawText;
+
+    std::variant<llvm::APInt, llvm::APFloat> value;
+
+    size_t estimated_size() const {
+        return 16;
+    }
+};
+
+struct Keyword {
+    SymbolKind symbol = SymbolKind::Keyword;
+
+    clang::tok::TokenKind tkkind;
+
+    constexpr static std::string_view CppRefKeywordBaseUrl =
+        "https://en.cppreference.com/w/cpp/keyword/";
+
+    static std::string cpprefLink(clang::tok::TokenKind keyword) {
+        std::string url{CppRefKeywordBaseUrl};
+        url += clang::tok::getTokenName(keyword);
+        return url;
+    }
+
+    size_t estimated_size() const {
+        return CppRefKeywordBaseUrl.size() + 20;
+    }
+};
+
+struct Literal {
+    SymbolKind symbol = SymbolKind::String;
+
+    clang::tok::TokenKind kind;
+
+    llvm::StringRef text;
+
+    size_t estimated_size() const {
+        return text.size() + 16;
+    }
+
+    static std::string_view stringLiteralKindName(clang::tok::TokenKind kind) {
+        switch(kind) {
+            case clang::tok::char_constant: return "char_constant";
+            case clang::tok::string_literal: return "string_literal";
+            case clang::tok::wide_string_literal: return "wide_string_literal";
+            case clang::tok::utf8_string_literal: return "utf8_string_literal";
+            case clang::tok::utf16_string_literal: return "utf16_string_literal";
+            case clang::tok::utf32_string_literal: return "utf32_string_literal";
+            // case clang::tok::binary_data: return "binary_data";
+            default: return "unknown";
+        }
+    }
+};
+
+/// Make HoverInfo default constructible.
 struct Empty : std::monostate {
     size_t estimated_size() const {
         return 0;
@@ -224,7 +299,9 @@ struct Empty : std::monostate {
 };
 
 /// Use variant to store different types of hover information to reduce the memory usage.
-struct HoverInfo : public std::variant<Empty, Namespace, Record, Enum, Fn, Var> {
+struct HoverInfo :
+    public std::
+        variant<Empty, Namespace, Record, Enum, Fn, Var, Header, Numeric, Literal, Keyword> {
     /// Return the estimated size of the hover information in bytes.
     size_t estimated_size() const {
         auto size_counter = Match{
@@ -538,6 +615,156 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
     }
 };
 
+/// FIXME:
+/// Should we put the following function into `SourceConverter::toLocation` or `SourceCode.h` ?
+clang::SourceLocation toLocation(const clang::SourceManager& src,
+                                 clang::FileID id,
+                                 const SourceConverter& cvtr,
+                                 const proto::Position& pos) {
+    uint32_t offset = cvtr.toOffset(src.getBufferData(id), pos);
+    return src.getLocForStartOfFile(id).getLocWithOffset(offset);
+}
+
+using Token = clang::syntax::Token;
+using namespace clang::tok;
+
+llvm::SmallVector<Token> pickBestToken(llvm::ArrayRef<Token>& touching) {
+    constexpr auto ranker = [](const Token& tk) -> uint32_t {
+        auto kind = tk.kind();
+        if(isAnyIdentifier(kind) || kind == numeric_constant)
+            return 10;
+
+        if(llvm::is_contained({kw_auto, kw_decltype}, kind))
+            return 9;
+
+        if(isStringLiteral(kind))
+            return 7;
+
+        auto prefix_ops = {l_square, r_square, star, minus, exclaim, clang::tok::pipe};
+        if(llvm::is_contained(prefix_ops, kind))
+            return 6;
+
+        // keyword or function call.
+        if(getKeywordSpelling(kind) || llvm::is_contained({l_paren, r_paren}, kind))
+            return 5;
+
+        if(getPunctuatorSpelling(kind))
+            return 0;
+
+        return 1;
+    };
+
+    llvm::SmallVector<Token> ranked{touching};
+    std::ranges::sort(ranked, [ranker](const Token& lhs, const Token& rhs) {
+        return ranker(lhs) > ranker(rhs);
+    });
+    return ranked;
+}
+
+namespace hit {
+
+std::optional<HoverInfo> header(llvm::ArrayRef<Include> includes,
+                                const clang::SourceManager& SM,
+                                uint32_t line) {
+    auto lineof = [&SM](const Include& inc) {
+        return SM.getPresumedLineNumber(inc.location);
+    };
+
+    if(includes.empty() || lineof(includes.back()) < line) {
+        return std::nullopt;
+    }
+
+    for(auto& inc: includes) {
+        if(lineof(inc) != line)
+            continue;
+
+        Header ic;
+        ic.symbol = SymbolKind::Header;
+        ic.name = inc.fileName;
+        ic.absPath = path::join(inc.searchPath, inc.relativePath);
+        return HoverInfo{std::move(ic)};
+    }
+
+    return std::nullopt;
+}
+
+std::optional<HoverInfo> numeric(const Token& tk, const clang::SourceManager& SM, ASTInfo& info) {
+
+    if(auto kind = tk.kind(); kind == numeric_constant) {
+        llvm::StringRef text = tk.text(SM);
+        auto& ctx = info.context();
+        clang::NumericLiteralParser parser(tk.text(SM),
+                                           tk.location(),
+                                           SM,
+                                           ctx.getLangOpts(),
+                                           ctx.getTargetInfo(),
+                                           ctx.getDiagnostics());
+        llvm::APInt apint;
+        if(parser.GetIntegerValue(apint)) {
+            return HoverInfo{
+                Numeric{.rawText = text, .value = apint}
+            };
+        }
+
+        llvm::APFloat apfloat{0.0};
+        if(parser.GetFloatValue(apfloat, llvm::RoundingMode::Dynamic)) {
+            return HoverInfo{
+                Numeric{.rawText = text, .value = apfloat}
+            };
+        }
+
+        llvm_unreachable("Parse numeric literal failed.");
+    }
+    return std::nullopt;
+}
+
+std::optional<HoverInfo> keyword(const Token& tk) {
+    if(auto kind = tk.kind(); getKeywordSpelling(kind)) {
+        return HoverInfo{Keyword{.tkkind = kind}};
+    }
+    return std::nullopt;
+}
+
+std::optional<HoverInfo> literal(const Token& tk, const clang::SourceManager& SM) {
+    if(isStringLiteral(tk.kind())) {
+        return HoverInfo{
+            Literal{.kind = tk.kind(), .text = tk.text(SM)}
+        };
+    }
+
+    return std::nullopt;
+}
+
+std::optional<HoverInfo> call() {
+    return std::nullopt;
+}
+
+std::optional<HoverInfo> deduced(const Token& tk,
+                                 const clang::SourceManager& SM,
+                                 const SelectionTree& ST) {
+    if(tk.kind() != kw_auto && tk.kind() != kw_decltype) {
+        return std::nullopt;
+    }
+}
+
+std::optional<HoverInfo> detect(const Token& token, ASTInfo& info) {
+    const auto& SM = info.srcMgr();
+    auto cheap_case = hit::numeric(token, SM, info)
+                          .or_else([&]() { return hit::literal(token, SM); })
+                          .or_else([&]() { return hit::keyword(token); });
+
+    if(cheap_case.has_value())
+        return cheap_case;
+
+    auto selection = SelectionTree::selectToken(token, info.context(), info.tokBuf());
+    if(!selection.hasValue())
+        return std::nullopt;
+
+    return deduced(token, SM, selection).or_else([&]() { return hit::call(); });
+}
+
+}  // namespace hit
+
 struct MarkdownPrinter {
 
     using Self = MarkdownPrinter;
@@ -827,8 +1054,81 @@ struct MarkdownPrinter {
         // clang-format on
     }
 
+    void operator() (const Header& ic) {
+        // clang-format off
+        title(ic)
+        .hln()
+
+        .vln("`{}`", ic.absPath);
+        // clang-format on
+    }
+
+    void operator() (const Keyword& kw) {
+        // clang-format off
+        v("{} {} `{}`", H3, kw.symbol.name(), clang::tok::getTokenName(kw.tkkind))
+        .hln()
+
+        .vln("See: [{0}]({0})", kw.cpprefLink(kw.tkkind));
+        // clang-format on
+    }
+
+    void operator() (const Numeric& nm) {
+        bool isInteger = true;
+        llvm::SmallString<64> bin;
+        llvm::SmallString<32> dec;
+        llvm::SmallString<32> hex;
+
+        auto fmtter = Match{
+            [&](const llvm::APInt& apint) {
+                apint.toString(bin, 2, /*Signed=*/true);
+                apint.toString(dec, 10, /*Signed=*/true);
+                apint.toString(hex, 16, /*Signed=*/true);
+            },
+            [&](const llvm::APFloat& apfloat) {
+                isInteger = false;
+                apfloat.toString(dec, 10);
+                hex.resize_for_overwrite(
+                    apfloat.convertToHexString(hex.begin(),
+                                               16,
+                                               /*UpperCase=*/true,
+                                               llvm::RoundingMode::NearestTiesToEven));
+            },
+        };
+        std::visit(fmtter, nm.value);
+
+        constexpr auto sv = [](llvm::StringRef str) -> std::string_view {
+            return std::string_view{str.data(), str.size()};
+        };
+
+        if(isInteger) {
+            // clang-format off
+            v("{} {} `{}`", H3, nm.symbol.name(), sv(nm.rawText))
+            .hln()
+            .vln("Binary: `{}`", sv(bin))
+            .vln("Decimal: `{}`", sv(dec))
+            .vln("Hexadecimal: `{}`", sv(hex));
+            // clang-format on
+        } else {
+            // clang-format off
+            v("{} {} `{}`", H3, nm.symbol.name(), sv(nm.rawText))
+            .hln()
+            .vln("Decimal: `{}`", sv(dec))
+            .vln("Hexadecimal: `{}`", sv(hex));
+            // clang-format on
+        }
+    }
+
+    void operator() (const Literal& lit) {
+        // clang-format off
+        v("{} {} `{}`", H3, lit.symbol.name(), lit.stringLiteralKindName(lit.kind))
+        .hln()
+
+        .vln("size: {} bytes", lit.text.size() + 1); // null-terminated
+        // clang-format on
+    }
+
     void operator() (const Empty&) {
-        buffer = "<unimplemented>";
+        llvm_unreachable("Empty just used to defualt-construct a HoverInfo");
     }
 
     /// Render the hover information to markdown text.
@@ -859,21 +1159,56 @@ struct MarkdownPrinter {
 
 namespace clice::feature::hover {
 
+namespace {
+
+Result toMarkdown(const HoverInfo& hover, const config::HoverOption& option) {
+    return {.markdown = MarkdownPrinter::print(hover, option)};
+}
+
+std::optional<HoverInfo> hover(proto::Position position,
+                               ASTInfo& info,
+                               const SourceConverter& cvtr,
+                               const config::HoverOption& option) {
+    auto srcLoc = toLocation(info.srcMgr(), info.mainFileID(), cvtr, position);
+    if(srcLoc.isInvalid())
+        return std::nullopt;
+
+    auto tokens = clang::syntax::spelledTokensTouching(srcLoc, info.tokBuf());
+    if(tokens.empty())
+        return std::nullopt;
+
+    /// Check if the position is in a include directive.
+    llvm::ArrayRef<Include> includes = info.directives()[info.mainFileID()].includes;
+    // +1: convert 0-based lsp line to 1-based clang line.
+    if(auto hit = hit::header(includes, info.srcMgr(), position.line + 1))
+        return hit;
+
+    auto candidates = pickBestToken(tokens);
+    for(const auto& token: candidates) {
+        if(auto hit = hit::detect(token, info))
+            return hit;
+    }
+
+    return std::nullopt;
+}
+
+}  // namespace
+
 Result hover(const clang::Decl* decl, const config::HoverOption& option) {
     assert(decl && "Must be non-null pointer");
 
     DeclHoverBuilder builder{.option = option};
     builder.Visit(decl);
-    return {.markdown = MarkdownPrinter::print(builder.hover, option)};
+    return toMarkdown(builder.hover, option);
 }
 
-/// Compute inlay hints for MainfileID in given param and config.
-Result hover(proto::HoverParams param,
-             ASTInfo& info,
-             const SourceConverter& converter,
-             const config::HoverOption& option) {
-    assert(false && "Not implemented yet");
-    return {};
+std::optional<Result> hover(proto::HoverParams param,
+                            ASTInfo& info,
+                            const SourceConverter& cvtr,
+                            const config::HoverOption& option) {
+    return hover(param.position, info, cvtr, option).transform([&](HoverInfo&& hover) {
+        return toMarkdown(hover, option);
+    });
 }
 
 proto::MarkupContent toLspType(Result hover) {

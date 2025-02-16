@@ -75,13 +75,6 @@ public:
     SelectionTree(SelectionTree&&) = default;
     SelectionTree& operator= (SelectionTree&&) = default;
 
-    /// Construct a selection tree from the given source range. `start` and `end` means offset from
-    /// file start location, these arguments should come from function `SourceConverter::toOffset`.
-    SelectionTree(std::uint32_t begin,
-                  std::uint32_t end,
-                  clang::ASTContext& context,
-                  clang::syntax::TokenBuffer& tokens);
-
     /// Check if there is any selection.
     bool hasValue() const {
         return root != nullptr;
@@ -118,7 +111,25 @@ public:
 
     void dump(llvm::raw_ostream& os, clang::ASTContext& context) const;
 
+    static SelectionTree selectOffsetRange(std::uint32_t begin,
+                                           std::uint32_t end,
+                                           clang::ASTContext& context,
+                                           clang::syntax::TokenBuffer& tokens) {
+        return SelectionTree(begin, end, context, tokens);
+    }
+
+    static SelectionTree selectToken(const clang::syntax::Token& token,
+                                     clang::ASTContext& context,
+                                     clang::syntax::TokenBuffer& tokens);
+
 private:
+    /// Construct a selection tree from the given source range. `start` and `end` means offset from
+    /// file start location, these arguments should come from function `SourceConverter::toOffset`.
+    SelectionTree(std::uint32_t begin,
+                  std::uint32_t end,
+                  clang::ASTContext& context,
+                  clang::syntax::TokenBuffer& tokens);
+
     // The root node of selection tree.
     Node* root;
 
