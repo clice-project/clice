@@ -92,8 +92,9 @@ constexpr inline auto to_string_literal_impl = [] {
         }();
 
         std::array<char, length + 1> result = {};
-        for(std::size_t i = length; i; i /= 10) {
-            result[i - 1] = '0' + N % 10;
+        std::size_t n = N;
+        for(std::size_t i = length; i; n /= 10, i--) {
+            result[i - 1] = '0' + n % 10;
         }
         result[length] = '\0';
         return result;
