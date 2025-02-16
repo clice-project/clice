@@ -1,4 +1,5 @@
 #include "Async/FileSystem.h"
+#include "Support/Logger.h"
 
 namespace clice::async::awaiter {}
 
@@ -13,6 +14,10 @@ struct fs : async::awaiter::uv<fs<Derived, Ret>, uv_fs_t, Ret> {
     }
 
     void cleanup() {
+        if(this->request.result < 0) {
+            this->error = this->request.result;
+        }
+        
         uv_fs_req_cleanup(&this->request);
     }
 
@@ -113,8 +118,12 @@ handle::~handle() {
         return;
     }
 
-    uv_fs_t* request = new uv_fs_t;
-    uv_fs_close(async::loop, request, file, [](uv_fs_t* request) { delete request; });
+    uv_fs_t request;
+    int error = uv_fs_close(async::loop, &request, file, nullptr);
+    if(error < 0) {
+        log::warn("Failed to close file: {}", uv_strerror(error));
+    }
+    uv_fs_req_cleanup(&request);
 }
 
 Result<handle> open(std::string path, Mode mode) {

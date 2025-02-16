@@ -293,9 +293,8 @@ async::Task<std::vector<IncludeGraph::SymbolID>>
     }
 
     co_await async::gather(indices, [&](const std::string& path) -> async::Task<bool> {
-        auto binary = co_await async::fs::read(path);
+        auto binary = co_await async::fs::read(path + ".sidx");
         if(!binary) {
-            log::info("Failed to read index file: {}, because: {}", path, binary.error());
             co_return true;
         }
 
@@ -323,7 +322,7 @@ async::Task<> IncludeGraph::lookup(llvm::ArrayRef<SymbolID> targets,
                                    llvm::ArrayRef<std::string> files,
                                    LookupCallback callback) {
     co_await async::gather(files, [&](const std::string& indexPath) -> async::Task<bool> {
-        auto binary = co_await async::fs::read(indexPath);
+        auto binary = co_await async::fs::read(indexPath + ".sidx");
         if(!binary) {
             co_return false;
         }
@@ -363,8 +362,6 @@ async::Task<proto::ReferenceResult> IncludeGraph::lookup(const proto::ReferenceP
     auto ids = co_await resolve(params);
     /// FIXME: If the size of ids equal to one and it is not an external symbol, we should
     /// just search the symbol in the current translation unit.
-
-    println("Lookup reference for {} symbols", ::clice::dump(ids));
 
     proto::ReferenceResult result;
 
