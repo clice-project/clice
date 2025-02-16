@@ -93,6 +93,7 @@ Task<bool> gather(Range&& range,
         if(auto result = co_await task; !result) {
             for(auto& task: tasks) {
                 task.cancel();
+                task.dispose();
             }
             cancelled = true;
             event.set();
@@ -110,6 +111,7 @@ Task<bool> gather(Range&& range,
             if(auto result = co_await task; !result) {
                 for(auto& task: tasks) {
                     task.cancel();
+                    task.dispose();
                 }
                 cancelled = true;
                 event.set();

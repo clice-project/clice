@@ -16,8 +16,6 @@ namespace clice::async {
 
 namespace fs {
 
-using handle = uv_file;
-
 struct Mode : refl::Enum<Mode, true> {
     enum Kind {
         /// Open the file for reading.
@@ -45,19 +43,22 @@ struct Mode : refl::Enum<Mode, true> {
     using Enum::Enum;
 };
 
+struct handle {
+    uv_file file;
+
+    ~handle();
+};
+
 /// Open the file asynchronously.
 Result<handle> open(std::string path, Mode mode);
 
-/// Close the file asynchronously.
-Result<void> close(handle file);
-
 /// Read the file asynchronously, make sure the buffer is valid until the task is done.
-Result<ssize_t> read(handle file, char* buffer, std::size_t size);
+Result<ssize_t> read(handle handle, char* buffer, std::size_t size);
 
 Result<std::string> read(std::string path, Mode mode = Mode::Read);
 
 /// Write the file asynchronously, make sure the buffer is valid until the task is done.
-Result<void> write(handle file, char* buffer, std::size_t size);
+Result<void> write(handle handle, char* buffer, std::size_t size);
 
 Result<void> write(std::string path,
                    char* buffer,

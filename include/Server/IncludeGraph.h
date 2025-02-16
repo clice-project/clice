@@ -141,18 +141,19 @@ public:
 
 private:
     struct SymbolID {
-        std::string name;
         uint64_t hash;
+        std::string name;
     };
 
-    /// Return all indices of the given translation unit. If the translation unit
-    /// is nullptr, return all indices of the whole project.
+    /// Return all indices of the given translation unit. If the file is empty,
+    /// return all indices of the IncludeGraph.
     std::vector<std::string> indices(TranslationUnit* tu = nullptr);
 
     /// Resolve the symbol at the given position.
     async::Task<std::vector<SymbolID>> resolve(const proto::TextDocumentPositionParams& params);
 
-    using LookupCallback = llvm::unique_function<void(llvm::StringRef content,
+    using LookupCallback = llvm::unique_function<bool(llvm::StringRef path,
+                                                      llvm::StringRef content,
                                                       const index::SymbolIndex::Symbol& symbol)>;
 
     async::Task<> lookup(llvm::ArrayRef<SymbolID> targets,

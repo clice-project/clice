@@ -32,24 +32,16 @@ struct open : fs<open, handle> {
     }
 
     auto result() {
-        return request.result;
-    }
-};
-
-struct close : fs<close> {
-    handle file;
-
-    int start(uv_fs_cb cb) {
-        return uv_fs_close(async::loop, &request, file, cb);
+        return handle{static_cast<uv_file>(request.result)};
     }
 };
 
 struct read : fs<read, ssize_t> {
-    handle file;
+    handle handle;
     uv_buf_t bufs[1];
 
     int start(uv_fs_cb cb) {
-        return uv_fs_read(async::loop, &request, file, bufs, 1, -1, cb);
+        return uv_fs_read(async::loop, &request, handle.file, bufs, 1, -1, cb);
     }
 
     auto result() {
@@ -58,11 +50,11 @@ struct read : fs<read, ssize_t> {
 };
 
 struct write : fs<write> {
-    handle file;
+    handle handle;
     uv_buf_t bufs[1];
 
     int start(uv_fs_cb cb) {
-        return uv_fs_write(async::loop, &request, file, bufs, 1, 0, cb);
+        return uv_fs_write(async::loop, &request, handle.file, bufs, 1, 0, cb);
     }
 };
 
@@ -116,6 +108,11 @@ static int transformFlags(Mode mode) {
     return flags;
 }
 
+handle::~handle() {
+    uv_fs_t* request = new uv_fs_t;
+    uv_fs_close(async::loop, request, file, [](uv_fs_t* request) { delete request; });
+}
+
 Result<handle> open(std::string path, Mode mode) {
     co_return co_await awaiter::open{
         .path = path.c_str(),
@@ -123,13 +120,9 @@ Result<handle> open(std::string path, Mode mode) {
     };
 }
 
-Result<void> close(handle file) {
-    co_return co_await awaiter::close{.file = file};
-}
-
-Result<ssize_t> read(handle file, char* buffer, std::size_t size) {
+Result<ssize_t> read(handle handle, char* buffer, std::size_t size) {
     co_return co_await awaiter::read{
-        .file = file,
+        .handle = handle,
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
@@ -151,6 +144,11 @@ Result<std::string> read(std::string path, Mode mode) {
             co_return std::unexpected(result.error());
         }
 
+        /// FIXME: Move this to awaiter.
+        if(*result < 0) {
+            co_return std::unexpected(std::error_code(*result, async::category()));
+        }
+
         if(*result == 0) {
             break;
         }
@@ -158,17 +156,12 @@ Result<std::string> read(std::string path, Mode mode) {
         content.append(buffer, *result);
     }
 
-    /// Close the file.
-    if(auto result = co_await close(*file); !result) {
-        co_return std::unexpected(result.error());
-    }
-
     co_return content;
 }
 
-Result<void> write(handle file, char* buffer, std::size_t size) {
+Result<void> write(handle handle, char* buffer, std::size_t size) {
     co_return co_await awaiter::write{
-        .file = file,
+        .handle = handle,
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
@@ -180,10 +173,6 @@ Result<void> write(std::string path, char* buffer, std::size_t size, Mode mode) 
     }
 
     if(auto result = co_await write(*file, buffer, size); !result) {
-        co_return std::unexpected(result.error());
-    }
-
-    if(auto result = co_await close(*file); !result) {
         co_return std::unexpected(result.error());
     }
 

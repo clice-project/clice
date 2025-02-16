@@ -320,6 +320,11 @@ public:
                 continue;
             }
 
+            if(file.path.empty()) {
+                file.path = path::real_path(srcMgr.getFileEntryRefForID(fid)->getName());
+                assert(!file.path.empty() && "Invalid file path");
+            }
+
             auto [buffer, size] = clice::binary::binarify(static_cast<memory::SymbolIndex>(file));
             indices.try_emplace(
                 fid,
