@@ -29,15 +29,38 @@ TEST(Async, GatherRange) {
 
     std::vector<int> results;
 
-    auto task_gen = [&](int x) -> async::Task<> {
+    auto task_gen = [&](int x) -> async::Task<bool> {
         co_await async::sleep(10);
         results.push_back(x);
+        co_return true;
     };
 
     auto core = async::gather(args, task_gen);
     async::run(core);
 
     EXPECT_EQ(args, results);
+    EXPECT_EQ(core.result(), true);
+}
+
+TEST(Async, GatherCancel) {
+    std::vector<int> args;
+    for(int i = 0; i < 30; ++i) {
+        args.push_back(i);
+    }
+
+    std::vector<int> results;
+
+    auto task_gen = [&](int x) -> async::Task<bool> {
+        co_await async::sleep(10);
+        results.push_back(x);
+        co_return false;
+    };
+
+    auto core = async::gather(args, task_gen);
+    async::run(core);
+
+    EXPECT_EQ(results.size(), 1);
+    EXPECT_EQ(core.result(), false);
 }
 
 }  // namespace

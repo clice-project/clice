@@ -320,6 +320,17 @@ public:
                 continue;
             }
 
+            if(file.path.empty()) {
+                llvm::SmallString<128> path;
+                auto error =
+                    llvm::sys::fs::real_path(srcMgr.getFileEntryRefForID(fid)->getName(), path);
+                if(!error) {
+                    file.path = path.str();
+                } else {
+                    path = srcMgr.getFileEntryRefForID(fid)->getName();
+                }
+            }
+
             auto [buffer, size] = clice::binary::binarify(static_cast<memory::SymbolIndex>(file));
             indices.try_emplace(
                 fid,

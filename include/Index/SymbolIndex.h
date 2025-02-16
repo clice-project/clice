@@ -70,6 +70,9 @@ public:
         Symbol symbol() const;
     };
 
+    /// The path of the source file.
+    llvm::StringRef path() const;
+
     /// All symbols in the index.
     ArrayView<Symbol> symbols() const;
 
