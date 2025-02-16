@@ -44,21 +44,37 @@ struct Mode : refl::Enum<Mode, true> {
 };
 
 struct handle {
-    uv_file file;
+public:
+    handle(uv_file file) : file(file) {}
+
+    handle(const handle&) = delete;
+
+    handle(handle&& other) noexcept : file(other.file) {
+        other.file = -1;
+    }
 
     ~handle();
+
+    handle& operator= (const handle&) = delete;
+
+    int value() const {
+        return file;
+    }
+
+private:
+    uv_file file;
 };
 
 /// Open the file asynchronously.
 Result<handle> open(std::string path, Mode mode);
 
 /// Read the file asynchronously, make sure the buffer is valid until the task is done.
-Result<ssize_t> read(handle handle, char* buffer, std::size_t size);
+Result<ssize_t> read(const handle& handle, char* buffer, std::size_t size);
 
 Result<std::string> read(std::string path, Mode mode = Mode::Read);
 
 /// Write the file asynchronously, make sure the buffer is valid until the task is done.
-Result<void> write(handle handle, char* buffer, std::size_t size);
+Result<void> write(const handle& handle, char* buffer, std::size_t size);
 
 Result<void> write(std::string path,
                    char* buffer,

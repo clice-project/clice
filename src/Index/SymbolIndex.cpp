@@ -321,8 +321,14 @@ public:
             }
 
             if(file.path.empty()) {
-                file.path = path::real_path(srcMgr.getFileEntryRefForID(fid)->getName());
-                assert(!file.path.empty() && "Invalid file path");
+                llvm::SmallString<128> path;
+                auto error =
+                    llvm::sys::fs::real_path(srcMgr.getFileEntryRefForID(fid)->getName(), path);
+                if(!error) {
+                    file.path = path.str();
+                } else {
+                    path = srcMgr.getFileEntryRefForID(fid)->getName();
+                }
             }
 
             auto [buffer, size] = clice::binary::binarify(static_cast<memory::SymbolIndex>(file));

@@ -37,11 +37,11 @@ struct open : fs<open, handle> {
 };
 
 struct read : fs<read, ssize_t> {
-    handle handle;
+    uv_file file;
     uv_buf_t bufs[1];
 
     int start(uv_fs_cb cb) {
-        return uv_fs_read(async::loop, &request, handle.file, bufs, 1, -1, cb);
+        return uv_fs_read(async::loop, &request, file, bufs, 1, -1, cb);
     }
 
     auto result() {
@@ -50,11 +50,11 @@ struct read : fs<read, ssize_t> {
 };
 
 struct write : fs<write> {
-    handle handle;
+    uv_file file;
     uv_buf_t bufs[1];
 
     int start(uv_fs_cb cb) {
-        return uv_fs_write(async::loop, &request, handle.file, bufs, 1, 0, cb);
+        return uv_fs_write(async::loop, &request, file, bufs, 1, 0, cb);
     }
 };
 
@@ -109,6 +109,10 @@ static int transformFlags(Mode mode) {
 }
 
 handle::~handle() {
+    if(file == -1) {
+        return;
+    }
+
     uv_fs_t* request = new uv_fs_t;
     uv_fs_close(async::loop, request, file, [](uv_fs_t* request) { delete request; });
 }
@@ -120,9 +124,9 @@ Result<handle> open(std::string path, Mode mode) {
     };
 }
 
-Result<ssize_t> read(handle handle, char* buffer, std::size_t size) {
+Result<ssize_t> read(const handle& handle, char* buffer, std::size_t size) {
     co_return co_await awaiter::read{
-        .handle = handle,
+        .file = handle.value(),
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
@@ -159,9 +163,9 @@ Result<std::string> read(std::string path, Mode mode) {
     co_return content;
 }
 
-Result<void> write(handle handle, char* buffer, std::size_t size) {
+Result<void> write(const handle& handle, char* buffer, std::size_t size) {
     co_return co_await awaiter::write{
-        .handle = handle,
+        .file = handle.value(),
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
