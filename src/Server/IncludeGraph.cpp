@@ -243,6 +243,70 @@ std::vector<proto::IncludeLocation>
     return locations;
 }
 
+async::Task<proto::ReferenceResult> IncludeGraph::lookup(const proto::ReferenceParams& params,
+                                                         RelationKind kind) {
+    auto path = SourceConverter::toPath(params.textDocument.uri);
+    co_return proto::ReferenceResult{};
+}
+
+async::Task<proto::HierarchyPrepareResult>
+    IncludeGraph::prepareHierarchy(const proto::HierarchyPrepareParams& params) {
+    auto path = SourceConverter::toPath(params.textDocument.uri);
+
+    /// Read the content of the file.
+    auto content = co_await async::fs::read(path);
+    if(!content) {
+        co_return proto::HierarchyPrepareResult{};
+    }
+    auto offset = SC.toOffset(*content, params.position);
+
+    std::vector<std::string> indices;
+    if(auto iter = tus.find(path); iter != tus.end()) {
+        indices.emplace_back(iter->second->indexPath);
+    } else if(auto iter = headers.find(path); iter != headers.end()) {
+        for(auto& index: iter->second->indices) {
+            indices.emplace_back(index.path);
+        }
+    }
+
+    if(indices.empty()) {
+        co_return proto::HierarchyPrepareResult{};
+    }
+
+    proto::HierarchyPrepareResult result;
+
+    for(auto& path: indices) {
+        auto binary = co_await async::fs::read(path);
+        if(!binary) {
+            continue;
+        }
+
+        co_await async::submit([&] {
+            llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
+            index::SymbolIndex index(binary->data(), binary->size(), false);
+            index.locateSymbols(offset, symbols);
+            if(symbols.empty()) {
+                return;
+            }
+
+            for(auto& symbol: symbols) {
+                result.emplace_back(proto::HierarchyItem{
+                    .name = symbol.name().str(),
+                    .kind = symbol.kind(),
+                    .uri = params.textDocument.uri,
+                    .data = symbol.id(),
+                });
+            }
+        });
+
+        if(!result.empty()) {
+            break;
+        }
+    };
+
+    co_return result;
+}
+
 std::string IncludeGraph::getIndexPath(llvm::StringRef file) {
     auto now = std::chrono::system_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();

@@ -139,8 +139,22 @@ public:
     /// Resolve the header context to the include chain.
     std::vector<proto::IncludeLocation> contextResolve(const proto::HeaderContext& context);
 
+    /// Lookup the reference information according to the given position.
+    async::Task<proto::ReferenceResult> lookup(const proto::ReferenceParams& params,
+                                               RelationKind kind);
+
     /// According to the given file and offset, resolve the symbol at the offset.
-    async::Task<> resolve(llvm::StringRef file, uint32_t offset);
+    async::Task<proto::HierarchyPrepareResult>
+        prepareHierarchy(const proto::HierarchyPrepareParams& params);
+
+    async::Task<proto::CallHierarchyIncomingCallsResult>
+        incomingCalls(const proto::HierarchyParams& params);
+
+    async::Task<proto::CallHierarchyOutgoingCallsResult>
+        outgoingCalls(const proto::HierarchyParams& params);
+
+    async::Task<proto::TypeHierarchyResult> typeHierarchy(const proto::HierarchyParams& params,
+                                                          bool super);
 
 private:
     std::string getIndexPath(llvm::StringRef file);
@@ -169,6 +183,7 @@ private:
     llvm::StringMap<TranslationUnit*> tus;
     std::vector<std::string> pathPool;
     llvm::StringMap<std::uint32_t> pathIndices;
+    SourceConverter SC;
 };
 
 }  // namespace clice

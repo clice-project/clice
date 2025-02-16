@@ -77,19 +77,25 @@ struct ServerCapabilities {
     TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::None;
 
     /// The server provides go to declaration support.
-    DeclarationOptions declarationProvider = {};
+    LookupOptions declarationProvider = {};
 
     /// The server provides goto definition support.
-    DefinitionOptions definitionProvider = {};
+    LookupOptions definitionProvider = {};
 
     /// The server provides goto type definition support.
-    TypeDefinitionOptions typeDefinitionProvider = {};
+    LookupOptions typeDefinitionProvider = {};
 
     /// The server provides goto implementation support.
-    ImplementationOptions implementationProvider = {};
+    LookupOptions implementationProvider = {};
 
     /// The server provides find references support.
-    ReferenceOptions referencesProvider = {};
+    LookupOptions referencesProvider = {};
+
+    /// The server provides call hierarchy support.
+    LookupOptions callHierarchyProvider = {};
+
+    /// The server provides type hierarchy support.
+    LookupOptions typeHierarchyProvider = {};
 
     /// The server provides semantic tokens support.
     SemanticTokensOptions semanticTokensProvider;
