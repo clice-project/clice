@@ -19,8 +19,8 @@ struct DeclCollector : public clang::RecursiveASTVisitor<DeclCollector> {
     llvm::StringMap<const clang::Decl*> decls;
 
     bool VisitNamedDecl(const clang::NamedDecl* decl) {
-        assert(decl && "???");
-        decls[decl->getName()] = decl;
+        assert(decl && "Decl must be a valid pointer");
+        decls[decl->getNameAsString()] = decl;
         return true;
     }
 };
@@ -99,8 +99,11 @@ protected:
         auto position = tester->locations.at(key);
         auto hoverInfo = hover(position, *tester->info, cvtr, option);
 
-        bool res = checker(hoverInfo);
-        EXPECT_TRUE(res);
+        bool checkResult = checker(hoverInfo);
+        // if(hoverInfo.has_value()) {
+        //     llvm::outs() << toMarkdown(*hoverInfo, option).markdown << '\n';
+        // }
+        EXPECT_TRUE(checkResult);
     }
 };
 
@@ -373,43 +376,57 @@ namespace n {
 )cpp";
 
     auto code = R"cpp($(e1)
-#in$(custom_include)clude "head$(cus_header_name)er.h"$(header_name_end)
-#in$(std_include)clude <stddef.h$(std_header_name)>
+#in$(h1)clude "head$(h3)er.h"$(h4)
+#in$(h2)clude <stddef.h$(h5)>
 
 $(e2)
 
-int f() { 
+i$(k1)nt$(k2) f() { 
     return 0; 
-}
+}$(e3)
+$(e4)
 
-namespace n {
+aut$(k3)o$(k4) i1 = $(n1)1$(n2);
+auto i2 = $(n3)-$(n4)1$(n5);
+
+
+long oper$(k5)ator ""_w(const char*, uns$(k6)igned$(k7) long) {
+    return 1;
+};
+
+auto l1 = $(l1)"test$(l2)_string_li$(l3)t";
+auto l2 = R$(l4)"tes$(l5)t(raw_string_lit)test"$(l6);
+auto l3 = u8$(l7)"test$(l8)_string_li$(l9)t";
+auto l4 = "test$(l10)_string_li$(l11)t_udf"_w;
+
+$(k8)names$(k9)pace$(k10) n {  $(e5)
     int f(int x) {
-        return x;
+    $(e6)    return static_cast<int>($(n6)13$(n7)7.1$(n8)5$(n9));   $(e7)
     }
 }
 
+$(e8)
 )cpp";
 
     runWithHeader(code, header);
 
-    auto emptys = {"e1", "e2"};
-    for(auto empty: emptys) {
-        auto isNone = [](std::optional<HoverInfo>& hover) -> bool {
-            return !hover.has_value();
-        };
-        EXPECT_HOVER_TYPE(empty, isNone);
-    }
-
-    auto headers = {
-        "custom_include",
-        "std_include",
-        "cus_header_name",
-        "header_name_end",
-        "std_header_name",
+    using Fmtter = std::string(int index);
+    auto EXPECT_TYPES_N = [this](Fmtter fmt, int n, HoverChecker checker) {
+        for(int i = 1; i <= n; i++) {
+            auto key = fmt(i);
+            EXPECT_HOVER_TYPE(key, checker);
+        }
     };
-    for(auto header: headers) {
-        EXPECT_HOVER_TYPE(header, is<Header>);
-    }
+
+    auto isNone = [](std::optional<HoverInfo>& hover) -> bool {
+        return !hover.has_value();
+    };
+
+    EXPECT_TYPES_N([](int i) { return std::format("e{}", i); }, 8, isNone);
+    EXPECT_TYPES_N([](int i) { return std::format("h{}", i); }, 5, is<Header>);
+    EXPECT_TYPES_N([](int i) { return std::format("n{}", i); }, 8, is<Numeric>);
+    EXPECT_TYPES_N([](int i) { return std::format("l{}", i); }, 11, is<Literal>);
+    EXPECT_TYPES_N([](int i) { return std::format("k{}", i); }, 10, is<Keyword>);
 }
 
 }  // namespace

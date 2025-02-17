@@ -271,10 +271,13 @@ struct Literal {
 
     clang::tok::TokenKind kind;
 
-    llvm::StringRef text;
+    std::string content;
+
+    /// User-defined suffix of the literal, e.g. "_s" in "123"_s, maybe empty.
+    std::string udSuffix;
 
     size_t estimated_size() const {
-        return text.size() + 16;
+        return content.size() + 32;
     }
 
     static std::string_view stringLiteralKindName(clang::tok::TokenKind kind) {
@@ -631,7 +634,7 @@ using namespace clang::tok;
 llvm::SmallVector<Token> pickBestToken(llvm::ArrayRef<Token>& touching) {
     constexpr auto ranker = [](const Token& tk) -> uint32_t {
         auto kind = tk.kind();
-        if(isAnyIdentifier(kind) || kind == numeric_constant)
+        if(isAnyIdentifier(kind))
             return 10;
 
         if(llvm::is_contained({kw_auto, kw_decltype}, kind))
@@ -640,7 +643,15 @@ llvm::SmallVector<Token> pickBestToken(llvm::ArrayRef<Token>& touching) {
         if(isStringLiteral(kind))
             return 7;
 
-        auto prefix_ops = {l_square, r_square, star, minus, exclaim, clang::tok::pipe};
+        auto prefix_ops = {
+            l_square,
+            r_square,
+            star,
+            minus,
+            exclaim,
+            numeric_constant,
+            clang::tok::pipe,
+        };
         if(llvm::is_contained(prefix_ops, kind))
             return 6;
 
@@ -689,31 +700,31 @@ std::optional<HoverInfo> header(llvm::ArrayRef<Include> includes,
 }
 
 std::optional<HoverInfo> numeric(const Token& tk, const clang::SourceManager& SM, ASTInfo& info) {
-
     if(auto kind = tk.kind(); kind == numeric_constant) {
         llvm::StringRef text = tk.text(SM);
         auto& ctx = info.context();
-        clang::NumericLiteralParser parser(tk.text(SM),
+        clang::NumericLiteralParser parser(text,
                                            tk.location(),
                                            SM,
                                            ctx.getLangOpts(),
                                            ctx.getTargetInfo(),
                                            ctx.getDiagnostics());
         llvm::APInt apint;
-        if(parser.GetIntegerValue(apint)) {
+        if(!parser.GetIntegerValue(apint)) {  // `GetIntegerValue` return true if overflow.
             return HoverInfo{
                 Numeric{.rawText = text, .value = apint}
             };
         }
 
         llvm::APFloat apfloat{0.0};
-        if(parser.GetFloatValue(apfloat, llvm::RoundingMode::Dynamic)) {
+        if(parser.GetFloatValue(apfloat, llvm::RoundingMode::NearestTiesToEven)) {
             return HoverInfo{
                 Numeric{.rawText = text, .value = apfloat}
             };
         }
 
-        llvm_unreachable("Parse numeric literal failed.");
+        std::string reason = std::format("Parse numeric literal failed, text: {}", text);
+        llvm_unreachable(reason.c_str());
     }
     return std::nullopt;
 }
@@ -725,11 +736,23 @@ std::optional<HoverInfo> keyword(const Token& tk) {
     return std::nullopt;
 }
 
-std::optional<HoverInfo> literal(const Token& tk, const clang::SourceManager& SM) {
+std::optional<HoverInfo> literal(const Token& tk, const clang::SourceManager& SM, ASTInfo& info) {
     if(isStringLiteral(tk.kind())) {
-        return HoverInfo{
-            Literal{.kind = tk.kind(), .text = tk.text(SM)}
-        };
+        auto& ctx = info.context();
+        clang::Token raw;
+        bool isFail = clang::Lexer::getRawToken(tk.location(),
+                                                raw,
+                                                SM,
+                                                ctx.getLangOpts(),
+                                                /*IgnoreWhiteSpace=*/true);
+        if(!isFail) {
+            clang::StringLiteralParser parser(raw, SM, ctx.getLangOpts(), ctx.getTargetInfo());
+            auto text = parser.GetString();
+            auto udsuffix = parser.getUDSuffix();
+            return HoverInfo{
+                Literal{.kind = tk.kind(), .content = text.str(), .udSuffix = udsuffix.str()}
+            };
+        }
     }
 
     return std::nullopt;
@@ -750,7 +773,7 @@ std::optional<HoverInfo> deduced(const Token& tk,
 std::optional<HoverInfo> detect(const Token& token, ASTInfo& info) {
     const auto& SM = info.srcMgr();
     auto cheap_case = hit::numeric(token, SM, info)
-                          .or_else([&]() { return hit::literal(token, SM); })
+                          .or_else([&]() { return hit::literal(token, SM, info); })
                           .or_else([&]() { return hit::keyword(token); });
 
     if(cheap_case.has_value())
@@ -1123,7 +1146,13 @@ struct MarkdownPrinter {
         v("{} {} `{}`", H3, lit.symbol.name(), lit.stringLiteralKindName(lit.kind))
         .hln()
 
-        .vln("size: {} bytes", lit.text.size() + 1); // null-terminated
+        .o("User Defined Suffix: `{}`", lit.udSuffix)
+        .hln()
+
+        .vln("size: {} bytes", lit.content.size() + 1) // null-terminated
+        .hln()
+
+        .vln("{}", lit.content);
         // clang-format on
     }
 
@@ -1177,7 +1206,7 @@ std::optional<HoverInfo> hover(proto::Position position,
     if(tokens.empty())
         return std::nullopt;
 
-    /// Check if the position is in a include directive.
+    // Check if the position is in a include directive.
     llvm::ArrayRef<Include> includes = info.directives()[info.mainFileID()].includes;
     // +1: convert 0-based lsp line to 1-based clang line.
     if(auto hit = hit::header(includes, info.srcMgr(), position.line + 1))
