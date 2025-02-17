@@ -6,6 +6,8 @@
 
 namespace clice {
 
+/// A visitor class that extends clang::RecursiveASTVisitor to traverse
+/// AST nodes with an additional filtering mechanism.
 template <typename Derived>
 class FilteredASTVisitor : public clang::RecursiveASTVisitor<Derived> {
 private:
@@ -69,7 +71,8 @@ private:
 
 public:
 #define CHECK_DERIVED_IMPL(func)                                                                   \
-    static_assert(std::same_as<decltype(&FilteredASTVisitor::func), decltype(&Derived::func)>);
+    static_assert(std::same_as<decltype(&FilteredASTVisitor::func), decltype(&Derived::func)>,     \
+                  "Derived class should not implement this method");
 
     bool TraverseDecl(clang::Decl* decl) {
         CHECK_DERIVED_IMPL(TraverseDecl);
