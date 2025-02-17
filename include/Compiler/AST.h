@@ -2,6 +2,7 @@
 
 #include "Directive.h"
 #include "AST/Resolver.h"
+#include "Basic/SourceCode.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Tooling/Syntax/Tokens.h"
@@ -105,6 +106,16 @@ public:
     bool isBuiltinFile(clang::FileID fid) {
         auto path = getFilePath(fid);
         return path == "<built-in>" || path == "<command line>" || path == "<scratch space>";
+    }
+
+    LocalSourceRange toLocalRange(clang::SourceRange range) {
+        auto [begin, end] = range;
+        assert(begin.isValid() && end.isValid() && "Invalid source range");
+        assert(begin.isFileID() && end.isFileID() && "Invalid source range");
+        return LocalSourceRange{
+            .begin = SM.getFileOffset(begin),
+            .end = SM.getFileOffset(end) + getTokenLength(SM, end),
+        };
     }
 
 private:
