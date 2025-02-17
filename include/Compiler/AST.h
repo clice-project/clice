@@ -19,7 +19,7 @@ public:
             llvm::DenseMap<clang::FileID, Directive> directives) :
         interested(interested), action(std::move(action)), instance(std::move(instance)),
         m_resolver(std::move(resolver)), buffer(std::move(buffer)),
-        m_directives(std::move(directives)) {}
+        m_directives(std::move(directives)), SM(this->instance->getSourceManager()) {}
 
     ASTInfo(const ASTInfo&) = delete;
 
@@ -72,10 +72,40 @@ public:
         return interested;
     }
 
+public:
     /// All files involved in building the AST.
     const llvm::DenseSet<clang::FileID>& files();
 
     std::vector<std::string> deps();
+
+    clang::SourceLocation getSpellingLoc(clang::SourceLocation loc) {
+        return SM.getSpellingLoc(loc);
+    }
+
+    clang::SourceLocation getExpansionLoc(clang::SourceLocation loc) {
+        return SM.getExpansionLoc(loc);
+    }
+
+    auto getDecomposedLoc(clang::SourceLocation loc) {
+        return SM.getDecomposedLoc(loc);
+    }
+
+    /// Get the file ID of a source location. The source location should always
+    /// be a spelling location.
+    clang::FileID getFileID(clang::SourceLocation spelling) {
+        assert(spelling.isInvalid() && spelling.isFileID() && "Invalid source location");
+        return SM.getFileID(spelling);
+    }
+
+    /// Get the file path of a file ID. If the file exists the path
+    /// will be real path, otherwise it will be virtual path.
+    llvm::StringRef getFilePath(clang::FileID fid);
+
+    /// Check if a file is a builtin file.
+    bool isBuiltinFile(clang::FileID fid) {
+        auto path = getFilePath(fid);
+        return path == "<built-in>" || path == "<command line>" || path == "<scratch space>";
+    }
 
 private:
     /// The interested file ID.
@@ -98,6 +128,11 @@ private:
     llvm::DenseMap<clang::FileID, Directive> m_directives;
 
     llvm::DenseSet<clang::FileID> allFiles;
+
+    clang::SourceManager& SM;
+
+    /// Cache for file path. It is used to avoid multiple file path lookup.
+    llvm::DenseMap<clang::FileID, std::string> pathCache;
 };
 
 }  // namespace clice

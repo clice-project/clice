@@ -45,4 +45,26 @@ std::vector<std::string> ASTInfo::deps() {
     return result;
 }
 
+llvm::StringRef ASTInfo::getFilePath(clang::FileID fid) {
+    if(auto it = pathCache.find(fid); it != pathCache.end()) {
+        return it->second;
+    }
+
+    auto entry = SM.getFileEntryRefForID(fid);
+    assert(entry && "Invalid file entry");
+
+    auto name = entry->getName();
+    llvm::SmallString<128> path;
+
+    /// Try to get the real path of the file.
+    if(auto error = llvm::sys::fs::real_path(name, path)) {
+        /// If failed, use the virtual path.
+        path = name;
+    }
+
+    auto [it, inserted] = pathCache.try_emplace(fid, path.data(), path.size());
+    assert(inserted && "File path already exists");
+    return it->second;
+}
+
 }  // namespace clice
