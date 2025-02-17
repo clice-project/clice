@@ -1,8 +1,8 @@
 #include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
 
-#include "clang/Lex/PreprocessorOptions.h"
-#include "clang/Frontend/TextDiagnosticPrinter.h"
+#include <clang/Lex/PreprocessorOptions.h>
+#include <clang/Frontend/TextDiagnosticPrinter.h>
 
 namespace clice {
 
@@ -34,16 +34,21 @@ std::unique_ptr<clang::CompilerInvocation> createInvocation(CompilationParams& p
     return invocation;
 }
 
-std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& params) {
+std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& params,
+                                                        clang::DiagnosticConsumer* diag,
+                                                        bool ownDiag) {
+
     auto instance = std::make_unique<clang::CompilerInstance>();
 
     instance->setInvocation(createInvocation(params));
 
-    /// TODO: use a thread safe filesystem and our customized `DiagnosticConsumer`.
-    instance->createDiagnostics(
-        *params.vfs,
-        new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()),
-        true);
+    if(diag) {
+        instance->createDiagnostics(*params.vfs, diag, ownDiag);
+    } else
+        instance->createDiagnostics(
+            *params.vfs,
+            new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()),
+            true);
 
     if(auto remapping = clang::createVFSFromCompilerInvocation(instance->getInvocation(),
                                                                instance->getDiagnostics(),
@@ -217,7 +222,6 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCMInfo& 
     instance->getFrontendOpts().OutputFile = params.outPath.str();
     instance->getFrontendOpts().ProgramAction = clang::frontend::GenerateReducedModuleInterface;
 
-    ;
     if(auto info = ExecuteAction(std::move(instance),
                                  std::make_unique<clang::GenerateReducedModuleInterfaceAction>())) {
         assert(info->pp().isInNamedInterfaceUnit() &&
@@ -229,6 +233,22 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCMInfo& 
         }
         out.path = params.outPath.str();
         out.srcPath = params.srcPath.str();
+        return std::move(*info);
+    } else {
+        return std::unexpected(info.error());
+    }
+}
+
+std::expected<ASTInfo, std::string> compile(CompilationParams& params,
+                                            std::vector<Diagnostic>& out,
+                                            const DiagOption& options,
+                                            const clang::tidy::ClangTidyContext* tidy) {
+    DiagnosticCollector* collector = new DiagnosticCollector(options);
+    auto instance = impl::createInstance(params, collector, true);
+
+    if(auto info =
+           ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>())) {
+        info->setDiagnostics(collector->takeWithTidyContext(tidy));
         return std::move(*info);
     } else {
         return std::unexpected(info.error());

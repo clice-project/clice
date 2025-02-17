@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AST.h"
+#include "Diagnostic.h"
 #include "Module.h"
 #include "Preamble.h"
 #include "Support/FileSystem.h"
@@ -49,7 +50,9 @@ namespace impl {
 std::unique_ptr<clang::CompilerInvocation> createInvocation(CompilationParams& params);
 
 /// Create a compiler instance from the given compilation parameters.
-std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& params);
+std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& params,
+                                                        clang::DiagnosticConsumer* diag = nullptr,
+                                                        bool ownDiag = false);
 
 }  // namespace impl
 
@@ -66,5 +69,9 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& 
 
 /// Build PCM from given file path and content.
 std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCMInfo& out);
+
+/// Get diagnostics from given file path and content.
+std::expected<ASTInfo, std::string> compile(CompilationParams& params, std::vector<Diagnostic>& out, const DiagOption& options,
+                                const clang::tidy::ClangTidyContext* tidy = nullptr);
 
 }  // namespace clice
