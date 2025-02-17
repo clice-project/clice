@@ -99,7 +99,8 @@ public:
     }
 
     /// Get the file path of a file ID. If the file exists the path
-    /// will be real path, otherwise it will be virtual path.
+    /// will be real path, otherwise it will be virtual path. The result
+    /// makes sure the path is ended with '/0'.
     llvm::StringRef getFilePath(clang::FileID fid);
 
     /// Check if a file is a builtin file.
@@ -146,7 +147,8 @@ private:
     clang::SourceManager& SM;
 
     /// Cache for file path. It is used to avoid multiple file path lookup.
-    llvm::DenseMap<clang::FileID, std::string> pathCache;
+    llvm::DenseMap<clang::FileID, llvm::StringRef> pathCache;
+    llvm::BumpPtrAllocator pathStorage;
 };
 
 }  // namespace clice

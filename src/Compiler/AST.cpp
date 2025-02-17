@@ -61,8 +61,16 @@ llvm::StringRef ASTInfo::getFilePath(clang::FileID fid) {
         /// If failed, use the virtual path.
         path = name;
     }
+    assert(!path.empty() && "Invalid file path");
 
-    auto [it, inserted] = pathCache.try_emplace(fid, path.data(), path.size());
+
+    /// Allocate the path in the storage.
+    auto size = path.size();
+    auto data = pathStorage.Allocate<char>(size + 1);
+    memcpy(data, path.data(), size);
+    data[size] = '\0';
+
+    auto [it, inserted] = pathCache.try_emplace(fid, data, size);
     assert(inserted && "File path already exists");
     return it->second;
 }
