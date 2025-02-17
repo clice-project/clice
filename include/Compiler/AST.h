@@ -112,9 +112,12 @@ public:
         auto [begin, end] = range;
         assert(begin.isValid() && end.isValid() && "Invalid source range");
         assert(begin.isFileID() && end.isFileID() && "Invalid source range");
+        auto [beginFID, beginOffset] = getDecomposedLoc(begin);
+        auto [endFID, endOffset] = getDecomposedLoc(end);
+        assert(beginFID == endFID && "Invalid source range");
         return LocalSourceRange{
-            .begin = SM.getFileOffset(begin),
-            .end = SM.getFileOffset(end) + getTokenLength(SM, end),
+            .begin = beginOffset,
+            .end = endOffset + getTokenLength(SM, end),
         };
     }
 
