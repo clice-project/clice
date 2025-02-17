@@ -4,25 +4,20 @@
 #include "Resolver.h"
 #include "SymbolKind.h"
 #include "RelationKind.h"
-#include "Compiler/Compilation.h"
-#include "clang/AST/RecursiveASTVisitor.h"
+#include "FilterASTVisitor.h"
 
 namespace clice {
 
 template <typename Derived>
-class SemanticVisitor : public clang::RecursiveASTVisitor<SemanticVisitor<Derived>> {
+class SemanticVisitor : public FilteredASTVisitor<SemanticVisitor<Derived>> {
 public:
-    using Base = clang::RecursiveASTVisitor<SemanticVisitor>;
+    using Base = FilteredASTVisitor<SemanticVisitor>;
 
     SemanticVisitor(ASTInfo& info, bool mainFileOnly = false) :
-        sema(info.sema()), pp(info.pp()), resolver(info.resolver()), srcMgr(info.srcMgr()),
-        tokBuf(info.tokBuf()), info(info), mainFileOnly(mainFileOnly) {}
+        Base(info, mainFileOnly, {}), sema(info.sema()), pp(info.pp()), resolver(info.resolver()),
+        srcMgr(info.srcMgr()), tokBuf(info.tokBuf()), info(info), mainFileOnly(mainFileOnly) {}
 
 public:
-    consteval bool VisitImplicitInstantiation() {
-        return true;
-    }
-
     Derived& getDerived() {
         return static_cast<Derived&>(*this);
     }
@@ -169,23 +164,6 @@ public:
 #define VISIT_EXPR(type) bool Visit##type(const clang::type* expr)
 #define VISIT_TYPE(type) bool Visit##type(const clang::type* type)
 #define VISIT_TYPELOC(type) bool Visit##type(clang::type loc)
-
-#define TRAVERSE_DECL(type) bool Traverse##type(clang::type* decl)
-
-    TRAVERSE_DECL(Decl) {
-        if(!decl) {
-            return true;
-        }
-
-        if(!llvm::isa<clang::TranslationUnitDecl>(decl) && needFilter(decl->getLocation())) {
-            return true;
-        }
-
-        decls.push_back(decl);
-        auto result = Base::TraverseDecl(decl);
-        decls.pop_back();
-        return result;
-    }
 
     VISIT_DECL(ImportDecl) {
         auto tokens = tokBuf.expandedTokens(decl->getSourceRange());
@@ -380,6 +358,17 @@ public:
         return true;
     }
 
+    bool TraverseFunctionDecl(clang::FunctionDecl* decl) {
+        if(!decl) {
+            return true;
+        }
+
+        decls.emplace_back(decl);
+        auto result = Base::TraverseFunctionDecl(decl);
+        decls.pop_back();
+        return result;
+    }
+
     /// void foo() { ... }
     ///       ^~~~ declaration/definition
     VISIT_DECL(FunctionDecl) {
@@ -513,35 +502,17 @@ public:
 
     /// requires Foo<T>;
     ///            ^~~~ reference
-    bool TraverseConceptReference(clang::ConceptReference* reference) {
+    bool VisitConceptReference(clang::ConceptReference* reference) {
         auto decl = reference->getNamedConcept();
         auto location = reference->getConceptNameLoc();
         handleDeclOccurrence(decl, RelationKind::Reference, location);
         handleRelation(decl, RelationKind::Reference, decl, location);
-        return Base::TraverseConceptReference(reference);
+        return true;
     }
 
     /// ============================================================================
     ///                                  TypeLoc
     /// ============================================================================
-
-    /// We don't care about type without location information.
-    constexpr bool TraverseType [[gnu::const]] (clang::QualType) {
-        return true;
-    }
-
-    bool TraverseTypeLoc(clang::TypeLoc loc) {
-        /// FIXME: Workaround for `QualifiedTypeLoc`.
-        if(auto QL = loc.getAs<clang::QualifiedTypeLoc>()) {
-            return Base::TraverseTypeLoc(QL.getUnqualifiedLoc());
-        }
-
-        if(needFilter(loc.getSourceRange().getBegin())) {
-            return true;
-        }
-
-        return Base::TraverseTypeLoc(loc);
-    }
 
     /// unsigned int foo = 2;
     ///   ^~~~~~~~^~~~~~~~ reference
@@ -623,40 +594,7 @@ public:
     ///                                Specifier
     /// ============================================================================
 
-    bool TraverseAttr(clang::Attr* attr) {
-        if(needFilter(attr->getLocation())) {
-            return true;
-        }
-
-        getDerived().handleAttrOccurrence(attr, attr->getLocation());
-
-        return Base::TraverseAttr(attr);
-    }
-
-    /// FIXME: clang currently doesn't traverse attributes in `AttrbutedStmt` correctly.
-    /// See https://github.com/llvm/llvm-project/issues/117687.
-    bool TraverseAttributedStmt(clang::AttributedStmt* stmt) {
-        if(needFilter(stmt->getBeginLoc())) {
-            return true;
-        }
-
-        for(auto attr: stmt->getAttrs()) {
-            getDerived().handleAttrOccurrence(attr, attr->getRange());
-        }
-
-        return Base::TraverseAttributedStmt(stmt);
-    }
-
-    /// We don't care about name specifier without location information.
-    constexpr bool TraverseNestedNameSpecifier [[gnu::const]] (clang::NestedNameSpecifier*) {
-        return true;
-    }
-
-    bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc loc) {
-        if(!loc || needFilter(loc.getLocalBeginLoc())) {
-            return true;
-        }
-
+    bool VisitNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc loc) {
         auto NNS = loc.getNestedNameSpecifier();
         switch(NNS->getKind()) {
             case clang::NestedNameSpecifier::Namespace: {
@@ -689,20 +627,17 @@ public:
             };
         }
 
-        return Base::TraverseNestedNameSpecifierLoc(loc);
+        return true;
+    }
+
+    bool VisitAttr(clang::Attr* attr) {
+        getDerived().handleAttrOccurrence(attr, attr->getRange());
+        return true;
     }
 
     /// ============================================================================
     ///                                 Statement
     /// ============================================================================
-
-    bool TraverseStmt(clang::Stmt* stmt) {
-        if(stmt && needFilter(stmt->getBeginLoc())) {
-            return true;
-        }
-
-        return Base::TraverseStmt(stmt);
-    }
 
     /// foo = 1
     ///  ^~~~ reference
