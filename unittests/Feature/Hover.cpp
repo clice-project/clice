@@ -408,7 +408,10 @@ $(n1)names$(n2)pace$(n3) outt$(n4)er {
 
 TEST_F(Hover, VariableAndLiteral) {
     auto code = R"cpp(
-    long operator ""_w(const char*, unsigned long long) {
+    // introduce size_t
+    #include <bits/c++config.h>
+
+    long operator ""_w(const char*, size_t) {
         return 1;
     };
 
@@ -428,11 +431,14 @@ TEST_F(Hover, VariableAndLiteral) {
 
 TEST_F(Hover, FunctionDeclAndParameter) {
     auto code = R"cpp(
+    // introduce size_t
+    #include <bits/c++config.h>
+
     i$(f1)nt$(f2) f() { 
         return 0; 
     }
 
-    lo$(f3)ng oper$(f4)ator ""_w(const char*, uns$(p1)igned$(p2) long$(p3) long) {$(f5)
+    lo$(f3)ng oper$(f4)ator ""_w(const char* str, std::si$(p1)ze_t$(p2) leng$(p3)th) {$(f5)
         return 1;
     };
 
