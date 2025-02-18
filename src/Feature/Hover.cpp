@@ -460,7 +460,7 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
         lay.align = ctx.getTypeAlignInChars(QT).getQuantity();
 
         if(lay.isBitField) {
-            lay.size = FD->getBitWidthValue(ctx);
+            /// lay.size = FD->getBitWidthValue(ctx);
             continousBitFieldBits += lay.size;
             if(continousBitFieldBits > 8) {
                 lay.padding = lay.align - continousBitFieldBits % lay.align;

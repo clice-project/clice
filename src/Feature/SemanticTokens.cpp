@@ -185,7 +185,7 @@ public:
     /// FIXME: handle module name.
 
     void merge(std::vector<SemanticToken>& tokens) {
-        ranges::sort(tokens, refl::less, [](const auto& token) { return token.range; });
+        std::ranges::sort(tokens, refl::less, [](const auto& token) { return token.range; });
 
         std::vector<SemanticToken> merged;
 

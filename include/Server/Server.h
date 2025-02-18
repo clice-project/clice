@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include "Config.h"
 #include "Indexer.h"
 #include "Protocol.h"
@@ -85,31 +84,34 @@ private:
     ///                             Language Features
     /// ============================================================================
 
-    async::Task<> onGotoDeclaration(json::Value id, const proto::DeclarationParams& params);
-
-    async::Task<> onGotoDefinition(json::Value id, const proto::DefinitionParams& params);
-
-    async::Task<> onGotoTypeDefinition(json::Value id, const proto::TypeDefinitionParams& params);
-
-    async::Task<> onGotoImplementation(json::Value id, const proto::ImplementationParams& params);
-
-    async::Task<> onFindReferences(json::Value id, const proto::ReferenceParams& params);
-
-    async::Task<> onPrepareCallHierarchy(json::Value id,
-                                         const proto::CallHierarchyPrepareParams& params);
-
-    async::Task<> onIncomingCall(json::Value id,
-                                 const proto::CallHierarchyIncomingCallsParams& params);
-
-    async::Task<> onOutgoingCall(json::Value id,
-                                 const proto::CallHierarchyOutgoingCallsParams& params);
-
-    async::Task<> onPrepareTypeHierarchy(json::Value id,
-                                         const proto::TypeHierarchyPrepareParams& params);
-
-    async::Task<> onSupertypes(json::Value id, const proto::TypeHierarchySupertypesParams& params);
-
-    async::Task<> onSubtypes(json::Value id, const proto::TypeHierarchySubtypesParams& params);
+    // async::Task<> onGotoDeclaration(json::Value id, const proto::DeclarationParams& params);
+    //
+    // async::Task<> onGotoDefinition(json::Value id, const proto::DefinitionParams& params);
+    //
+    // async::Task<> onGotoTypeDefinition(json::Value id, const proto::TypeDefinitionParams&
+    // params);
+    //
+    // async::Task<> onGotoImplementation(json::Value id, const proto::ImplementationParams&
+    // params);
+    //
+    // async::Task<> onFindReferences(json::Value id, const proto::ReferenceParams& params);
+    //
+    // async::Task<> onPrepareCallHierarchy(json::Value id,
+    //                                      const proto::CallHierarchyPrepareParams& params);
+    //
+    // async::Task<> onIncomingCall(json::Value id,
+    //                              const proto::CallHierarchyIncomingCallsParams& params);
+    //
+    // async::Task<> onOutgoingCall(json::Value id,
+    //                              const proto::CallHierarchyOutgoingCallsParams& params);
+    //
+    // async::Task<> onPrepareTypeHierarchy(json::Value id,
+    //                                      const proto::TypeHierarchyPrepareParams& params);
+    //
+    // async::Task<> onSupertypes(json::Value id, const proto::TypeHierarchySupertypesParams&
+    // params);
+    //
+    // async::Task<> onSubtypes(json::Value id, const proto::TypeHierarchySubtypesParams& params);
 
     async::Task<> onDocumentHighlight(json::Value id, const proto::DocumentHighlightParams& params);
 
