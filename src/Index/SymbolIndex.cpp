@@ -29,7 +29,7 @@ const static clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
 
 class SymbolIndexBuilder : public SemanticVisitor<SymbolIndexBuilder> {
 public:
-    SymbolIndexBuilder(ASTInfo& info) : SemanticVisitor(info) {}
+    SymbolIndexBuilder(ASTInfo& info) : SemanticVisitor(info, false) {}
 
     struct File : memory::SymbolIndex {
         llvm::DenseMap<const void*, uint32_t> symbolCache;
@@ -46,8 +46,8 @@ public:
         llvm::SmallString<128> USR;
         if(isMacro) {
             auto def = static_cast<const clang::MacroInfo*>(symbol);
-            auto name = getTokenSpelling(srcMgr, def->getDefinitionLoc());
-            clang::index::generateUSRForMacro(name, def->getDefinitionLoc(), srcMgr, USR);
+            auto name = getTokenSpelling(SM, def->getDefinitionLoc());
+            clang::index::generateUSRForMacro(name, def->getDefinitionLoc(), SM, USR);
         } else {
             clang::index::generateUSRForDecl(static_cast<const clang::Decl*>(symbol), USR);
         }
@@ -77,7 +77,7 @@ public:
         if(success) {
             file.symbols.emplace_back(memory::Symbol{
                 .id = getSymbolID(def, true),
-                .name = getTokenSpelling(srcMgr, def->getDefinitionLoc()).str(),
+                .name = getTokenSpelling(SM, def->getDefinitionLoc()).str(),
                 .kind = SymbolKind::Macro,
             });
         }
@@ -87,11 +87,11 @@ public:
     auto getLocation(File& file, clang::SourceRange range) {
         /// add new location.
         auto [begin, end] = range;
-        auto presumedBegin = srcMgr.getDecomposedExpansionLoc(begin);
-        auto presumedEnd = srcMgr.getDecomposedExpansionLoc(end);
+        auto presumedBegin = SM.getDecomposedExpansionLoc(begin);
+        auto presumedEnd = SM.getDecomposedExpansionLoc(end);
         ///
         auto beginOffset = presumedBegin.second;
-        auto endOffset = presumedEnd.second + getTokenLength(info.srcMgr(), end);
+        auto endOffset = presumedEnd.second + getTokenLength(AST.srcMgr(), end);
 
         auto [iter, success] =
             file.locationCache.try_emplace({beginOffset, endOffset}, file.ranges.size());
@@ -197,8 +197,8 @@ public:
         decl = normalize(decl);
 
         /// We always use spelling location for occurrence.
-        auto spelling = srcMgr.getSpellingLoc(location);
-        clang::FileID id = srcMgr.getFileID(spelling);
+        auto spelling = SM.getSpellingLoc(location);
+        clang::FileID id = SM.getFileID(spelling);
         assert(id.isValid() && "Invalid file id");
         auto& file = files[id];
 
@@ -210,8 +210,8 @@ public:
     void handleMacroOccurrence(const clang::MacroInfo* def,
                                RelationKind kind,
                                clang::SourceLocation location) {
-        auto spelling = srcMgr.getSpellingLoc(location);
-        clang::FileID id = srcMgr.getFileID(spelling);
+        auto spelling = SM.getSpellingLoc(location);
+        clang::FileID id = SM.getFileID(spelling);
         assert(id.isValid() && "Invalid file id");
         auto& file = files[id];
 
@@ -220,8 +220,8 @@ public:
         file.occurrences.emplace_back(memory::Occurrence{loc, symbol});
 
         {
-            auto expansion = srcMgr.getExpansionLoc(location);
-            clang::FileID id = srcMgr.getFileID(expansion);
+            auto expansion = SM.getExpansionLoc(location);
+            clang::FileID id = SM.getFileID(expansion);
             assert(id.isValid() && "Invalid file id");
 
             auto& file = files[id];
@@ -261,16 +261,16 @@ public:
         target = sameDecl ? decl : normalize(target);
 
         auto [begin, end] = range;
-        auto expansion = srcMgr.getExpansionLoc(begin);
-        if(srcMgr.isWrittenInBuiltinFile(expansion) ||
-           srcMgr.isWrittenInCommandLineFile(expansion)) {
+        auto expansion = SM.getExpansionLoc(begin);
+        if(SM.isWrittenInBuiltinFile(expansion) ||
+           SM.isWrittenInCommandLineFile(expansion)) {
             return;
         }
 
         assert(expansion.isValid() && expansion.isFileID() && "Invalid expansion location");
-        clang::FileID id = srcMgr.getFileID(expansion);
+        clang::FileID id = SM.getFileID(expansion);
         assert(id.isValid() && "Invalid file id");
-        assert(id == srcMgr.getFileID(srcMgr.getExpansionLoc(end)) && "Source range cross file");
+        assert(id == SM.getFileID(SM.getExpansionLoc(end)) && "Source range cross file");
 
         auto& file = files[id];
 
@@ -312,22 +312,22 @@ public:
 
         llvm::DenseMap<clang::FileID, SymbolIndex> indices;
         for(auto& [fid, file]: files) {
-            auto loc = srcMgr.getLocForStartOfFile(fid);
+            auto loc = SM.getLocForStartOfFile(fid);
 
             /// FIXME: Figure out why index result will contain them.
-            if(srcMgr.isWrittenInBuiltinFile(loc) || srcMgr.isWrittenInCommandLineFile(loc) ||
-               srcMgr.isWrittenInScratchSpace(loc)) {
+            if(SM.isWrittenInBuiltinFile(loc) || SM.isWrittenInCommandLineFile(loc) ||
+               SM.isWrittenInScratchSpace(loc)) {
                 continue;
             }
 
             if(file.path.empty()) {
                 llvm::SmallString<128> path;
                 auto error =
-                    llvm::sys::fs::real_path(srcMgr.getFileEntryRefForID(fid)->getName(), path);
+                    llvm::sys::fs::real_path(SM.getFileEntryRefForID(fid)->getName(), path);
                 if(!error) {
                     file.path = path.str();
                 } else {
-                    path = srcMgr.getFileEntryRefForID(fid)->getName();
+                    path = SM.getFileEntryRefForID(fid)->getName();
                 }
             }
 
