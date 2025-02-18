@@ -1,6 +1,5 @@
 #include "Test/CTest.h"
 #include "Feature/Hover.h"
-#include "Basic/SourceConverter.h"
 
 #include "src/Feature/Hover.cpp"
 
@@ -101,9 +100,8 @@ protected:
     void EXPECT_HOVER_TYPE(llvm::StringRef key,
                            HoverChecker checker,
                            config::HoverOption option = DefaultOption) {
-        SourceConverter cvtr{};
-        auto position = tester->locations.at(key);
-        auto hoverInfo = hover(position, *tester->info, cvtr, option);
+        auto pos = tester->locations.at(key);
+        auto hoverInfo = hover(pos.line + 1, pos.character + 1, *tester->info, option);
 
         bool checkResult = checker(hoverInfo);
         // if(hoverInfo.has_value()) {

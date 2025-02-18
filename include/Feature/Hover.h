@@ -6,7 +6,6 @@
 namespace clice {
 
 class ASTInfo;
-class SourceConverter;
 
 namespace proto {
 
@@ -85,9 +84,8 @@ struct Result {
 Result hover(const clang::Decl* decl, const config::HoverOption& option);
 
 /// Compute inlay hints for MainfileID in given param and config.
-std::optional<Result> hover(proto::HoverParams param,
-                            ASTInfo& info,
-                            const SourceConverter& converter,
+std::optional<Result> hover(const proto::HoverParams& param,
+                            ASTInfo& AST,
                             const config::HoverOption& option);
 
 proto::MarkupContent toLspType(Result hover);

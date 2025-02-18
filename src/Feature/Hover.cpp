@@ -1,7 +1,6 @@
 #include "Feature/Hover.h"
 
 #include "AST/Selection.h"
-#include "Basic/SourceConverter.h"
 #include "Compiler/AST.h"
 #include "Support/FileSystem.h"
 
@@ -255,6 +254,8 @@ struct Keyword {
     SymbolKind symbol = SymbolKind::Keyword;
 
     clang::tok::TokenKind tkkind;
+
+    llvm::StringRef spelling;
 
     constexpr static std::string_view CppRefKeywordBaseUrl =
         "https://en.cppreference.com/w/cpp/keyword/";
@@ -714,16 +715,6 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
     }
 };
 
-/// FIXME:
-/// Should we put the following function into `SourceConverter::toLocation` or `SourceCode.h` ?
-clang::SourceLocation toLocation(const clang::SourceManager& src,
-                                 clang::FileID id,
-                                 const SourceConverter& cvtr,
-                                 const proto::Position& pos) {
-    uint32_t offset = cvtr.toOffset(src.getBufferData(id), pos);
-    return src.getLocForStartOfFile(id).getLocWithOffset(offset);
-}
-
 using Token = clang::syntax::Token;
 using namespace clang::tok;
 
@@ -800,7 +791,7 @@ struct ExprHoverBuilder {
                                       clang::CXXNamedCastExpr>;
 
     const SelectionTree& tree;
-    ASTInfo& info;
+    ASTInfo& AST;
     const config::HoverOption& option;
 
     /// The final matched expression node by `PreciseExprMatcher`.
@@ -845,22 +836,21 @@ struct ExprHoverBuilder {
         return std::nullopt;
     }
 
-    Res build() {
+    static Res build(ASTInfo& AST, const SelectionTree& tree, const config::HoverOption& option) {
         PreciseExprMatcher expr;
         if(!tree.walkDfs([&expr](const Node* node) { return expr.accept(node); })) {
             return std::nullopt;
         }
-        this->target = expr.deepest;
-        return std::visit(*this, expr);
+
+        ExprHoverBuilder builder{tree, AST, option, expr.deepest};
+        return std::visit(builder, expr);
     }
 };
 
 namespace hit {
 
-std::optional<HoverInfo> header(llvm::ArrayRef<Include> includes,
-                                const clang::SourceManager& SM,
-                                uint32_t line) {
-    auto lineof = [&SM](const Include& inc) {
+std::optional<HoverInfo> header(llvm::ArrayRef<Include> includes, ASTInfo& AST, uint32_t line) {
+    auto lineof = [&SM = AST.srcMgr()](const Include& inc) {
         return SM.getPresumedLineNumber(inc.location);
     };
 
@@ -882,16 +872,16 @@ std::optional<HoverInfo> header(llvm::ArrayRef<Include> includes,
     return std::nullopt;
 }
 
-std::optional<HoverInfo> numeric(const Token& tk, ASTInfo& info) {
-    if(auto kind = tk.kind(); kind == numeric_constant) {
-        llvm::StringRef text = tk.text(info.srcMgr());
-        auto& ctx = info.context();
+std::optional<HoverInfo> numeric(const Token& token, ASTInfo& AST) {
+    if(auto kind = token.kind(); kind == numeric_constant) {
+        llvm::StringRef text = token.text(AST.srcMgr());
+        auto& Ctx = AST.context();
         clang::NumericLiteralParser parser(text,
-                                           tk.location(),
-                                           info.srcMgr(),
-                                           ctx.getLangOpts(),
-                                           ctx.getTargetInfo(),
-                                           ctx.getDiagnostics());
+                                           token.location(),
+                                           AST.srcMgr(),
+                                           Ctx.getLangOpts(),
+                                           Ctx.getTargetInfo(),
+                                           Ctx.getDiagnostics());
         llvm::APInt apint;
         if(!parser.GetIntegerValue(apint)) {
             return HoverInfo{
@@ -912,31 +902,33 @@ std::optional<HoverInfo> numeric(const Token& tk, ASTInfo& info) {
     return std::nullopt;
 }
 
-std::optional<HoverInfo> keyword(const Token& tk) {
-    if(auto kind = tk.kind(); getKeywordSpelling(kind)) {
-        return HoverInfo{Keyword{.tkkind = kind}};
+std::optional<HoverInfo> keyword(const Token& token) {
+    if(auto spelling = getKeywordSpelling(token.kind())) {
+        return HoverInfo{
+            Keyword{.tkkind = token.kind(), .spelling = spelling}
+        };
     }
     return std::nullopt;
 }
 
-std::optional<HoverInfo> literal(const Token& tk, ASTInfo& info) {
-    if(isStringLiteral(tk.kind())) {
-        auto& ctx = info.context();
+std::optional<HoverInfo> literal(const Token& token, ASTInfo& AST) {
+    if(isStringLiteral(token.kind())) {
+        auto& Ctx = AST.context();
         clang::Token raw;
-        bool isFail = clang::Lexer::getRawToken(tk.location(),
+        bool isFail = clang::Lexer::getRawToken(token.location(),
                                                 raw,
-                                                info.srcMgr(),
-                                                ctx.getLangOpts(),
+                                                AST.srcMgr(),
+                                                Ctx.getLangOpts(),
                                                 /*IgnoreWhiteSpace=*/true);
         if(!isFail) {
             clang::StringLiteralParser parser(raw,
-                                              info.srcMgr(),
-                                              ctx.getLangOpts(),
-                                              ctx.getTargetInfo());
+                                              AST.srcMgr(),
+                                              Ctx.getLangOpts(),
+                                              Ctx.getTargetInfo());
             auto text = parser.GetString();
             auto udsuffix = parser.getUDSuffix();
             return HoverInfo{
-                Literal{.kind = tk.kind(), .content = text.str(), .udSuffix = udsuffix.str()}
+                Literal{.kind = token.kind(), .content = text.str(), .udSuffix = udsuffix.str()}
             };
         }
     }
@@ -944,94 +936,82 @@ std::optional<HoverInfo> literal(const Token& tk, ASTInfo& info) {
     return std::nullopt;
 }
 
-std::optional<HoverInfo> deduced(const Token& tk,
-                                 const clang::SourceManager& SM,
-                                 ASTInfo& info,
+std::optional<HoverInfo> deduced(const Token& token,
+                                 ASTInfo& AST,
                                  const SelectionTree& tree,
                                  const config::HoverOption& option) {
-    bool isAuto = tk.kind() == kw_auto;
-    bool isDecltype = tk.kind() == kw_decltype;
-    if(!isAuto && !isDecltype) {
+    if(token.kind() != kw_auto && token.kind() != kw_decltype) {
         return std::nullopt;
     }
 
-    const SelectionTree::Node* context = nullptr;
-    auto findDecl = [&info, &context](const SelectionTree::Node* node) -> bool {
+    const SelectionTree::Node* ctx = nullptr;
+    auto findDeclContext = [&AST, &ctx](const SelectionTree::Node* node) -> bool {
         // `decltype(auto)` is `AutoTypeLoc`.
         if(auto AT = node->dynNode.get<clang::AutoTypeLoc>()) {
-            context = node->parent;
+            ctx = node->parent;
             return false;
         }
         if(auto DT = node->dynNode.get<clang::DecltypeTypeLoc>()) {
-            context = node->parent;
+            ctx = node->parent;
             return false;
         }
         return true;
     };
 
-    if(tree.walkDfs(findDecl))
+    if(tree.walkDfs(findDeclContext))
         return std::nullopt;
 
-    if(auto dynKind = context->dynNode.getNodeKind();
+    if(auto dynKind = ctx->dynNode.getNodeKind();
        dynKind.isSame(clang::ASTNodeKind::getFromNodeKind<clang::FunctionProtoTypeLoc>())) {
-        context = context->parent;
+        ctx = ctx->parent;
     }
 
-    const clang::Decl* decl = context->dynNode.get<clang::Decl>();
+    const clang::Decl* decl = ctx->dynNode.get<clang::Decl>();
     assert(decl && "Selected Node must be a valid pointer");
 
     return DeclHoverBuilder::build(decl, option);
 }
 
 std::optional<HoverInfo> declaration(const SelectionTree& tree, const config::HoverOption& option) {
-    const SelectionTree::Node* expect = nullptr;
+    const clang::Decl* decl = nullptr;
 
     // Find the most inner declaration node.
-    tree.walkDfs([&expect](const SelectionTree::Node* node) {
-        if(node->dynNode.get<clang::Decl>())
-            expect = node;
+    tree.walkDfs([&decl](const SelectionTree::Node* node) {
+        if(auto D = node->dynNode.get<clang::Decl>())
+            decl = D;
         return true;
     });
 
-    if(!expect) {
+    if(!decl) {
         return std::nullopt;
     }
 
-    const clang::Decl* decl = expect->dynNode.get<clang::Decl>();
     return DeclHoverBuilder::build(decl, option);
 }
 
-std::optional<HoverInfo> expression(ASTInfo& info,
+std::optional<HoverInfo> expression(ASTInfo& AST,
                                     const SelectionTree& tree,
                                     const config::HoverOption& option) {
-    ExprHoverBuilder builder{
-        .tree = tree,
-        .info = info,
-        .option = option,
-    };
-
-    return builder.build();
+    return ExprHoverBuilder::build(AST, tree, option);
 }
 
 std::optional<HoverInfo> detect(const Token& token,
-                                ASTInfo& info,
+                                ASTInfo& AST,
                                 const config::HoverOption& option) {
-    // Try some cheap cases to avoid construct a selection tree.
-    auto cheap = hit::numeric(token, info).or_else([&]() {  //
-        return hit::literal(token, info);
-    });
-    if(cheap.has_value())
-        return cheap;
+    auto cheap = hit::numeric(token, AST).or_else([&]() { return hit::literal(token, AST); });
+    auto expensive = [&]() -> std::optional<HoverInfo> {
+        const auto tree = SelectionTree::selectToken(token, AST.context(), AST.tokBuf());
+        if(!tree.hasValue())
+            return std::nullopt;
 
-    auto selection = SelectionTree::selectToken(token, info.context(), info.tokBuf());
-    if(!selection.hasValue())
-        return std::nullopt;
+        return deduced(token, AST, tree, option)
+            .or_else([&]() { return hit::expression(AST, tree, option); })
+            .or_else([&]() { return hit::declaration(tree, option); })
+            .or_else([&]() { return hit::keyword(token); });
+    };
 
-    // Put `keyword` at the end to avoid conflict with `deduced()` if hover on `auto/decltype`.
-    return deduced(token, info.srcMgr(), info, selection, option)
-        .or_else([&]() { return hit::expression(info, selection, option); })
-        .or_else([&]() { return hit::declaration(selection, option); })
-        .or_else([&]() { return hit::keyword(token); });
+    // Try some cheap cases first to avoid construct a selection tree.
+    return cheap.or_else(expensive);
 }
 
 }  // namespace hit
@@ -1129,11 +1109,11 @@ struct MarkdownPrinter {
     }
 
     template <typename HasDocument>
-    Self& doc(const HasDocument& bs) {
+    Self& doc(const HasDocument& doc) {
         if(!option.documentation)
             return *this;
 
-        return oln("{}", bs.document);
+        return oln("{}", doc.document);
     }
 
     Self& mem(const MemoryLayout& lay, bool isField) {
@@ -1246,27 +1226,27 @@ struct MarkdownPrinter {
         // clang-format on
     }
 
-    void operator() (const Enum& enm) {
+    void operator() (const Enum& em) {
         // clang-format off
 
         // Block 1: title and namespace 
-        title(enm).v(" `({})`", enm.implType).ln()
-        .scope(enm).vif(!enm.isScoped, ", (unscoped)").ln()
+        title(em).v(" `({})`", em.implType).ln()
+        .scope(em).vif(!em.isScoped, ", (unscoped)").ln()
         .hln()
 
         // Block 2: optional document 
-        .doc(enm)
+        .doc(em)
         .hln()
 
         // Block 3: items
-        .vif(!enm.items.empty(), "{} items:", enm.items.size()).ln()
-        .iter<Enum::EnumItem>(enm.items, [this](const Enum::EnumItem& it) {
+        .vif(!em.items.empty(), "{} items:", em.items.size()).ln()
+        .iter<Enum::EnumItem>(em.items, [this](const Enum::EnumItem& it) {
             v("+ {} = `{}`", it.name, it.value).ln();
         })
         .hln()
 
         // Block 4: source code
-        .vln("{}", enm.source);
+        .vln("{}", em.source);
 
         // clang-format on
     }
@@ -1478,27 +1458,25 @@ Result toMarkdown(const HoverInfo& hover, const config::HoverOption& option) {
     return {.markdown = MarkdownPrinter::print(hover, option)};
 }
 
-std::optional<HoverInfo> hover(proto::Position position,
-                               ASTInfo& info,
-                               const SourceConverter& cvtr,
-                               const config::HoverOption& option) {
-    auto srcLoc = toLocation(info.srcMgr(), info.mainFileID(), cvtr, position);
+std::optional<HoverInfo>
+    hover(uint32_t line, uint32_t col, ASTInfo& AST, const config::HoverOption& option) {
+
+    auto srcLoc = AST.srcMgr().translateLineCol(AST.mainFileID(), line, col);
     if(srcLoc.isInvalid())
         return std::nullopt;
 
-    auto tokens = clang::syntax::spelledTokensTouching(srcLoc, info.tokBuf());
+    auto tokens = clang::syntax::spelledTokensTouching(srcLoc, AST.tokBuf());
     if(tokens.empty())
         return std::nullopt;
 
     // Check if the position is in a include directive.
-    llvm::ArrayRef<Include> includes = info.directives()[info.mainFileID()].includes;
-    // +1: convert 0-based lsp line to 1-based clang line.
-    if(auto hit = hit::header(includes, info.srcMgr(), position.line + 1))
+    llvm::ArrayRef<Include> includes = AST.directives()[AST.mainFileID()].includes;
+    if(auto hit = hit::header(includes, AST, line))
         return hit;
 
     auto candidates = pickBestToken(tokens);
     for(const auto& token: candidates) {
-        if(auto hit = hit::detect(token, info, option))
+        if(auto hit = hit::detect(token, AST, option))
             return hit;
     }
 
@@ -1508,23 +1486,19 @@ std::optional<HoverInfo> hover(proto::Position position,
 }  // namespace
 
 Result hover(const clang::Decl* decl, const config::HoverOption& option) {
-    auto hover = DeclHoverBuilder::build(decl, option);
-    return toMarkdown(hover, option);
+    return toMarkdown(DeclHoverBuilder::build(decl, option), option);
 }
 
-std::optional<Result> hover(proto::HoverParams param,
-                            ASTInfo& info,
-                            const SourceConverter& cvtr,
+std::optional<Result> hover(const proto::HoverParams& param,
+                            ASTInfo& AST,
                             const config::HoverOption& option) {
-    return hover(param.position, info, cvtr, option).transform([&](HoverInfo&& hover) {
-        return toMarkdown(hover, option);
-    });
+    // Convert 0-0 based lsp position to clang 1-1 based loction.
+    return hover(param.position.line + 1, param.position.character + 1, AST, option)
+        .transform([&option](HoverInfo&& hv) { return toMarkdown(hv, option); });
 }
 
 proto::MarkupContent toLspType(Result hover) {
-    proto::MarkupContent markup;
-    markup.value = std::move(hover.markdown);
-    return markup;
+    return {.value = std::move(hover.markdown)};
 }
 
 }  // namespace clice::feature::hover
