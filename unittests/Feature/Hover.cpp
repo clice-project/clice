@@ -432,7 +432,7 @@ TEST_F(Hover, FunctionDeclAndParameter) {
         return 0; 
     }
 
-    lo$(f3)ng oper$(f4)ator ""_w(const char*, uns$(p1)igned$(p2) long$(p3)) {$(f5)
+    lo$(f3)ng oper$(f4)ator ""_w(const char*, uns$(p1)igned$(p2) long$(p3) long) {$(f5)
         return 1;
     };
 
