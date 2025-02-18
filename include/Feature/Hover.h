@@ -6,16 +6,16 @@
 namespace clice {
 
 class ASTInfo;
-class SourceConverter;
 
 namespace proto {
 
+// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#hoverParams
 struct HoverParams {
     // The text document.
     URI textDocument;
 
     // The position inside the text document.
-    Position postion;
+    Position position;
 };
 
 }  // namespace proto
@@ -40,7 +40,7 @@ enum class MemoryLayoutRenderKind : uint8_t {
 
 struct HoverOption {
     /// The maximum number of fields to show in the hover of a class/struct/enum. 0 means show all.
-    uint16_t maxFieldsCount;
+    uint16_t maxFieldsCount = 0;
 
     /// TODO:
     /// The maximum number of derived classes to show in the hover of a pure virtual class.
@@ -84,10 +84,9 @@ struct Result {
 Result hover(const clang::Decl* decl, const config::HoverOption& option);
 
 /// Compute inlay hints for MainfileID in given param and config.
-Result hover(proto::HoverParams param,
-             ASTInfo& info,
-             const SourceConverter& converter,
-             const config::HoverOption& option);
+std::optional<Result> hover(const proto::HoverParams& param,
+                            ASTInfo& AST,
+                            const config::HoverOption& option);
 
 proto::MarkupContent toLspType(Result hover);
 
