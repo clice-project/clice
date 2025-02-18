@@ -93,19 +93,17 @@ struct PrettyType {
     }
 };
 
-struct Field : WithDocument, MemoryLayout {
+struct Field : WithDocument, WithScope, MemoryLayout {
 
     PrettyType type;
 
     std::string name;
 
-    std::string scope;
-
     clang::AccessSpecifier access;
 
     size_t estimated_size() const {
-        return WithDocument::estimated_size() + sizeof(MemoryLayout) + type.estimated_size() +
-               name.size() + scope.size();
+        return WithDocument::estimated_size() + WithScope::estimated_size() + sizeof(MemoryLayout) +
+               type.estimated_size() + name.size();
     }
 };
 
@@ -147,6 +145,9 @@ struct Enum : HoverBase, WithDocument, WithScope {
 /// - #define FOO(Name)
 /// - template <ParamType Name = DefaultType> class Foo {};
 struct Param {
+    /// In case the template parameter, kind is `Type` parameter.
+    SymbolKind kind;
+
     /// The printable parameter type, e.g. "int", or "typename" (in
     /// TemplateParameters)
     PrettyType type;
@@ -213,6 +214,9 @@ struct Var : HoverBase, WithDocument, WithScope {
     bool isExtern = false;
     bool isDeprecated = false;
 
+    /// Non empty if the variable has a constexpr evaluated value.;
+    // std::string value;
+
     // Non empty if isDeprecated is true.
     std::string deprecateReason;
 
@@ -262,7 +266,7 @@ struct Keyword {
     }
 
     size_t estimated_size() const {
-        return CppRefKeywordBaseUrl.size() + 20;
+        return 64;
     }
 };
 
@@ -294,6 +298,18 @@ struct Literal {
     }
 };
 
+struct Expression : HoverBase {
+
+    PrettyType type;
+
+    /// TODO:
+    std::string evaluated;
+
+    size_t estimated_size() const {
+        return HoverBase::estimated_size() + evaluated.size() + type.estimated_size();
+    }
+};
+
 /// Make HoverInfo default constructible.
 struct Empty : std::monostate {
     size_t estimated_size() const {
@@ -303,8 +319,18 @@ struct Empty : std::monostate {
 
 /// Use variant to store different types of hover information to reduce the memory usage.
 struct HoverInfo :
-    public std::
-        variant<Empty, Namespace, Record, Enum, Fn, Var, Header, Numeric, Literal, Keyword> {
+    public std::variant<Empty,
+                        Namespace,
+                        Record,
+                        Field,
+                        Enum,
+                        Fn,
+                        Var,
+                        Header,
+                        Numeric,
+                        Literal,
+                        Expression,
+                        Keyword> {
     /// Return the estimated size of the hover information in bytes.
     size_t estimated_size() const {
         auto size_counter = Match{
@@ -324,7 +350,7 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
 
     HoverInfo hover;
 
-    void recFillScope(const clang::DeclContext* DC, WithScope& scope) {
+    static void recFillScope(const clang::DeclContext* DC, WithScope& scope) {
         if(DC->isTranslationUnit())
             return;
 
@@ -349,11 +375,11 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
             scope.local += RD->getName(), scope.local += "::";
         } else if(auto FD = llvm::dyn_cast<clang::FunctionDecl>(DC)) {
             recFillScope(FD->getDeclContext(), scope);
-            scope.local += FD->getName(), scope.local += "::";
+            scope.local += FD->getNameAsString(), scope.local += "::";
         }
     }
 
-    void fillScope(const clang::DeclContext* DC, WithScope& scope) {
+    static void fillScope(const clang::DeclContext* DC, WithScope& scope) {
         recFillScope(DC, scope);
 
         for(auto& lens: {std::ref(scope.local), std::ref(scope.namespac)}) {
@@ -366,9 +392,7 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
     void VisitNamespaceDecl(const clang::NamespaceDecl* ND) {
         Namespace ns;
         ns.symbol = SymbolKind::Namespace;
-        ns.name = ND->getName();
-
-        recFillScope(ND->getDeclContext(), ns);
+        fillScope(ND, ns);
 
         ns.source = "<TODO: source code>";
         hover.emplace<Namespace>(std::move(ns));
@@ -382,16 +406,7 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
         lay.size = ctx.getTypeSizeInChars(QT).getQuantity();
     }
 
-    void VisitRecordDecl(const clang::RecordDecl* RD) {
-        Record rc;
-
-        // For class (partial) template specialization, use existing one to reuse its template
-        // params.
-        if(std::holds_alternative<Record>(hover)) {
-            rc = std::get<Record>(std::move(hover));
-            hover.emplace<Empty>();
-        }
-
+    void fillRecord(const clang::RecordDecl* RD, Record& rc) {
         rc.symbol = RD->isStruct() ? SymbolKind::Struct : SymbolKind::Class;
         rc.name = RD->getNameAsString();
 
@@ -400,23 +415,31 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
 
         rc.source = "<TODO: source code>";
         rc.document = "<TODO: document>";
-        hover.emplace<Record>(std::move(rc));
 
         for(auto FD: RD->fields()) {
-            VisitFieldDecl(FD);
+            Field fd;
+            fillField(FD, fd);
+            rc.fields.push_back(std::move(fd));
         }
+    }
+
+    void VisitRecordDecl(const clang::RecordDecl* RD) {
+        Record rc;
+        fillRecord(RD, rc);
+
+        hover.emplace<Record>(std::move(rc));
     }
 
     void VisitClassTemplateDecl(const clang::ClassTemplateDecl* TD) {
         Record rc;
-
         for(const auto& tpara: *TD->getTemplateParameters()) {
             Param p;
             p.name = tpara->getName();
             rc.templateParams.push_back(std::move(p));
         }
-        hover.emplace<Record>(std::move(rc));
 
+        fillRecord(TD->getTemplatedDecl(), rc);
+        hover.emplace<Record>(std::move(rc));
         VisitRecordDecl(llvm::dyn_cast<clang::RecordDecl>(TD->getTemplatedDecl()));
     }
 
@@ -449,15 +472,12 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
         }
     }
 
-    void VisitFieldDecl(const clang::FieldDecl* FD) {
-        assert(std::holds_alternative<Record>(hover) && "Must be a Record hover");
-
-        Field field;
+    void fillField(const clang::FieldDecl* FD, Field& field) {
         field.access = FD->getAccess();
         field.name = FD->getNameAsString();
 
         auto RD = llvm::dyn_cast<clang::RecordDecl>(FD->getDeclContext());
-        field.scope = RD->isAnonymousStructOrUnion() ? "(anonymous)" : RD->getName();
+        fillScope(RD, field);
         fillMemoryLayout(FD, RD, field);
 
         auto ty = FD->getType();
@@ -469,9 +489,12 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
             field.type.type = ty.getAsString();
             field.type.akaType = canonicalTy.getAsString();
         }
+    }
 
-        auto& record = std::get<Record>(hover);
-        record.fields.push_back(std::move(field));
+    void VisitFieldDecl(const clang::FieldDecl* FD) {
+        Field field;
+        fillField(FD, field);
+        hover.emplace<Field>(std::move(field));
     }
 
     void VisitEnumDecl(const clang::EnumDecl* ED) {
@@ -515,20 +538,12 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
         hover.emplace<Enum>(std::move(enm));
     }
 
-    void VisitFunctionDecl(const clang::FunctionDecl* FD) {
-        Fn fn;
-
-        /// For function template, use existing one to reuse its template parameters.
-        if(std::holds_alternative<Fn>(hover)) {
-            fn = std::get<Fn>(std::move(hover));
-            hover.emplace<Empty>();
-        }
-
+    static void fillFunction(const clang::FunctionDecl* FD, Fn& fn) {
         if(fn.symbol != SymbolKind::Method && fn.symbol != SymbolKind::Operator) {
             fn.symbol = SymbolKind::Function;
         }
 
-        fn.name = FD->getName();
+        fn.name = FD->getNameAsString();
         fn.isConstexpr = FD->isConstexpr();
         fn.isConsteval = FD->isConsteval();
         fn.isInlined = FD->isInlined();
@@ -564,7 +579,11 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
 
         fn.source = "<TODO: source code>";
         fn.document = "<TODO: document>";
+    }
 
+    void VisitFunctionDecl(const clang::FunctionDecl* FD) {
+        Fn fn;
+        fillFunction(FD, fn);
         hover.emplace<Fn>(std::move(fn));
     }
 
@@ -573,32 +592,87 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
 
         for(auto tpara: *TD->getTemplateParameters()) {
             Param p;
+            p.kind = SymbolKind::Type;
             p.name = tpara->getName();
             fn.templateParams.push_back(std::move(p));
         }
 
+        fillFunction(TD->getAsFunction(), fn);
         hover.emplace<Fn>(std::move(fn));
-        VisitFunctionDecl(TD->getAsFunction());
+    }
+
+    void VisitTemplateTypeParmDecl(const clang::TemplateTypeParmDecl* TTPD) {
+        Var var;
+
+        var.symbol = SymbolKind::Type;
+        var.name = TTPD->getName();
+        if(var.name.empty())
+            var.name = "(unnamed)";
+
+        fillScope(TTPD->getDeclContext(), var);
+        var.type.type = TTPD->getNameAsString();
+
+        hover.emplace<Var>(std::move(var));
+    }
+
+    void VisitNonTypeTemplateParmDecl(const clang::NonTypeTemplateParmDecl* NTPD) {
+        Var var;
+
+        var.symbol = SymbolKind::Parameter;
+        var.name = NTPD->getName();
+        if(var.name.empty())
+            var.name = "(unnamed)";
+
+        fillScope(NTPD->getDeclContext(), var);
+
+        auto qty = NTPD->getType();
+        var.type.type = qty.getAsString();
+        if(auto cqty = qty.getCanonicalType().getAsString(); cqty != var.type.type) {
+            var.type.akaType = std::move(cqty);
+        }
+
+        var.document = "<TODO: document>";
+        var.source = "<TODO: source code>";
+
+        hover.emplace<Var>(std::move(var));
+    }
+
+    void VisitTemplateTemplateParmDecl(const clang::TemplateTemplateParmDecl* TTPD) {
+        Var var;
+
+        var.symbol = SymbolKind::Type;
+        var.name = TTPD->getName();
+        if(var.name.empty())
+            var.name = "(unnamed)";
+
+        fillScope(TTPD->getDeclContext(), var);
+        var.type.type = TTPD->getNameAsString();
+
+        hover.emplace<Var>(std::move(var));
     }
 
     void VisitCXXMethodDecl(const clang::CXXMethodDecl* MD) {
         Fn fn;
         fn.symbol = SymbolKind::Method;
+        fillFunction(MD, fn);
         hover.emplace<Fn>(std::move(fn));
-
-        VisitFunctionDecl(MD);
     }
 
-    void VisitVarDecl(const clang::VarDecl* VD) {
-        Var var;
-        var.symbol = SymbolKind::Variable;
+    static void fillVarInfo(const clang::VarDecl* VD, Var& var) {
         var.name = VD->getName();
+        if(var.name.empty())
+            var.name = "(unnamed)";
+
         var.isConstexpr = VD->isConstexpr();
         var.isFileScope = VD->isFileVarDecl();
         var.isLocal = VD->isLocalVarDecl();
         var.isStaticLocal = VD->isStaticLocal();
         var.isExtern = VD->isLocalExternDecl();
         var.isDeprecated = VD->isDeprecated(&var.deprecateReason);
+        if(!var.isDeprecated && var.name.starts_with("_")) {
+            var.isDeprecated = true;
+            var.deprecateReason = "Manually marked as throwaway variable";
+        }
 
         fillScope(VD->getDeclContext(), var);
 
@@ -608,13 +682,35 @@ struct DeclHoverBuilder : public clang::ConstDeclVisitor<DeclHoverBuilder, void>
             var.type.akaType = std::move(cqty);
         }
 
-        auto& ctx = VD->getASTContext();
-        var.size = ctx.getTypeSizeInChars(qty).getQuantity();
-        var.align = ctx.getTypeAlignInChars(qty).getQuantity();
+        if(!qty->isDependentType()) {
+            auto& ctx = VD->getASTContext();
+            var.size = ctx.getTypeSizeInChars(qty).getQuantity();
+            var.align = ctx.getTypeAlignInChars(qty).getQuantity();
+        }
 
         var.document = "<TODO: document>";
         var.source = "<TODO: source code>";
+    }
+
+    void VisitVarDecl(const clang::VarDecl* VD) {
+        Var var;
+        var.symbol = SymbolKind::Variable;
+        fillVarInfo(VD, var);
         hover.emplace<Var>(std::move(var));
+    }
+
+    void VisitParmVarDecl(const clang::ParmVarDecl* PVD) {
+        Var var;
+        var.symbol = SymbolKind::Parameter;
+        fillVarInfo(PVD, var);
+        hover.emplace<Var>(std::move(var));
+    }
+
+    static HoverInfo build(const clang::Decl* decl, const config::HoverOption& option) {
+        assert(decl && "Must be non-null pointer");
+        DeclHoverBuilder builder{.option = option};
+        builder.Visit(decl);
+        return std::move(builder.hover);
     }
 };
 
@@ -672,6 +768,93 @@ llvm::SmallVector<Token> pickBestToken(llvm::ArrayRef<Token>& touching) {
     return ranked;
 }
 
+struct ExprHoverBuilder {
+
+    using Node = SelectionTree::Node;
+
+    template <typename... Ts>
+    struct Accept :
+        public std::variant<std::nullptr_t, std::add_pointer_t<std::add_const_t<Ts>>...> {
+
+        using Cases = std::variant<std::nullptr_t, std::add_pointer_t<std::add_const_t<Ts>>...>;
+
+        const Node* deepest = nullptr;
+
+        template <typename P>
+        void accept(const Node* node) {
+            if(auto ptr = node->dynNode.get<P>()) {
+                this->template emplace<std::add_pointer_t<std::add_const_t<P>>>(ptr);
+                deepest = node;
+            }
+        }
+
+        bool accept(const Node* node) {
+            // Return true to get the deepest node.
+            return (accept<Ts>(node), ...), true;
+        }
+    };
+
+    using PreciseExprMatcher = Accept<clang::DeclRefExpr,
+                                      clang::CXXMemberCallExpr,
+                                      clang::CallExpr,
+                                      clang::CXXNamedCastExpr>;
+
+    const SelectionTree& tree;
+    ASTInfo& info;
+    const config::HoverOption& option;
+
+    /// The final matched expression node by `PreciseExprMatcher`.
+    const Node* target = nullptr;
+
+    using Res = std::optional<HoverInfo>;
+
+    Res operator() (const clang::DeclRefExpr* DR) const {
+        return DeclHoverBuilder::build(DR->getDecl(), option);
+    }
+
+    Res operator() (const clang::CXXMemberCallExpr* MC) const {
+        return DeclHoverBuilder::build(MC->getCalleeDecl(), option);
+    }
+
+    Res operator() (const clang::CallExpr* C) const {
+        return DeclHoverBuilder::build(C->getCalleeDecl(), option);
+    }
+
+    Res operator() (const clang::CXXNamedCastExpr* NC) const {
+        auto dest = NC->getTypeAsWritten();
+        if(dest->isFundamentalType()) {
+            return std::nullopt;
+        }
+
+        Expression expr;
+        expr.symbol = SymbolKind::Variable;
+        expr.name = NC->getStmtClassName();
+
+        expr.type.type = dest.getAsString();
+        if(auto qty = dest.getCanonicalType(); qty != dest) {
+            expr.type.akaType = qty.getAsString();
+        }
+
+        expr.source = "<TODO: source code>";
+        return HoverInfo{std::move(expr)};
+    }
+
+    // By default, return empty.
+    template <typename O>
+    Res operator() (O) const {
+        return std::nullopt;
+    }
+
+    Res build() {
+        PreciseExprMatcher expr;
+        if(!tree.walkDfs([&expr](const Node* node) { return expr.accept(node); })) {
+            return std::nullopt;
+        }
+        this->target = expr.deepest;
+        return std::visit(*this, expr);
+    }
+};
+
 namespace hit {
 
 std::optional<HoverInfo> header(llvm::ArrayRef<Include> includes,
@@ -699,18 +882,18 @@ std::optional<HoverInfo> header(llvm::ArrayRef<Include> includes,
     return std::nullopt;
 }
 
-std::optional<HoverInfo> numeric(const Token& tk, const clang::SourceManager& SM, ASTInfo& info) {
+std::optional<HoverInfo> numeric(const Token& tk, ASTInfo& info) {
     if(auto kind = tk.kind(); kind == numeric_constant) {
-        llvm::StringRef text = tk.text(SM);
+        llvm::StringRef text = tk.text(info.srcMgr());
         auto& ctx = info.context();
         clang::NumericLiteralParser parser(text,
                                            tk.location(),
-                                           SM,
+                                           info.srcMgr(),
                                            ctx.getLangOpts(),
                                            ctx.getTargetInfo(),
                                            ctx.getDiagnostics());
         llvm::APInt apint;
-        if(!parser.GetIntegerValue(apint)) {  // `GetIntegerValue` return true if overflow.
+        if(!parser.GetIntegerValue(apint)) {
             return HoverInfo{
                 Numeric{.rawText = text, .value = apint}
             };
@@ -736,17 +919,20 @@ std::optional<HoverInfo> keyword(const Token& tk) {
     return std::nullopt;
 }
 
-std::optional<HoverInfo> literal(const Token& tk, const clang::SourceManager& SM, ASTInfo& info) {
+std::optional<HoverInfo> literal(const Token& tk, ASTInfo& info) {
     if(isStringLiteral(tk.kind())) {
         auto& ctx = info.context();
         clang::Token raw;
         bool isFail = clang::Lexer::getRawToken(tk.location(),
                                                 raw,
-                                                SM,
+                                                info.srcMgr(),
                                                 ctx.getLangOpts(),
                                                 /*IgnoreWhiteSpace=*/true);
         if(!isFail) {
-            clang::StringLiteralParser parser(raw, SM, ctx.getLangOpts(), ctx.getTargetInfo());
+            clang::StringLiteralParser parser(raw,
+                                              info.srcMgr(),
+                                              ctx.getLangOpts(),
+                                              ctx.getTargetInfo());
             auto text = parser.GetString();
             auto udsuffix = parser.getUDSuffix();
             return HoverInfo{
@@ -758,32 +944,94 @@ std::optional<HoverInfo> literal(const Token& tk, const clang::SourceManager& SM
     return std::nullopt;
 }
 
-std::optional<HoverInfo> call() {
-    return std::nullopt;
-}
-
 std::optional<HoverInfo> deduced(const Token& tk,
                                  const clang::SourceManager& SM,
-                                 const SelectionTree& ST) {
-    if(tk.kind() != kw_auto && tk.kind() != kw_decltype) {
+                                 ASTInfo& info,
+                                 const SelectionTree& tree,
+                                 const config::HoverOption& option) {
+    bool isAuto = tk.kind() == kw_auto;
+    bool isDecltype = tk.kind() == kw_decltype;
+    if(!isAuto && !isDecltype) {
         return std::nullopt;
     }
+
+    const SelectionTree::Node* context = nullptr;
+    auto findDecl = [&info, &context](const SelectionTree::Node* node) -> bool {
+        // `decltype(auto)` is `AutoTypeLoc`.
+        if(auto AT = node->dynNode.get<clang::AutoTypeLoc>()) {
+            context = node->parent;
+            return false;
+        }
+        if(auto DT = node->dynNode.get<clang::DecltypeTypeLoc>()) {
+            context = node->parent;
+            return false;
+        }
+        return true;
+    };
+
+    if(tree.walkDfs(findDecl))
+        return std::nullopt;
+
+    if(auto dynKind = context->dynNode.getNodeKind();
+       dynKind.isSame(clang::ASTNodeKind::getFromNodeKind<clang::FunctionProtoTypeLoc>())) {
+        context = context->parent;
+    }
+
+    const clang::Decl* decl = context->dynNode.get<clang::Decl>();
+    assert(decl && "Selected Node must be a valid pointer");
+
+    return DeclHoverBuilder::build(decl, option);
 }
 
-std::optional<HoverInfo> detect(const Token& token, ASTInfo& info) {
-    const auto& SM = info.srcMgr();
-    auto cheap_case = hit::numeric(token, SM, info)
-                          .or_else([&]() { return hit::literal(token, SM, info); })
-                          .or_else([&]() { return hit::keyword(token); });
+std::optional<HoverInfo> declaration(const SelectionTree& tree, const config::HoverOption& option) {
+    const SelectionTree::Node* expect = nullptr;
 
-    if(cheap_case.has_value())
-        return cheap_case;
+    // Find the most inner declaration node.
+    tree.walkDfs([&expect](const SelectionTree::Node* node) {
+        if(node->dynNode.get<clang::Decl>())
+            expect = node;
+        return true;
+    });
+
+    if(!expect) {
+        return std::nullopt;
+    }
+
+    const clang::Decl* decl = expect->dynNode.get<clang::Decl>();
+    return DeclHoverBuilder::build(decl, option);
+}
+
+std::optional<HoverInfo> expression(ASTInfo& info,
+                                    const SelectionTree& tree,
+                                    const config::HoverOption& option) {
+    ExprHoverBuilder builder{
+        .tree = tree,
+        .info = info,
+        .option = option,
+    };
+
+    return builder.build();
+}
+
+std::optional<HoverInfo> detect(const Token& token,
+                                ASTInfo& info,
+                                const config::HoverOption& option) {
+    // Try some cheap cases to avoid construct a selection tree.
+    auto cheap = hit::numeric(token, info).or_else([&]() {  //
+        return hit::literal(token, info);
+    });
+    if(cheap.has_value())
+        return cheap;
 
     auto selection = SelectionTree::selectToken(token, info.context(), info.tokBuf());
     if(!selection.hasValue())
         return std::nullopt;
 
-    return deduced(token, SM, selection).or_else([&]() { return hit::call(); });
+    // Put `keyword` at the end to avoid conflict with `deduced()` if hover on `auto/decltype`.
+    return deduced(token, info.srcMgr(), info, selection, option)
+        .or_else([&]() { return hit::expression(info, selection, option); })
+        .or_else([&]() { return hit::declaration(selection, option); })
+        .or_else([&]() { return hit::keyword(token); });
 }
 
 }  // namespace hit
@@ -977,6 +1225,27 @@ struct MarkdownPrinter {
         // clang-format on
     }
 
+    void operator() (const Field& fd) {
+        // clang-format off
+
+        SymbolKind kind = SymbolKind::Field;
+        // Block 1: title and namespace 
+        v("{} {} `{}`", H3, kind.name(), fd.name).ln()
+        .scope(fd).ln()
+        .hln()
+
+        // Block 2: type
+        .v("Type: `{}`", fd.type.type).o(" (aka `{}`)", fd.type.akaType).ln()
+        .mem(fd, /*isField=*/true)
+        .hln()
+
+        // Block 3: optional document 
+        .doc(fd)
+        .hln();
+
+        // clang-format on
+    }
+
     void operator() (const Enum& enm) {
         // clang-format off
 
@@ -1064,7 +1333,7 @@ struct MarkdownPrinter {
         // Block 2: type
         .tags(var)
         .v("Type: `{}`", var.type.type).o(" (aka `{}`)", var.type.akaType).ln()
-        .vln("size = {} bytes, align = {} bytes", var.size, var.align)
+        .vif(var.size, "size = {} bytes, align = {} bytes", var.size, var.align).ln()
         .hln()
 
         // Block 3: optional document 
@@ -1156,8 +1425,23 @@ struct MarkdownPrinter {
         // clang-format on
     }
 
+    void operator() (const Expression& expr) {
+        // clang-format off
+        v("{} Expression `{}`", H3, expr.name)
+        .hln()
+
+        .v("type: `{}`", expr.type.type).o("  (aka `{}`)", expr.type.akaType).ln()
+        .hln()
+
+        .vln("{}", expr.source);
+        // clang-format on
+    }
+
     void operator() (const Empty&) {
+        // Show nothing in release mode to avoid crash.
+#ifndef NDEBUG
         llvm_unreachable("Empty just used to defualt-construct a HoverInfo");
+#endif
     }
 
     /// Render the hover information to markdown text.
@@ -1214,7 +1498,7 @@ std::optional<HoverInfo> hover(proto::Position position,
 
     auto candidates = pickBestToken(tokens);
     for(const auto& token: candidates) {
-        if(auto hit = hit::detect(token, info))
+        if(auto hit = hit::detect(token, info, option))
             return hit;
     }
 
@@ -1224,11 +1508,8 @@ std::optional<HoverInfo> hover(proto::Position position,
 }  // namespace
 
 Result hover(const clang::Decl* decl, const config::HoverOption& option) {
-    assert(decl && "Must be non-null pointer");
-
-    DeclHoverBuilder builder{.option = option};
-    builder.Visit(decl);
-    return toMarkdown(builder.hover, option);
+    auto hover = DeclHoverBuilder::build(decl, option);
+    return toMarkdown(hover, option);
 }
 
 std::optional<Result> hover(proto::HoverParams param,

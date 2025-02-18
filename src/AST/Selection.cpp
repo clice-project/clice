@@ -179,9 +179,12 @@ struct SelectionCollector : public clang::RecursiveASTVisitor<SelectionCollector
     SelectionCollector(SelectionBuilder& builder) : builder(builder) {}
 
     bool TraverseDecl(clang::Decl* decl) {
+        if(!decl)
+            return true;
+
         /// `TranslationUnitDecl` has invalid location information.
         /// So we process it separately.
-        if(llvm::isa_and_nonnull<clang::TranslationUnitDecl>(decl)) {
+        if(llvm::isa<clang::TranslationUnitDecl>(decl)) {
             return Base::TraverseDecl(decl);
         }
 
@@ -197,9 +200,9 @@ struct SelectionCollector : public clang::RecursiveASTVisitor<SelectionCollector
     }
 
     /// we don't care about the node without location information, so skip them.
-    bool shouldWalkTypesOfTypeLocs() {
-        return false;
-    }
+    // bool shouldWalkTypesOfTypeLocs() {
+    //     return false;
+    // }
 
     bool TraverseType(clang::QualType) {
         return true;
@@ -219,20 +222,20 @@ struct SelectionCollector : public clang::RecursiveASTVisitor<SelectionCollector
         return builder.hook(&loc, [&] { return Base::TraverseTypeLoc(loc); });
     }
 
-    bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc NNS) {
+    bool TraverseNestedNameSpecifierLoc(const clang::NestedNameSpecifierLoc& NNS) {
         return builder.hook(&NNS, [&] { return Base::TraverseNestedNameSpecifierLoc(NNS); });
     }
 
-    bool TraverseTemplateArgumentLoc(const clang::TemplateArgumentLoc& argument) {
-        return builder.hook(&argument, [&] { return Base::TraverseTemplateArgumentLoc(argument); });
+    bool TraverseTemplateArgumentLoc(const clang::TemplateArgumentLoc& A) {
+        return builder.hook(&A, [&] { return Base::TraverseTemplateArgumentLoc(A); });
     }
 
-    bool TraverseCXXBaseSpecifier(const clang::CXXBaseSpecifier& base) {
-        return builder.hook(&base, [&] { return Base::TraverseCXXBaseSpecifier(base); });
+    bool TraverseCXXBaseSpecifier(const clang::CXXBaseSpecifier& BS) {
+        return builder.hook(&BS, [&] { return Base::TraverseCXXBaseSpecifier(BS); });
     }
 
-    bool TraverseConstructorInitializer(clang::CXXCtorInitializer* init) {
-        return builder.hook(init, [&] { return Base::TraverseConstructorInitializer(init); });
+    bool TraverseConstructorInitializer(clang::CXXCtorInitializer* I) {
+        return builder.hook(I, [&] { return Base::TraverseConstructorInitializer(I); });
     }
 
     /// FIXME: figure out concept in clang AST.
@@ -247,11 +250,12 @@ SelectionTree SelectionBuilder::build() {
     if(isValidOffsetRange())
         collector.TraverseAST(context);
 
-    storage.shrink_to_fit();
-
     SelectionTree tree;
-    tree.storage = std::move(storage);
-    tree.root = &tree.storage.front();
+    if(!storage.empty()) {
+        storage.shrink_to_fit();
+        tree.storage = std::move(storage);
+        tree.root = &tree.storage.front();
+    }
     return tree;
 }
 

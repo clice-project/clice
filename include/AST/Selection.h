@@ -64,6 +64,11 @@ public:
 
         /// The parent node in the selection tree. nullptr for root node.
         Node* parent;
+
+        template <typename T, typename... Ts>
+        bool isOneOf() const {
+            return dynNode.get<T>() || (dynNode.get<Ts>() || ...);
+        }
     };
 
     /// Construct an empty selection tree.
@@ -93,16 +98,51 @@ public:
         return storage;
     }
 
-    /// Get the farest node that fully covers the selection. Return nullptr if there is no
-    /// selection.
-    const Node* getFarestFullCoverageNode() const {
-        const Node* current = root;
-        while(current && current->kind == CoverageKind::Full) {
-            if(current->children.empty())
-                break;
-            current = current->children.front();
+    /// Return true to continue the walk, false to stop.
+    using Walker = llvm::function_ref<bool(const Node*)>;
+
+    /// Return true if the walk is completed, false if the walk is interrupted.
+    bool walkDfs(Walker ops) const {
+        if(!root)
+            return true;
+
+        llvm::SmallVector<const Node*> stack;
+        stack.push_back(root);
+        while(!stack.empty()) {
+            auto node = stack.pop_back_val();
+
+            if(!ops(node))
+                return false;
+
+            for(auto child: node->children) {
+                stack.push_back(child);
+            }
         }
-        return current;
+
+        return true;
+    }
+
+    /// Return true if the walk is completed, false if the walk is interrupted.
+    bool walkBfs(Walker ops) const {
+        if(!root)
+            return true;
+
+        std::deque<const Node*> queue;
+        queue.push_back(root);
+
+        while(!queue.empty()) {
+            auto node = queue.front();
+            queue.pop_front();
+
+            if(!ops(node))
+                return false;
+
+            for(auto child: node->children) {
+                queue.push_front(child);
+            }
+        }
+
+        return true;
     }
 
     explicit operator bool () const {

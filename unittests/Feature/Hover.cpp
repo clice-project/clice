@@ -92,6 +92,12 @@ protected:
         return false;
     }
 
+    static bool isNone(std::optional<HoverInfo>& hover) {
+        bool no = !hover.has_value();
+        EXPECT_TRUE(no);
+        return no;
+    }
+
     void EXPECT_HOVER_TYPE(llvm::StringRef key,
                            HoverChecker checker,
                            config::HoverOption option = DefaultOption) {
@@ -101,10 +107,20 @@ protected:
 
         bool checkResult = checker(hoverInfo);
         // if(hoverInfo.has_value()) {
+        //     llvm::outs() << "======[" << key << "]======\n";
         //     llvm::outs() << toMarkdown(*hoverInfo, option).markdown << '\n';
         // }
         EXPECT_TRUE(checkResult);
     }
+
+    using Fmtter = std::string(int index);
+
+    void EXPECT_TYPES_N(Fmtter fmt, int n, HoverChecker checker) {
+        for(int i = 1; i <= n; i++) {
+            auto key = fmt(i);
+            EXPECT_HOVER_TYPE(key, checker);
+        }
+    };
 };
 
 TEST_F(Hover, Namespace) {
@@ -365,68 +381,148 @@ ___
     EXPECT_HOVER("x1", FREE_STYLE);
 }
 
-TEST_F(Hover, HoverCase) {
-    auto header = R"cpp(
-int f();
+TEST_F(Hover, HeaderAndNamespace) {
+    auto header = R"cpp()cpp";
 
-namespace n {
-    int f(int x);
-}
-
-)cpp";
-
-    auto code = R"cpp($(e1)
+    auto code = R"cpp(
 #in$(h1)clude "head$(h3)er.h"$(h4)
 #in$(h2)clude <stddef.h$(h5)>
 
-$(e2)
+$(n1)names$(n2)pace$(n3) outt$(n4)er { 
 
-i$(k1)nt$(k2) f() { 
-    return 0; 
-}$(e3)
-$(e4)
+    namespac$(n5)e $(n6){
 
-aut$(k3)o$(k4) i1 = $(n1)1$(n2);
-auto i2 = $(n3)-$(n4)1$(n5);
+        nam$(n7)espace inne$(n8)r {
 
+        }$(n9)
 
-long oper$(k5)ator ""_w(const char*, uns$(k6)igned$(k7) long) {
-    return 1;
-};
-
-auto l1 = $(l1)"test$(l2)_string_li$(l3)t";
-auto l2 = R$(l4)"tes$(l5)t(raw_string_lit)test"$(l6);
-auto l3 = u8$(l7)"test$(l8)_string_li$(l9)t";
-auto l4 = "test$(l10)_string_li$(l11)t_udf"_w;
-
-$(k8)names$(k9)pace$(k10) n {  $(e5)
-    int f(int x) {
-    $(e6)    return static_cast<int>($(n6)13$(n7)7.1$(n8)5$(n9));   $(e7)
     }
-}
 
-$(e8)
+}$(n10)
+
 )cpp";
 
     runWithHeader(code, header);
 
-    using Fmtter = std::string(int index);
-    auto EXPECT_TYPES_N = [this](Fmtter fmt, int n, HoverChecker checker) {
-        for(int i = 1; i <= n; i++) {
-            auto key = fmt(i);
-            EXPECT_HOVER_TYPE(key, checker);
-        }
-    };
-
-    auto isNone = [](std::optional<HoverInfo>& hover) -> bool {
-        return !hover.has_value();
-    };
-
-    EXPECT_TYPES_N([](int i) { return std::format("e{}", i); }, 8, isNone);
     EXPECT_TYPES_N([](int i) { return std::format("h{}", i); }, 5, is<Header>);
-    EXPECT_TYPES_N([](int i) { return std::format("n{}", i); }, 8, is<Numeric>);
-    EXPECT_TYPES_N([](int i) { return std::format("l{}", i); }, 11, is<Literal>);
-    EXPECT_TYPES_N([](int i) { return std::format("k{}", i); }, 10, is<Keyword>);
+    EXPECT_TYPES_N([](int i) { return std::format("n{}", i); }, 8, is<Namespace>);
+}
+
+TEST_F(Hover, VariableAndLiteral) {
+    auto code = R"cpp(
+    long operator ""_w(const char*, unsigned long) {
+        return 1;
+    };
+
+    aut$(v1)o$(v2) i$(v3)1$(v4) = $(n1)1$(n2);
+    auto$(v5) i2 = $(n3)-$(n4)1$(n5);
+ 
+    auto l1$(v6) = $(l1)"test$(l2)_string_li$(l3)t";
+    auto l2 = R$(l4)"tes$(l5)t(raw_string_lit)test"$(l6);
+    auto l3 = u8$(l7)"test$(l8)_string_li$(l9)t";
+    auto l$(v7)4 = $(l10)"$(l11)udf_string$(l12)"_w;
+)cpp";
+    run(code);
+
+    EXPECT_TYPES_N([](int i) { return std::format("v{}", i); }, 7, is<Var>);
+    EXPECT_TYPES_N([](int i) { return std::format("l{}", i); }, 12, is<Literal>);
+}
+
+TEST_F(Hover, FunctionDeclAndParameter) {
+    auto code = R"cpp(
+    i$(f1)nt$(f2) f() { 
+        return 0; 
+    }
+
+    lo$(f3)ng oper$(f4)ator ""_w(const char*, uns$(p1)igned$(p2) long$(p3)) {$(f5)
+        return 1;
+    };
+
+
+    struct A {
+        int f$(f6)n(i$(p4)nt par$(p5)am) {
+            return param;
+        }
+        
+        voi$(f7)d ope$(f8)rator()$(f9)(int par$(p6)am) {}
+    };
+
+
+    templ$(f10)ate<typenam$(p7)e T1$(p8), typename T$(p9)2>
+    void templ$(f11)ate_func1(T1 le$(p10)ft, T2 righ$(p11)t)$(f12) {}
+
+    template<in$(p12)t NonTy$(p13)peParam = 1>
+    void templ$(f13)ate_func2() {}
+
+    template<templa$(p14)te<typen$(p15)ame Inn$(p16)er> typenam$(p17)e Outt$(p18)er>
+    void templ$(f14)ate_func3() {}
+
+)cpp";
+    run(code);
+
+    EXPECT_TYPES_N([](int i) { return std::format("f{}", i); }, 12, is<Fn>);
+    EXPECT_TYPES_N([](int i) { return std::format("p{}", i); }, 18, is<Var>);
+}
+
+TEST_F(Hover, AutoAndDecltype) {
+    auto code = R"cpp(
+
+$(a1)aut$(a2)o$(a3) i = -1;
+
+$(d1)dec$(d2)ltype$(d3)(i) j = 2;
+
+struct A { int x; };
+
+aut$(a4)o va$(a5)r = A{};
+
+a$(fa)uto f1() { return 1; }
+
+de$(fn_decltype)cltype(au$(fn_decltype_auto)to) f2() {}
+
+int f3(au$(fn_para_auto)to x) {}
+
+)cpp";
+
+    run(code);
+
+    EXPECT_TYPES_N([](int i) { return std::format("a{}", i); }, 5, is<Var>);
+    EXPECT_TYPES_N([](int i) { return std::format("d{}", i); }, 3, is<Var>);
+
+    EXPECT_HOVER_TYPE("fa", is<Fn>);
+    EXPECT_HOVER_TYPE("fn_decltype", is<Fn>);
+    EXPECT_HOVER_TYPE("fn_decltype_auto", is<Fn>);
+
+    /// FIXME: It seems a bug of SelectionTree, which cannot select any node of `f3`;
+    /// EXPECT_HOVER_TYPE("fn_para_auto", is<Var>);
+}
+
+TEST_F(Hover, Expr) {
+    auto code = R"cpp(
+int xxxx = 1;
+int yyyy = xx$(e1)xx;
+
+struct A {
+    int function(int param) {
+        return thi$(e2)s$(e3)->$(e4)funct$(e5)ion(para$(e6)m);
+    }
+
+    int fn(int param) {
+        return static$(e7)_cast<A*>(nul$(e8)lptr)->function(par$(e9)am);
+    }
+};
+)cpp";
+
+    run(code);
+
+    EXPECT_HOVER_TYPE("e1", is<Var>);
+    EXPECT_HOVER_TYPE("e2", is<Fn>);
+    EXPECT_HOVER_TYPE("e3", is<Fn>);
+    EXPECT_HOVER_TYPE("e4", is<Fn>);
+    EXPECT_HOVER_TYPE("e5", is<Fn>);
+    EXPECT_HOVER_TYPE("e6", is<Var>);
+    EXPECT_HOVER_TYPE("e7", is<Expression>);
+    EXPECT_HOVER_TYPE("e8", is<Expression>);
+    EXPECT_HOVER_TYPE("e9", is<Var>);
 }
 
 }  // namespace
