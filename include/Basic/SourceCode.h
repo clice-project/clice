@@ -13,11 +13,13 @@ struct LocalSourceRange {
     /// The end position offset to the source file.
     uint32_t end;
 
-    bool contains(uint32_t offset) const {
+    constexpr bool operator== (const LocalSourceRange& other) const = default;
+
+    constexpr bool contains(uint32_t offset) const {
         return offset >= begin && offset <= end;
     }
 
-    bool intersects(const LocalSourceRange& other) const {
+    constexpr bool intersects(const LocalSourceRange& other) const {
         return begin <= other.end && end >= other.begin;
     }
 };
