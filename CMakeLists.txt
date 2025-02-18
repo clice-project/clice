@@ -130,6 +130,7 @@ target_link_libraries(integration_tests PRIVATE clice-core)
 if(CLICE_ENABLE_TEST)
     file(GLOB_RECURSE CLICE_TEST_SOURCES "${CMAKE_SOURCE_DIR}/unittests/*/*.cpp")
     add_executable(unit_tests "${CLICE_TEST_SOURCES}" "${CMAKE_SOURCE_DIR}/src/Driver/unit_tests.cc")
+    target_include_directories(unit_tests PUBLIC "${CMAKE_SOURCE_DIR}")
 
     FetchContent_Declare(
         googletest

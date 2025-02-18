@@ -91,19 +91,22 @@ struct PPCallback : public clang::PPCallbacks {
 
     void InclusionDirective(clang::SourceLocation hashLoc,
                             const clang::Token& includeTok,
-                            llvm::StringRef,
+                            llvm::StringRef fileName,
                             bool,
                             clang::CharSourceRange,
                             clang::OptionalFileEntryRef,
-                            llvm::StringRef,
-                            llvm::StringRef,
+                            llvm::StringRef searchPath,
+                            llvm::StringRef relativePath,
                             const clang::Module*,
                             bool,
                             clang::SrcMgr::CharacteristicKind) override {
         prevFID = SM.getFileID(hashLoc);
         directives[prevFID].includes.emplace_back(Include{
-            {},
-            includeTok.getLocation(),
+            .fid = {},
+            .location = includeTok.getLocation(),
+            .fileName = fileName.str(),
+            .searchPath = searchPath.str(),
+            .relativePath = relativePath.str(),
         });
     }
 
