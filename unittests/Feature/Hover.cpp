@@ -408,7 +408,7 @@ $(n1)names$(n2)pace$(n3) outt$(n4)er {
 
 TEST_F(Hover, VariableAndLiteral) {
     auto code = R"cpp(
-    long operator ""_w(const char*, unsigned long) {
+    long operator ""_w(const char*, unsigned long long) {
         return 1;
     };
 
