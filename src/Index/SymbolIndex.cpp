@@ -1,7 +1,7 @@
 #include <numeric>
 
 #include "Index/Index.h"
-
+#include "Index/USR.h"
 #include "AST/Semantic.h"
 #include "Basic/SourceCode.h"
 #include "Index/SymbolIndex.h"
@@ -12,20 +12,6 @@
 namespace clice::index {
 
 namespace {
-
-const static clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
-    if(!decl) {
-        std::terminate();
-    }
-
-    decl = llvm::cast<clang::NamedDecl>(decl->getCanonicalDecl());
-
-    if(auto ND = instantiatedFrom(llvm::cast<clang::NamedDecl>(decl))) {
-        return llvm::cast<clang::NamedDecl>(ND->getCanonicalDecl());
-    }
-
-    return decl;
-}
 
 class SymbolIndexBuilder : public SemanticVisitor<SymbolIndexBuilder> {
 public:
@@ -47,9 +33,9 @@ public:
         if(isMacro) {
             auto def = static_cast<const clang::MacroInfo*>(symbol);
             auto name = getTokenSpelling(SM, def->getDefinitionLoc());
-            clang::index::generateUSRForMacro(name, def->getDefinitionLoc(), SM, USR);
+            index::generateUSRForMacro(name, def->getDefinitionLoc(), SM, USR);
         } else {
-            clang::index::generateUSRForDecl(static_cast<const clang::Decl*>(symbol), USR);
+            index::generateUSRForDecl(static_cast<const clang::Decl*>(symbol), USR);
         }
 
         assert(!USR.empty() && "Invalid USR");
@@ -262,8 +248,7 @@ public:
 
         auto [begin, end] = range;
         auto expansion = SM.getExpansionLoc(begin);
-        if(SM.isWrittenInBuiltinFile(expansion) ||
-           SM.isWrittenInCommandLineFile(expansion)) {
+        if(SM.isWrittenInBuiltinFile(expansion) || SM.isWrittenInCommandLineFile(expansion)) {
             return;
         }
 

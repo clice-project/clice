@@ -127,6 +127,20 @@ const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
     return nullptr;
 }
 
+const clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
+    if(!decl) {
+        std::terminate();
+    }
+
+    decl = llvm::cast<clang::NamedDecl>(decl->getCanonicalDecl());
+
+    if(auto ND = instantiatedFrom(llvm::cast<clang::NamedDecl>(decl))) {
+        return llvm::cast<clang::NamedDecl>(ND->getCanonicalDecl());
+    }
+
+    return decl;
+}
+
 clang::QualType typeForDecl(const clang::NamedDecl* decl) {
     if(auto VD = llvm::dyn_cast<clang::VarDecl>(decl)) {
         return VD->getType();

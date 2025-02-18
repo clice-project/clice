@@ -10,8 +10,8 @@ namespace {
 
 class HighlightBuilder : public SemanticVisitor<HighlightBuilder> {
 public:
-    HighlightBuilder(bool emitForIndex, ASTInfo& AST) :
-        emitForIndex(emitForIndex), SemanticVisitor<HighlightBuilder>(AST, true) {}
+    HighlightBuilder(ASTInfo& AST, bool interestedOnly) :
+        emitForIndex(!interestedOnly), SemanticVisitor<HighlightBuilder>(AST, interestedOnly) {}
 
     void handleDeclOccurrence(const clang::NamedDecl* decl,
                               RelationKind kind,
@@ -262,8 +262,8 @@ private:
 
 }  // namespace
 
-index::Shared<std::vector<SemanticToken>> semanticTokens(ASTInfo& info) {
-    return HighlightBuilder(true, info).buildForIndex();
+index::Shared<std::vector<SemanticToken>> semanticTokens(ASTInfo& AST) {
+    return HighlightBuilder(AST, false).buildForIndex();
 }
 
 proto::SemanticTokens toSemanticTokens(llvm::ArrayRef<SemanticToken> tokens,
