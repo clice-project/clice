@@ -29,6 +29,20 @@ bool isDefinition(const clang::Decl* decl) {
     return false;
 }
 
+bool isTemplated(const clang::Decl* decl) {
+    if(decl->getDescribedTemplate()) {
+        return true;
+    }
+
+    if(llvm::isa<clang::TemplateDecl,
+                 clang::ClassTemplatePartialSpecializationDecl,
+                 clang::VarTemplatePartialSpecializationDecl>(decl)) {
+        return true;
+    }
+
+    return false;
+}
+
 const static clang::CXXRecordDecl* getDeclContextForTemplateInstationPattern(const clang::Decl* D) {
     if(const auto* CTSD = dyn_cast<clang::ClassTemplateSpecializationDecl>(D->getDeclContext())) {
         return CTSD->getTemplateInstantiationPattern();

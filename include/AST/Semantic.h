@@ -13,17 +13,13 @@ class SemanticVisitor : public FilteredASTVisitor<SemanticVisitor<Derived>> {
 public:
     using Base = FilteredASTVisitor<SemanticVisitor>;
 
-    SemanticVisitor(ASTInfo& info, bool mainFileOnly = false) :
-        Base(info, mainFileOnly, {}), sema(info.sema()), pp(info.pp()), resolver(info.resolver()),
-        srcMgr(info.srcMgr()), tokBuf(info.tokBuf()), info(info), mainFileOnly(mainFileOnly) {}
+    SemanticVisitor(ASTInfo& AST, bool interestedOnly) :
+        Base(AST, interestedOnly, {}), AST(AST), PP(AST.pp()), SM(AST.srcMgr()), TB(AST.tokBuf()),
+        resolver(AST.resolver()) {}
 
 public:
     Derived& getDerived() {
         return static_cast<Derived&>(*this);
-    }
-
-    bool needFilter(clang::SourceLocation location) {
-        return location.isInvalid() || (mainFileOnly && !srcMgr.isInMainFile(location));
     }
 
     /// Invoked when a declaration occur is seen in source code.
@@ -107,9 +103,9 @@ public:
     }
 
     void run() {
-        Base::TraverseAST(info.context());
+        Base::TraverseAST(AST.context());
 
-        for(auto directive: info.directives()) {
+        for(auto directive: AST.directives()) {
             for(auto macro: directive.second.macros) {
                 switch(macro.kind) {
                     case MacroRef::Kind::Def: {
@@ -126,14 +122,14 @@ public:
             }
         }
 
-        if(auto module = info.context().getCurrentNamedModule()) {
+        if(auto module = AST.context().getCurrentNamedModule()) {
             auto keyword = module->DefinitionLoc;
-            auto begin = tokBuf.spelledTokenContaining(keyword);
-            assert(begin->kind() == clang::tok::identifier && begin->text(srcMgr) == "module" &&
+            auto begin = TB.spelledTokenContaining(keyword);
+            assert(begin->kind() == clang::tok::identifier && begin->text(SM) == "module" &&
                    "Invalid module declaration");
 
             begin += 1;
-            auto end = tokBuf.spelledTokens(srcMgr.getFileID(keyword)).end();
+            auto end = TB.spelledTokens(SM.getFileID(keyword)).end();
 
             for(auto iter = begin; iter != end; ++iter) {
                 if(iter->kind() == clang::tok::identifier) {
@@ -166,10 +162,10 @@ public:
 #define VISIT_TYPELOC(type) bool Visit##type(clang::type loc)
 
     VISIT_DECL(ImportDecl) {
-        auto tokens = tokBuf.expandedTokens(decl->getSourceRange());
+        auto tokens = TB.expandedTokens(decl->getSourceRange());
 
         assert(tokens.size() >= 2 && tokens[0].kind() == clang::tok::identifier &&
-               tokens[0].text(srcMgr) == "import" && "Invalid import declaration");
+               tokens[0].text(SM) == "import" && "Invalid import declaration");
         assert([&]() {
             auto range = tokens.drop_front(1);
             for(auto iter = range.begin(); iter != range.end(); ++iter) {
@@ -708,13 +704,11 @@ public:
     }
 
 protected:
-    bool mainFileOnly;
-    clang::Sema& sema;
-    clang::Preprocessor& pp;
+    ASTInfo& AST;
+    clang::Preprocessor& PP;
+    clang::SourceManager& SM;
+    clang::syntax::TokenBuffer& TB;
     TemplateResolver& resolver;
-    clang::SourceManager& srcMgr;
-    clang::syntax::TokenBuffer& tokBuf;
-    ASTInfo& info;
     llvm::SmallVector<clang::Decl*> decls;
 };
 

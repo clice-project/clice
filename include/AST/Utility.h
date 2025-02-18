@@ -5,6 +5,10 @@ namespace clice {
 /// is this decl a definition?
 bool isDefinition(const clang::Decl* decl);
 
+/// Check whether the decl is a template. Note that for partial specializations,
+/// we consider it as a template while clang does not.
+bool isTemplated(const clang::Decl* decl);
+
 /// Return the decl where it is instantiated from. If could be a template decl
 /// or a member of a class template. If the decl is a full specialization, return
 /// itself.
