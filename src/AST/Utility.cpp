@@ -141,6 +141,66 @@ const clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
     return decl;
 }
 
+std::string getDeclName(const clang::NamedDecl* decl) {
+    llvm::SmallString<128> result;
+
+    auto name = decl->getDeclName();
+    switch(name.getNameKind()) {
+        case clang::DeclarationName::Identifier: {
+            result += name.getAsIdentifierInfo()->getName();
+            break;
+        }
+
+        case clang::DeclarationName::CXXConstructorName: {
+            result += name.getCXXNameType().getAsString();
+            break;
+        }
+
+        case clang::DeclarationName::CXXDestructorName: {
+            result += '~';
+            result += name.getCXXNameType().getAsString();
+            break;
+        }
+
+        case clang::DeclarationName::CXXConversionFunctionName: {
+            result += "operator ";
+            result += name.getCXXNameType().getAsString();
+            break;
+        }
+
+        case clang::DeclarationName::CXXOperatorName: {
+            result += "operator ";
+            result += clang::getOperatorSpelling(name.getCXXOverloadedOperator());
+            break;
+        }
+
+        case clang::DeclarationName::CXXDeductionGuideName: {
+            result += name.getCXXDeductionGuideTemplate()->getNameAsString();
+            break;
+        }
+
+        case clang::DeclarationName::CXXLiteralOperatorName: {
+            result += R"(operator "")";
+            result += name.getCXXLiteralIdentifier()->getName();
+            break;
+        }
+
+        case clang::DeclarationName::CXXUsingDirective: {
+            auto UDD = llvm::cast<clang::UsingDirectiveDecl>(decl);
+            result += UDD->getNominatedNamespace()->getName();
+            break;
+        }
+
+        case clang::DeclarationName::ObjCZeroArgSelector:
+        case clang::DeclarationName::ObjCOneArgSelector:
+        case clang::DeclarationName::ObjCMultiArgSelector: {
+            std::unreachable();
+        }
+    }
+
+    return result.str().str();
+}
+
 clang::QualType typeForDecl(const clang::NamedDecl* decl) {
     if(auto VD = llvm::dyn_cast<clang::VarDecl>(decl)) {
         return VD->getType();

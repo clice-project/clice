@@ -16,6 +16,9 @@ const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl);
 
 const clang::NamedDecl* normalize(const clang::NamedDecl* decl);
 
+/// Get the name of the decl.
+std::string getDeclName(const clang::NamedDecl* decl);
+
 /// To response go-to-type-definition request. Some decls actually have a type
 /// for example the result of `typeof(var)` is the type of `var`. This function
 /// returns the type for the decl if any.
