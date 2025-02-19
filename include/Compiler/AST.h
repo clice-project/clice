@@ -103,24 +103,21 @@ public:
     /// makes sure the path is ended with '/0'.
     llvm::StringRef getFilePath(clang::FileID fid);
 
+    /// Get the content of a file ID.
+    llvm::StringRef getFileContent(clang::FileID fid) {
+        return SM.getBufferData(fid);
+    }
+
     /// Check if a file is a builtin file.
     bool isBuiltinFile(clang::FileID fid) {
         auto path = getFilePath(fid);
         return path == "<built-in>" || path == "<command line>" || path == "<scratch space>";
     }
 
-    LocalSourceRange toLocalRange(clang::SourceRange range) {
-        auto [begin, end] = range;
-        assert(begin.isValid() && end.isValid() && "Invalid source range");
-        assert(begin.isFileID() && end.isFileID() && "Invalid source range");
-        auto [beginFID, beginOffset] = getDecomposedLoc(begin);
-        auto [endFID, endOffset] = getDecomposedLoc(end);
-        assert(beginFID == endFID && "Invalid source range");
-        return LocalSourceRange{
-            .begin = beginOffset,
-            .end = endOffset + getTokenLength(SM, end),
-        };
-    }
+    /// Decompose a source range into file ID and local source range. The begin and end
+    /// of the input source range both should be `FileID`. If the range is cross multiple
+    /// files, we cut off the range at the end of the first file.
+    std::pair<clang::FileID, LocalSourceRange> toLocalRange(clang::SourceRange range);
 
 private:
     /// The interested file ID.

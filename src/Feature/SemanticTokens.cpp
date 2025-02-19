@@ -105,9 +105,9 @@ private:
             }
         }
 
-        auto [fid, offset] = AST.getDecomposedLoc(location);
+        auto [fid, range] = AST.toLocalRange(location);
         auto& tokens = emitForIndex ? sharedResult[fid] : result;
-        tokens.emplace_back(AST.toLocalRange(location), kind, modifiers);
+        tokens.emplace_back(range, kind, modifiers);
     }
 
     /// Render semantic tokens for file through raw lexer.
