@@ -13,14 +13,14 @@ namespace clice::index {
 
 namespace {
 
+struct File : memory::SymbolIndex {
+    llvm::DenseMap<const void*, uint32_t> symbolCache;
+    llvm::DenseMap<std::pair<uint32_t, uint32_t>, uint32_t> locationCache;
+};
+
 class SymbolIndexBuilder : public SemanticVisitor<SymbolIndexBuilder> {
 public:
     SymbolIndexBuilder(ASTInfo& info) : SemanticVisitor(info, false) {}
-
-    struct File : memory::SymbolIndex {
-        llvm::DenseMap<const void*, uint32_t> symbolCache;
-        llvm::DenseMap<std::pair<uint32_t, uint32_t>, uint32_t> locationCache;
-    };
 
     /// Get the symbol id for the given decl.
     uint64_t getSymbolID(const void* symbol, bool isMacro = false) {
@@ -85,6 +85,10 @@ public:
             file.ranges.emplace_back(LocalSourceRange{beginOffset, endOffset});
         }
         return iter->second;
+    }
+
+    std::uint32_t getLocation(clang::SourceRange range) {
+        AST.toLocalRange(range);
     }
 
     void sort(File& file) {
@@ -182,14 +186,27 @@ public:
 
         decl = normalize(decl);
 
+        if(location.isMacroID()) {
+            auto spelling = AST.getSpellingLoc(location);
+            auto expansion = AST.getExpansionLoc(location);
+
+            /// FIXME: For location from macro, we only handle the case that the
+            /// spelling and expansion are in the same file currently.
+            if(AST.getFileID(spelling) != AST.getFileID(expansion)) {
+                return;
+            }
+
+            /// For occurrence, we always use spelling location.
+            location = spelling;
+        }
+
         /// We always use spelling location for occurrence.
-        auto spelling = SM.getSpellingLoc(location);
-        clang::FileID id = SM.getFileID(spelling);
+        clang::FileID id = SM.getFileID(location);
         assert(id.isValid() && "Invalid file id");
         auto& file = files[id];
 
         auto symbol = getSymbol(file, decl);
-        auto loc = getLocation(file, {spelling, spelling});
+        auto loc = getLocation(file, {location, location});
         file.occurrences.emplace_back(memory::Occurrence{loc, symbol});
     }
 
