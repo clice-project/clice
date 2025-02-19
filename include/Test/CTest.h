@@ -14,6 +14,8 @@ struct Tester {
     llvm::StringMap<proto::Position> locations;
     std::vector<std::string> sources;
 
+    proto::Position eof;
+
 public:
     Tester() = default;
 
@@ -29,6 +31,10 @@ public:
 
     void addFile(llvm::StringRef name, llvm::StringRef content) {
         params.remappedFiles.emplace_back(name, content);
+    }
+
+    proto::Position endOfFile() const {
+        return eof;
     }
 
     llvm::StringRef annoate(llvm::StringRef content) {
@@ -75,6 +81,8 @@ public:
             source.push_back(c);
         }
 
+        eof.line = line;
+        eof.character = column;
         return source;
     }
 

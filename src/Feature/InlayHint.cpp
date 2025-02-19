@@ -1,8 +1,8 @@
+#include "AST/FilterASTVisitor.h"
 #include "Basic/SourceConverter.h"
 #include "Compiler/Compilation.h"
 #include "Feature/InlayHint.h"
 
-#include <clang/AST/RecursiveASTVisitor.h>
 #include <clang/AST/TypeVisitor.h>
 
 namespace clice {
@@ -34,10 +34,10 @@ using feature::inlay_hint::Result;
 struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
     using Base = clang::TypeVisitor<TypeHintLinkBuilder, void>;
 
+    ASTInfo& AST;
+
     // The result buffer to write.
     std::vector<LablePart>& results;
-    const SourceConverter& cvtr;
-    const clang::SourceManager& SM;
 
     // const clang::PrintingPolicy& policy;
 
@@ -65,7 +65,7 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
     void recordScope(const Decl* D, llvm::SmallVectorImpl<LablePart>& stack) {
         stack.push_back({
             .value = D->getName().str(),
-            .location = cvtr.toLocalRange(D->getSourceRange(), SM),
+            .location = AST.toLocalRange(D->getSourceRange()).second,
         });
     }
 
@@ -96,7 +96,7 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
         recursiveMarkScope(RD->getDeclContext());
         results.push_back({
             .value = RD->getName().str(),
-            .location = cvtr.toLocalRange(RD->getFirstDecl()->getSourceRange(), SM),
+            .location = AST.toLocalRange(RD->getFirstDecl()->getSourceRange()).second,
         });
     }
 
@@ -178,10 +178,7 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
     }
 
     /// Build label parts for a given type, the result will be written to `hints`.
-    static void build(clang::QualType QT,
-                      std::vector<LablePart>& hints,
-                      const SourceConverter& cvtr,
-                      const clang::SourceManager& SM) {
+    static void build(clang::QualType QT, std::vector<LablePart>& hints, ASTInfo& AST) {
         assert(!QT.isNull() && "QualType must not be Null.");
 
         if(isBuiltinType(QT) || isStdType(QT)) {
@@ -189,12 +186,7 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
             return;
         }
 
-        TypeHintLinkBuilder builder{
-            .results = hints,
-            .cvtr = cvtr,
-            .SM = SM,
-        };
-
+        TypeHintLinkBuilder builder{.AST = AST, .results = hints};
         builder.Visit(QT.getTypePtr());
     }
 
@@ -202,8 +194,7 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
     static void buildWithKnownName(clang::QualType QT,
                                    llvm::StringRef name,
                                    std::vector<LablePart>& hints,
-                                   const SourceConverter& cvtr,
-                                   const clang::SourceManager& SM) {
+                                   ASTInfo& AST) {
         assert(!QT.isNull() && "QualType must not be Null.");
 
         if(name.contains("std::") || isBuiltinType(QT)) {
@@ -211,12 +202,7 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
             return;
         }
 
-        TypeHintLinkBuilder builder{
-            .results = hints,
-            .cvtr = cvtr,
-            .SM = SM,
-        };
-
+        TypeHintLinkBuilder builder{.AST = AST, .results = hints};
         builder.Visit(QT.getTypePtr());
     }
 };
@@ -225,55 +211,28 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
 ///     A. Only collect hints in MainFileID.
 ///     B. Collect hints in each files, used for header context.
 /// The result is always stored in a densmap<FileID, vector<InlayHint>>, and return as needed.
-struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
+struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
 
-    using Base = clang::RecursiveASTVisitor<InlayHintCollector>;
+    using Base = FilteredASTVisitor<InlayHintCollector>;
 
     /// The result of inlay hints for given AST.
     using Storage = llvm::DenseMap<clang::FileID, Result>;
 
-    const clang::SourceManager& src;
-
-    const SourceConverter& cvtr;
-
-    /// The restrict range of request.
-    const LocalSourceRange limit;
+    /// The result of inlay hints.
+    Storage result;
 
     /// The config of inlay hints collector.
     const config::InlayHintOption option;
 
-    /// Indicate that only hints in main file should be collected (mode A).
-    const bool onlyMain;
-
-    /// The result of inlay hints.
-    Storage result;
-
-    /// The printing policy of AST.
-    const clang::PrintingPolicy policy;
-
     /// Whole source code text in main file.
     const llvm::StringRef code;
 
-    /// Do not produce inlay hints if either range ends is not within the main file.
-    bool needFilter(clang::SourceRange range) {
-        // skip invalid range or not in main file
-        if(range.isInvalid())
-            return true;
-
-        if(!onlyMain)
-            return false;
-
-        if(!src.isInMainFile(range.getBegin()) || !src.isInMainFile(range.getEnd()))
-            return true;
-
-        // not involved in restrict range
-        auto begin = src.getDecomposedLoc(range.getBegin()).second;
-        auto end = src.getDecomposedLoc(range.getEnd()).second;
-        if(end < limit.begin || begin > limit.end)
-            return true;
-
-        return false;
-    }
+    InlayHintCollector(ASTInfo& ast,
+                       bool interestedOnly,
+                       std::optional<LocalSourceRange> limit,
+                       const config::InlayHintOption& option) :
+        Base(ast, interestedOnly, limit), result(), option(option),
+        code(ast.getInterestedFileContent()) {}
 
     /// Shrink the hint text to the max length.
     static std::string shrinkHintText(std::string text, size_t maxLength) {
@@ -285,7 +244,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     }
 
     std::string tryShrinkHintText(std::string text) {
-        return onlyMain ? shrinkHintText(text, option.maxLength) : text;
+        return interestedOnly ? shrinkHintText(std::move(text), option.maxLength) : text;
     }
 
     /// Collect hint for variable declared with `auto` keywords.
@@ -299,7 +258,7 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         // For lambda expression, `getAsString` return a text like `(lambda at main.cpp:2:10)`
         //      auto lambda = [](){ return 1; };
         // Use a short text instead.
-        std::string typeName = deduced.getAsString(policy);
+        std::string typeName = deduced.getAsString(AST.context().getPrintingPolicy());
 
         bool isLambda = false;
         if(typeName.contains("lambda"))
@@ -309,21 +268,21 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         if(isLambda || !option.typeLink) {
             LablePart lable{.value = tryShrinkHintText(std::format(": {}", typeName))};
             if(linkDeclRange.has_value())
-                lable.location = cvtr.toLocalRange(*linkDeclRange, src);
+                lable.location = AST.toLocalRange(*linkDeclRange).second;
             labels.push_back(std::move(lable));
         } else {
             labels.push_back({.value = ": "});
-            TypeHintLinkBuilder::buildWithKnownName(deduced, typeName, labels, cvtr, src);
+            TypeHintLinkBuilder::buildWithKnownName(deduced, typeName, labels, AST);
         }
 
+        auto [locFileID, offset] = AST.getDecomposedLoc(identRange.getEnd());
         InlayHint hint{
             .kind = kind,
-            .offset = src.getDecomposedLoc(identRange.getEnd()).second,
+            .offset = offset,
             .labels = std::move(labels),
         };
-
-        clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(identRange.getBegin());
-        result[fid].push_back(std::move(hint));
+        clang::FileID fileID = interestedOnly ? AST.getInterestedFile() : locFileID;
+        result[fileID].push_back(std::move(hint));
     }
 
     // If `expr` spells a single unqualified identifier, return that name, otherwise, return an
@@ -340,9 +299,9 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     }
 
     /// Check if there is any comment like /*paramName*/ before a argument.
-    bool hasHandWriteComment(clang::SourceRange argument) {
-        auto [fid, offset] = src.getDecomposedLoc(argument.getBegin());
-        if(fid != src.getMainFileID())
+    bool hasHandWriteComment(clang::SourceRange argumentRange) {
+        auto [fileID, offset] = AST.getDecomposedLoc(argumentRange.getBegin());
+        if(fileID != AST.getInterestedFile())
             return false;
 
         // Get source text until the argument and drop end whitespace.
@@ -393,30 +352,24 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             auto parmName = std::format("{}{}:", params[i]->getName(), hintRef ? "&" : "");
             LablePart lable{
                 .value = tryShrinkHintText(std::move(parmName)),
-                .location = cvtr.toLocalRange(params[i]->getSourceRange(), src),
+                .location = AST.toLocalRange(params[i]->getSourceRange()).second,
             };
 
             auto argBeginLoc = args[i]->getSourceRange().getBegin();
+            auto [locFileID, offset] = AST.getDecomposedLoc(argBeginLoc);
             InlayHint hint{
                 .kind = kind,
-                .offset = src.getDecomposedLoc(argBeginLoc).second,
+                .offset = offset,
                 .labels = {std::move(lable)},
             };
 
-            clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(argBeginLoc);
-            result[fid].push_back(std::move(hint));
+            clang::FileID fileID = interestedOnly ? AST.getInterestedFile() : locFileID;
+            result[fileID].push_back(std::move(hint));
         }
     }
 
-    bool TraverseDecl(clang::Decl* decl) {
-        if(!decl || needFilter(decl->getSourceRange()))
-            return true;
-
-        return Base::TraverseDecl(decl);
-    }
-
     bool VisitVarDecl(const clang::VarDecl* decl) {
-        // Hint local variable, global variable, and structure binding.
+        // Hint local variable, global variable, and structure binding only.
         if(!decl->isLocalVarDecl() && !decl->isFileVarDecl())
             return true;
 
@@ -633,21 +586,24 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     void collectReturnTypeHint(clang::SourceLocation hintLoc, clang::QualType retType, Kind kind) {
         std::vector<LablePart> labels;
         if(!option.typeLink) {
+            const auto& policy = AST.context().getPrintingPolicy();
+
             LablePart lable;
             lable.value = tryShrinkHintText(std::format("-> {}", retType.getAsString(policy)));
             labels.push_back(std::move(lable));
         } else {
             labels.push_back({.value = "-> "});
-            TypeHintLinkBuilder::build(retType, labels, cvtr, src);
+            TypeHintLinkBuilder::build(retType, labels, AST);
         }
 
+        auto [locFIleID, offset] = AST.getDecomposedLoc(hintLoc);
         InlayHint hint{
             .kind = kind,
-            .offset = src.getDecomposedLoc(hintLoc).second,
+            .offset = offset,
             .labels = std::move(labels),
         };
 
-        clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(hintLoc);
+        clang::FileID fid = interestedOnly ? AST.getInterestedFile() : locFIleID;
         result[fid].push_back(std::move(hint));
     }
 
@@ -658,13 +614,13 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
             /// FIXME:
             /// Use a proper name such as simplified signature of funtion.
             auto typeLoc = decl->getTypeSourceInfo()->getTypeLoc().getSourceRange();
-            auto begin = src.getCharacterData(typeLoc.getBegin());
-            auto end = src.getCharacterData(typeLoc.getEnd());
-            llvm::StringRef piece{begin, static_cast<size_t>(end - begin) + 1};
+            auto begin = AST.srcMgr().getCharacterData(typeLoc.getBegin());
+            auto end = AST.srcMgr().getCharacterData(typeLoc.getEnd());
+            llvm::StringRef source{begin, static_cast<size_t>(end - begin) + 1};
 
             // Right side of '}'
             collectBlockEndHint(decl->getBodyRBrace().getLocWithOffset(1),
-                                std::format("// {}", piece),
+                                std::format("// {}", source),
                                 decl->getSourceRange(),
                                 Kind::FunctionEnd,
                                 DecideDuplicated::Ignore);
@@ -725,17 +681,18 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     void collectArrayElemIndexHint(int index, clang::SourceLocation location) {
         LablePart lable{
             .value = std::format("[{}]=", index),  // This shouldn't be shrinked.
-            .location = cvtr.toLocalRange(location, src),
+            .location = AST.toLocalRange(location).second,
         };
 
+        auto [locFileID, offset] = AST.getDecomposedLoc(location);
         InlayHint hint{
             .kind = Kind::ArrayIndex,
-            .offset = src.getDecomposedLoc(location).second,
+            .offset = offset,
             .labels = {std::move(lable)},
         };
 
-        clang::FileID fid = onlyMain ? src.getMainFileID() : src.getFileID(location);
-        result[fid].push_back(std::move(hint));
+        clang::FileID fileID = interestedOnly ? AST.getInterestedFile() : locFileID;
+        result[fileID].push_back(std::move(hint));
     }
 
     bool VisitInitListExpr(const clang::InitListExpr* Syn) {
@@ -754,12 +711,13 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     }
 
     bool isMultiLineRange(const clang::SourceRange range) {
-        return range.isValid() && src.getPresumedLineNumber(range.getBegin()) <
-                                      src.getPresumedLineNumber(range.getEnd());
+        const auto& SM = AST.srcMgr();
+        return range.isValid() && SM.getPresumedLineNumber(range.getBegin()) <
+                                      SM.getPresumedLineNumber(range.getEnd());
     }
 
     llvm::StringRef remainTextOfThatLine(clang::SourceLocation location) {
-        auto [_, offset] = src.getDecomposedLoc(location);
+        auto [_, offset] = AST.getDecomposedLoc(location);
         auto remain = code.substr(offset).split('\n').first;
         return remain.ltrim();
     }
@@ -781,21 +739,24 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
         Ignore,
     };
 
-    void collectBlockEndHint(clang::SourceLocation location,
+    void collectBlockEndHint(clang::SourceLocation endLoc,
                              std::string text,
                              clang::SourceRange linkRange,
                              Kind kind,
                              DecideDuplicated decision) {
         // Already has a comment in that line.
-        if(auto remain = remainTextOfThatLine(location);
+        if(auto remain = remainTextOfThatLine(endLoc);
            remain.starts_with("/*") || remain.starts_with("//"))
             return;
 
-        auto& state = result[onlyMain ? src.getMainFileID() : src.getFileID(location)];
+        const auto& SM = AST.srcMgr();
+        auto fileID = interestedOnly ? AST.getInterestedFile() : SM.getDecomposedLoc(endLoc).first;
+        auto& state = result[fileID];
+
         if(decision != DecideDuplicated::AcceptBoth && !state.empty()) {
             // Already has a duplicated hint in that line, use the newer hint instead.
-            auto lastHintLine = cvtr.toPosition(code, state.back().offset).line;
-            auto thatLine = cvtr.toPosition(location, src).line;
+            auto lastHintLine = SM.getLineNumber(fileID, state.back().offset);
+            auto thatLine = SM.getPresumedLineNumber(endLoc);
             if(lastHintLine == thatLine) {
                 if(decision == DecideDuplicated::Replace)
                     state.pop_back();
@@ -806,12 +767,12 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
 
         LablePart lable{
             .value = tryShrinkHintText(std::move(text)),
-            .location = cvtr.toLocalRange(linkRange, src),
+            .location = AST.toLocalRange(linkRange).second,
         };
 
         InlayHint hint{
             .kind = kind,
-            .offset = src.getDecomposedLoc(location).second,
+            .offset = AST.getDecomposedLoc(endLoc).second,
             .labels = {std::move(lable)},
         };
 
@@ -846,18 +807,19 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
 
         LablePart lable{
             .value = tryShrinkHintText(std::format("size: {}, align: {}", size, align)),
-            .location = cvtr.toLocalRange(decl->getSourceRange(), src),
+            .location = AST.toLocalRange(decl->getSourceRange()).second,
         };
 
         // right side of identifier.
         auto tail = decl->getLocation().getLocWithOffset(decl->getName().size());
+        auto [locFildID, offset] = AST.getDecomposedLoc(tail);
         InlayHint hint{
             .kind = Kind::StructSizeAndAlign,
-            .offset = src.getDecomposedLoc(tail).second,
+            .offset = offset,
             .labels = {std::move(lable)},
         };
 
-        auto fid = onlyMain ? src.getMainFileID() : src.getFileID(tail);
+        auto fid = interestedOnly ? AST.getInterestedFile() : locFildID;
         result[fid].push_back(std::move(hint));
     }
 
@@ -907,6 +869,15 @@ struct InlayHintCollector : clang::RecursiveASTVisitor<InlayHintCollector> {
     //     }
     //     return true;
     // }
+
+    static Storage collect(ASTInfo& AST,
+                           bool interestedOnly,
+                           std::optional<LocalSourceRange> limit,
+                           const config::InlayHintOption& option) {
+        InlayHintCollector collector{AST, interestedOnly, limit, option};
+        collector.TraverseTranslationUnitDecl(AST.tu());
+        return std::move(collector.result);
+    }
 };
 
 using feature::inlay_hint::InlayHintKind;
@@ -961,8 +932,9 @@ proto::InlayHintLablePart toLspType(const LablePart& lable,
                                     llvm::StringRef content,
                                     const SourceConverter& SC) {
     proto::InlayHintLablePart lspPart;
-    lspPart.value = InlayHintCollector::shrinkHintText(lable.value, maxHintLength);
     lspPart.tooltip = blank();
+    lspPart.value = maxHintLength ? InlayHintCollector::shrinkHintText(lable.value, maxHintLength)
+                                  : lable.value;
     if(lable.location.has_value())
         lspPart.location = {.uri = docuri.str(), .range = SC.toRange(*lable.location, content)};
     return lspPart;
@@ -994,49 +966,38 @@ proto::InlayHint toLspType(const InlayHint& hint,
     return lspHint;
 }
 
-Result inlayHints(proto::InlayHintParams param,
-                  ASTInfo& AST,
-                  const SourceConverter& converter,
-                  const config::InlayHintOption& option) {
-    llvm::StringRef codeText = AST.getInterestedFileContent();
+namespace {
 
-    // Take 0-0 based Lsp Location from `param.range` and convert it to offset pair.
-    LocalSourceRange requestRange{
-        .begin = static_cast<uint32_t>(converter.toOffset(codeText, param.range.start)),
-        .end = static_cast<uint32_t>(converter.toOffset(codeText, param.range.end)),
-    };
-
-    const clang::SourceManager& src = AST.srcMgr();
-    // If request range is invalid, use the whole interested file as the restrict range.
-    if(requestRange.begin >= requestRange.end) {
-        clang::FileID main = src.getMainFileID();
-        requestRange.begin = src.getDecomposedSpellingLoc(src.getLocForStartOfFile(main)).second;
-        requestRange.end = src.getDecomposedSpellingLoc(src.getLocForEndOfFile(main)).second;
-    }
-
-    /// TODO:
-    /// Check and fix invalid options before collect hints.
-    InlayHintCollector collector{
-        .src = src,
-        .cvtr = converter,
-        .limit = requestRange,
-        .option = option,
-        .onlyMain = true,
-        .result = InlayHintCollector::Storage{},
-        .policy = AST.context().getPrintingPolicy(),
-        .code = codeText,
-    };
-
-    collector.TraverseTranslationUnitDecl(AST.tu());
-
-    return std::move(collector.result[src.getMainFileID()]);
+clang::SourceLocation fromLineCol(clang::FileID file,
+                                  proto::Position pos,
+                                  const clang::SourceManager& SM) {
+    return SM.translateLineCol(file, pos.line + 1, pos.character + 1);
 }
 
-index::Shared<Result> inlayHints(proto::DocumentUri uri,
-                                 ASTInfo& info,
-                                 const SourceConverter& converter) {
-    const clang::SourceManager& src = info.srcMgr();
+}  // namespace
 
+Result inlayHints(proto::InlayHintParams param,
+                  ASTInfo& AST,
+                  const config::InlayHintOption& option) {
+    assert(param.range.start != param.range.end && "Invalid range from client.");
+
+    // Take 0-0 based Lsp Location from `param.range` and convert it to offset pair.
+    const clang::SourceManager& SM = AST.srcMgr();
+    clang::SourceRange requestRange{
+        fromLineCol(AST.getInterestedFile(), param.range.start, SM),
+        fromLineCol(AST.getInterestedFile(), param.range.end, SM),
+    };
+    assert(requestRange.isValid() && "Invalid SourceRange.");
+
+    /// TODO:
+    /// Check and fix invalid options before collecting hints.
+
+    auto limit = AST.toLocalRange(requestRange).second;
+    auto result = InlayHintCollector::collect(AST, true, limit, option);
+    return std::move(result[AST.getInterestedFile()]);
+}
+
+index::Shared<Result> inlayHints(ASTInfo& AST) {
     config::InlayHintOption enableAll;
     enableAll.maxLength = 0;
     enableAll.maxArrayElements = 0;
@@ -1047,18 +1008,7 @@ index::Shared<Result> inlayHints(proto::DocumentUri uri,
     enableAll.numberLiteralToHex = true;
     enableAll.cstrLength = true;
 
-    InlayHintCollector collector{
-        .src = src,
-        .cvtr = converter,
-        .option = enableAll,
-        .onlyMain = false,
-        .result = InlayHintCollector::Storage{},
-        .policy = info.context().getPrintingPolicy(),
-        .code = src.getBufferData(src.getMainFileID()),
-    };
-
-    collector.TraverseTranslationUnitDecl(info.tu());
-    return std::move(collector.result);
+    return InlayHintCollector::collect(AST, false, std::nullopt, enableAll);
 }
 
 proto::InlayHintsResult toLspType(llvm::ArrayRef<InlayHint> result,
@@ -1074,8 +1024,9 @@ proto::InlayHintsResult toLspType(llvm::ArrayRef<InlayHint> result,
     /// `config::maxArrayElements` will be ignored because we can't recover the parent-child
     /// relationship of AST node from `InlayHint`.
 
+    auto option = config.value_or(config::InlayHintOption{});
     for(auto& hint: result) {
-        if(config.has_value() && !isAvailableWithOption(hint.kind, *config))
+        if(!isAvailableWithOption(hint.kind, *config))
             continue;
 
         lspRes.push_back(toLspType(hint, config->maxLength, docuri, content, SC));

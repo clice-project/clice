@@ -27,7 +27,7 @@ bool RAVFileter::filterable(clang::SourceRange range) const {
                 return true;
             }
 
-            if(targetRange && !targetRange->contains(offset)) {
+            if(limit && !limit->contains(offset)) {
                 return true;
             }
         }
@@ -45,7 +45,7 @@ bool RAVFileter::filterable(clang::SourceRange range) const {
                 return true;
             }
 
-            if(targetRange && !targetRange->intersects({beginOffset, endOffset})) {
+            if(limit && !limit->intersects({beginOffset, endOffset})) {
                 return true;
             }
         }

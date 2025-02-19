@@ -9,13 +9,13 @@ namespace clice {
 
 struct RAVFileter {
 
-    RAVFileter(ASTInfo& AST, bool interestedOnly, std::optional<LocalSourceRange> targetRange) :
-        AST(AST), targetRange(targetRange), interestedOnly(interestedOnly) {}
+    RAVFileter(ASTInfo& AST, bool interestedOnly, std::optional<LocalSourceRange> limit) :
+        AST(AST), limit(limit), interestedOnly(interestedOnly) {}
 
     bool filterable(clang::SourceRange range) const;
 
     ASTInfo& AST;
-    std::optional<LocalSourceRange> targetRange;
+    std::optional<LocalSourceRange> limit;
     bool interestedOnly = true;
 };
 
