@@ -63,7 +63,6 @@ llvm::StringRef ASTInfo::getFilePath(clang::FileID fid) {
     }
     assert(!path.empty() && "Invalid file path");
 
-
     /// Allocate the path in the storage.
     auto size = path.size();
     auto data = pathStorage.Allocate<char>(size + 1);
@@ -73,6 +72,35 @@ llvm::StringRef ASTInfo::getFilePath(clang::FileID fid) {
     auto [it, inserted] = pathCache.try_emplace(fid, data, size);
     assert(inserted && "File path already exists");
     return it->second;
+}
+
+std::pair<clang::FileID, LocalSourceRange> ASTInfo::toLocalRange(clang::SourceRange range) {
+    auto [begin, end] = range;
+    assert(begin.isValid() && end.isValid() && "Invalid source range");
+    assert(begin.isFileID() && end.isValid() && "Input source range should be a file range");
+
+    if(begin == end) {
+        auto [fid, offset] = getDecomposedLoc(begin);
+        return {
+            fid,
+            {offset, offset + getTokenLength(SM, end)}
+        };
+    } else {
+        auto [beginFID, beginOffset] = getDecomposedLoc(begin);
+        auto [endFID, endOffset] = getDecomposedLoc(end);
+        if(beginFID == endFID) {
+            return {
+                beginFID,
+                {beginOffset, endOffset + getTokenLength(SM, end)}
+            };
+        } else {
+            auto content = getFileContent(beginFID);
+            return {
+                beginFID,
+                {beginOffset, static_cast<uint32_t>(content.size())}
+            };
+        }
+    }
 }
 
 }  // namespace clice
