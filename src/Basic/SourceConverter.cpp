@@ -226,7 +226,7 @@ static std::string decodePercent(llvm::StringRef content) {
 
 proto::DocumentUri SourceConverter::toURI(llvm::StringRef fspath) {
     if(!path::is_absolute(fspath))
-        std::terminate();
+        std::abort();
 
     llvm::SmallString<128> path("file://");
 #if defined(_WIN32)
@@ -265,13 +265,13 @@ std::string SourceConverter::toPath(llvm::StringRef uri) {
     if(cloned.starts_with("file:///")) {
         cloned = cloned.drop_front(8);
     } else {
-        std::terminate();
+        std::abort();
     }
 #elif defined(__unix__)
     if(cloned.starts_with("file://")) {
         cloned = cloned.drop_front(7);
     } else {
-        std::terminate();
+        std::abort();
     }
 #else
 #error "Unsupported platform"
@@ -282,7 +282,7 @@ std::string SourceConverter::toPath(llvm::StringRef uri) {
     llvm::SmallString<128> result;
     if(auto err = fs::real_path(decoded, result)) {
         print("Failed to get real path: {}, Input is {}\n", err.message(), decoded);
-        std::terminate();
+        std::abort();
     }
 
     return result.str().str();

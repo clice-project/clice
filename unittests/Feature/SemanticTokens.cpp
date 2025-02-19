@@ -59,7 +59,7 @@ struct SemanticTokens : ::testing::Test, Tester {
     void dumpResult() {
         auto& tokens = result[info->getInterestedFile()];
         for(auto& token: tokens) {
-            println("token: {}", dump(token));
+            clice::println("token: {}", dump(token));
         }
     }
 };

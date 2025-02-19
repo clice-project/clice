@@ -20,7 +20,7 @@ PCMInfo buildPCM(llvm::StringRef file, llvm::StringRef code) {
     PCMInfo pcm;
     if(!compile(params, pcm)) {
         llvm::errs() << "Failed to build PCM\n";
-        std::terminate();
+        std::abort();
     }
 
     return pcm;
@@ -35,7 +35,7 @@ ModuleInfo scan(llvm::StringRef content) {
     auto info = scanModule(params);
     if(!info) {
         llvm::errs() << "Failed to scan module\n";
-        std::terminate();
+        std::abort();
     }
     return std::move(*info);
 }
