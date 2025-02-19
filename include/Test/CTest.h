@@ -92,7 +92,7 @@ public:
         auto info = compile(params);
         if(!info) {
             llvm::errs() << "Failed to build AST\n";
-            std::terminate();
+            std::abort();
         }
 
         this->info.emplace(std::move(*info));

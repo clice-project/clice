@@ -54,7 +54,7 @@ void trace(std::format_string<Args...> fmt, Args&&... args) {
 template <typename... Args>
 void fatal [[noreturn]] (std::format_string<Args...> fmt, Args&&... args) {
     log::log(Level::FATAL, fmt.get(), std::forward<Args>(args)...);
-    std::terminate();
+    std::abort();
 }
 
 }  // namespace clice::log

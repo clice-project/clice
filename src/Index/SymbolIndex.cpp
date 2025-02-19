@@ -15,7 +15,7 @@ namespace {
 
 const static clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
     if(!decl) {
-        std::terminate();
+        std::abort();
     }
 
     decl = llvm::cast<clang::NamedDecl>(decl->getCanonicalDecl());
@@ -107,6 +107,11 @@ public:
         /// to make sure that the data is in the same order even they are in different
         /// files.
 
+        /// Polyfill ranges::iota for libc++
+        auto iota = [](auto &r, auto init) {
+            ranges::generate(r, [init] mutable { return init++; });
+        };
+
         /// Map the old index to new index.
         std::vector<uint32_t> symbolMap(file.symbols.size());
         std::vector<uint32_t> locationMap(file.ranges.size());
@@ -114,7 +119,7 @@ public:
         {
             /// Sort symbols and update the symbolMap.
             std::vector<uint32_t> new2old(file.symbols.size());
-            std::ranges::iota(new2old, 0u);
+            iota(new2old, 0u);
 
             ranges::sort(views::zip(file.symbols, new2old), refl::less, [](const auto& element) {
                 auto& symbol = std::get<0>(element);
@@ -129,7 +134,7 @@ public:
         {
             /// Sort locations and update the locationMap.
             std::vector<uint32_t> new2old(file.ranges.size());
-            std::ranges::iota(new2old, 0u);
+            iota(new2old, 0u);
 
             ranges::sort(views::zip(file.ranges, new2old), refl::less, [](const auto& element) {
                 return std::get<0>(element);
