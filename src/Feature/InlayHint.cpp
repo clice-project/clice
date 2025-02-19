@@ -998,9 +998,7 @@ Result inlayHints(proto::InlayHintParams param,
                   ASTInfo& info,
                   const SourceConverter& converter,
                   const config::InlayHintOption& option) {
-    const clang::SourceManager& src = info.srcMgr();
-
-    llvm::StringRef codeText = src.getBufferData(src.getMainFileID());
+    llvm::StringRef codeText = info.getMainFileContent();
 
     // Take 0-0 based Lsp Location from `param.range` and convert it to offset pair.
     LocalSourceRange requestRange{
@@ -1008,6 +1006,7 @@ Result inlayHints(proto::InlayHintParams param,
         .end = static_cast<uint32_t>(converter.toOffset(codeText, param.range.end)),
     };
 
+    const clang::SourceManager& src = info.srcMgr();
     // If request range is invalid, use the whole main file as the restrict range.
     if(requestRange.begin >= requestRange.end) {
         clang::FileID main = src.getMainFileID();

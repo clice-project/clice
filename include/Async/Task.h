@@ -117,6 +117,7 @@ struct final {
         /// In the final suspend point, this coroutine is already done.
         /// So try to resume the waiting coroutine if it exists.
         if(continuation) {
+            continuation->next = nullptr;
             handle = continuation->resume_handle();
         }
 
