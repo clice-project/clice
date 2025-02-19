@@ -15,7 +15,7 @@ namespace {
 
 const static clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
     if(!decl) {
-        std::terminate();
+        std::abort();
     }
 
     decl = llvm::cast<clang::NamedDecl>(decl->getCanonicalDecl());
@@ -113,8 +113,7 @@ public:
 
         {
             /// Sort symbols and update the symbolMap.
-            std::vector<uint32_t> new2old(file.symbols.size());
-            std::ranges::iota(new2old, 0u);
+            auto new2old = views::iota(0u, file.symbols.size()) | ranges::to<std::vector<uint32_t>>();
 
             ranges::sort(views::zip(file.symbols, new2old), refl::less, [](const auto& element) {
                 auto& symbol = std::get<0>(element);
@@ -128,8 +127,7 @@ public:
 
         {
             /// Sort locations and update the locationMap.
-            std::vector<uint32_t> new2old(file.ranges.size());
-            std::ranges::iota(new2old, 0u);
+            auto new2old = views::iota(0u, file.ranges.size()) | ranges::to<std::vector<uint32_t>>();
 
             ranges::sort(views::zip(file.ranges, new2old), refl::less, [](const auto& element) {
                 return std::get<0>(element);

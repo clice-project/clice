@@ -108,12 +108,12 @@ std::string getName(const clang::NamedDecl* decl) {
             return name.getCXXLiteralIdentifier()->getName().str();
         }
         case clang::DeclarationName::CXXUsingDirective: {
-            std::terminate();
+            std::abort();
         };
         case clang::DeclarationName::ObjCZeroArgSelector:
         case clang::DeclarationName::ObjCOneArgSelector:
         case clang::DeclarationName::ObjCMultiArgSelector: {
-            std::terminate();
+            std::abort();
         }
     }
 }
@@ -218,7 +218,7 @@ proto::CompletionResult codeCompletion(CompilationParams& params,
         for(auto& item: completions) {}
         return completions;
     } else {
-        std::terminate();
+        std::abort();
     }
 }
 
