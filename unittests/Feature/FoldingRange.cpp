@@ -5,7 +5,7 @@ namespace clice::testing {
 
 namespace {
 
-using namespace clice::feature::folding_range;
+using namespace clice::feature::foldingrange;
 
 struct FoldingRange : public ::testing::Test {
     std::optional<Tester> tester;
@@ -17,9 +17,8 @@ struct FoldingRange : public ::testing::Test {
         tester->run();
         auto& info = tester->info;
 
-        FoldingRangeParams param;
-        SourceConverter converter;
-        result = foldingRange(param, *info, converter);
+        proto::FoldingRangeParams param;
+        result = foldingRange(param, *info);
     }
 
     index::Shared<Result> runWithHeader(llvm::StringRef source, llvm::StringRef header) {
@@ -28,12 +27,13 @@ struct FoldingRange : public ::testing::Test {
         tester->run();
         auto& info = tester->info;
 
-        FoldingRangeParams param;
-        SourceConverter converter;
-        return foldingRange(*info, converter);
+        proto::FoldingRangeParams param;
+        return foldingRange(*info);
     }
 
-    void EXPECT_RANGE(std::size_t index, llvm::StringRef begin, llvm::StringRef end,
+    void EXPECT_RANGE(std::size_t index,
+                      llvm::StringRef begin,
+                      llvm::StringRef end,
                       std::source_location current = std::source_location::current()) {
         auto& folding = result[index];
 
@@ -118,11 +118,11 @@ struct _6 {$(5)
     //$(6)
 };
 
-void f() {$(9)
+void f() $(9){
     struct nested {$(11)
         //$(12)
-    };$(10)
-}
+    };
+}$(10)
 
 )cpp");
 
@@ -144,13 +144,13 @@ struct _2 {$(1)
 };
 
 struct _3 {$(3)
-    void method() {$(5)
-        int x = 0;$(6)
-    }
+    void method() $(5){
+        int x = 0;
+    }$(6)
 
-    void parameter (){$(7)
-        //$(8)
-    }
+    void parameter () $(7){
+        //
+    }$(8)
 
     void skip() {};
 $(4)
@@ -169,9 +169,9 @@ TEST_F(FoldingRange, LambdaCapture) {
     run(R"cpp(
 auto z = [$(1)
     x = 0, y = 1$(2)
-]() {$(3)
-    //$(4)
-};
+]() $(3){
+    //
+}$(4);
 
 auto s = [$(5)
     x=0, 
@@ -191,19 +191,19 @@ TEST_F(FoldingRange, LambdaExpression) {
     run(R"cpp(
 auto _0 = [](int _) {};
 
-auto _1 = [](int _) {$(1)
-    //$(2)
-};
-
-auto _2 = [](int _) {$(3)
+auto _1 = [](int _) $(1){
     //
-    return 0;$(4)
-};
+}$(2);
+
+auto _2 = [](int _) $(3){
+    //
+    return 0;
+    }$(4);
 
 auto _3 = []($(5)
         int _1,
-        int _2$(6)
-    ) {};
+        int _2
+    )$(6) {};
 
 )cpp");
 
@@ -218,20 +218,20 @@ void e() {}
 
 void f($(1)
 //
-//$(2)
-) {}
+//
+)$(2) {}
 
 void g($(3)
 int x,
 int y = 2
-//$(4)
-) {}
+//
+)$(4) {}
 
 void d($(5)
     int _1,
     int _2,
-    ...$(6)
-);
+    ...
+    )$(6);
 )cpp");
 
     EXPECT_RANGE(0, "1", "2");
@@ -241,23 +241,23 @@ void d($(5)
 
 TEST_F(FoldingRange, FunctionBody) {
     run(R"cpp(
-void f() {$(1)
+void f() $(1){
 //
-//$(2)
-}
+//
+}$(2)
 
-void g() {$(3)
-    int x = 0;$(4)
-}
+void g() $(3){
+    int x = 0;
+}$(4)
 
 void e() {}
 
-void n() {$(5)
-    {$(7)
-        // empty bock $(8)
-    }
-    //$(6)
-}
+void n() $(5){
+    $(7){
+        // empty bock 
+    }$(8)
+    //
+}$(6)
 )cpp");
 
     EXPECT_RANGE(0, "1", "2");
@@ -270,15 +270,15 @@ TEST_F(FoldingRange, FunctionCall) {
     run(R"cpp(
 int f(int _1, int _2, int _3, int _4, int _5, int _6) { return _1 + _2; }
 
-int main() {$(1)
+int main() $(1){
 
     int _ = f(1, (1 + 2), 3, 4, 5, 6);
 
     return f($(3)
         1, 2, 3, 
-        4, 5, 6$(4)
-    );$(2)
-}
+        4, 5, 6
+    )$(4);
+}$(2)
 )cpp");
 
     EXPECT_RANGE(0, "1", "2");
@@ -287,22 +287,22 @@ int main() {$(1)
 
 TEST_F(FoldingRange, CompoundStmt) {
     run(R"cpp(
-int main () {$(1)
+int main () $(1){
 
-    {$(3)
-        {$(5)
-            //$(6)
-        }
+    $(3){
+        $(5){
+            //
+        }$(6)
 
-        {$(7)
-            //$(8)
-        }
+        $(7){
+            //
+        }$(8)
 
-        //$(4)
-    }
+        //
+    }$(4)
 
-    return 0;$(2)
-}
+    return 0;
+}$(2)
 
 )cpp");
 
@@ -315,14 +315,14 @@ TEST_F(FoldingRange, InitializeList) {
     run(R"cpp(
 struct L { int xs[4]; };
 
-L l1 = {$(1)
-    1, 2, 3, 4$(2)
-};
+L l1 = $(1){
+    1, 2, 3, 4
+}$(2);
 
-L l2 = {$(3)
+L l2 = $(3){
 //
-//$(4)
-};
+//
+}$(4);
 
 )cpp");
 

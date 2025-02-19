@@ -4,11 +4,19 @@
 #include "Basic/SourceCode.h"
 #include "AST/Resolver.h"
 #include "Basic/SourceCode.h"
-#include "clang/Frontend/CompilerInstance.h"
-#include "clang/Frontend/FrontendActions.h"
-#include "clang/Tooling/Syntax/Tokens.h"
+
+#include <clang/Frontend/CompilerInstance.h>
+#include <clang/Frontend/FrontendActions.h>
+#include <clang/Tooling/Syntax/Tokens.h>
 
 namespace clice {
+
+namespace proto {
+
+struct Position;
+struct Range;
+
+}  // namespace proto
 
 /// All AST related information needed for language server.
 class ASTInfo {
@@ -68,18 +76,14 @@ public:
         return instance->getASTContext().getTranslationUnitDecl();
     }
 
-    clang::FileID mainFileID() {
-        return srcMgr().getMainFileID();
-    }
-
     /// The interested file ID. For file without header context, it is the main file ID.
     /// For file with header context, it is the file ID of header file.
-    clang::FileID getInterestedFile() {
+    clang::FileID getInterestedFile() const {
         return interested;
     }
 
-    llvm::StringRef getMainFileContent() {
-        return getFileContent(mainFileID());
+    llvm::StringRef getInterestedFileContent() const {
+        return getFileContent(interested);
     }
 
     /// All files involved in building the AST.
@@ -87,21 +91,21 @@ public:
 
     std::vector<std::string> deps();
 
-    clang::SourceLocation getSpellingLoc(clang::SourceLocation loc) {
+    clang::SourceLocation getSpellingLoc(clang::SourceLocation loc) const {
         return SM.getSpellingLoc(loc);
     }
 
-    clang::SourceLocation getExpansionLoc(clang::SourceLocation loc) {
+    clang::SourceLocation getExpansionLoc(clang::SourceLocation loc) const {
         return SM.getExpansionLoc(loc);
     }
 
-    auto getDecomposedLoc(clang::SourceLocation loc) {
+    auto getDecomposedLoc(clang::SourceLocation loc) const {
         return SM.getDecomposedLoc(loc);
     }
 
     /// Get the file ID of a source location. The source location should always
     /// be a spelling location.
-    clang::FileID getFileID(clang::SourceLocation spelling) {
+    clang::FileID getFileID(clang::SourceLocation spelling) const {
         assert(spelling.isInvalid() && spelling.isFileID() && "Invalid source location");
         return SM.getFileID(spelling);
     }
@@ -112,7 +116,7 @@ public:
     llvm::StringRef getFilePath(clang::FileID fid);
 
     /// Get the content of a file ID.
-    llvm::StringRef getFileContent(clang::FileID fid) {
+    llvm::StringRef getFileContent(clang::FileID fid) const {
         return SM.getBufferData(fid);
     }
 
@@ -126,6 +130,19 @@ public:
     /// of the input source range both should be `FileID`. If the range is cross multiple
     /// files, we cut off the range at the end of the first file.
     std::pair<clang::FileID, LocalSourceRange> toLocalRange(clang::SourceRange range);
+
+    LocalSourceRange toLocalRange(clang::SourceRange range) const {
+        auto [begin, end] = range;
+        assert(begin.isValid() && end.isValid() && "Invalid source range");
+        assert(begin.isFileID() && end.isFileID() && "Invalid source range");
+        auto [beginFID, beginOffset] = getDecomposedLoc(begin);
+        auto [endFID, endOffset] = getDecomposedLoc(end);
+        assert(beginFID == endFID && "Invalid source range");
+        return LocalSourceRange{
+            .begin = beginOffset,
+            .end = endOffset + getTokenLength(SM, end),
+        };
+    }
 
 private:
     /// The interested file ID.

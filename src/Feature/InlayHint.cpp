@@ -995,10 +995,10 @@ proto::InlayHint toLspType(const InlayHint& hint,
 }
 
 Result inlayHints(proto::InlayHintParams param,
-                  ASTInfo& info,
+                  ASTInfo& AST,
                   const SourceConverter& converter,
                   const config::InlayHintOption& option) {
-    llvm::StringRef codeText = info.getMainFileContent();
+    llvm::StringRef codeText = AST.getInterestedFileContent();
 
     // Take 0-0 based Lsp Location from `param.range` and convert it to offset pair.
     LocalSourceRange requestRange{
@@ -1006,8 +1006,8 @@ Result inlayHints(proto::InlayHintParams param,
         .end = static_cast<uint32_t>(converter.toOffset(codeText, param.range.end)),
     };
 
-    const clang::SourceManager& src = info.srcMgr();
-    // If request range is invalid, use the whole main file as the restrict range.
+    const clang::SourceManager& src = AST.srcMgr();
+    // If request range is invalid, use the whole interested file as the restrict range.
     if(requestRange.begin >= requestRange.end) {
         clang::FileID main = src.getMainFileID();
         requestRange.begin = src.getDecomposedSpellingLoc(src.getLocForStartOfFile(main)).second;
@@ -1023,11 +1023,11 @@ Result inlayHints(proto::InlayHintParams param,
         .option = option,
         .onlyMain = true,
         .result = InlayHintCollector::Storage{},
-        .policy = info.context().getPrintingPolicy(),
+        .policy = AST.context().getPrintingPolicy(),
         .code = codeText,
     };
 
-    collector.TraverseTranslationUnitDecl(info.tu());
+    collector.TraverseTranslationUnitDecl(AST.tu());
 
     return std::move(collector.result[src.getMainFileID()]);
 }

@@ -1461,7 +1461,7 @@ Result toMarkdown(const HoverInfo& hover, const config::HoverOption& option) {
 std::optional<HoverInfo>
     hover(uint32_t line, uint32_t col, ASTInfo& AST, const config::HoverOption& option) {
 
-    auto srcLoc = AST.srcMgr().translateLineCol(AST.mainFileID(), line, col);
+    auto srcLoc = AST.srcMgr().translateLineCol(AST.getInterestedFile(), line, col);
     if(srcLoc.isInvalid())
         return std::nullopt;
 
@@ -1470,7 +1470,7 @@ std::optional<HoverInfo>
         return std::nullopt;
 
     // Check if the position is in a include directive.
-    llvm::ArrayRef<Include> includes = AST.directives()[AST.mainFileID()].includes;
+    llvm::ArrayRef<Include> includes = AST.directives()[AST.getInterestedFile()].includes;
     if(auto hit = hit::header(includes, AST, line))
         return hit;
 
