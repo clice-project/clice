@@ -79,7 +79,7 @@ public:
     }
 
     llvm::StringRef getMainFileContent() {
-        return getFileContent(srcMgr(), mainFileID());
+        return getFileContent(mainFileID());
     }
 
     /// All files involved in building the AST.
