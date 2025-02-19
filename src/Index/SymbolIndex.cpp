@@ -113,7 +113,7 @@ public:
 
         {
             /// Sort symbols and update the symbolMap.
-            auto new2old = views::iota(0u, file.symbols.size()) | ranges::to<std::vector<uint32_t>>();
+            auto new2old = views::iota(0) | views::take(file.symbols.size()) | ranges::to<std::vector<uint32_t>>();
 
             ranges::sort(views::zip(file.symbols, new2old), refl::less, [](const auto& element) {
                 auto& symbol = std::get<0>(element);
@@ -127,7 +127,7 @@ public:
 
         {
             /// Sort locations and update the locationMap.
-            auto new2old = views::iota(0u, file.ranges.size()) | ranges::to<std::vector<uint32_t>>();
+            auto new2old = views::iota(0) | views::take(file.ranges.size()) | ranges::to<std::vector<uint32_t>>();
 
             ranges::sort(views::zip(file.ranges, new2old), refl::less, [](const auto& element) {
                 return std::get<0>(element);
