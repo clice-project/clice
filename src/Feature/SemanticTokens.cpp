@@ -10,8 +10,8 @@ namespace {
 
 class HighlightBuilder : public SemanticVisitor<HighlightBuilder> {
 public:
-    HighlightBuilder(bool emitForIndex, ASTInfo& AST) :
-        emitForIndex(emitForIndex), SemanticVisitor<HighlightBuilder>(AST, true) {}
+    HighlightBuilder(ASTInfo& AST, bool interestedOnly) :
+        emitForIndex(!interestedOnly), SemanticVisitor<HighlightBuilder>(AST, interestedOnly) {}
 
     void handleDeclOccurrence(const clang::NamedDecl* decl,
                               RelationKind kind,
@@ -95,14 +95,17 @@ private:
 
     void addToken(clang::SourceLocation location, SymbolKind kind, SymbolModifiers modifiers) {
         if(location.isMacroID()) {
-            /// FIXME: If the token is expanded from macro and isn't from macro argument,
-            /// we should skip it temporarily, which means we don't render the macro
-            /// definition body at all. This may be changed in the future.
-            if(SM.isMacroArgExpansion(location)) {
+            auto spelling = AST.getSpellingLoc(location);
+            auto expansion = AST.getExpansionLoc(location);
+
+            /// FIXME: For location from macro, we only handle the case that the
+            /// spelling and expansion are in the same file currently.
+            if(AST.getFileID(spelling) != AST.getFileID(expansion)) {
                 return;
-            } else {
-                location = SM.getSpellingLoc(location);
             }
+
+            /// For occurrence, we always use spelling location.
+            location = spelling;
         }
 
         auto [fid, range] = AST.toLocalRange(location);
@@ -262,8 +265,8 @@ private:
 
 }  // namespace
 
-index::Shared<std::vector<SemanticToken>> semanticTokens(ASTInfo& info) {
-    return HighlightBuilder(true, info).buildForIndex();
+index::Shared<std::vector<SemanticToken>> semanticTokens(ASTInfo& AST) {
+    return HighlightBuilder(AST, false).buildForIndex();
 }
 
 proto::SemanticTokens toSemanticTokens(llvm::ArrayRef<SemanticToken> tokens,

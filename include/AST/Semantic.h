@@ -689,17 +689,28 @@ public:
     }
 
     VISIT_EXPR(CallExpr) {
-        // FIXME: consider lambda expression.
-        auto back = decls.back();
-        clang::NamedDecl* caller = llvm::isa<clang::StaticAssertDecl>(back)
-                                       ? llvm::cast<clang::NamedDecl>(back->getDeclContext())
-                                       : llvm::cast<clang::NamedDecl>(back);
-        auto callee =
-            expr->getCalleeDecl() ? llvm::cast<clang::NamedDecl>(expr->getCalleeDecl()) : nullptr;
-        if(callee && caller) {
-            handleRelation(caller, RelationKind::Caller, callee, expr->getSourceRange());
-            handleRelation(callee, RelationKind::Callee, caller, expr->getSourceRange());
+        /// FIXME: Is the function decls is empty, it means that
+        /// the callee is a global variable decl or static assert decl.
+        /// Should we handle it separately?
+        if(decls.empty()) {
+            return true;
         }
+
+        auto back = decls.back();
+        const clang::NamedDecl* caller = llvm::dyn_cast<clang::FunctionDecl>(back);
+        const clang::NamedDecl* callee = nullptr;
+
+        if(auto decl = expr->getCalleeDecl()) {
+            if(auto ND = llvm::dyn_cast<clang::NamedDecl>(decl)) {
+                callee = ND;
+            }
+        }
+
+        if(callee && caller) {
+            handleRelation(caller, RelationKind::Callee, callee, expr->getSourceRange());
+            handleRelation(callee, RelationKind::Caller, caller, expr->getSourceRange());
+        }
+
         return true;
     }
 
