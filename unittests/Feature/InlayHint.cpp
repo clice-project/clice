@@ -49,9 +49,17 @@ protected:
         return std::distance(result.begin(), iter);
     }
 
-    std::string joinLabels(const InlayHint& hint) {
+    static std::string joinLabels(const InlayHint& hint) {
         std::string text;
         for(auto& lable: hint.labels) {
+            text += lable.value;
+        }
+        return text;
+    }
+
+    static std::string joinLabels(const proto::InlayHint& hint) {
+        std::string text;
+        for(auto& lable: hint.lables) {
             text += lable.value;
         }
         return text;
@@ -488,6 +496,8 @@ namespace _2 {
             SourceConverter SC;
             auto lspRes = toLspType(result, "", fixOption, header, SC);
             EXPECT_EQ(lspRes.size(), 2);
+            EXPECT_TRUE(lspRes[0].lables[0].value.contains("namespace _1"));
+            EXPECT_EQ(joinLabels(lspRes[1]), ": _1::_2345678");
         }
     }
 }
