@@ -7,7 +7,6 @@
 #include "Index/SymbolIndex.h"
 #include "Support/Binary.h"
 #include "Support/Compare.h"
-#include "clang/Index/USRGeneration.h"
 
 namespace clice::index {
 
