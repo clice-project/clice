@@ -2,77 +2,43 @@
 
 #include "Basic/SourceCode.h"
 #include "Compiler/AST.h"
+
 #include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice {
 
+struct RAVFileter {
+
+    RAVFileter(ASTInfo& AST, bool interestedOnly, std::optional<LocalSourceRange> limit) :
+        AST(AST), limit(limit), interestedOnly(interestedOnly) {}
+
+    bool filterable(clang::SourceRange range) const;
+
+    ASTInfo& AST;
+    std::optional<LocalSourceRange> limit;
+    bool interestedOnly = true;
+};
+
 /// A visitor class that extends clang::RecursiveASTVisitor to traverse
 /// AST nodes with an additional filtering mechanism.
 template <typename Derived>
-class FilteredASTVisitor : public clang::RecursiveASTVisitor<Derived> {
-private:
+class FilteredASTVisitor : public clang::RecursiveASTVisitor<Derived>, public RAVFileter {
+protected:
     using Base = clang::RecursiveASTVisitor<Derived>;
 
-    bool filterable(clang::SourceRange range) {
-        auto [begin, end] = range;
-
-        /// FIXME: Most of implicit decls don't have valid source range. Is it possible
-        /// that we want to visit them sometimes?
-        if(begin.isInvalid() || end.isInvalid()) {
-            return true;
-        }
-
-        if(begin == end) {
-            /// We are only interested in expansion location.
-            auto [fid, offset] = AST.getDecomposedLoc(AST.getExpansionLoc(begin));
-
-            /// For builtin files, we don't want to visit them.
-            if(AST.isBuiltinFile(fid)) {
-                return true;
-            }
-
-            /// Filter out if the location is not in the interested file.
-            if(interestedOnly) {
-                auto interested = AST.getInterestedFile();
-                if(fid != interested) {
-                    return true;
-                }
-
-                if(targetRange && !targetRange->contains(offset)) {
-                    return true;
-                }
-            }
-        } else {
-            auto [beginFID, beginOffset] = AST.getDecomposedLoc(AST.getExpansionLoc(begin));
-            auto [endFID, endOffset] = AST.getDecomposedLoc(AST.getExpansionLoc(end));
-
-            if(AST.isBuiltinFile(beginFID) || AST.isBuiltinFile(endFID)) {
-                return true;
-            }
-
-            if(interestedOnly) {
-                auto interested = AST.getInterestedFile();
-                if(beginFID != interested && endFID != interested) {
-                    return true;
-                }
-
-                if(targetRange && !targetRange->intersects({beginOffset, endOffset})) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    Derived& getDerived() {
-        return static_cast<Derived&>(*this);
-    }
+    FilteredASTVisitor(ASTInfo& AST,
+                       bool interestedOnly,
+                       std::optional<LocalSourceRange> targetRange) :
+        RAVFileter(AST, interestedOnly, targetRange) {}
 
 public:
 #define CHECK_DERIVED_IMPL(func)                                                                   \
     static_assert(std::same_as<decltype(&FilteredASTVisitor::func), decltype(&Derived::func)>,     \
                   "Derived class should not implement this method");
+
+    Derived& getDerived() {
+        return static_cast<Derived&>(*this);
+    }
 
     bool TraverseDecl(clang::Decl* decl) {
         CHECK_DERIVED_IMPL(TraverseDecl);
@@ -136,7 +102,7 @@ public:
         return Base::TraverseAttributedStmt(stmt);
     }
 
-    /// We don't want to node withou location information.
+    /// We don't want to node without location information.
     constexpr bool TraverseType [[gnu::always_inline]] (clang::QualType) {
         CHECK_DERIVED_IMPL(TraverseType);
         return true;
@@ -215,16 +181,6 @@ public:
     }
 
 #undef CHECK_DERIVED_IMPL
-
-protected:
-    FilteredASTVisitor(ASTInfo& AST,
-                       bool interestedOnly,
-                       std::optional<LocalSourceRange> targetRange) :
-        AST(AST), interestedOnly(interestedOnly), targetRange(targetRange) {}
-
-    ASTInfo& AST;
-    bool interestedOnly = true;
-    std::optional<LocalSourceRange> targetRange;
 };
 
 }  // namespace clice

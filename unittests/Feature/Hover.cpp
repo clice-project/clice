@@ -3,7 +3,7 @@
 
 #include "src/Feature/Hover.cpp"
 
-#include <clang/AST/RecursiveASTVisitor.h>
+#include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice::testing {
 
@@ -409,7 +409,7 @@ $(n1)names$(n2)pace$(n3) outt$(n4)er {
 TEST_F(Hover, VariableAndLiteral) {
     auto code = R"cpp(
     // introduce size_t
-    #include <bits/c++config.h>
+    #include <cstddef>
 
     long operator ""_w(const char*, size_t) {
         return 1;

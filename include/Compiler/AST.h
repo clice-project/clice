@@ -4,6 +4,7 @@
 #include "Basic/SourceCode.h"
 #include "AST/Resolver.h"
 #include "Basic/SourceCode.h"
+
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Tooling/Syntax/Tokens.h"
@@ -68,18 +69,14 @@ public:
         return instance->getASTContext().getTranslationUnitDecl();
     }
 
-    clang::FileID mainFileID() {
-        return srcMgr().getMainFileID();
-    }
-
     /// The interested file ID. For file without header context, it is the main file ID.
     /// For file with header context, it is the file ID of header file.
-    clang::FileID getInterestedFile() {
+    clang::FileID getInterestedFile() const {
         return interested;
     }
 
-    llvm::StringRef getMainFileContent() {
-        return getFileContent(mainFileID());
+    llvm::StringRef getInterestedFileContent() const {
+        return getFileContent(interested);
     }
 
     /// All files involved in building the AST.
@@ -87,15 +84,15 @@ public:
 
     std::vector<std::string> deps();
 
-    clang::SourceLocation getSpellingLoc(clang::SourceLocation loc) {
+    clang::SourceLocation getSpellingLoc(clang::SourceLocation loc) const {
         return SM.getSpellingLoc(loc);
     }
 
-    clang::SourceLocation getExpansionLoc(clang::SourceLocation loc) {
+    clang::SourceLocation getExpansionLoc(clang::SourceLocation loc) const {
         return SM.getExpansionLoc(loc);
     }
 
-    auto getDecomposedLoc(clang::SourceLocation loc) {
+    auto getDecomposedLoc(clang::SourceLocation loc) const {
         return SM.getDecomposedLoc(loc);
     }
 
@@ -112,7 +109,7 @@ public:
     llvm::StringRef getFilePath(clang::FileID fid);
 
     /// Get the content of a file ID.
-    llvm::StringRef getFileContent(clang::FileID fid) {
+    llvm::StringRef getFileContent(clang::FileID fid) const {
         return SM.getBufferData(fid);
     }
 
@@ -153,6 +150,7 @@ private:
 
     /// Cache for file path. It is used to avoid multiple file path lookup.
     llvm::DenseMap<clang::FileID, llvm::StringRef> pathCache;
+    
     llvm::BumpPtrAllocator pathStorage;
 };
 

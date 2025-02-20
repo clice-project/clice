@@ -1,7 +1,7 @@
 #pragma once
 
-#include <clang/AST/ASTTypeTraits.h>
-#include <clang/Tooling/Syntax/Tokens.h>
+#include "clang/AST/ASTTypeTraits.h"
+#include "clang/Tooling/Syntax/Tokens.h"
 
 #include <deque>
 
