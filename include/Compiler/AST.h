@@ -5,18 +5,11 @@
 #include "AST/Resolver.h"
 #include "Basic/SourceCode.h"
 
-#include <clang/Frontend/CompilerInstance.h>
-#include <clang/Frontend/FrontendActions.h>
-#include <clang/Tooling/Syntax/Tokens.h>
+#include "clang/Frontend/CompilerInstance.h"
+#include "clang/Frontend/FrontendActions.h"
+#include "clang/Tooling/Syntax/Tokens.h"
 
 namespace clice {
-
-namespace proto {
-
-struct Position;
-struct Range;
-
-}  // namespace proto
 
 /// All AST related information needed for language server.
 class ASTInfo {
@@ -157,6 +150,7 @@ private:
 
     /// Cache for file path. It is used to avoid multiple file path lookup.
     llvm::DenseMap<clang::FileID, llvm::StringRef> pathCache;
+    
     llvm::BumpPtrAllocator pathStorage;
 };
 

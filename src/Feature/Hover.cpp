@@ -4,8 +4,8 @@
 #include "Compiler/AST.h"
 #include "Support/FileSystem.h"
 
-#include <clang/Lex/LiteralSupport.h>
-#include <clang/AST/DeclVisitor.h>
+#include "clang/Lex/LiteralSupport.h"
+#include "clang/AST/DeclVisitor.h"
 
 #ifdef _WIN32
 #include <variant>

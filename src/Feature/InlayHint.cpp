@@ -3,7 +3,7 @@
 #include "Compiler/Compilation.h"
 #include "Feature/InlayHint.h"
 
-#include <clang/AST/TypeVisitor.h>
+#include "clang/AST/TypeVisitor.h"
 
 namespace clice {
 

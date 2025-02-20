@@ -3,7 +3,7 @@
 
 #include "src/Feature/Hover.cpp"
 
-#include <clang/AST/RecursiveASTVisitor.h>
+#include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice::testing {
 

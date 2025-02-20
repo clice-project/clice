@@ -1,7 +1,7 @@
-#include <AST/Selection.h>
-#include <Compiler/AST.h>
+#include "AST/Selection.h"
+#include "Compiler/AST.h"
 
-#include <clang/AST/RecursiveASTVisitor.h>
+#include "clang/AST/RecursiveASTVisitor.h"
 
 #include <stack>
 
