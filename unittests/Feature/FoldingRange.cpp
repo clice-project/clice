@@ -72,6 +72,29 @@ namespace ugly
     EXPECT_RANGE(2, "5", "6");
 }
 
+TEST_F(FoldingRange, NamespaceExpandedFromMacro) {
+    run(R"cpp(
+#define NS_OUTER namespace outter {
+#define NS_INNER namespace inner {
+#define END_MACRO }
+
+NS_OUTER$(1)
+    NS_INNER$(3)
+    namespace inner {$(5)
+    
+    $(6)}
+    END_MACRO$(4)
+END_MACRO$(2)
+
+)cpp");
+
+    EXPECT_EQ(result.size(), 3);
+
+    EXPECT_RANGE(0, "1", "2");
+    EXPECT_RANGE(1, "3", "4");
+    EXPECT_RANGE(2, "5", "6");
+}
+
 TEST_F(FoldingRange, Enum) {
     run(R"cpp(
 enum _0 {$(1)

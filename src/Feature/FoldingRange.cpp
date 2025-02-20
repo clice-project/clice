@@ -34,7 +34,7 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
         FilteredASTVisitor(AST, interestedOnly, targetRange), result() {}
 
     /// Collect source range as a folding range.
-    void collect(const clang::SourceRange range,
+    void collect(clang::SourceRange range,
                  std::pair<int, int> offsetFix = {0, 0},
                  proto::FoldingRangeKind kind = proto::FoldingRangeKind::Region) {
 
@@ -48,6 +48,21 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
 
         auto fileID = interestedOnly ? AST.getInterestedFile() : SM.getFileID(range.getBegin());
         auto& state = result[fileID];
+
+        if(auto beg = range.getBegin(); beg.isMacroID()) {
+            auto cursor =
+                SM.translateLineCol(fileID, SM.getExpansionLineNumber(beg), LastColOfLine);
+            range.setBegin(cursor);
+            offsetFix.first = 0;
+        }
+        if(auto end = range.getEnd(); end.isMacroID()) {
+            range.setEnd(SM.translateLineCol(fileID,
+                                             SM.getExpansionLineNumber(end),
+                                             SM.getExpansionColumnNumber(end)));
+            offsetFix.second = 0;
+        }
+
+        assert(range.isValid());
 
         auto [leftLocal, rightLocal] = AST.toLocalRange(range).second;
         LocalSourceRange fixed{leftLocal + offsetFix.first, rightLocal + offsetFix.second};
