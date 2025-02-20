@@ -131,19 +131,6 @@ public:
     /// files, we cut off the range at the end of the first file.
     std::pair<clang::FileID, LocalSourceRange> toLocalRange(clang::SourceRange range);
 
-    LocalSourceRange toLocalRange(clang::SourceRange range) const {
-        auto [begin, end] = range;
-        assert(begin.isValid() && end.isValid() && "Invalid source range");
-        assert(begin.isFileID() && end.isFileID() && "Invalid source range");
-        auto [beginFID, beginOffset] = getDecomposedLoc(begin);
-        auto [endFID, endOffset] = getDecomposedLoc(end);
-        assert(beginFID == endFID && "Invalid source range");
-        return LocalSourceRange{
-            .begin = beginOffset,
-            .end = endOffset + getTokenLength(SM, end),
-        };
-    }
-
 private:
     /// The interested file ID.
     clang::FileID interested;
