@@ -102,7 +102,7 @@ public:
     /// Get the file ID of a source location. The source location should always
     /// be a spelling location.
     clang::FileID getFileID(clang::SourceLocation spelling) {
-        assert(spelling.isInvalid() && spelling.isFileID() && "Invalid source location");
+        assert(spelling.isValid() && spelling.isFileID() && "Invalid source location");
         return SM.getFileID(spelling);
     }
 

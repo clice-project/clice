@@ -122,10 +122,6 @@ target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus)
 add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")
 target_link_libraries(clice PRIVATE clice-core)
 
-# integration_tests
-add_executable(integration_tests "${CMAKE_SOURCE_DIR}/src/Driver/integration_tests.cc")
-target_link_libraries(integration_tests PRIVATE clice-core)
-
 # clice tests
 if(CLICE_ENABLE_TEST)
     file(GLOB_RECURSE CLICE_TEST_SOURCES "${CMAKE_SOURCE_DIR}/unittests/*/*.cpp")
@@ -140,4 +136,11 @@ if(CLICE_ENABLE_TEST)
     FetchContent_MakeAvailable(googletest)
 
     target_link_libraries(unit_tests PRIVATE  gtest_main clice-core)
+
+    # integration_tests
+    add_executable(integration_tests "${CMAKE_SOURCE_DIR}/src/Driver/integration_tests.cc")
+    target_link_libraries(integration_tests PRIVATE clice-core)
+
+    add_executable(helper "${CMAKE_SOURCE_DIR}/src/Driver/helper.cc")
+    target_link_libraries(helper PRIVATE clice-core)
 endif()
