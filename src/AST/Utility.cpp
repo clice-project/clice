@@ -129,7 +129,7 @@ const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
 
 const clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
     if(!decl) {
-        std::terminate();
+        std::abort();
     }
 
     decl = llvm::cast<clang::NamedDecl>(decl->getCanonicalDecl());

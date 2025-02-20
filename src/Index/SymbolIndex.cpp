@@ -131,9 +131,9 @@ struct SymbolIndexStorage : memory::SymbolIndex {
     llvm::DenseMap<std::pair<uint32_t, uint32_t>, uint32_t> locationCache;
 };
 
-class SymbolIndexBuilder : public SemanticVisitor<SymbolIndexBuilder> {
+class SymbolIndexCollector : public SemanticVisitor<SymbolIndexCollector> {
 public:
-    SymbolIndexBuilder(ASTInfo& info) : SemanticVisitor(info, false) {}
+    SymbolIndexCollector(ASTInfo& info) : SemanticVisitor(info, false) {}
 
     /// Get the symbol id for the given decl.
     uint64_t getSymbolID(const void* symbol, bool isMacro = false) {
@@ -200,14 +200,17 @@ public:
     void handleMacroOccurrence(const clang::MacroInfo* def,
                                RelationKind kind,
                                clang::SourceLocation location) {
+        /// FIXME: Figure out when location is MacroID.
+        if(location.isMacroID()) {
+            return;
+        }
+
         auto begin = def->getDefinitionLoc();
         auto end = def->getDefinitionEndLoc();
         assert(begin.isFileID() && end.isFileID() && "Invalid location");
 
         /// Get the macro name.
         auto name = getTokenSpelling(SM, begin);
-
-        assert(location.isFileID() && "Invalid location");
 
         /// Add the occurrence.
         auto [fid, local] = AST.toLocalRange(location);
@@ -251,8 +254,12 @@ public:
         using enum RelationKind::Kind;
 
         if(kind.is_one_of(Definition, Declaration)) {
-            auto [fid2, definitionRange] = AST.toLocalRange(decl->getSourceRange());
+            auto [begin, end] = decl->getSourceRange();
+            begin = AST.getExpansionLoc(begin);
+            end = AST.getExpansionLoc(end);
+            auto [fid2, definitionRange] = AST.toLocalRange(clang::SourceRange(begin, end));
             assert(fid == fid2 && "Invalid definition location");
+
             data[0].offset = file.getLocation(relationRange);
             data[1].offset = file.getLocation(definitionRange);
         } else if(kind.is_one_of(Reference, WeakReference)) {
@@ -284,12 +291,10 @@ public:
     llvm::DenseMap<clang::FileID, SymbolIndex> build() {
         run();
 
-        for(auto& [_, index]: indices) {
-            index.sort();
-        }
-
         llvm::DenseMap<clang::FileID, SymbolIndex> result;
         for(auto& [fid, index]: indices) {
+            index.sort();
+
             if(index.path.empty()) {
                 index.path = AST.getFilePath(fid);
             }
@@ -299,6 +304,7 @@ public:
                 fid,
                 SymbolIndex{static_cast<char*>(const_cast<void*>(buffer.base)), size, true});
         }
+
         return std::move(result);
     }
 
@@ -310,7 +316,7 @@ private:
 }  // namespace
 
 Shared<SymbolIndex> index(ASTInfo& info) {
-    SymbolIndexBuilder collector(info);
+    SymbolIndexCollector collector(info);
     return collector.build();
 }
 
