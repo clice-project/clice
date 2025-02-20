@@ -13,7 +13,6 @@ namespace clice::index {
 namespace {
 
 struct SymbolIndexStorage : memory::SymbolIndex {
-
     std::uint32_t getLocation(LocalSourceRange range) {
         auto key = std::pair(range.begin, range.end);
         auto [iter, success] = locationCache.try_emplace(key, ranges.size());
@@ -46,7 +45,7 @@ struct SymbolIndexStorage : memory::SymbolIndex {
         /// files.
 
         /// Polyfill ranges::iota for libc++
-        auto iota = [](auto &r, auto init) {
+        auto iota = [](auto& r, auto init) {
             ranges::generate(r, [init] mutable { return init++; });
         };
 
@@ -89,10 +88,10 @@ struct SymbolIndexStorage : memory::SymbolIndex {
             occurrence.location = {locationMap[occurrence.location]};
         }
 
+        /// Sort all occurrences and update the symbol and location references.
         ranges::sort(occurrences, refl::less, [](const auto& occurrence) {
             return occurrence.location;
         });
-
         auto range = ranges::unique(occurrences, refl::equal);
         occurrences.erase(range.begin(), range.end());
 
