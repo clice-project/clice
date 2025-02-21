@@ -31,9 +31,6 @@ jobs:
       - name: Setup llvm & libstdc++ & cmake & ninja
         run: |
           sudo apt update
-          sudo apt install -y software-properties-common
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
           sudo apt install -y gcc-14 g++-14 libstdc++-14-dev
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100

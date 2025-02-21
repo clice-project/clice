@@ -29,6 +29,20 @@ bool isDefinition(const clang::Decl* decl) {
     return false;
 }
 
+bool isTemplated(const clang::Decl* decl) {
+    if(decl->getDescribedTemplate()) {
+        return true;
+    }
+
+    if(llvm::isa<clang::TemplateDecl,
+                 clang::ClassTemplatePartialSpecializationDecl,
+                 clang::VarTemplatePartialSpecializationDecl>(decl)) {
+        return true;
+    }
+
+    return false;
+}
+
 const static clang::CXXRecordDecl* getDeclContextForTemplateInstationPattern(const clang::Decl* D) {
     if(const auto* CTSD = dyn_cast<clang::ClassTemplateSpecializationDecl>(D->getDeclContext())) {
         return CTSD->getTemplateInstantiationPattern();
@@ -111,6 +125,80 @@ const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
     }
 
     return nullptr;
+}
+
+const clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
+    if(!decl) {
+        std::abort();
+    }
+
+    decl = llvm::cast<clang::NamedDecl>(decl->getCanonicalDecl());
+
+    if(auto ND = instantiatedFrom(llvm::cast<clang::NamedDecl>(decl))) {
+        return llvm::cast<clang::NamedDecl>(ND->getCanonicalDecl());
+    }
+
+    return decl;
+}
+
+std::string getDeclName(const clang::NamedDecl* decl) {
+    llvm::SmallString<128> result;
+
+    auto name = decl->getDeclName();
+    switch(name.getNameKind()) {
+        case clang::DeclarationName::Identifier: {
+            result += name.getAsIdentifierInfo()->getName();
+            break;
+        }
+
+        case clang::DeclarationName::CXXConstructorName: {
+            result += name.getCXXNameType().getAsString();
+            break;
+        }
+
+        case clang::DeclarationName::CXXDestructorName: {
+            result += '~';
+            result += name.getCXXNameType().getAsString();
+            break;
+        }
+
+        case clang::DeclarationName::CXXConversionFunctionName: {
+            result += "operator ";
+            result += name.getCXXNameType().getAsString();
+            break;
+        }
+
+        case clang::DeclarationName::CXXOperatorName: {
+            result += "operator ";
+            result += clang::getOperatorSpelling(name.getCXXOverloadedOperator());
+            break;
+        }
+
+        case clang::DeclarationName::CXXDeductionGuideName: {
+            result += name.getCXXDeductionGuideTemplate()->getNameAsString();
+            break;
+        }
+
+        case clang::DeclarationName::CXXLiteralOperatorName: {
+            result += R"(operator "")";
+            result += name.getCXXLiteralIdentifier()->getName();
+            break;
+        }
+
+        case clang::DeclarationName::CXXUsingDirective: {
+            auto UDD = llvm::cast<clang::UsingDirectiveDecl>(decl);
+            result += UDD->getNominatedNamespace()->getName();
+            break;
+        }
+
+        case clang::DeclarationName::ObjCZeroArgSelector:
+        case clang::DeclarationName::ObjCOneArgSelector:
+        case clang::DeclarationName::ObjCMultiArgSelector: {
+            std::unreachable();
+        }
+    }
+
+    return result.str().str();
 }
 
 clang::QualType typeForDecl(const clang::NamedDecl* decl) {

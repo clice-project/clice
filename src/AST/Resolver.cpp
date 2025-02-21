@@ -382,7 +382,7 @@ public:
             case clang::NestedNameSpecifier::NamespaceAlias:
             case clang::NestedNameSpecifier::Super: {
                 llvm::errs() << "Unexpected name specifier\n";
-                std::terminate();
+                std::abort();
             }
         }
     }

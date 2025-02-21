@@ -60,9 +60,23 @@ struct SymbolKind : refl::Enum<SymbolKind, false, uint8_t> {
 
 struct SymbolModifiers : refl::Enum<SymbolModifiers, true, uint32_t> {
     enum Kind {
+        /// Represents that the symbol is a declaration(e.g. function declaration).
         Declaration = 0,
+
+        /// Represents that the symbol is a definition(e.g. function definition).
         Definition,
-        Reference,
+
+        /// Represents that the symbol is const modified(e.g. `const` variable).
+        Const,
+
+        /// Represents that the symbol is overloaded(e.g. overloaded functions and operators).
+        Overloaded,
+
+        /// Represents that the symbol is a part of type(e.g. `*` in `int*`).
+        Typed,
+
+        /// Represents that the symbol is a template(e.g. class template or function template).
+        Templated,
     };
 
     using Enum::Enum;

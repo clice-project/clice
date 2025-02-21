@@ -3,7 +3,7 @@
 
 namespace clice {
 
-Server::Server() : indexer(config::index, database), scheduler(database, {}) {
+Server::Server() : indexer(database,config::index ), scheduler(database, {}) {
     addMethod("initialize", &Server::onInitialize);
     addMethod("initialized", &Server::onInitialized);
     addMethod("shutdown", &Server::onShutdown);
@@ -14,17 +14,17 @@ Server::Server() : indexer(config::index, database), scheduler(database, {}) {
     addMethod("textDocument/didSave", &Server::onDidSave);
     addMethod("textDocument/didClose", &Server::onDidClose);
 
-    addMethod("textDocument/declaration", &Server::onGotoDeclaration);
-    addMethod("textDocument/definition", &Server::onGotoDefinition);
-    addMethod("textDocument/typeDefinition", &Server::onGotoTypeDefinition);
-    addMethod("textDocument/implementation", &Server::onGotoImplementation);
-    addMethod("textDocument/references", &Server::onFindReferences);
-    addMethod("textDocument/callHierarchy/prepare", &Server::onPrepareCallHierarchy);
-    addMethod("textDocument/callHierarchy/incomingCalls", &Server::onIncomingCall);
-    addMethod("textDocument/callHierarchy/outgoingCalls", &Server::onOutgoingCall);
-    addMethod("textDocument/typeHierarchy/prepare", &Server::onPrepareTypeHierarchy);
-    addMethod("textDocument/typeHierarchy/supertypes", &Server::onSupertypes);
-    addMethod("textDocument/typeHierarchy/subtypes", &Server::onSubtypes);
+    // addMethod("textDocument/declaration", &Server::onGotoDeclaration);
+    // addMethod("textDocument/definition", &Server::onGotoDefinition);
+    // addMethod("textDocument/typeDefinition", &Server::onGotoTypeDefinition);
+    // addMethod("textDocument/implementation", &Server::onGotoImplementation);
+    // addMethod("textDocument/references", &Server::onFindReferences);
+    // addMethod("textDocument/callHierarchy/prepare", &Server::onPrepareCallHierarchy);
+    // addMethod("textDocument/callHierarchy/incomingCalls", &Server::onIncomingCall);
+    // addMethod("textDocument/callHierarchy/outgoingCalls", &Server::onOutgoingCall);
+    // addMethod("textDocument/typeHierarchy/prepare", &Server::onPrepareTypeHierarchy);
+    // addMethod("textDocument/typeHierarchy/supertypes", &Server::onSupertypes);
+    // addMethod("textDocument/typeHierarchy/subtypes", &Server::onSubtypes);
     addMethod("textDocument/documentHighlight", &Server::onDocumentHighlight);
     addMethod("textDocument/documentLink", &Server::onDocumentLink);
     addMethod("textDocument/hover", &Server::onHover);

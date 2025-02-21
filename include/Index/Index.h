@@ -61,13 +61,12 @@ struct Occurrence {
 };
 
 struct SymbolIndex {
+    String path;
     Array<Symbol> symbols;
     Array<Occurrence> occurrences;
     Array<LocalSourceRange> ranges;
 };
 
 }  // namespace memory
-
-SymbolIndex serialize(const memory::SymbolIndex& index);
 
 }  // namespace clice::index
