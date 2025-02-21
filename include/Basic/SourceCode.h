@@ -22,6 +22,24 @@ struct LocalSourceRange {
     constexpr bool intersects(const LocalSourceRange& other) const {
         return begin <= other.end && end >= other.begin;
     }
+
+    constexpr bool valid() const {
+        return begin != -1 && end != -1;
+    }
+};
+
+struct Location {
+    /// The file path.
+    std::string file;
+
+    /// The range in the file.
+    LocalSourceRange range;
+
+    constexpr bool operator== (const Location& other) const = default;
+
+    constexpr bool valid() const {
+        return !file.empty() && range.valid();
+    }
 };
 
 /// Get the content of the file with the given file ID.
