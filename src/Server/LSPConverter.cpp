@@ -150,22 +150,21 @@ public:
             return lastOutput;
         }
 
-        std::uint32_t character = 0;
+        /// The length of the current line.
+        std::uint32_t lineLength = 0;
 
         /// Move the line offset to the current line.
         for(std::uint32_t i = lastLineOffset; i < offset; i++) {
-            auto c = content[i];
-            if(c == '\n') {
+            lineLength += 1;
+            if(content[i] == '\n') {
                 line += 1;
-                lastLineOffset += character;
-                character = 0;
-            } else {
-                character += 1;
+                lastLineOffset += lineLength;
+                lineLength = 0;
             }
         }
 
         /// Get the content of the current line.
-        auto lineContent = content.substr(lastLineOffset, character);
+        auto lineContent = content.substr(lastLineOffset, lineLength);
         auto position = proto::Position{
             .line = line,
             .character = remeasure(lineContent, kind),
@@ -195,6 +194,7 @@ private:
 
 LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
                                            llvm::ArrayRef<feature::SemanticToken> tokens) {
+    /// FIXME: Use a better way to handle file content.
     auto file = co_await async::fs::read(path.str());
     if(!file) {
         co_return json::Value(nullptr);
@@ -210,6 +210,7 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
                  std::uint32_t length,
                  SymbolKind kind,
                  SymbolModifiers modifiers) {
+            /// FIXME: Add a map between lsp kinds and our kinds.
             /// [line, character, length, tokenType, tokenModifiers]
             data.emplace_back(line);
             data.emplace_back(character);
@@ -221,65 +222,64 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
 
     SemanticTokens result;
 
+    PositionConverter converter(content, kind);
     std::uint32_t lastLine = 0;
     std::uint32_t lastChar = 0;
 
-    PositionConverter converter(content, kind);
-
     for(auto& token: tokens) {
         auto [beginOffset, endOffset] = token.range;
-
         auto [beginLine, beginChar] = converter.toPosition(beginOffset);
         auto [endLine, endChar] = converter.toPosition(endOffset);
 
         if(beginLine == endLine) [[likely]] {
             std::uint32_t line = beginLine - lastLine;
-            std::uint32_t character = line == 0 ? beginChar - lastChar : beginChar;
+            std::uint32_t character = (line == 0 ? beginChar - lastChar : beginChar);
             std::uint32_t length = endChar - beginChar;
-
             result.add(line, character, length, token.kind, token.modifiers);
-
-            lastLine = endLine;
-            lastChar = endChar;
         } else {
             /// If the token spans multiple lines, split it into multiple tokens.
             auto subContent = content.substr(beginOffset, endOffset - beginOffset);
 
-            /// Take the content of one line.
-            auto takeLineContent = [&] {
-                auto pos = subContent.find('\n');
-                if(pos == llvm::StringRef::npos) {
-                    return llvm::StringRef();
+            /// The first line is special.
+            bool isFirst = true;
+            /// The offset of the last line end.
+            std::uint32_t lastLineOffset = 0;
+            /// The length of the current line.
+            std::uint32_t lineLength = 0;
+
+            for(auto c: subContent) {
+                lineLength += 1;
+                if(c == '\n') {
+                    std::uint32_t line;
+                    std::uint32_t character;
+
+                    if(isFirst) [[unlikely]] {
+                        line = beginLine - lastLine;
+                        character = (line == 0 ? beginChar - lastChar : beginChar);
+                        isFirst = false;
+                    } else {
+                        line = 1;
+                        character = 0;
+                    }
+
+                    std::uint32_t length =
+                        remeasure(subContent.substr(lastLineOffset, lineLength), kind);
+                    result.add(line, character, length, token.kind, token.modifiers);
+
+                    lastLineOffset += lineLength;
+                    lineLength = 0;
                 }
-
-                auto lineContent = subContent.substr(0, pos + 1);
-                subContent = subContent.substr(pos + 1);
-                return lineContent;
-            };
-
-            /// Resolve the first line.
-            auto lineContent = takeLineContent();
-            std::uint32_t line = beginLine - lastLine;
-            std::uint32_t character = line == 0 ? beginChar - lastChar : beginChar;
-            std::uint32_t length = remeasure(lineContent, kind);
-
-            result.add(line, character, length, token.kind, token.modifiers);
-
-            /// Resolve the additional lines.
-            while(true) {
-                auto lineContent = takeLineContent();
-                if(lineContent.empty()) {
-                    /// The last line.
-                    result.add(1, 0, remeasure(subContent, kind), token.kind, token.modifiers);
-                    break;
-                }
-
-                result.add(1, 0, remeasure(lineContent, kind), token.kind, token.modifiers);
             }
 
-            lastLine = endLine;
-            lastChar = endChar;
+            /// Process the last line if it's not empty.
+            if(lineLength > 0) {
+                std::uint32_t length = remeasure(subContent.substr(lastLineOffset), kind);
+                result.add(1, 0, length, token.kind, token.modifiers);
+            }
         }
+
+        lastLine = endLine;
+        lastChar = endChar;
     }
 
     co_return json::serialize(result);
