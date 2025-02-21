@@ -124,6 +124,14 @@ public:
     /// files, we cut off the range at the end of the first file.
     std::pair<clang::FileID, LocalSourceRange> toLocalRange(clang::SourceRange range);
 
+    Location toLocation(clang::SourceRange range) {
+        auto [fid, localRange] = toLocalRange(range);
+        return Location{
+            .file = getFilePath(fid).str(),
+            .range = localRange,
+        };
+    }
+
 private:
     /// The interested file ID.
     clang::FileID interested;
@@ -150,7 +158,7 @@ private:
 
     /// Cache for file path. It is used to avoid multiple file path lookup.
     llvm::DenseMap<clang::FileID, llvm::StringRef> pathCache;
-    
+
     llvm::BumpPtrAllocator pathStorage;
 };
 
