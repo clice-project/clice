@@ -11,7 +11,7 @@ struct SemanticTokens : ::testing::Test, Tester {
     void run(llvm::StringRef code) {
         addMain("main.cpp", code);
         Tester::run();
-        result = feature::semanticTokens(*info);
+        result = feature::indexSemanticTokens(*info);
     }
 
     void EXPECT_TOKEN(llvm::StringRef pos,

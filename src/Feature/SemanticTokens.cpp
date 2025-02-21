@@ -265,46 +265,12 @@ private:
 
 }  // namespace
 
-index::Shared<std::vector<SemanticToken>> semanticTokens(ASTInfo& AST) {
+std::vector<SemanticToken> semanticTokens(ASTInfo& AST) {
+    return HighlightBuilder(AST, true).buildForFile();
+}
+
+index::Shared<std::vector<SemanticToken>> indexSemanticTokens(ASTInfo& AST) {
     return HighlightBuilder(AST, false).buildForIndex();
-}
-
-proto::SemanticTokens toSemanticTokens(llvm::ArrayRef<SemanticToken> tokens,
-                                       SourceConverter& SC,
-                                       llvm::StringRef content,
-                                       const config::SemanticTokensOption& option) {
-
-    proto::SemanticTokens result;
-
-    std::size_t lastLine = 0;
-    std::size_t lastColumn = 0;
-
-    for(auto& token: tokens) {
-        auto [begin, end] = token.range;
-        auto [line, column] = SC.toPosition(content, begin);
-
-        if(line != lastLine) {
-            /// FIXME: Cut off content to improve performance.
-            lastColumn = 0;
-        }
-
-        result.data.emplace_back(line - lastLine);
-        result.data.emplace_back(column - lastColumn);
-        result.data.emplace_back(end - begin);
-        result.data.emplace_back(token.kind.value());
-        result.data.emplace_back(token.modifiers.value());
-
-        lastLine = line;
-        lastColumn = column;
-    }
-
-    return result;
-}
-
-proto::SemanticTokens semanticTokens(ASTInfo& info,
-                                     SourceConverter& SC,
-                                     const config::SemanticTokensOption& option) {
-    return {};
 }
 
 }  // namespace clice::feature

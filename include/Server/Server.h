@@ -113,32 +113,33 @@ private:
     //
     // async::Task<> onSubtypes(json::Value id, const proto::TypeHierarchySubtypesParams& params);
 
-    async::Task<> onDocumentHighlight(json::Value id, const proto::DocumentHighlightParams& params);
-
-    async::Task<> onDocumentLink(json::Value id, const proto::DocumentLinkParams& params);
-
-    async::Task<> onHover(json::Value id, const proto::HoverParams& params);
-
-    async::Task<> onCodeLens(json::Value id, const proto::CodeLensParams& params);
-
-    async::Task<> onFoldingRange(json::Value id, const proto::FoldingRangeParams& params);
-
-    async::Task<> onDocumentSymbol(json::Value id, const proto::DocumentSymbolParams& params);
-
-    async::Task<> onSemanticTokens(json::Value id, const proto::SemanticTokensParams& params);
-
-    async::Task<> onInlayHint(json::Value id, const proto::InlayHintParams& params);
-
-    async::Task<> onCodeCompletion(json::Value id, const proto::CompletionParams& params);
-
-    async::Task<> onSignatureHelp(json::Value id, const proto::SignatureHelpParams& params);
-
-    async::Task<> onCodeAction(json::Value id, const proto::CodeActionParams& params);
-
-    async::Task<> onFormatting(json::Value id, const proto::DocumentFormattingParams& params);
-
-    async::Task<> onRangeFormatting(json::Value id,
-                                    const proto::DocumentRangeFormattingParams& params);
+    // async::Task<> onDocumentHighlight(json::Value id, const proto::DocumentHighlightParams&
+    // params);
+    //
+    // async::Task<> onDocumentLink(json::Value id, const proto::DocumentLinkParams& params);
+    //
+    // async::Task<> onHover(json::Value id, const proto::HoverParams& params);
+    //
+    // async::Task<> onCodeLens(json::Value id, const proto::CodeLensParams& params);
+    //
+    // async::Task<> onFoldingRange(json::Value id, const proto::FoldingRangeParams& params);
+    //
+    // async::Task<> onDocumentSymbol(json::Value id, const proto::DocumentSymbolParams& params);
+    //
+    // async::Task<> onSemanticTokens(json::Value id, const proto::SemanticTokensParams& params);
+    //
+    // async::Task<> onInlayHint(json::Value id, const proto::InlayHintParams& params);
+    //
+    // async::Task<> onCodeCompletion(json::Value id, const proto::CompletionParams& params);
+    //
+    // async::Task<> onSignatureHelp(json::Value id, const proto::SignatureHelpParams& params);
+    //
+    // async::Task<> onCodeAction(json::Value id, const proto::CodeActionParams& params);
+    //
+    // async::Task<> onFormatting(json::Value id, const proto::DocumentFormattingParams& params);
+    //
+    // async::Task<> onRangeFormatting(json::Value id,
+    //                                const proto::DocumentRangeFormattingParams& params);
 
     /// ============================================================================
     ///                             Workspace Features
