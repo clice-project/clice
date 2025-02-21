@@ -131,14 +131,22 @@ struct DocumentSymbol {
 using Result = std::vector<DocumentSymbol>;
 
 /// Get all document symbols in each file.
-index::Shared<Result> documentSymbol(ASTInfo& info, const SourceConverter& SC);
+index::Shared<Result> documentSymbol(ASTInfo& AST);
+
+struct MainFileOnlyFlag {};
 
 /// Get document symbols in the main file.
-Result documentSymbolInMainFile(ASTInfo& info, const SourceConverter& SC);
+Result documentSymbol(ASTInfo& AST, MainFileOnlyFlag _mainFileOnlyFlag);
 
 /// Convert the result to LSP format.
-proto::DocumentSymbolResult toLspResult(llvm::ArrayRef<DocumentSymbol> result,
-                                        llvm::StringRef content, const SourceConverter& SC);
+proto::DocumentSymbol toLspType(const DocumentSymbol& result,
+                                const SourceConverter& SC,
+                                llvm::StringRef content);
+
+/// Convert an array of document symbols to LSP format.
+proto::DocumentSymbolResult toLspType(llvm::ArrayRef<DocumentSymbol> result,
+                                      const SourceConverter& SC,
+                                      llvm::StringRef content);
 
 }  // namespace feature::document_symbol
 
