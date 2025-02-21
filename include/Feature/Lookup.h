@@ -1,4 +1,6 @@
 #include "Basic/Document.h"
+#include "Support/Struct.h"
+#include "AST/SymbolKind.h"
 
 namespace clice::proto {
 
@@ -7,98 +9,75 @@ struct WorkDoneProgressOptions {
     bool workDoneProgress = false;
 };
 
-using DeclarationOptions = WorkDoneProgressOptions;
+struct PartialResultParams {};
 
-using DeclarationParams = TextDocumentPositionParams;
+/// The options of the all lookup.
+using LookupOptions = WorkDoneProgressOptions;
 
-using DeclarationResult = std::vector<Location>;
+/// The parameters of the simple lookup(definition, declaration,
+/// type definition, implementation and reference).
+inherited_struct(ReferenceParams, TextDocumentPositionParams, PartialResultParams){};
 
-using DefinitionOptions = DeclarationParams;
-
-using DefinitionParams = TextDocumentPositionParams;
-
-using DefinitionResult = std::vector<Location>;
-
-using TypeDefinitionOptions = WorkDoneProgressOptions;
-
-using TypeDefinitionParams = TextDocumentPositionParams;
-
-using TypeDefinitionResult = std::vector<Location>;
-
-using ImplementationOptions = WorkDoneProgressOptions;
-
-using ImplementationParams = TextDocumentPositionParams;
-
-using ImplementationResult = std::vector<Location>;
-
-using ReferenceOptions = WorkDoneProgressOptions;
-
-using ReferenceParams = TextDocumentPositionParams;
-
+/// The result of the simple lookup.
 using ReferenceResult = std::vector<Location>;
 
-using CallHierarchyPrepareParams = TextDocumentPositionParams;
+/// The parameters of the all hierarchy resolve(call hierarchy and type hierarchy)
+using HierarchyPrepareParams = TextDocumentPositionParams;
 
-struct CallHierarchyItem {
-    /// The name of this item.
+struct HierarchyItem {
+    /// The name of the item.
     string name;
 
-    /// FIXME: ...
+    /// The kind of the item.
+    SymbolKind kind;
+
+    /// The resource identifier of this item.
+    DocumentUri uri;
+
+    /// The range enclosing this symbol not including leading/trailing whitespace
+    /// but everything else, e.g. comments and code.
+    Range range;
+
+    /// The range that should be selected and revealed when this symbol is being
+    /// picked, e.g. the name of a function. Must be contained by the
+    /// [`range`](#CallHierarchyItem.range).
+    Range selectionRange;
+
+    /// A customized data of the item. We use it to store
+    /// the USR hash of the item.
+    uint64_t data = 0;
 };
 
-using CallHierarchyPrepareResult = std::vector<CallHierarchyItem>;
+using HierarchyPrepareResult = std::vector<HierarchyItem>;
 
-struct CallHierarchyIncomingCallsParams {
-    CallHierarchyItem item;
+/// The parameters of the both call hierarchy and type hierarchy.
+inherited_struct(HierarchyParams, TextDocumentPositionParams, PartialResultParams) {
+    HierarchyItem item;
 };
 
 struct CallHierarchyIncomingCall {
     /// The item that makes the call.
-    CallHierarchyItem from;
+    HierarchyItem from;
 
-    /// The range at which at which the calls appears. This is relative to the caller
-    /// denoted by `from`.
-    std::vector<Range> fromRange;
+    /// The ranges at which the calls appear. This is relative to the caller
+    /// denoted by [`this.from`](#CallHierarchyIncomingCall.from).
+    std::vector<Range> fromRanges;
 };
 
 using CallHierarchyIncomingCallsResult = std::vector<CallHierarchyIncomingCall>;
 
-struct CallHierarchyOutgoingCallsParams {
-    CallHierarchyItem item;
-};
-
 struct CallHierarchyOutgoingCall {
     /// The item that is called.
-    CallHierarchyItem to;
+    HierarchyItem to;
 
-    /// The range at which this item is called. This is relative to the caller
-    /// denoted by `to`.
-    std::vector<Range> toRange;
+    /// The range at which this item is called. This is the range relative to
+    /// the caller, e.g the item passed to `callHierarchy/outgoingCalls` request.
+    std::vector<Range> fromRanges;
 };
 
 using CallHierarchyOutgoingCallsResult = std::vector<CallHierarchyOutgoingCall>;
 
-struct TypeHierarchyItem {
-    /// The name of the type.
-    string name;
-
-    /// FIXME: ...
-};
-
-using TypeHierarchyPrepareParams = TextDocumentPositionParams;
-
-using TypeHierarchyPrepareResult = std::vector<TypeHierarchyItem>;
-
-struct TypeHierarchySupertypesParams {
-    TypeHierarchyItem item;
-};
-
-using TypeHierarchySupertypesResult = std::vector<TypeHierarchyItem>;
-
-struct TypeHierarchySubtypesParams {
-    TypeHierarchyItem item;
-};
-
-using TypeHierarchySubtypesResult = std::vector<TypeHierarchyItem>;
+/// The result of the both super and sub type hierarchy.
+using TypeHierarchyResult = std::vector<HierarchyItem>;
 
 }  // namespace clice::proto

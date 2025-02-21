@@ -40,14 +40,14 @@ public:
     proto::Range toRange(clang::SourceRange range, const clang::SourceManager& SM) const;
 
     /// Same as the above, but input is a `LocalSourceRange` and the content is provided.
-    proto::Range toRange(LocalSourceRange range, llvm::StringRef conent) const;
+    proto::Range toRange(LocalSourceRange range, llvm::StringRef content) const;
 
     /// Convert a clang::SourceRange to LocalSourceRange.
     LocalSourceRange toLocalRange(clang::SourceRange range, const clang::SourceManager& SM) const;
 
     /// Convert a proto::Position to a file offset in the content with the specified
     /// encoding kind.
-    std::size_t toOffset(llvm::StringRef content, proto::Position position) const;
+    std::uint32_t toOffset(llvm::StringRef content, proto::Position position) const;
 
     /// Get the encoding kind of the content in LSP protocol.
     proto::PositionEncodingKind encodingKind() const {

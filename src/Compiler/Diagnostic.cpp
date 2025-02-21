@@ -105,7 +105,7 @@ void dumpArg(clang::DiagnosticsEngine::ArgumentKind kind, std::uint64_t value) {
         }
 
         default: {
-            std::terminate();
+            std::abort();
         }
     }
 

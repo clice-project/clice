@@ -1,30 +1,16 @@
 #include "Basic/Document.h"
 #include "Basic/SourceCode.h"
-#include "Basic/SourceConverter.h"
 #include "Index/Shared.h"
 #include "Support/JSON.h"
 
 namespace clice {
 
-class ASTInfo;
-
-struct FoldingRangeParams {};
-
 namespace proto {
-
-// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#foldingRangeClientCapabilities
 
 /// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#foldingRangeClientCapabilities
 struct FoldingRangeClientCapabilities {};
 
-/// TODO:
 /// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#foldingRangeParams
-/// ```
-/// export interface FoldingRangeParams extends WorkDoneProgressParams,
-/// PartialResultParams {
-/// ...
-/// ```
-
 struct FoldingRangeParams {
     /// The text document.
     TextDocumentIdentifier textDocument;
@@ -70,28 +56,35 @@ using FoldingRangeResult = std::vector<FoldingRange>;
 
 }  // namespace proto
 
-namespace feature::folding_range {
+class ASTInfo;
+class SourceConverter;
+
+namespace feature::foldingrange {
 
 json::Value capability(json::Value clientCapabilities);
 
+/// We don't record the coalesced text for a range, because it's rarely useful.
 struct FoldingRange {
     LocalSourceRange range;
     proto::FoldingRangeKind kind;
-    /// We don't record the coallaesced text for a range, because it's rarely useful.
 };
 
 using Result = std::vector<FoldingRange>;
 
 /// Generate folding range for all files.
-index::Shared<Result> foldingRange(ASTInfo& info, const SourceConverter& converter);
+index::Shared<Result> foldingRange(ASTInfo& AST);
 
 /// Return folding range in main file.
-Result foldingRange(FoldingRangeParams& params, ASTInfo& info, const SourceConverter& converter);
+Result foldingRange(proto::FoldingRangeParams param, ASTInfo& AST);
 
-/// Convert folding range to LSP format.
-proto::FoldingRangeResult toLspResult(llvm::ArrayRef<FoldingRange> ranges, llvm::StringRef content,
-                                      const SourceConverter& SC);
+proto::FoldingRange toLspType(const FoldingRange& folding,
+                              const SourceConverter& SC,
+                              llvm::StringRef content);
 
-}  // namespace feature::folding_range
+proto::FoldingRangeResult toLspResult(llvm::ArrayRef<FoldingRange> foldings,
+                                      const SourceConverter& SC,
+                                      llvm::StringRef content);
+
+}  // namespace feature::foldingrange
 
 }  // namespace clice

@@ -98,6 +98,11 @@ SymbolIndex::Symbol SymbolIndex::Occurrence::symbol() const {
     return Symbol{base, index.get<"symbols">()[occurrence->symbol].data};
 }
 
+llvm::StringRef SymbolIndex::path() const {
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    return index.get<"path">().as_string();
+}
+
 ArrayView<SymbolIndex::Symbol> SymbolIndex::symbols() const {
     binary::Proxy<memory::SymbolIndex> index{base, base};
     auto symbols = index.get<"symbols">().as_array();

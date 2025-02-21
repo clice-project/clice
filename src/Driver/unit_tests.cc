@@ -1,6 +1,7 @@
 #include "Test/Test.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Signals.h"
 
 namespace clice {
 
@@ -28,6 +29,8 @@ llvm::StringRef test_dir() {
 int main(int argc, char** argv) {
     using namespace clice;
 
+    llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
+
     ::testing::InitGoogleTest(&argc, argv);
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
 
@@ -40,6 +43,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    return RUN_ALL_TESTS();
+    bool res = RUN_ALL_TESTS();
+    return res;
 }
 

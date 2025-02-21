@@ -244,14 +244,18 @@ using Result = std::vector<InlayHint>;
 /// Compute inlay hints for MainfileID in given range and config.
 Result inlayHints(proto::InlayHintParams param,
                   ASTInfo& info,
-                  const SourceConverter& converter,
                   const config::InlayHintOption& option);
 
 /// Same with `inlayHints` but including all fileID, and all options in `config::InlayHintOption`
 /// will be enabled to support index.
-index::Shared<Result> inlayHints(proto::DocumentUri uri,
-                                 ASTInfo& info,
-                                 const SourceConverter& converter);
+index::Shared<Result> inlayHints(ASTInfo& info);
+
+/// Convert `InlayHint` to `proto::InlayHint`.
+proto::InlayHint toLspType(const InlayHint& hint,
+                           size_t maxHintLength,
+                           llvm::StringRef docuri,
+                           llvm::StringRef content,
+                           const SourceConverter& SC);
 
 /// Convert `Result` to `proto::InlayHintResult`.  If an option is provided, use the option to
 /// filter result. By default, all hints will be converted.

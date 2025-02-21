@@ -151,7 +151,6 @@ public:
 
     using underlying_type = underlying;
 
-    /// FIXME:
     Enum() = default;
 
     /// A integral must explicitly convert to the enum.
@@ -255,7 +254,7 @@ private:
     }
 
 private:
-    underlying m_Value;
+    underlying m_Value = 0;
 };
 
 template <typename Derived, typename underlying>

@@ -171,7 +171,7 @@ std::string pretty_dump(const Object& object, std::size_t indent = 2) {
     auto repr = dump(object);
     auto json = json::parse(repr);
     if(!json) {
-        std::terminate();
+        std::abort();
     }
     llvm::SmallString<128> buffer = {std::format("{{0:{}}}", indent)};
     return llvm::formatv(buffer.c_str(), *json);

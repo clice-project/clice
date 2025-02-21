@@ -29,21 +29,21 @@ inline void EXPECT_EQ(const LHS& lhs,
                       const RHS& rhs,
                       std::source_location current = std::source_location::current()) {
     if(!refl::equal(lhs, rhs)) {
-        std::string expect;
+        std::string left;
         if constexpr(requires { json::Serde<LHS>::serialize; }) {
-            llvm::raw_string_ostream(expect) << json::serialize(lhs);
+            llvm::raw_string_ostream(left) << json::serialize(lhs);
         } else {
-            expect = "cannot dump value";
+            left = "cannot dump value";
         }
 
-        std::string actual;
+        std::string right;
         if constexpr(requires { json::Serde<RHS>::serialize; }) {
-            llvm::raw_string_ostream(actual) << json::serialize(rhs);
+            llvm::raw_string_ostream(right) << json::serialize(rhs);
         } else {
-            actual = "cannot dump value";
+            right = "cannot dump value";
         }
 
-        EXPECT_FAILURE(std::format("expect: {}, actual: {}\n", expect, actual), current);
+        EXPECT_FAILURE(std::format("left : {}\nright: {}\n", left, right), current);
     }
 }
 

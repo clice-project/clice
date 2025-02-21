@@ -29,8 +29,14 @@ protected:
         tester.emplace("main.cpp", code);
         tester->run();
         auto& info = tester->info;
-        SourceConverter converter;
-        result = inlayHints({.range = range}, *info, converter, option);
+
+        proto::Range limit = range;
+        if(limit.start.line == limit.end.line && limit.start.character == limit.end.character &&
+           limit.start.line == 0 && limit.start.character == 0) {
+            limit = {.start = {}, .end = tester->endOfFile()};
+        }
+
+        result = inlayHints({.range = limit}, *info, option);
     }
 
     size_t indexOf(llvm::StringRef key) {
@@ -43,9 +49,17 @@ protected:
         return std::distance(result.begin(), iter);
     }
 
-    std::string joinLabels(const InlayHint& hint) {
+    static std::string joinLabels(const InlayHint& hint) {
         std::string text;
         for(auto& lable: hint.labels) {
+            text += lable.value;
+        }
+        return text;
+    }
+
+    static std::string joinLabels(const proto::InlayHint& hint) {
+        std::string text;
+        for(auto& lable: hint.lables) {
             text += lable.value;
         }
         return text;
@@ -460,8 +474,7 @@ namespace _2 {
     auto& info = tx.info;
     EXPECT_TRUE(info.has_value());
 
-    SourceConverter cvtr{proto::PositionEncodingKind::UTF8};
-    auto maps = inlayHints("", *info, cvtr);
+    auto maps = inlayHints(*info);
 
     // 2 fileID
     EXPECT_EQ(maps.size(), 2);
@@ -479,8 +492,12 @@ namespace _2 {
                 .blockEnd = true,
                 .structSizeAndAlign = false,
             };
-            auto lspRes = toLspType(result, "", fixOption, header, cvtr);
+
+            SourceConverter SC;
+            auto lspRes = toLspType(result, "", fixOption, header, SC);
             EXPECT_EQ(lspRes.size(), 2);
+            EXPECT_TRUE(lspRes[0].lables[0].value.contains("namespace _1"));
+            EXPECT_EQ(joinLabels(lspRes[1]), ": _1::_2345678");
         }
     }
 }

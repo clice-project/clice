@@ -44,6 +44,12 @@ static StringRef GetExternalSourceContainer(const NamedDecl* D) {
     return StringRef();
 }
 
+void AppendExprODRHash(const Expr* expr, llvm::raw_ostream& Out) {
+    ODRHash Hash{};
+    Hash.AddStmt(expr);
+    Out << Hash.CalculateHash();
+};
+
 namespace {
 class USRGenerator : public ConstDeclVisitor<USRGenerator> {
     SmallVectorImpl<char>& Buf;
@@ -85,6 +91,7 @@ public:
     void VisitUnresolvedUsingValueDecl(const UnresolvedUsingValueDecl* D);
     void VisitUnresolvedUsingTypenameDecl(const UnresolvedUsingTypenameDecl* D);
     void VisitConceptDecl(const ConceptDecl* D);
+    void VisitTemplateParamObjectDecl(const TemplateParamObjectDecl* D);
 
     void VisitLinkageSpecDecl(const LinkageSpecDecl* D) {
         IgnoreResults = true;  // No USRs for linkage specs themselves.
@@ -199,6 +206,10 @@ void USRGenerator::VisitFunctionDecl(const FunctionDecl* D) {
         IsTemplate = true;
         Out << "@FT@";
         VisitTemplateParameterList(FunTmpl->getTemplateParameters());
+        if(auto RC = D->getTrailingRequiresClause()) {
+            Out << ":RC";
+            AppendExprODRHash(RC, Out);
+        }
     } else
         Out << "@F@";
 
@@ -228,13 +239,13 @@ void USRGenerator::VisitFunctionDecl(const FunctionDecl* D) {
         Out << '>';
     }
 
-    QualType CanonicalType = D->getType().getCanonicalType();
     // Mangle in type information for the arguments.
-    if(const auto* FPT = CanonicalType->getAs<FunctionProtoType>()) {
-        for(QualType PT: FPT->param_types()) {
-            Out << '#';
-            VisitType(PT);
+    for(auto ParmVar: D->parameters()) {
+        Out << '#';
+        if(ParmVar->isExplicitObjectParameter()) {
+            Out << "this";
         }
+        VisitType(ParmVar->getType());
     }
     if(D->isVariadic())
         Out << '.';
@@ -568,7 +579,7 @@ void USRGenerator::VisitType(QualType T) {
                 case BuiltinType::OCLReserveID: Out << "@BT@OCLReserveID"; break;
                 case BuiltinType::OCLSampler: Out << "@BT@OCLSampler"; break;
 #define SVE_TYPE(Name, Id, SingletonId)                                                            \
-    case BuiltinType::Id: Out << "@BT@" << Name; break;
+    case BuiltinType::Id: Out << "@BT@" << #Name; break;
 #include "clang/Basic/AArch64SVEACLETypes.def"
 #define PPC_VECTOR_TYPE(Name, Id, Size)                                                            \
     case BuiltinType::Id: Out << "@BT@" << #Name; break;
@@ -710,6 +721,15 @@ void USRGenerator::VisitType(QualType T) {
                 VisitTemplateArgument(Arg);
             return;
         }
+        if(const auto* DeducedSpec = T->getAs<DeducedTemplateSpecializationType>()) {
+            // TODO(sakria9): double check this
+            Out << "D";
+            VisitTemplateName(DeducedSpec->getTemplateName());
+            if(!DeducedSpec->getDeducedType().isNull()) {
+                VisitType(DeducedSpec->getDeducedType());
+            }
+            return;
+        }
         if(const DependentNameType* DNT = T->getAs<DependentNameType>()) {
             Out << '^';
             printQualifier(Out, LangOpts, DNT->getQualifier());
@@ -739,6 +759,10 @@ void USRGenerator::VisitType(QualType T) {
             T = AT->getElementType();
             continue;
         }
+        if(const auto* AT = dyn_cast<AutoType>(T)) {
+            Out << 'a';
+            return;
+        }
 
         // Unhandled type.
         Out << ' ';
@@ -749,14 +773,19 @@ void USRGenerator::VisitType(QualType T) {
 void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Params) {
     if(!Params)
         return;
+
     Out << '>' << Params->size();
     for(TemplateParameterList::const_iterator P = Params->begin(), PEnd = Params->end(); P != PEnd;
         ++P) {
         Out << '#';
-        if(isa<TemplateTypeParmDecl>(*P)) {
-            if(cast<TemplateTypeParmDecl>(*P)->isParameterPack())
+        if(auto p = dyn_cast<TemplateTypeParmDecl>(*P)) {
+            if(p->isParameterPack())
                 Out << 'p';
             Out << 'T';
+            if(p->hasTypeConstraint()) {
+                Out << ":TC";
+                AppendExprODRHash(p->getTypeConstraint()->getImmediatelyDeclaredConstraint(), Out);
+            }
             continue;
         }
 
@@ -765,6 +794,10 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
                 Out << 'p';
             Out << 'N';
             VisitType(NTTP->getType());
+            if(auto constraint = NTTP->getPlaceholderTypeConstraint()) {
+                Out << ":PTC";
+                AppendExprODRHash(constraint, Out);
+            }
             continue;
         }
 
@@ -773,6 +806,11 @@ void USRGenerator::VisitTemplateParameterList(const TemplateParameterList* Param
             Out << 'p';
         Out << 't';
         VisitTemplateParameterList(TTP->getTemplateParameters());
+    }
+
+    if(auto requiresClause = Params->getRequiresClause()) {
+        Out << ":RC";
+        AppendExprODRHash(requiresClause, Out);
     }
 }
 
@@ -787,7 +825,11 @@ void USRGenerator::VisitTemplateName(TemplateName Name) {
         return;
     }
 
-    // FIXME: Visit dependent template names.
+    if(auto DT = Name.getAsDependentTemplateName()) {
+        Out << '^';
+        printQualifier(Out, LangOpts, DT->getQualifier());
+        Out << ':' << DT->getIdentifier()->getName();
+    }
 }
 
 void USRGenerator::VisitTemplateArgument(const TemplateArgument& Arg) {
@@ -805,9 +847,13 @@ void USRGenerator::VisitTemplateArgument(const TemplateArgument& Arg) {
             VisitTemplateName(Arg.getAsTemplateOrTemplatePattern());
             break;
 
-        case TemplateArgument::Expression:
-            // FIXME: Visit expressions.
+        case TemplateArgument::Expression: {
+            Out << 'E';
+            ODRHash Hash{};
+            Hash.AddStmt(Arg.getAsExpr());
+            Out << Hash.CalculateHash();
             break;
+        }
 
         case TemplateArgument::Pack:
             Out << 'p' << Arg.pack_size();
@@ -858,6 +904,13 @@ void USRGenerator::VisitConceptDecl(const ConceptDecl* D) {
     VisitDeclContext(D->getDeclContext());
     Out << "@CT@";
     EmitDeclName(D);
+}
+
+void USRGenerator::VisitTemplateParamObjectDecl(const TemplateParamObjectDecl* D) {
+    VisitType(D->getType());
+    ODRHash Hash{};
+    Hash.AddStructuralValue(D->getValue());
+    Out << Hash.CalculateHash();
 }
 
 void USRGenerator::VisitMSGuidDecl(const MSGuidDecl* D) {

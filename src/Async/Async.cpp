@@ -67,6 +67,8 @@ void run() {
         init();
     }
 
+    UV_CHECK_RESULT(uv_os_setenv("UV_THREADPOOL_SIZE", "20"));
+
     UV_CHECK_RESULT(uv_run(loop, UV_RUN_DEFAULT));
 
     uv_close(reinterpret_cast<uv_handle_t*>(&idle), nullptr);

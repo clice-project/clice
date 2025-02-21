@@ -13,7 +13,7 @@ std::unique_ptr<clang::CompilerInvocation> createInvocation(CompilationParams& p
     llvm::SmallVector<const char*, 16> args;
 
     if(auto result = mangleCommand(params.command, args, buffer); !result) {
-        std::terminate();
+        std::abort();
     }
 
     clang::CreateInvocationOptions options = {};
@@ -21,7 +21,7 @@ std::unique_ptr<clang::CompilerInvocation> createInvocation(CompilationParams& p
 
     auto invocation = clang::createInvocation(args, options);
     if(!invocation) {
-        std::terminate();
+        std::abort();
     }
 
     auto& frontOpts = invocation->getFrontendOpts();
@@ -70,7 +70,7 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
     }
 
     if(!instance->createTarget()) {
-        std::terminate();
+        std::abort();
     }
 
     auto [pch, bound] = params.pch;
