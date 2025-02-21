@@ -1,107 +1,89 @@
+#include "AST/FilterASTVisitor.h"
 #include "Basic/SourceConverter.h"
-#include "Feature/DocumentSymbol.h"
 #include "Compiler/Compilation.h"
-#include "clang/AST/RecursiveASTVisitor.h"
+#include "Feature/DocumentSymbol.h"
 
 namespace clice {
 
 namespace {
 
+using feature::document_symbol::DocumentSymbol;
+
 /// Clangd's DocumentSymbol Implementation:
 /// https://github.com/llvm/llvm-project/blob/main/clang-tools-extra/clangd/FindSymbols.cpp#L286
 
 /// Use DFS to traverse the AST and collect document symbols.
-struct DocumentSymbolCollector : clang::RecursiveASTVisitor<DocumentSymbolCollector> {
+struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollector> {
 
-    using Base = clang::RecursiveASTVisitor<DocumentSymbolCollector>;
+    using Base = FilteredASTVisitor<DocumentSymbolCollector>;
 
-    const clang::SourceManager& src;
-
-    const SourceConverter& cvtr;
+    using Storage = index::Shared<feature::document_symbol::Result>;
 
     /// DFS state stack.
-    std::vector<proto::DocumentSymbol> stack;
+    std::vector<std::pair<DocumentSymbol, clang::SourceLocation>> stack;
 
     /// Result of document symbols.
-    std::vector<proto::DocumentSymbol> result;
+    Storage result;
+
+    DocumentSymbolCollector(ASTInfo& AST, bool interestedOnly) :
+        Base(AST, interestedOnly, std::nullopt) {}
 
     /// Entry a new AST node which may has some children nodes.
-    void entry(proto::DocumentSymbol symbol) {
-        stack.push_back(std::move(symbol));
+    void entry(DocumentSymbol symbol, clang::SourceLocation loc) {
+        stack.push_back({std::move(symbol), loc});
     }
 
     /// Leave the current AST node.
     void leave() {
-        stack.back().children.shrink_to_fit();
+        stack.back().first.children.shrink_to_fit();
         auto last = std::move(stack.back());
         stack.pop_back();
 
-        collect(std::move(last));
+        collect(std::move(last.first), last.second);
     }
 
     /// Collect a leaf node as the DocumentSymbol.
-    void collect(proto::DocumentSymbol symbol) {
-        auto& ref = stack.empty() ? result : stack.back().children;
-        ref.push_back(std::move(symbol));
+    void collect(DocumentSymbol symbol, clang::SourceLocation loc) {
+        feature::document_symbol::Result* state;
+
+        if(!stack.empty()) {
+            state = &stack.back().first.children;
+        } else {
+            clang::FileID fileID = interestedOnly ? AST.getInterestedFile() : AST.getFileID(loc);
+            state = &result[fileID];
+        }
+
+        state->push_back(std::move(symbol));
     }
 
     /// Mark the symbol as deprecated.
-    void markDeprecated(proto::DocumentSymbol& symbol) {
+    void markDeprecated(DocumentSymbol& symbol) {
         symbol.tags.push_back(proto::SymbolTag{proto::SymbolTag::Deprecated});
-        symbol.deprecated = true;
-    }
-
-    bool isInMainFile(clang::SourceLocation loc) {
-        return loc.isValid() && src.isInMainFile(loc);
     }
 
     /// For a given location, it could be one of SpellingLoc or ExpansionLoc (from macro expansion).
     /// So take literal location as the result for macro.
     clang::SourceRange toLiteralRange(clang::SourceRange range) {
-        auto [begin, end] = range;
-
         auto takeLocation = [this](clang::SourceLocation loc) {
-            return !loc.isMacroID() ? loc : src.getExpansionLoc(loc);
+            return loc.isMacroID() ? AST.getExpansionLoc(loc) : loc;
         };
 
+        auto [begin, end] = range;
         return {takeLocation(begin), takeLocation(end)};
-    }
-
-    bool TraverseDecl(clang::Decl* decl) {
-        if(!decl)
-            return true;
-
-        if(!llvm::isa<clang::NamedDecl>(decl))
-            return true;
-
-        if(!isInMainFile(decl->getLocation()) || decl->isImplicit())
-            return true;
-
-        if(auto* ctsd = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(decl)) {
-            if(!ctsd->isExplicitInstantiationOrSpecialization())
-                return true;
-        }
-
-        if(auto* vtsd = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl)) {
-            if(!vtsd->isExplicitInstantiationOrSpecialization())
-                return true;
-        }
-
-        return Base::TraverseDecl(decl);
     }
 
     bool TraverseNamespaceDecl(clang::NamespaceDecl* decl) {
         constexpr auto Default = "<anonymous namespace>";
 
-        auto range = cvtr.toRange(toLiteralRange(decl->getSourceRange()), src);
-        proto::DocumentSymbol symbol{
-            .name = decl->isAnonymousNamespace() ? Default : decl->getNameAsString(),
+        auto range = AST.toLocalRange(toLiteralRange(decl->getSourceRange())).second;
+        DocumentSymbol symbol{
             .kind = proto::SymbolKind::Namespace,
+            .name = decl->isAnonymousNamespace() ? Default : decl->getNameAsString(),
             .range = range,
             .selectionRange = range,
         };
 
-        entry(std::move(symbol));
+        entry(std::move(symbol), decl->getBeginLoc());
         bool res = Base::TraverseNamespaceDecl(decl);
         leave();
 
@@ -109,15 +91,15 @@ struct DocumentSymbolCollector : clang::RecursiveASTVisitor<DocumentSymbolCollec
     }
 
     bool TraverseEnumDecl(clang::EnumDecl* decl) {
-        auto range = cvtr.toRange(toLiteralRange(decl->getSourceRange()), src);
-        proto::DocumentSymbol symbol{
-            .name = decl->getNameAsString(),
+        auto range = AST.toLocalRange(toLiteralRange(decl->getSourceRange())).second;
+        DocumentSymbol symbol{
             .kind = proto::SymbolKind::Enum,
+            .name = decl->getNameAsString(),
             .range = range,
             .selectionRange = range,
         };
 
-        entry(std::move(symbol));
+        entry(std::move(symbol), decl->getBeginLoc());
         bool res = Base::TraverseEnumDecl(decl);
         leave();
 
@@ -126,10 +108,10 @@ struct DocumentSymbolCollector : clang::RecursiveASTVisitor<DocumentSymbolCollec
 
     bool VisitEnumDecl(const clang::EnumDecl* decl) {
         for(auto* etor: decl->enumerators()) {
-            auto range = cvtr.toRange(toLiteralRange(etor->getSourceRange()), src);
-            proto::DocumentSymbol symbol{
-                .name = etor->getNameAsString(),
+            auto range = AST.toLocalRange(toLiteralRange(etor->getSourceRange())).second;
+            DocumentSymbol symbol{
                 .kind = proto::SymbolKind::EnumMember,
+                .name = etor->getNameAsString(),
                 .range = range,
                 .selectionRange = range,
             };
@@ -146,7 +128,7 @@ struct DocumentSymbolCollector : clang::RecursiveASTVisitor<DocumentSymbolCollec
             if(etor->isDeprecated())
                 markDeprecated(symbol);
 
-            collect(std::move(symbol));
+            collect(std::move(symbol), etor->getBeginLoc());
         }
 
         return true;
@@ -155,8 +137,8 @@ struct DocumentSymbolCollector : clang::RecursiveASTVisitor<DocumentSymbolCollec
     bool TraverseCXXRecordDecl(clang::CXXRecordDecl* decl) {
         constexpr auto Default = "<anonymous struct>";
 
-        auto range = cvtr.toRange(toLiteralRange(decl->getSourceRange()), src);
-        proto::DocumentSymbol symbol{
+        auto range = AST.toLocalRange(toLiteralRange(decl->getSourceRange())).second;
+        DocumentSymbol symbol{
             .range = range,
             .selectionRange = range,
         };
@@ -169,17 +151,17 @@ struct DocumentSymbolCollector : clang::RecursiveASTVisitor<DocumentSymbolCollec
         else
             symbol.name = Default;
 
-        entry(std::move(symbol));
+        entry(std::move(symbol), decl->getBeginLoc());
         bool res = Base::TraverseCXXRecordDecl(decl);
         leave();
         return res;
     }
 
     bool VisitFieldDecl(const clang::FieldDecl* decl) {
-        auto range = cvtr.toRange(decl->getSourceRange(), src);
-        proto::DocumentSymbol symbol{
-            .name = decl->getNameAsString(),
+        auto range = AST.toLocalRange(toLiteralRange(decl->getSourceRange())).second;
+        DocumentSymbol symbol{
             .kind = proto::SymbolKind::Field,
+            .name = decl->getNameAsString(),
             .range = range,
             .selectionRange = range,
         };
@@ -188,7 +170,7 @@ struct DocumentSymbolCollector : clang::RecursiveASTVisitor<DocumentSymbolCollec
         if(decl->isDeprecated())
             markDeprecated(symbol);
 
-        collect(std::move(symbol));
+        collect(std::move(symbol), decl->getBeginLoc());
         return true;
     }
 
@@ -207,6 +189,22 @@ struct DocumentSymbolCollector : clang::RecursiveASTVisitor<DocumentSymbolCollec
         return signature;
     }
 
+    DocumentSymbol extractFunctionSymbol(const clang::FunctionDecl* decl) {
+        auto local = AST.toLocalRange(toLiteralRange(decl->getSourceRange())).second;
+        DocumentSymbol symbol{
+            .kind = proto::SymbolKind::Function,
+            .name = decl->getNameAsString(),
+            .range = local,
+            .selectionRange = local,
+        };
+        symbol.detail = composeFuncSignature(decl);
+
+        if(decl->isDeprecated())
+            markDeprecated(symbol);
+
+        return symbol;
+    }
+
     bool TraverseFunctionDecl(clang::FunctionDecl* decl) {
         if(!decl)
             return true;
@@ -216,58 +214,86 @@ struct DocumentSymbolCollector : clang::RecursiveASTVisitor<DocumentSymbolCollec
             return true;
         }
 
-        return Base::TraverseFunctionDecl(decl);
+        entry(extractFunctionSymbol(decl), decl->getBeginLoc());
+        bool res = Base::TraverseFunctionDecl(decl);
+        leave();
+
+        return res;
     }
 
-    bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
-        auto range = cvtr.toRange(toLiteralRange(decl->getSourceRange()), src);
-        proto::DocumentSymbol symbol{
-            .name = decl->getNameAsString(),
-            .kind = proto::SymbolKind::Function,
-            .range = range,
-            .selectionRange = range,
-        };
-        symbol.detail = composeFuncSignature(decl);
+    bool TraverseCXXMethodDecl(clang::CXXMethodDecl* decl) {
+        if(!decl)
+            return true;
 
-        if(decl->isDeprecated())
-            markDeprecated(symbol);
+        if(auto spec = decl->getTemplateSpecializationInfo();
+           spec && !spec->isExplicitSpecialization()) {
+            return true;
+        }
 
-        collect(std::move(symbol));
-        return true;
+        entry(extractFunctionSymbol(decl), decl->getBeginLoc());
+        bool res = Base::TraverseCXXMethodDecl(decl);
+        leave();
+
+        return res;
+    }
+
+    bool TraverseCXXConstructorDecl(clang::CXXConstructorDecl* decl) {
+        if(decl->isImplicit())
+            return true;
+
+        entry(extractFunctionSymbol(decl), decl->getBeginLoc());
+        bool res = Base::TraverseCXXConstructorDecl(decl);
+        leave();
+        return res;
+    }
+
+    bool TraverseCXXDestructorDecl(clang::CXXDestructorDecl* decl) {
+        if(decl->isImplicit())
+            return true;
+
+        entry(extractFunctionSymbol(decl), decl->getBeginLoc());
+        bool res = Base::TraverseCXXDestructorDecl(decl);
+        leave();
+        return res;
     }
 
     bool TraverseParmVarDecl(clang::ParmVarDecl* decl) {
+        // Skip function parameters.
         return true;
     }
 
-    bool TraverseVarDecl(clang::VarDecl* decl) {
-        if(!decl || decl->isLocalVarDeclOrParm() || decl->isTemplated())
+    bool VisitVarDecl(const clang::VarDecl* decl) {
+        /// Do not show local variables except static local variables.
+        if(decl->isLocalVarDecl() && !decl->isStaticLocal())
             return true;
 
-        return Base::TraverseVarDecl(decl);
-    }
-
-    bool VisitVarDecl(const clang::VarDecl* decl) {
-        auto range = cvtr.toRange(toLiteralRange(decl->getSourceRange()), src);
-        proto::DocumentSymbol symbol{
+        auto local = AST.toLocalRange(toLiteralRange(decl->getSourceRange())).second;
+        DocumentSymbol symbol{
+            .kind = decl->isConstexpr() ? proto::SymbolKind::Constant : proto::SymbolKind::Variable,
             .name = decl->getNameAsString(),
             .detail = decl->getType().getAsString(),
-            .kind = decl->isConstexpr() ? proto::SymbolKind::Constant : proto::SymbolKind::Variable,
-            .range = range,
-            .selectionRange = range,
+            .range = local,
+            .selectionRange = local,
         };
 
         if(decl->isDeprecated())
             markDeprecated(symbol);
 
-        collect(std::move(symbol));
+        collect(std::move(symbol), decl->getBeginLoc());
         return true;
+    }
+
+    static Storage collect(ASTInfo& AST, bool interestedOnly) {
+        DocumentSymbolCollector collector{AST, interestedOnly};
+        collector.TraverseTranslationUnitDecl(AST.tu());
+        assert(collector.stack.empty() && "Unclosed scope to collect DocumentSymbol.");
+        return std::move(collector.result);
     }
 };
 
 }  // namespace
 
-namespace feature {
+namespace feature::document_symbol {
 
 // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#serverCapabilities
 // ```
@@ -277,22 +303,58 @@ namespace feature {
 //	documentSymbolProvider?: boolean | DocumentSymbolOptions;
 // ```
 // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentSymbolOptions
-json::Value documentSymbolCapability(json::Value clientCapabilities) {
+json::Value capability(json::Value clientCapabilities) {
     return json::Object{
         {"documentSymbolProvider", true},
     };
 }
 
-proto::DocumentSymbolResult documentSymbol(ASTInfo& info, const SourceConverter& converter) {
-    DocumentSymbolCollector collector{
-        .src = info.srcMgr(),
-        .cvtr = converter,
-    };
-
-    collector.TraverseTranslationUnitDecl(info.tu());
-    return std::move(collector.result);
+/// Get all document symbols in each file.
+index::Shared<Result> documentSymbol(ASTInfo& AST) {
+    return DocumentSymbolCollector::collect(AST, false);
 }
 
-}  // namespace feature
+Result documentSymbol(ASTInfo& AST, MainFileOnlyFlag _) {
+    auto result = DocumentSymbolCollector::collect(AST, true);
+    return std::move(result[AST.getInterestedFile()]);
+}
+
+proto::DocumentSymbol toLspType(const DocumentSymbol& result,
+                                const SourceConverter& SC,
+                                llvm::StringRef content) {
+    proto::DocumentSymbol lspRes;
+
+    lspRes.name = result.name;
+    lspRes.detail = result.detail;
+    lspRes.kind = result.kind;
+    lspRes.tags = result.tags;
+
+    lspRes.range = SC.toRange(result.range, content);
+    lspRes.selectionRange = SC.toRange(result.selectionRange, content);
+
+    lspRes.children.reserve(result.children.size());
+    for(auto& child: result.children) {
+        lspRes.children.push_back(toLspType(child, SC, content));
+    }
+
+    lspRes.children.shrink_to_fit();
+    return lspRes;
+}
+
+proto::DocumentSymbolResult toLspResult(llvm::ArrayRef<DocumentSymbol> result,
+                                        const SourceConverter& SC,
+                                        llvm::StringRef content) {
+    proto::DocumentSymbolResult lspRes;
+    lspRes.reserve(result.size());
+
+    for(auto& symbol: result) {
+        lspRes.push_back(toLspType(symbol, SC, content));
+    }
+
+    lspRes.shrink_to_fit();
+    return lspRes;
+}
+
+}  // namespace feature::document_symbol
 
 }  // namespace clice

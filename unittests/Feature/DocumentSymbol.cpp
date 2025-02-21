@@ -6,22 +6,38 @@ namespace clice::testing {
 
 namespace {
 
-void total_size(const proto::DocumentSymbolResult& result, size_t& size) {
-    for(auto& item: result) {
-        ++size;
-        total_size(item.children, size);
+using namespace feature::document_symbol;
+
+struct DocumentSymbol : public ::testing::Test {
+
+protected:
+    std::optional<Tester> tester;
+
+    Result run(llvm::StringRef code) {
+        tester.emplace("main.cpp", code);
+        tester->run();
+
+        auto& info = tester->info;
+        EXPECT_TRUE(info.has_value());
+
+        return documentSymbol(*info, {});
     }
-}
 
-size_t total_size(const proto::DocumentSymbolResult& result) {
-    size_t size = 0;
-    total_size(result, size);
-    return size;
-}
+    static void total_size(const Result& result, size_t& size) {
+        for(auto& item: result) {
+            ++size;
+            total_size(item.children, size);
+        }
+    }
 
-const SourceConverter converter{proto::PositionEncodingKind::UTF8};
+    static size_t total_size(const Result& result) {
+        size_t size = 0;
+        total_size(result, size);
+        return size;
+    }
+};
 
-TEST(DocumentSymbol, Namespace) {
+TEST_F(DocumentSymbol, Namespace) {
     const char* main = R"cpp(
 namespace _1 {
     namespace _2 {
@@ -43,15 +59,11 @@ namespace _1::_2{
 
 )cpp";
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto res = feature::documentSymbol(*txs.info, converter);
-    // dbg(res);
-    ASSERT_EQ(total_size(res), 8);
+    auto res = run(main);
+    EXPECT_EQ(total_size(res), 8);
 }
 
-TEST(DocumentSymbol, Struct) {
+TEST_F(DocumentSymbol, Struct) {
     const char* main = R"cpp(
 struct _1 {};
 struct _2 {};
@@ -68,19 +80,19 @@ int main(int argc, char* argv[]) {
     } point;
 
     int local = 0; // no symbol for `local` variable
+
+    static int static_local  = 0; // has symbol for `static_local` variable
+    return 0;
 }
 
 )cpp";
 
-    Tester txs("main.cpp", main);
-    txs.run();
+    auto res = run(main);
 
-    auto res = feature::documentSymbol(*txs.info, converter);
-    // dbg(res);
-    ASSERT_EQ(total_size(res), 9);
+    EXPECT_EQ(total_size(res), 10);
 }
 
-TEST(DocumentSymbol, Field) {
+TEST_F(DocumentSymbol, Field) {
     const char* main = R"cpp(
 
 struct x {
@@ -97,15 +109,11 @@ struct x {
 
 )cpp";
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto res = feature::documentSymbol(*txs.info, converter);
-    // dbg(res);
-    ASSERT_EQ(total_size(res), 7);
+    auto res = run(main);
+    EXPECT_EQ(total_size(res), 7);
 }
 
-TEST(DocumentSymbol, Constructor) {
+TEST_F(DocumentSymbol, Constructor) {
     const char* main = R"cpp(
 struct S {
     int x;
@@ -116,16 +124,11 @@ struct S {
     ~S() {}
 };
 )cpp";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto res = feature::documentSymbol(*txs.info, converter);
-    // dbg(res);
-    ASSERT_EQ(total_size(res), 6);
+    auto res = run(main);
+    EXPECT_EQ(total_size(res), 6);
 }
 
-TEST(DocumentSymbol, Method) {
+TEST_F(DocumentSymbol, Method) {
     const char* main = R"cpp(
 
 struct _0 {
@@ -139,15 +142,11 @@ struct _0 {
 
 )cpp";
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto res = feature::documentSymbol(*txs.info, converter);
-    // dbg(res);
-    ASSERT_EQ(total_size(res), 7);
+    auto res = run(main);
+    EXPECT_EQ(total_size(res), 7);
 }
 
-TEST(DocumentSymbol, Enum) {
+TEST_F(DocumentSymbol, Enum) {
     const char* main = R"cpp(
 
 enum class A {
@@ -164,38 +163,21 @@ enum B {
 
 )cpp";
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto res = feature::documentSymbol(*txs.info, converter);
-    // dbg(res);
-    ASSERT_EQ(total_size(res), 8);
+    auto res = run(main);
+    EXPECT_EQ(total_size(res), 8);
 }
 
-TEST(DocumentSymbol, TopLevelVariable) {
+TEST_F(DocumentSymbol, TopLevelVariable) {
     const char* main = R"cpp(
 constexpr auto x = 1;
 int y = 2;
 )cpp";
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto res = feature::documentSymbol(*txs.info, converter);
-    // dbg(res);
-    ASSERT_EQ(total_size(res), 2);
+    auto res = run(main);
+    EXPECT_EQ(total_size(res), 2);
 }
 
-#define CLASS(X) class X
-
-CLASS(test) {
-    int x = 1;
-};
-
-#define VAR(X) int X = 1;
-VAR(test)
-
-TEST(DocumentSymbol, Macro) {
+TEST_F(DocumentSymbol, Macro) {
     const char* main = R"cpp(
 #define CLASS(X) class X 
 
@@ -208,23 +190,63 @@ VAR(test)
 
 )cpp";
 
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    auto res = feature::documentSymbol(*txs.info, converter);
-    // dbg(res);
+    auto res = run(main);
 
     // clang-format off
-    
+
 /// FIXME:
 /// Fix range for macro expansion.  Current out put is:
+//
+// debug(res);
+// 
 // kind: Class, name:test, detail:, deprecated:false, range: {"end":{"character":0,"line":5},"start":{"character":0,"line":3}}, children_num:1
 //  kind: Field, name:x, detail:int, deprecated:false, range: {"end":{"character":3,"line":4},"start":{"character":4,"line":4}}, children_num:0
 // kind: Variable, name:test, detail:int, deprecated:false, range: {"end":{"character":0,"line":8},"start":{"character":0,"line":8}}, children_num:0
 
     // clang-format on
 
-    ASSERT_EQ(total_size(res), 3);
+    EXPECT_EQ(total_size(res), 3);
+}
+
+TEST_F(DocumentSymbol, WithHeader) {
+    const char* header = R"cpp(
+
+struct Test {
+    
+    struct Inner {
+       double z;
+    };
+
+    int a;
+
+    constexpr static int x = 1;
+};
+
+)cpp";
+
+    const char* main = R"cpp(
+#include "header.h"
+
+constexpr auto x = 1;
+int y = 2;
+)cpp";
+
+    Tester tx;
+    tx.addFile(path::join(".", "header.h"), header);
+    tx.addMain("main.cpp", main);
+    tx.run();
+
+    auto& info = tx.info;
+    EXPECT_TRUE(info.has_value());
+
+    auto maps = documentSymbol(*info);
+    for(auto& [fileID, result]: maps) {
+        if(fileID == info->srcMgr().getMainFileID()) {
+            EXPECT_EQ(total_size(result), 2);
+        } else {
+            EXPECT_EQ(total_size(result), 5);
+        }
+    }
 }
 
 }  // namespace
