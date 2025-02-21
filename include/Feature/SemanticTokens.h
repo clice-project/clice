@@ -23,10 +23,10 @@ struct SemanticToken {
 };
 
 /// Generate semantic tokens for the interested file only.
-std::vector<SemanticToken> semanticTokens(ASTInfo& info);
+std::vector<SemanticToken> semanticTokens(ASTInfo& AST);
 
 /// Generate semantic tokens for all files.
-index::Shared<std::vector<SemanticToken>> indexSemanticTokens(ASTInfo& info);
+index::Shared<std::vector<SemanticToken>> indexSemanticTokens(ASTInfo& AST);
 
 }  // namespace feature
 
