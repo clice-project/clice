@@ -3,7 +3,7 @@
 
 namespace clice {
 
-Server::Server() : indexer(database,config::index ), scheduler(database, {}) {
+Server::Server() : indexer(database, config::index), scheduler(database, {}) {
     addMethod("initialize", &Server::onInitialize);
     addMethod("initialized", &Server::onInitialized);
     addMethod("shutdown", &Server::onShutdown);
@@ -25,19 +25,19 @@ Server::Server() : indexer(database,config::index ), scheduler(database, {}) {
     // addMethod("textDocument/typeHierarchy/prepare", &Server::onPrepareTypeHierarchy);
     // addMethod("textDocument/typeHierarchy/supertypes", &Server::onSupertypes);
     // addMethod("textDocument/typeHierarchy/subtypes", &Server::onSubtypes);
-    addMethod("textDocument/documentHighlight", &Server::onDocumentHighlight);
-    addMethod("textDocument/documentLink", &Server::onDocumentLink);
-    addMethod("textDocument/hover", &Server::onHover);
-    addMethod("textDocument/codeLens", &Server::onCodeLens);
-    addMethod("textDocument/foldingRange", &Server::onFoldingRange);
-    addMethod("textDocument/documentSymbol", &Server::onDocumentSymbol);
-    addMethod("textDocument/semanticTokens/full", &Server::onSemanticTokens);
-    addMethod("textDocument/inlayHint", &Server::onInlayHint);
-    addMethod("textDocument/completion", &Server::onCodeCompletion);
-    addMethod("textDocument/signatureHelp", &Server::onSignatureHelp);
-    addMethod("textDocument/codeAction", &Server::onCodeAction);
-    addMethod("textDocument/formatting", &Server::onFormatting);
-    addMethod("textDocument/rangeFormatting", &Server::onRangeFormatting);
+    // addMethod("textDocument/documentHighlight", &Server::onDocumentHighlight);
+    // addMethod("textDocument/documentLink", &Server::onDocumentLink);
+    // addMethod("textDocument/hover", &Server::onHover);
+    // addMethod("textDocument/codeLens", &Server::onCodeLens);
+    // addMethod("textDocument/foldingRange", &Server::onFoldingRange);
+    // addMethod("textDocument/documentSymbol", &Server::onDocumentSymbol);
+    // addMethod("textDocument/semanticTokens/full", &Server::onSemanticTokens);
+    // addMethod("textDocument/inlayHint", &Server::onInlayHint);
+    // addMethod("textDocument/completion", &Server::onCodeCompletion);
+    // addMethod("textDocument/signatureHelp", &Server::onSignatureHelp);
+    // addMethod("textDocument/codeAction", &Server::onCodeAction);
+    // addMethod("textDocument/formatting", &Server::onFormatting);
+    // addMethod("textDocument/rangeFormatting", &Server::onRangeFormatting);
 
     addMethod("workspace/didChangeWatchedFiles", &Server::onDidChangeWatchedFiles);
 
