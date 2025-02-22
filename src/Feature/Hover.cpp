@@ -26,7 +26,8 @@ std::vector<HoverItem> getHoverItems(ASTInfo& AST, const clang::NamedDecl* decl)
         addItem(HoverItem::Size, Ctx.getTypeSizeInChars(FD->getType()).getQuantity());
         addItem(HoverItem::Align, Ctx.getTypeAlignInChars(FD->getType()).getQuantity());
         if(FD->isBitField()) {
-            addItem(HoverItem::BitWidth, FD->getBitWidthValue());
+            /// FIXME:
+            /// addItem(HoverItem::BitWidth, FD->getBitWidthValue());
         }
     }
 

@@ -285,4 +285,9 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
     co_return json::serialize(result);
 }
 
+LSPConverter::Result LSPConverter::convert(const feature::Hover& hover) {
+    /// FIXME: Implement hover information render here.
+    co_return json::Value("");
+}
+
 }  // namespace clice

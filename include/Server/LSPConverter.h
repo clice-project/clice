@@ -17,6 +17,8 @@ public:
 
     Result convert(llvm::StringRef path, llvm::ArrayRef<feature::SemanticToken> tokens);
 
+    Result convert(const feature::Hover& hover);
+
 private:
     proto::PositionEncodingKind kind;
 };
