@@ -1,7 +1,7 @@
 #include "Support/Logger.h"
-#include "Server/Database.h"
-#include "Support/FileSystem.h"
+#include "Compiler/CompilationDatabase.h"
 #include "Compiler/Compilation.h"
+#include "Support/FileSystem.h"
 
 namespace clice {
 
@@ -33,7 +33,7 @@ void CompilationDatabase::updateCommands(llvm::StringRef filename) {
     assert(json.kind() != json::Value::Null && "json is nullptr");
 
     if(json.kind() != json::Value::Array) {
-        log::warn("Compilation Database requires a array of object, but get {0}, input file: {1}",
+        log::warn("Compilation CompilationDatabase requires a array of object, but get {0}, input file: {1}",
                   refl::enum_name(json.kind()),
                   filename);
         return;
@@ -46,7 +46,7 @@ void CompilationDatabase::updateCommands(llvm::StringRef filename) {
         auto object = element.getAsObject();
         if(!object) {
             log::warn(
-                "Compilation Database requires an array of object, but get a array of {0}, input file: {1}",
+                "Compilation CompilationDatabase requires an array of object, but get a array of {0}, input file: {1}",
                 refl::enum_name(element.kind()),
                 filename);
             continue;

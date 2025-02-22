@@ -1,10 +1,10 @@
 #pragma once
 
 #include "Config.h"
-#include "Database.h"
 #include "Protocol.h"
 #include "Async/Async.h"
 #include "Basic/SourceConverter.h"
+#include "Compiler/CompilationDatabase.h"
 #include "Compiler/Compilation.h"
 #include "Support/JSON.h"
 #include "Index/SymbolIndex.h"

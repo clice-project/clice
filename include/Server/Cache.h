@@ -3,7 +3,7 @@
 #include <deque>
 
 #include "Async/Async.h"
-#include "Database.h"
+#include "Compiler/CompilationDatabase.h"
 #include "Compiler/Module.h"
 #include "Compiler/Preamble.h"
 

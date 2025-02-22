@@ -3,10 +3,10 @@
 #include "Config.h"
 #include "Indexer.h"
 #include "Protocol.h"
-#include "Database.h"
 #include "Scheduler.h"
 
 #include "Async/Async.h"
+#include "Compiler/CompilationDatabase.h"
 
 namespace clice {
 

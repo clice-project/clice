@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Config.h"
-#include "Database.h"
+#include "Compiler/CompilationDatabase.h"
 #include "Async/Async.h"
 #include "llvm/ADT/StringSet.h"
 #include "IncludeGraph.h"
