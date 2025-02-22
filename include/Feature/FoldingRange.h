@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Basic/Document.h"
 #include "Basic/SourceCode.h"
 #include "Index/Shared.h"
