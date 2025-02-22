@@ -44,11 +44,6 @@ struct SymbolIndexStorage : memory::SymbolIndex {
         /// to make sure that the data is in the same order even they are in different
         /// files.
 
-        /// Polyfill ranges::iota for libc++
-        auto iota = [](auto& r, auto init) {
-            ranges::generate(r, [init] mutable { return init++; });
-        };
-
         /// Map the old index to new index.
         std::vector<uint32_t> symbolMap(symbols.size());
         std::vector<uint32_t> locationMap(ranges.size());
@@ -56,7 +51,9 @@ struct SymbolIndexStorage : memory::SymbolIndex {
         {
             /// Sort symbols and update the symbolMap.
             std::vector<uint32_t> new2old(symbols.size());
-            iota(new2old, 0u);
+            for(uint32_t i = 0; i < symbols.size(); ++i) {
+                new2old[i] = i;
+            }
 
             ranges::sort(views::zip(symbols, new2old), refl::less, [](const auto& element) {
                 auto& symbol = std::get<0>(element);
@@ -71,7 +68,9 @@ struct SymbolIndexStorage : memory::SymbolIndex {
         {
             /// Sort locations and update the locationMap.
             std::vector<uint32_t> new2old(ranges.size());
-            iota(new2old, 0u);
+            for(uint32_t i = 0; i < ranges.size(); ++i) {
+                new2old[i] = i;
+            }
 
             ranges::sort(views::zip(ranges, new2old), refl::less, [](const auto& element) {
                 return std::get<0>(element);

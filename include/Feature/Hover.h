@@ -1,7 +1,8 @@
 #pragma once
 
-#include "Basic/Document.h"
 #include "AST/SymbolKind.h"
+#include "Basic/SourceCode.h"
+#include "Index/Shared.h"
 
 namespace clice {
 
@@ -9,67 +10,80 @@ class ASTInfo;
 
 namespace config {
 
-/// For a full memory layout infomation, the render kind decides how to display the value. By
-/// default, show both decimal and hexadecimal. e.g:
-///         size = 4 (0x4), align = 4 (0x4), offset: 0 (0x0)
-/// while show decimal only:
-///         size = 4, align = 4, offset: 0
-/// while show hexadecimal only:
-///         size = 0x4, align = 0x4, offset: 0x0
-///
-/// And bit field is always displayed in decimal.
-///         size = 1 bit (+5 bits padding), align = 1 byte, offset: 4 byte + 2 bit
-enum class MemoryLayoutRenderKind : uint8_t {
-    Both = 0,
-    Decimal,
-    Hexadecimal,
-};
-
-struct HoverOption {
-    /// The maximum number of fields to show in the hover of a class/struct/enum. 0 means show all.
-    uint16_t maxFieldsCount = 0;
-
-    /// TODO:
-    /// The maximum number of derived classes to show in the hover of a pure virtual class.
-    // uint16_t maxDerivedClassNum;
-
-    /// Decide how to render the memory layout.
-    MemoryLayoutRenderKind memoryLayoutRenderKind = MemoryLayoutRenderKind::Both;
-
-    /// Show associated document.
-    bool documentation : 1 = true;
-
-    /// TODO:
-    /// Show overloaded virtual method for class/struct.
-    bool overloadVirtualMethod : 1 = true;
-
-    /// Show documentation link for key words, this will link to corresponding page of
-    /// `https://en.cppreference.com/w/cpp/keyword/`.
-    bool keywords : 1 = true;
-
-    /// TODO:
-    /// Show links instead of codeblock in hover information for mentioned symbols.
-    bool useLink : 1 = true;
-};
+struct HoverOptions {};
 
 }  // namespace config
 
-namespace feature::hover {
+namespace feature {
 
-/// TODO:
-/// Implement the action for hovering over elements.
-// struct HoverAction {
-//     // Goto type
-//     // Find reference
-// };
+struct HoverItem {
+    enum class HoverKind : uint8_t {
+        /// The typename of a variable or a type alias.
+        Type,
+        /// Size of type or variable.
+        Size,
+        /// Align of type or variable.
+        Align,
+        /// Offset of field in a class/struct.
+        Offset,
+        /// Bit width of a bit field.
+        BitWidth,
+        /// The index of a field in a class/struct.
+        FieldIndex,
+        /// The value of an enum item.
+        EnumValue,
+    };
 
-struct Result {
-    std::string markdown;
+    using enum HoverKind;
+
+    HoverKind kind;
+
+    std::string value;
 };
 
-/// Get the hover information of a declaration with given option.
-Result hoverInfo(const clang::Decl* decl, const config::HoverOption& option);
+/// Hover information for a symbol.
+struct Hover {
+    /// Title
+    SymbolKind kind;
+    std::string name;
 
-}  // namespace feature::hover
+    /// Extra information.
+    std::vector<HoverItem> items;
+
+    /// Raw document in the source code.
+    std::string document;
+
+    /// The full qualified name of the declaration.
+    std::string qualifier;
+
+    /// The source code of the declaration.
+    std::string source;
+};
+
+/// Hover information for all symbols in the file.
+struct Hovers {
+    struct Occurrence {
+        LocalSourceRange range;
+        uint32_t index;
+    };
+
+    /// Hover information for all symbols in the file.
+    std::vector<Hover> hovers;
+
+    /// A map between the file offset and the index of the hover.
+    std::vector<Occurrence> occurrences;
+};
+
+/// Generate the hover information for the given declaration(for test).
+Hover hover(ASTInfo& AST, const clang::NamedDecl* decl);
+
+/// Generate the hover information for the symbol at the given offset.
+Hover hover(ASTInfo& AST, uint32_t offset);
+
+/// Generate the hover information for all files in the given AST.
+index::Shared<Hovers> indexHover(ASTInfo& AST);
+
+}  // namespace feature
 
 }  // namespace clice
+
