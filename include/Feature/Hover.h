@@ -7,19 +7,6 @@ namespace clice {
 
 class ASTInfo;
 
-namespace proto {
-
-// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#hoverParams
-struct HoverParams {
-    // The text document.
-    URI textDocument;
-
-    // The position inside the text document.
-    Position position;
-};
-
-}  // namespace proto
-
 namespace config {
 
 /// For a full memory layout infomation, the render kind decides how to display the value. By
@@ -81,14 +68,7 @@ struct Result {
 };
 
 /// Get the hover information of a declaration with given option.
-Result hover(const clang::Decl* decl, const config::HoverOption& option);
-
-/// Compute inlay hints for MainfileID in given param and config.
-std::optional<Result> hover(const proto::HoverParams& param,
-                            ASTInfo& AST,
-                            const config::HoverOption& option);
-
-proto::MarkupContent toLspType(Result hover);
+Result hoverInfo(const clang::Decl* decl, const config::HoverOption& option);
 
 }  // namespace feature::hover
 

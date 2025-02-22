@@ -68,7 +68,7 @@ protected:
                       llvm::function_ref<bool(const Result&)> checker,
                       const config::HoverOption& option = DefaultOption) {
         auto ptr = getValidDeclPtr(declName);
-        auto result = hover(ptr, option);
+        auto result = hoverInfo(ptr, option);
         EXPECT_TRUE(checker(result));
     }
 
@@ -76,7 +76,7 @@ protected:
                       llvm::StringRef mdText,
                       const config::HoverOption& option = DefaultOption) {
         auto ptr = getValidDeclPtr(declName);
-        auto result = hover(ptr, option);
+        auto result = hoverInfo(ptr, option);
 
         // llvm::outs() << result.markdown << '\n';
         EXPECT_EQ(mdText, result.markdown);

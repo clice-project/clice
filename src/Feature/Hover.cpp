@@ -1485,20 +1485,8 @@ std::optional<HoverInfo>
 
 }  // namespace
 
-Result hover(const clang::Decl* decl, const config::HoverOption& option) {
+Result hoverInfo(const clang::Decl* decl, const config::HoverOption& option) {
     return toMarkdown(DeclHoverBuilder::build(decl, option), option);
-}
-
-std::optional<Result> hover(const proto::HoverParams& param,
-                            ASTInfo& AST,
-                            const config::HoverOption& option) {
-    // Convert 0-0 based lsp position to clang 1-1 based loction.
-    return hover(param.position.line + 1, param.position.character + 1, AST, option)
-        .transform([&option](HoverInfo&& hv) { return toMarkdown(hv, option); });
-}
-
-proto::MarkupContent toLspType(Result hover) {
-    return {.value = std::move(hover.markdown)};
 }
 
 }  // namespace clice::feature::hover
