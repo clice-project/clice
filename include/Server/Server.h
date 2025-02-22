@@ -3,7 +3,6 @@
 #include "Config.h"
 #include "Indexer.h"
 #include "Protocol.h"
-#include "Scheduler.h"
 
 #include "Async/Async.h"
 #include "Compiler/Command.h"
@@ -32,53 +31,29 @@ public:
     std::uint32_t id = 0;
 
 private:
-    using onRequest = llvm::unique_function<async::Task<>(json::Value, json::Value)>;
-    using onNotification = llvm::unique_function<async::Task<>(json::Value)>;
-
-    template <typename Param>
-    void addMethod(llvm::StringRef name,
-                   async::Task<> (Server::*method)(json::Value, const Param&)) {
-        requests.try_emplace(name,
-                             [this, method](json::Value id, json::Value value) -> async::Task<> {
-                                 co_await (this->*method)(std::move(id),
-                                                          json::deserialize<Param>(value));
-                             });
-    }
-
-    template <typename Param>
-    void addMethod(llvm::StringRef name, async::Task<> (Server::*method)(const Param&)) {
-        notifications.try_emplace(name, [this, method](json::Value value) -> async::Task<> {
-            co_await (this->*method)(json::deserialize<Param>(value));
-        });
-    }
-
-    llvm::StringMap<onRequest> requests;
-    llvm::StringMap<onNotification> notifications;
-
-private:
     /// ============================================================================
     ///                            Lifecycle Message
     /// ============================================================================
 
-    async::Task<> onInitialize(json::Value id, const proto::InitializeParams& params);
+    /// async::Task<> onInitialize(json::Value id, const proto::InitializeParams& params);
 
-    async::Task<> onInitialized(const proto::InitializedParams& params);
+    /// async::Task<> onInitialized(const proto::InitializedParams& params);
 
-    async::Task<> onShutdown(json::Value id, const proto::None&);
+    /// async::Task<> onShutdown(json::Value id, const proto::None&);
 
-    async::Task<> onExit(const proto::None&);
+    /// async::Task<> onExit(const proto::None&);
 
     /// ============================================================================
     ///                         Document Synchronization
     /// ============================================================================
 
-    async::Task<> onDidOpen(const proto::DidOpenTextDocumentParams& document);
+    /// async::Task<> onDidOpen(const proto::DidOpenTextDocumentParams& document);
 
-    async::Task<> onDidChange(const proto::DidChangeTextDocumentParams& document);
+    /// async::Task<> onDidChange(const proto::DidChangeTextDocumentParams& document);
 
-    async::Task<> onDidSave(const proto::DidSaveTextDocumentParams& document);
+    /// async::Task<> onDidSave(const proto::DidSaveTextDocumentParams& document);
 
-    async::Task<> onDidClose(const proto::DidCloseTextDocumentParams& document);
+    /// async::Task<> onDidClose(const proto::DidCloseTextDocumentParams& document);
 
     /// ============================================================================
     ///                             Language Features
@@ -145,26 +120,26 @@ private:
     ///                             Workspace Features
     /// ============================================================================
 
-    async::Task<> onDidChangeWatchedFiles(const proto::DidChangeWatchedFilesParams& params);
+    /// async::Task<> onDidChangeWatchedFiles(const proto::DidChangeWatchedFilesParams& params);
 
     /// ============================================================================
     ///                                 Extension
     /// ============================================================================
 
-    async::Task<> onIndexCurrent(const proto::TextDocumentIdentifier& params);
+    /// async::Task<> onIndexCurrent(const proto::TextDocumentIdentifier& params);
 
-    async::Task<> onIndexAll(const proto::None&);
+    /// async::Task<> onIndexAll(const proto::None&);
 
-    async::Task<> onContextCurrent(const proto::TextDocumentIdentifier& params);
+    /// async::Task<> onContextCurrent(const proto::TextDocumentIdentifier& params);
 
-    async::Task<> onContextAll(const proto::TextDocumentIdentifier& params);
+    /// async::Task<> onContextAll(const proto::TextDocumentIdentifier& params);
 
-    async::Task<> onContextSwitch(const proto::TextDocumentIdentifier& params);
+    /// async::Task<> onContextSwitch(const proto::TextDocumentIdentifier& params);
 
-    SourceConverter converter;
-    CompilationDatabase database;
-    Indexer indexer;
-    Scheduler scheduler;
+    /// SourceConverter converter;
+    /// CompilationDatabase database;
+    /// Indexer indexer;
+    /// Scheduler scheduler;
 };
 
 }  // namespace clice
