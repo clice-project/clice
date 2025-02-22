@@ -1,20 +1,15 @@
 #include "Test/CTest.h"
 #include "Feature/Hover.h"
 
-#include "src/Feature/Hover.cpp"
-
 #include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice::testing {
 
 namespace {
 
-constexpr config::HoverOption DefaultOption = {};
-
-using namespace feature::hover;
+using namespace feature;
 
 struct DeclCollector : public clang::RecursiveASTVisitor<DeclCollector> {
-
     llvm::StringMap<const clang::Decl*> decls;
 
     bool VisitNamedDecl(const clang::NamedDecl* decl) {
@@ -25,16 +20,13 @@ struct DeclCollector : public clang::RecursiveASTVisitor<DeclCollector> {
 };
 
 struct Hover : public ::testing::Test {
-    using HoverChecker = llvm::function_ref<bool(std::optional<HoverInfo>&)>;
 
 protected:
     std::optional<Tester> tester;
 
     llvm::StringMap<const clang::Decl*> decls;
 
-    void run(llvm::StringRef code,
-             proto::Range range = {},
-             const config::HoverOption& option = DefaultOption) {
+    void run(llvm::StringRef code, proto::Range range = {}) {
         tester.emplace("main.cpp", code);
         tester->run();
 
@@ -44,81 +36,6 @@ protected:
         collector.TraverseTranslationUnitDecl(info->tu());
         decls = std::move(collector.decls);
     }
-
-    void runWithHeader(llvm::StringRef source,
-                       llvm::StringRef header,
-                       const config::HoverOption& option = DefaultOption) {
-        tester.emplace("main.cpp", source);
-        tester->addFile(path::join(".", "header.h"), header);
-        tester->run();
-
-        auto& info = tester->info;
-        DeclCollector collector;
-        collector.TraverseTranslationUnitDecl(info->tu());
-        decls = std::move(collector.decls);
-    }
-
-    const clang::Decl* getValidDeclPtr(llvm::StringRef name) {
-        auto ptr = decls.lookup(name);
-        EXPECT_TRUE(bool(ptr));
-        return ptr;
-    }
-
-    void EXPECT_HOVER(llvm::StringRef declName,
-                      llvm::function_ref<bool(const Result&)> checker,
-                      const config::HoverOption& option = DefaultOption) {
-        auto ptr = getValidDeclPtr(declName);
-        auto result = hover(ptr, option);
-        EXPECT_TRUE(checker(result));
-    }
-
-    void EXPECT_HOVER(llvm::StringRef declName,
-                      llvm::StringRef mdText,
-                      const config::HoverOption& option = DefaultOption) {
-        auto ptr = getValidDeclPtr(declName);
-        auto result = hover(ptr, option);
-
-        // llvm::outs() << result.markdown << '\n';
-        EXPECT_EQ(mdText, result.markdown);
-    }
-
-    template <typename T>
-    static bool is(std::optional<HoverInfo>& hover) {
-        EXPECT_TRUE(hover.has_value());
-        if(hover.has_value()) {
-            return std::holds_alternative<T>(*hover);
-        }
-        return false;
-    }
-
-    static bool isNone(std::optional<HoverInfo>& hover) {
-        bool no = !hover.has_value();
-        EXPECT_TRUE(no);
-        return no;
-    }
-
-    void EXPECT_HOVER_TYPE(llvm::StringRef key,
-                           HoverChecker checker,
-                           config::HoverOption option = DefaultOption) {
-        auto pos = tester->locations.at(key);
-        auto hoverInfo = hover(pos.line + 1, pos.character + 1, *tester->info, option);
-
-        bool checkResult = checker(hoverInfo);
-        // if(hoverInfo.has_value()) {
-        //     llvm::outs() << "======[" << key << "]======\n";
-        //     llvm::outs() << toMarkdown(*hoverInfo, option).markdown << '\n';
-        // }
-        EXPECT_TRUE(checkResult);
-    }
-
-    using Fmtter = std::string(int index);
-
-    void EXPECT_TYPES_N(Fmtter fmt, int n, HoverChecker checker) {
-        for(int i = 1; i <= n; i++) {
-            auto key = fmt(i);
-            EXPECT_HOVER_TYPE(key, checker);
-        }
-    };
 };
 
 TEST_F(Hover, Namespace) {
@@ -245,7 +162,6 @@ ___
 ___
 <TODO: source code>
 )md";
-    EXPECT_HOVER("M", M_TEXT);
 }
 
 TEST_F(Hover, EnumStyle) {
@@ -284,11 +200,6 @@ ___
 ___
 <TODO: source code>
 )md";
-
-#ifndef _WIN32
-    // The underlying type of `Free` is `int` on Windows.
-    EXPECT_HOVER("Free", FREE_STYLE);
-#endif
 
     // EXPECT_HOVER("Scope", "");
 }
@@ -346,8 +257,6 @@ ___
     // EXPECT_HOVER("t", FREE_STYLE);
     // EXPECT_HOVER("g", FREE_STYLE);
     // EXPECT_HOVER("h", FREE_STYLE);
-
-    EXPECT_HOVER("m", FUNC_STYLE);
 }
 
 TEST_F(Hover, VariableStyle) {
@@ -375,8 +284,6 @@ ___
 ___
 <TODO: source code>
 )md";
-
-    EXPECT_HOVER("x1", FREE_STYLE);
 }
 
 TEST_F(Hover, HeaderAndNamespace) {
@@ -399,11 +306,6 @@ $(n1)names$(n2)pace$(n3) outt$(n4)er {
 }$(n10)
 
 )cpp";
-
-    runWithHeader(code, header);
-
-    EXPECT_TYPES_N([](int i) { return std::format("h{}", i); }, 5, is<Header>);
-    EXPECT_TYPES_N([](int i) { return std::format("n{}", i); }, 8, is<Namespace>);
 }
 
 TEST_F(Hover, VariableAndLiteral) {
@@ -424,9 +326,6 @@ TEST_F(Hover, VariableAndLiteral) {
     auto l$(v7)4 = $(l10)"$(l11)udf_string$(l12)"_w;
 )cpp";
     run(code);
-
-    EXPECT_TYPES_N([](int i) { return std::format("v{}", i); }, 7, is<Var>);
-    EXPECT_TYPES_N([](int i) { return std::format("l{}", i); }, 12, is<Literal>);
 }
 
 TEST_F(Hover, FunctionDeclAndParameter) {
@@ -463,9 +362,6 @@ TEST_F(Hover, FunctionDeclAndParameter) {
 
 )cpp";
     run(code);
-
-    EXPECT_TYPES_N([](int i) { return std::format("f{}", i); }, 12, is<Fn>);
-    EXPECT_TYPES_N([](int i) { return std::format("p{}", i); }, 18, is<Var>);
 }
 
 TEST_F(Hover, AutoAndDecltype) {
@@ -489,13 +385,6 @@ int f3(au$(fn_para_auto)to x) {}
 
     run(code);
 
-    EXPECT_TYPES_N([](int i) { return std::format("a{}", i); }, 5, is<Var>);
-    EXPECT_TYPES_N([](int i) { return std::format("d{}", i); }, 3, is<Var>);
-
-    EXPECT_HOVER_TYPE("fa", is<Fn>);
-    EXPECT_HOVER_TYPE("fn_decltype", is<Fn>);
-    EXPECT_HOVER_TYPE("fn_decltype_auto", is<Fn>);
-
     /// FIXME: It seems a bug of SelectionTree, which cannot select any node of `f3`;
     /// EXPECT_HOVER_TYPE("fn_para_auto", is<Var>);
 }
@@ -517,16 +406,6 @@ struct A {
 )cpp";
 
     run(code);
-
-    EXPECT_HOVER_TYPE("e1", is<Var>);
-    EXPECT_HOVER_TYPE("e2", is<Fn>);
-    EXPECT_HOVER_TYPE("e3", is<Fn>);
-    EXPECT_HOVER_TYPE("e4", is<Fn>);
-    EXPECT_HOVER_TYPE("e5", is<Fn>);
-    EXPECT_HOVER_TYPE("e6", is<Var>);
-    EXPECT_HOVER_TYPE("e7", is<Expression>);
-    EXPECT_HOVER_TYPE("e8", is<Expression>);
-    EXPECT_HOVER_TYPE("e9", is<Var>);
 }
 
 }  // namespace

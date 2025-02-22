@@ -8,10 +8,11 @@ namespace clice::feature {
 
 namespace {
 
-class HighlightBuilder : public SemanticVisitor<HighlightBuilder> {
+class SemanticTokensCollector : public SemanticVisitor<SemanticTokensCollector> {
 public:
-    HighlightBuilder(ASTInfo& AST, bool interestedOnly) :
-        emitForIndex(!interestedOnly), SemanticVisitor<HighlightBuilder>(AST, interestedOnly) {}
+    SemanticTokensCollector(ASTInfo& AST, bool interestedOnly) :
+        emitForIndex(!interestedOnly),
+        SemanticVisitor<SemanticTokensCollector>(AST, interestedOnly) {}
 
     void handleDeclOccurrence(const clang::NamedDecl* decl,
                               RelationKind kind,
@@ -266,11 +267,11 @@ private:
 }  // namespace
 
 std::vector<SemanticToken> semanticTokens(ASTInfo& AST) {
-    return HighlightBuilder(AST, true).buildForFile();
+    return SemanticTokensCollector(AST, true).buildForFile();
 }
 
 index::Shared<std::vector<SemanticToken>> indexSemanticTokens(ASTInfo& AST) {
-    return HighlightBuilder(AST, false).buildForIndex();
+    return SemanticTokensCollector(AST, false).buildForIndex();
 }
 
 }  // namespace clice::feature
