@@ -1,4 +1,6 @@
 #include "Basic/Document.h"
+#include "Basic/SourceCode.h"
+#include "Index/Shared.h"
 #include "Support/JSON.h"
 
 namespace clice {
@@ -75,9 +77,6 @@ struct DocumentSymbol {
     /// The kind of this symbol.
     SymbolKind kind;
 
-    /// Indicates if this symbol is deprecated.
-    bool deprecated = false;
-
     /// Tags for this symbol.
     std::vector<SymbolTag> tags;
 
@@ -101,13 +100,54 @@ using DocumentSymbolResult = std::vector<DocumentSymbol>;
 class ASTInfo;
 class SourceConverter;
 
-namespace feature {
+namespace feature::document_symbol {
 
-json::Value documentSymbolCapability(json::Value clientCapabilities);
+json::Value capability(json::Value clientCapabilities);
 
-/// Run document symbol in given file.
-proto::DocumentSymbolResult documentSymbol(ASTInfo& info, const SourceConverter& converter);
+struct DocumentSymbol {
+    /// The kind of this symbol.
+    proto::SymbolKind kind;
 
-}  // namespace feature
+    /// The name of this symbol.
+    std::string name;
+
+    /// More detail for this symbol, e.g the signature of a function.
+    std::string detail;
+
+    /// Tags for this symbol.
+    std::vector<proto::SymbolTag> tags;
+
+    /// Children of this symbol, e.g. properties of a class.
+    std::vector<DocumentSymbol> children;
+
+    /// The range enclosing the symbol not including leading/trailing whitespace but everything
+    /// else.
+    LocalSourceRange range;
+
+    /// Must be contained by the `range`.
+    LocalSourceRange selectionRange;
+};
+
+using Result = std::vector<DocumentSymbol>;
+
+/// Get all document symbols in each file.
+index::Shared<Result> documentSymbol(ASTInfo& AST);
+
+struct MainFileOnlyFlag {};
+
+/// Get document symbols in the main file.
+Result documentSymbol(ASTInfo& AST, MainFileOnlyFlag _mainFileOnlyFlag);
+
+/// Convert the result to LSP format.
+proto::DocumentSymbol toLspType(const DocumentSymbol& result,
+                                const SourceConverter& SC,
+                                llvm::StringRef content);
+
+/// Convert an array of document symbols to LSP format.
+proto::DocumentSymbolResult toLspType(llvm::ArrayRef<DocumentSymbol> result,
+                                      const SourceConverter& SC,
+                                      llvm::StringRef content);
+
+}  // namespace feature::document_symbol
 
 }  // namespace clice

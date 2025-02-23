@@ -15,7 +15,7 @@ struct FeatureIndex {
 Shared<FeatureIndex> indexFeature(ASTInfo& info) {
     Shared<memory::FeatureIndex> indices;
 
-    for(auto&& [fid, result]: feature::semanticTokens(info)) {
+    for(auto&& [fid, result]: feature::indexSemanticTokens(info)) {
         indices[fid].tokens = std::move(result);
     }
 

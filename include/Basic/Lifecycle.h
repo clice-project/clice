@@ -60,6 +60,25 @@ struct InitializeParams {
     std::vector<WorkspaceFolder> workspaceFolders;
 };
 
+struct SemanticTokensOptions {
+    /// The legend used by the server.
+    struct SemanticTokensLegend {
+        /// The token types a server uses.
+        std::vector<std::string> tokenTypes;
+
+        /// The token modifiers a server uses.
+        std::vector<std::string> tokenModifiers;
+    } legend;
+
+    /// Server supports providing semantic tokens for a specific range
+    /// of a document.
+    bool range = false;
+
+    /// Server supports providing semantic tokens for a full document.
+    bool full = true;
+};
+
+/// Server Capability.
 struct ServerCapabilities {
     /// The position encoding the server picked from the encodings offered
     /// by the client via the client capability `general.positionEncodings`.
