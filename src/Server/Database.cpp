@@ -2,58 +2,7 @@
 #include "Compiler/Compilation.h"
 #include "Support/Logger.h"
 
-#include <expected>
-
 namespace clice {
-
-namespace {
-
-struct CompileCommand {
-    /// Absolute path of the file.
-    std::string file;
-
-    /// The compile command.
-    std::string command;
-};
-
-/// Try extract compile command from an item in CDB file. An reason will be returned if failed.
-std::expected<CompileCommand, std::string> tryParseCompileCommand(const json::Object* object) {
-    llvm::SmallString<128> path, buffer;
-    if(auto dir = object->getString("directory"))
-        buffer = dir.value();
-
-    if(auto file = object->getString("file")) {
-        buffer = path::join(buffer, *file);
-        if(auto error = fs::real_path(buffer, path)) {
-            auto reason =
-                std::format("Failed to get realpath of {0}, because {1}", *file, error.message());
-            return std::unexpected(std::move(reason));
-        }
-    } else {
-        return std::unexpected(std::format("Json item doesn't have a \"file\" key"));
-    }
-
-    CompileCommand cmd;
-    cmd.file = path.str();
-
-    if(auto command = object->getString("command")) {
-        cmd.command = command->str();
-        return cmd;
-    }
-
-    if(auto args = object->getArray("arguments")) {
-        for(auto& arg: *args) {
-            cmd.command += *arg.getAsString(), cmd.command += ' ';
-        }
-        cmd.command.shrink_to_fit();
-        return cmd;
-    }
-
-    auto reason = std::format("File:{0} doesn't have a \"command\" or \"arguments\" key.", path);
-    return std::unexpected(std::move(reason));
-}
-
-}  // namespace
 
 /// Update the compile commands with the given file.
 void CompilationDatabase::updateCommands(llvm::StringRef filename) {
@@ -102,7 +51,7 @@ void CompilationDatabase::updateCommands(llvm::StringRef filename) {
             continue;
         }
 
-        if(auto res = tryParseCompileCommand(object); res.has_value()) {
+        if(auto res = parseCompileCommand(object); res.has_value()) {
             auto [file, command] = std::move(res).value();
             commands[file] = std::move(command);
         } else {
@@ -154,6 +103,131 @@ llvm::StringRef CompilationDatabase::getModuleFile(llvm::StringRef name) {
         return "";
     }
     return iter->second;
+}
+
+namespace {
+
+struct SkipState {
+    bool skipCurrent = false;
+    bool skipNext = false;
+};
+
+/// TODO:
+/// Add more cases in compile_commands to skip.
+SkipState shouldSkip(llvm::StringRef argument, SkipState old) {
+    constexpr const char* skipTwice[] = {"-o"};
+    if(std::any_of(std::begin(skipTwice), std::end(skipTwice), [&](llvm::StringRef c) {
+           return argument == c;
+       })) {
+        return {true, true};
+    }
+
+    constexpr const char* skipCurrent[] = {"-g", "-O0", "-O1", "-O2", "-O3", "-Os", "-Oz"};
+    if(std::ranges::any_of(skipCurrent, [&](llvm::StringRef c) { return argument == c; })) {
+        return {true, false};
+    }
+
+    return {false, old.skipNext};
+}
+
+const static llvm::StringRef platSeparator = path::get_separator();
+
+void joinCompileCommands(std::string& out, llvm::StringRef arg, llvm::StringRef directory) {
+    // It looks like a relative path, join the directory.
+    if(!arg.starts_with('-') && arg.slice(1, llvm::StringRef::npos).contains(platSeparator) &&
+       !path::is_absolute(arg)) {
+        out += path::join(directory, arg);
+    } else {
+        out += arg;
+    }
+    out += ' ';
+}
+
+std::expected<CompileCommand, std::string> parseArgumentsStyle(const json::Object* object) {
+    CompileCommand cmd;
+
+    auto directory = object->getString("directory");
+    auto file = object->getString("file");
+    if(file.has_value() && directory.has_value()) {
+        cmd.file = path::join(directory.value(), file.value());
+    } else {
+        return std::unexpected("Json item doesn't have a \"file\" or \"directory\" key");
+    }
+
+    if(auto args = object->getArray("arguments")) {
+        for(SkipState state; auto& buildArg: *args) {
+            assert(buildArg.getAsString().has_value() && "\"arguments\" must be a list of string.");
+
+            llvm::StringRef arg = buildArg.getAsString().value();
+            if(state = shouldSkip(arg, state); state.skipCurrent) {
+                state.skipCurrent = false;
+                continue;
+            } else if(state.skipNext) {
+                state.skipNext = false;
+                continue;
+            }
+
+            joinCompileCommands(cmd.command, arg, *directory);
+        }
+    } else {
+        return std::unexpected("Json item doesn't have a \"arguments\" key");
+    }
+
+    cmd.command.shrink_to_fit();
+    return cmd;
+}
+
+std::expected<CompileCommand, std::string> parseCommandStyle(const json::Object* object) {
+    CompileCommand cmd;
+
+    auto directory = object->getString("directory");
+    auto file = object->getString("file");
+    if(file.has_value() && directory.has_value()) {
+        if(path::is_absolute(file.value())) {
+            cmd.file = file.value();
+        } else {
+            cmd.file = path::join(directory.value(), file.value());
+        }
+    } else {
+        return std::unexpected("Json item doesn't have a \"file\" key");
+    }
+
+    if(auto command = object->getString("command")) {
+
+        SkipState state;
+        llvm::StringRef line = command.value().ltrim();
+        while(!line.empty()) {
+            auto [arg, remain] = line.split(' ');
+            if(state = shouldSkip(arg, state); state.skipCurrent) {
+                state.skipCurrent = false;
+                line = remain.ltrim();
+                continue;
+            } else if(state.skipNext) {
+                state.skipNext = false;
+                line = remain.ltrim();
+                continue;
+            }
+
+            joinCompileCommands(cmd.command, arg, *directory);
+            line = remain.ltrim();
+        }
+
+    } else {
+        return std::unexpected("Json item doesn't have a \"command\" key");
+    }
+
+    return cmd;
+}
+}  // namespace
+
+std::expected<CompileCommand, std::string> parseCompileCommand(const json::Object* object) {
+    if(object->get("arguments")) {
+        return parseArgumentsStyle(object);
+    } else if(object->get("command")) {
+        return parseCommandStyle(object);
+    } else {
+        return std::unexpected("Json item doesn't have a \"arguments\" or \"command\" key");
+    }
 }
 
 }  // namespace clice

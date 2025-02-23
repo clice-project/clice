@@ -1,6 +1,9 @@
 #pragma once
 
+#include "Support/JSON.h"
 #include "llvm/ADT/StringMap.h"
+
+#include <expected>
 
 namespace clice {
 
@@ -49,5 +52,16 @@ private:
     /// implementation unit, the scan could be delayed until compiling it.
     llvm::StringMap<std::string> moduleMap;
 };
+
+struct CompileCommand {
+    /// Absolute path of the file.
+    std::string file;
+
+    /// The compile command.
+    std::string command;
+};
+
+/// Try extract compile command from an item in CDB file. An reason will be returned if failed.
+std::expected<CompileCommand, std::string> parseCompileCommand(const json::Object* object);
 
 }  // namespace clice
