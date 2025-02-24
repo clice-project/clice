@@ -3,10 +3,7 @@
 #include "Compiler/Compilation.h"
 #include "Feature/FoldingRange.h"
 
-/// Clangd's FoldingRange Implementation:
-/// https://github.com/llvm/llvm-project/blob/main/clang-tools-extra/clangd/SemanticSelection.cpp
-
-namespace clice {
+namespace clice::feature {
 
 namespace {
 
@@ -14,7 +11,7 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
 
     using Base = FilteredASTVisitor<FoldingRangeCollector>;
 
-    using Folding = feature::foldingrange::FoldingRange;
+    using Folding = feature::FoldingRange;
 
     /// Cache extra line number as the inner storage to speedup the collection.
     struct RichFolding : Folding {
@@ -36,7 +33,7 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
     /// Collect source range as a folding range.
     void collect(clang::SourceRange range,
                  std::pair<int, int> offsetFix = {0, 0},
-                 proto::FoldingRangeKind kind = proto::FoldingRangeKind::Region) {
+                 FoldingRangeKind kind = FoldingRangeKind::Region) {
 
         const auto& SM = AST.srcMgr();
         unsigned startLine = SM.getPresumedLineNumber(range.getBegin()) - 1;
@@ -67,7 +64,7 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
         auto [leftLocal, rightLocal] = AST.toLocalRange(range).second;
         LocalSourceRange fixed{leftLocal + offsetFix.first, rightLocal + offsetFix.second};
         if(state.empty() || state.back().startLine != startLine) {
-            state.push_back({fixed, kind, startLine, endLine});
+            state.push_back({kind, fixed, startLine, endLine});
         }
     }
 
@@ -333,49 +330,14 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
 
 }  // namespace
 
-namespace feature::foldingrange {
-
-json::Value capability(json::Value clientCapabilities) {
-    // Always return empty object.
-    // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_foldingRange
-    return {};
-}
-
-index::Shared<Result> foldingRange(ASTInfo& AST) {
-    return FoldingRangeCollector::collect(AST, /*interestedOnly=*/false, std::nullopt);
-}
-
-Result foldingRange(proto::FoldingRangeParams _, ASTInfo& AST) {
+std::vector<FoldingRange> foldingRange(ASTInfo& AST) {
     auto ranges = FoldingRangeCollector::collect(AST, /*interestedOnly=*/true, std::nullopt);
     return std::move(ranges[AST.getInterestedFile()]);
 }
 
-proto::FoldingRange toLspType(const FoldingRange& folding,
-                              const SourceConverter& SC,
-                              llvm::StringRef content) {
-    auto range = SC.toRange(folding.range, content);
-    return {
-        .startLine = range.start.line,
-        .endLine = range.end.line,
-        .startCharacter = range.start.character,
-        .endCharacter = range.end.character,
-        .kind = folding.kind,
-        .collapsedText = "",
-    };
-}
+index::Shared<std::vector<FoldingRange>> indexFoldingRange(ASTInfo& AST) {
+    return FoldingRangeCollector::collect(AST, /*interestedOnly=*/false, std::nullopt);
 
-proto::FoldingRangeResult toLspResult(llvm::ArrayRef<FoldingRange> foldings,
-                                      const SourceConverter& SC,
-                                      llvm::StringRef content) {
+}  // namespace feature
 
-    proto::FoldingRangeResult result;
-    result.reserve(foldings.size());
-    for(const auto& folding: foldings) {
-        result.push_back(toLspType(folding, SC, content));
-    }
-    return result;
-}
-
-}  // namespace feature::foldingrange
-
-}  // namespace clice
+}  // namespace clice::feature

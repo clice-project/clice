@@ -285,6 +285,30 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
     co_return json::serialize(result);
 }
 
+LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
+                                           llvm::ArrayRef<feature::FoldingRange> ranges) {
+    struct FoldingRange {
+        /// The zero-based start line of the range to fold. The folded area starts after the line's
+        /// last character.
+        std::uint32_t startLine;
+
+        /// The zero-based end line of the range to fold. The folded area ends with the line's last
+        /// character.
+        std::uint32_t endLine;
+
+        /// The zero-based character offset from where the folded range starts.
+        std::uint32_t startCharacter;
+
+        /// The zero-based character offset before the folded range ends.
+        std::uint32_t endCharacter;
+
+        /// Describes the kind of the folding range.
+        feature::FoldingRangeKind kind;
+    };
+
+    co_return json::Object();
+}
+
 LSPConverter::Result LSPConverter::convert(const feature::Hover& hover) {
     /// FIXME: Implement hover information render here.
     co_return json::Value("");
