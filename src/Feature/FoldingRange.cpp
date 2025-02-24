@@ -10,7 +10,7 @@ namespace {
 class FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> {
 public:
     FoldingRangeCollector(ASTInfo& AST, bool interestedOnly) :
-        FilteredASTVisitor(AST, interestedOnly, std::nullopt), result() {}
+        FilteredASTVisitor(AST, interestedOnly, std::nullopt), indexResult() {}
 
     /// Cache extra line number as the inner storage to speedup the collection.
     struct RichFolding : FoldingRange {
@@ -19,44 +19,6 @@ public:
     };
 
     constexpr static auto LastColOfLine = std::numeric_limits<unsigned>::max();
-
-    /// Collect source range as a folding range.
-    void collect(clang::SourceRange range,
-                 std::pair<int, int> offsetFix = {0, 0},
-                 FoldingRangeKind kind = FoldingRangeKind::Region) {
-
-        const auto& SM = AST.srcMgr();
-        unsigned startLine = SM.getPresumedLineNumber(range.getBegin()) - 1;
-        unsigned endLine = SM.getPresumedLineNumber(range.getEnd()) - 1;
-
-        // Skip ranges on a single line.
-        if(startLine >= endLine)
-            return;
-
-        auto fileID = interestedOnly ? AST.getInterestedFile() : SM.getFileID(range.getBegin());
-        auto& state = result[fileID];
-
-        if(auto beg = range.getBegin(); beg.isMacroID()) {
-            auto cursor =
-                SM.translateLineCol(fileID, SM.getExpansionLineNumber(beg), LastColOfLine);
-            range.setBegin(cursor);
-            offsetFix.first = 0;
-        }
-        if(auto end = range.getEnd(); end.isMacroID()) {
-            range.setEnd(SM.translateLineCol(fileID,
-                                             SM.getExpansionLineNumber(end),
-                                             SM.getExpansionColumnNumber(end)));
-            offsetFix.second = 0;
-        }
-
-        assert(range.isValid());
-
-        auto [leftLocal, rightLocal] = AST.toLocalRange(range).second;
-        LocalSourceRange fixed{leftLocal + offsetFix.first, rightLocal + offsetFix.second};
-        if(state.empty() || state.back().startLine != startLine) {
-            state.push_back({kind, fixed, startLine, endLine});
-        }
-    }
 
     bool VisitNamespaceDecl(const clang::NamespaceDecl* decl) {
         auto tokens = AST.tokBuf().expandedTokens(decl->getSourceRange());
@@ -70,70 +32,16 @@ public:
         return true;
     }
 
-    /// Collect public/protected/private blocks for a non-lambda struct/class.
-    void collectAccessSpecDecls(const clang::RecordDecl* RD) {
-        const clang::AccessSpecDecl* lastAccess = nullptr;
-
-        for(auto* decl: RD->decls()) {
-            if(auto* AS = llvm::dyn_cast<clang::AccessSpecDecl>(decl)) {
-                if(lastAccess) {
-                    auto spec = AS->getAccessUnsafe();
-                    int offsetToSpecStart = spec == clang::AS_private  ? 7
-                                            : spec == clang::AS_public ? 6
-                                                                       : 9;
-                    collect({lastAccess->getColonLoc(), AS->getAccessSpecifierLoc()},
-                            {1, -offsetToSpecStart});
-                }
-                lastAccess = AS;
-            }
-        }
-
-        // The last access specifier block.
-        if(lastAccess) {
-            collect({lastAccess->getColonLoc(), RD->getBraceRange().getEnd()}, {1, -1});
-        }
-    }
-
     bool VisitTagDecl(const clang::TagDecl* decl) {
         // Collect definition of class/struct/enum.
         auto [leftBrace, rightBrace] = decl->getBraceRange();
-        auto name = decl->getName();
         collect({leftBrace, rightBrace}, {1, -1});
 
         if(auto RD = llvm::dyn_cast<clang::RecordDecl>(decl)) {
             collectAccessSpecDecls(RD);
         }
+
         return true;
-    }
-
-    /// Collect function parameter list between '(' and ')'.
-    void collectParameterList(clang::SourceLocation leftSide, clang::SourceLocation rightSide) {
-        auto tokens = AST.tokBuf().expandedTokens({leftSide, rightSide});
-        auto leftParen = tokens.drop_until([](const auto& tk) {  //
-            return tk.kind() == clang::tok::l_paren;
-        });
-
-        if(leftParen.empty())
-            return;
-
-        auto rightParenIter =
-            std::find_if(leftParen.rbegin(), leftParen.rend(), [](const auto& tk) {
-                return tk.kind() == clang::tok::r_paren;
-            });
-
-        if(rightParenIter == leftParen.rend())
-            return;
-
-        collect({leftParen.front().location(), rightParenIter->location()}, {1, -1});
-    }
-
-    void collectCompoundStmt(const clang::Stmt* stmt) {
-        if(auto* CS = llvm::dyn_cast<clang::CompoundStmt>(stmt)) {
-            collect({CS->getLBracLoc(), CS->getRBracLoc()}, {1, -1});
-            for(auto child: stmt->children()) {
-                collectCompoundStmt(child);
-            }
-        }
     }
 
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
@@ -196,6 +104,106 @@ public:
     bool VisitInitListExpr(const clang::InitListExpr* expr) {
         collect({expr->getLBraceLoc(), expr->getRBraceLoc()}, {1, -1});
         return true;
+    }
+
+    static index::Shared<std::vector<FoldingRange>> collect(ASTInfo& AST, bool interestedOnly) {
+        FoldingRangeCollector collector(AST, interestedOnly);
+        collector.collectDrectives(AST.directives());
+        collector.TraverseTranslationUnitDecl(AST.tu());
+        return extract(collector.indexResult);
+    }
+
+private:
+    /// Collect source range as a folding range.
+    void collect(clang::SourceRange range,
+                 std::pair<int, int> offsetFix = {0, 0},
+                 FoldingRangeKind kind = FoldingRangeKind::Region) {
+
+        const auto& SM = AST.srcMgr();
+        unsigned startLine = SM.getPresumedLineNumber(range.getBegin()) - 1;
+        unsigned endLine = SM.getPresumedLineNumber(range.getEnd()) - 1;
+
+        // Skip ranges on a single line.
+        if(startLine >= endLine)
+            return;
+
+        auto fileID = interestedOnly ? AST.getInterestedFile() : SM.getFileID(range.getBegin());
+        auto& state = indexResult[fileID];
+
+        if(auto beg = range.getBegin(); beg.isMacroID()) {
+            auto cursor =
+                SM.translateLineCol(fileID, SM.getExpansionLineNumber(beg), LastColOfLine);
+            range.setBegin(cursor);
+            offsetFix.first = 0;
+        }
+        if(auto end = range.getEnd(); end.isMacroID()) {
+            range.setEnd(SM.translateLineCol(fileID,
+                                             SM.getExpansionLineNumber(end),
+                                             SM.getExpansionColumnNumber(end)));
+            offsetFix.second = 0;
+        }
+
+        assert(range.isValid());
+
+        auto [leftLocal, rightLocal] = AST.toLocalRange(range).second;
+        LocalSourceRange fixed{leftLocal + offsetFix.first, rightLocal + offsetFix.second};
+        if(state.empty() || state.back().startLine != startLine) {
+            state.push_back({kind, fixed, startLine, endLine});
+        }
+    }
+
+    /// Collect public/protected/private blocks for a non-lambda struct/class.
+    void collectAccessSpecDecls(const clang::RecordDecl* RD) {
+        const clang::AccessSpecDecl* lastAccess = nullptr;
+
+        for(auto* decl: RD->decls()) {
+            if(auto* AS = llvm::dyn_cast<clang::AccessSpecDecl>(decl)) {
+                if(lastAccess) {
+                    auto spec = AS->getAccessUnsafe();
+                    int offsetToSpecStart = spec == clang::AS_private  ? 7
+                                            : spec == clang::AS_public ? 6
+                                                                       : 9;
+                    collect({lastAccess->getColonLoc(), AS->getAccessSpecifierLoc()},
+                            {1, -offsetToSpecStart});
+                }
+                lastAccess = AS;
+            }
+        }
+
+        // The last access specifier block.
+        if(lastAccess) {
+            collect({lastAccess->getColonLoc(), RD->getBraceRange().getEnd()}, {1, -1});
+        }
+    }
+
+    /// Collect function parameter list between '(' and ')'.
+    void collectParameterList(clang::SourceLocation leftSide, clang::SourceLocation rightSide) {
+        auto tokens = AST.tokBuf().expandedTokens({leftSide, rightSide});
+        auto leftParen = tokens.drop_until([](const auto& tk) {  //
+            return tk.kind() == clang::tok::l_paren;
+        });
+
+        if(leftParen.empty())
+            return;
+
+        auto rightParenIter =
+            std::find_if(leftParen.rbegin(), leftParen.rend(), [](const auto& tk) {
+                return tk.kind() == clang::tok::r_paren;
+            });
+
+        if(rightParenIter == leftParen.rend())
+            return;
+
+        collect({leftParen.front().location(), rightParenIter->location()}, {1, -1});
+    }
+
+    void collectCompoundStmt(const clang::Stmt* stmt) {
+        if(auto* CS = llvm::dyn_cast<clang::CompoundStmt>(stmt)) {
+            collect({CS->getLBracLoc(), CS->getRBracLoc()}, {1, -1});
+            for(auto child: stmt->children()) {
+                collectCompoundStmt(child);
+            }
+        }
     }
 
     using ASTDirectives = std::remove_reference_t<decltype(std::declval<ASTInfo>().directives())>;
@@ -295,7 +303,8 @@ public:
         }
     }
 
-    static index::Shared<std::vector<FoldingRange>> extract(const Storage& storage) {
+    static index::Shared<std::vector<FoldingRange>>
+        extract(const index::Shared<std::vector<RichFolding>>& storage) {
         llvm::DenseMap<clang::FileID, std::vector<FoldingRange>> extracted;
         for(auto& [fileID, richs]: storage) {
             std::vector<FoldingRange> res;
@@ -308,15 +317,9 @@ public:
         return extracted;
     }
 
-    static index::Shared<std::vector<FoldingRange>> collect(ASTInfo& AST, bool interestedOnly) {
-        FoldingRangeCollector collector(AST, interestedOnly);
-        collector.collectDrectives(AST.directives());
-        collector.TraverseTranslationUnitDecl(AST.tu());
-        return extract(collector.result);
-    }
-
 private:
-    index::Shared<std::vector<RichFolding>> result;
+    std::vector<RichFolding> result;
+    index::Shared<std::vector<RichFolding>> indexResult;
 };
 
 }  // namespace
