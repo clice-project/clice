@@ -5,11 +5,9 @@ namespace clice::testing {
 
 namespace {
 
-using namespace clice::feature::foldingrange;
-
 struct FoldingRange : public ::testing::Test {
     std::optional<Tester> tester;
-    Result result;
+    std::vector<feature::FoldingRange> result;
 
     void run(llvm::StringRef source) {
         tester.emplace("main.cpp", source);
@@ -17,18 +15,16 @@ struct FoldingRange : public ::testing::Test {
         tester->run();
         auto& info = tester->info;
 
-        proto::FoldingRangeParams param;
-        result = foldingRange(param, *info);
+        result = feature::foldingRange(*info);
     }
 
-    index::Shared<Result> runWithHeader(llvm::StringRef source, llvm::StringRef header) {
+    index::Shared<std::vector<feature::FoldingRange>> runWithHeader(llvm::StringRef source,
+                                                                    llvm::StringRef header) {
         tester.emplace("main.cpp", source);
         tester->addFile(path::join(".", "header.h"), header);
         tester->run();
         auto& info = tester->info;
-
-        proto::FoldingRangeParams param;
-        return foldingRange(*info);
+        return feature::indexFoldingRange(*info);
     }
 
     void EXPECT_RANGE(std::size_t index,

@@ -3,73 +3,22 @@
 #include "Compiler/Compilation.h"
 #include "Feature/FoldingRange.h"
 
-/// Clangd's FoldingRange Implementation:
-/// https://github.com/llvm/llvm-project/blob/main/clang-tools-extra/clangd/SemanticSelection.cpp
-
-namespace clice {
+namespace clice::feature {
 
 namespace {
 
-struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> {
-
-    using Base = FilteredASTVisitor<FoldingRangeCollector>;
-
-    using Folding = feature::foldingrange::FoldingRange;
+class FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> {
+public:
+    FoldingRangeCollector(ASTInfo& AST, bool interestedOnly) :
+        FilteredASTVisitor(AST, interestedOnly, std::nullopt), indexResult() {}
 
     /// Cache extra line number as the inner storage to speedup the collection.
-    struct RichFolding : Folding {
+    struct RichFolding : FoldingRange {
         uint32_t startLine;
         uint32_t endLine;
     };
 
-    using Storage = index::Shared<std::vector<RichFolding>>;
-
-    Storage result;
-
     constexpr static auto LastColOfLine = std::numeric_limits<unsigned>::max();
-
-    FoldingRangeCollector(ASTInfo& AST,
-                          bool interestedOnly,
-                          std::optional<LocalSourceRange> targetRange) :
-        FilteredASTVisitor(AST, interestedOnly, targetRange), result() {}
-
-    /// Collect source range as a folding range.
-    void collect(clang::SourceRange range,
-                 std::pair<int, int> offsetFix = {0, 0},
-                 proto::FoldingRangeKind kind = proto::FoldingRangeKind::Region) {
-
-        const auto& SM = AST.srcMgr();
-        unsigned startLine = SM.getPresumedLineNumber(range.getBegin()) - 1;
-        unsigned endLine = SM.getPresumedLineNumber(range.getEnd()) - 1;
-
-        // Skip ranges on a single line.
-        if(startLine >= endLine)
-            return;
-
-        auto fileID = interestedOnly ? AST.getInterestedFile() : SM.getFileID(range.getBegin());
-        auto& state = result[fileID];
-
-        if(auto beg = range.getBegin(); beg.isMacroID()) {
-            auto cursor =
-                SM.translateLineCol(fileID, SM.getExpansionLineNumber(beg), LastColOfLine);
-            range.setBegin(cursor);
-            offsetFix.first = 0;
-        }
-        if(auto end = range.getEnd(); end.isMacroID()) {
-            range.setEnd(SM.translateLineCol(fileID,
-                                             SM.getExpansionLineNumber(end),
-                                             SM.getExpansionColumnNumber(end)));
-            offsetFix.second = 0;
-        }
-
-        assert(range.isValid());
-
-        auto [leftLocal, rightLocal] = AST.toLocalRange(range).second;
-        LocalSourceRange fixed{leftLocal + offsetFix.first, rightLocal + offsetFix.second};
-        if(state.empty() || state.back().startLine != startLine) {
-            state.push_back({fixed, kind, startLine, endLine});
-        }
-    }
 
     bool VisitNamespaceDecl(const clang::NamespaceDecl* decl) {
         auto tokens = AST.tokBuf().expandedTokens(decl->getSourceRange());
@@ -83,70 +32,16 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
         return true;
     }
 
-    /// Collect public/protected/private blocks for a non-lambda struct/class.
-    void collectAccessSpecDecls(const clang::RecordDecl* RD) {
-        const clang::AccessSpecDecl* lastAccess = nullptr;
-
-        for(auto* decl: RD->decls()) {
-            if(auto* AS = llvm::dyn_cast<clang::AccessSpecDecl>(decl)) {
-                if(lastAccess) {
-                    auto spec = AS->getAccessUnsafe();
-                    int offsetToSpecStart = spec == clang::AS_private  ? 7
-                                            : spec == clang::AS_public ? 6
-                                                                       : 9;
-                    collect({lastAccess->getColonLoc(), AS->getAccessSpecifierLoc()},
-                            {1, -offsetToSpecStart});
-                }
-                lastAccess = AS;
-            }
-        }
-
-        // The last access specifier block.
-        if(lastAccess) {
-            collect({lastAccess->getColonLoc(), RD->getBraceRange().getEnd()}, {1, -1});
-        }
-    }
-
     bool VisitTagDecl(const clang::TagDecl* decl) {
         // Collect definition of class/struct/enum.
         auto [leftBrace, rightBrace] = decl->getBraceRange();
-        auto name = decl->getName();
         collect({leftBrace, rightBrace}, {1, -1});
 
         if(auto RD = llvm::dyn_cast<clang::RecordDecl>(decl)) {
             collectAccessSpecDecls(RD);
         }
+
         return true;
-    }
-
-    /// Collect function parameter list between '(' and ')'.
-    void collectParameterList(clang::SourceLocation leftSide, clang::SourceLocation rightSide) {
-        auto tokens = AST.tokBuf().expandedTokens({leftSide, rightSide});
-        auto leftParen = tokens.drop_until([](const auto& tk) {  //
-            return tk.kind() == clang::tok::l_paren;
-        });
-
-        if(leftParen.empty())
-            return;
-
-        auto rightParenIter =
-            std::find_if(leftParen.rbegin(), leftParen.rend(), [](const auto& tk) {
-                return tk.kind() == clang::tok::r_paren;
-            });
-
-        if(rightParenIter == leftParen.rend())
-            return;
-
-        collect({leftParen.front().location(), rightParenIter->location()}, {1, -1});
-    }
-
-    void collectCompoundStmt(const clang::Stmt* stmt) {
-        if(auto* CS = llvm::dyn_cast<clang::CompoundStmt>(stmt)) {
-            collect({CS->getLBracLoc(), CS->getRBracLoc()}, {1, -1});
-            for(auto child: stmt->children()) {
-                collectCompoundStmt(child);
-            }
-        }
     }
 
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
@@ -209,6 +104,106 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
     bool VisitInitListExpr(const clang::InitListExpr* expr) {
         collect({expr->getLBraceLoc(), expr->getRBraceLoc()}, {1, -1});
         return true;
+    }
+
+    static index::Shared<std::vector<FoldingRange>> collect(ASTInfo& AST, bool interestedOnly) {
+        FoldingRangeCollector collector(AST, interestedOnly);
+        collector.collectDrectives(AST.directives());
+        collector.TraverseTranslationUnitDecl(AST.tu());
+        return extract(collector.indexResult);
+    }
+
+private:
+    /// Collect source range as a folding range.
+    void collect(clang::SourceRange range,
+                 std::pair<int, int> offsetFix = {0, 0},
+                 FoldingRangeKind kind = FoldingRangeKind::Region) {
+
+        const auto& SM = AST.srcMgr();
+        unsigned startLine = SM.getPresumedLineNumber(range.getBegin()) - 1;
+        unsigned endLine = SM.getPresumedLineNumber(range.getEnd()) - 1;
+
+        // Skip ranges on a single line.
+        if(startLine >= endLine)
+            return;
+
+        auto fileID = interestedOnly ? AST.getInterestedFile() : SM.getFileID(range.getBegin());
+        auto& state = indexResult[fileID];
+
+        if(auto beg = range.getBegin(); beg.isMacroID()) {
+            auto cursor =
+                SM.translateLineCol(fileID, SM.getExpansionLineNumber(beg), LastColOfLine);
+            range.setBegin(cursor);
+            offsetFix.first = 0;
+        }
+        if(auto end = range.getEnd(); end.isMacroID()) {
+            range.setEnd(SM.translateLineCol(fileID,
+                                             SM.getExpansionLineNumber(end),
+                                             SM.getExpansionColumnNumber(end)));
+            offsetFix.second = 0;
+        }
+
+        assert(range.isValid());
+
+        auto [leftLocal, rightLocal] = AST.toLocalRange(range).second;
+        LocalSourceRange fixed{leftLocal + offsetFix.first, rightLocal + offsetFix.second};
+        if(state.empty() || state.back().startLine != startLine) {
+            state.push_back({kind, fixed, startLine, endLine});
+        }
+    }
+
+    /// Collect public/protected/private blocks for a non-lambda struct/class.
+    void collectAccessSpecDecls(const clang::RecordDecl* RD) {
+        const clang::AccessSpecDecl* lastAccess = nullptr;
+
+        for(auto* decl: RD->decls()) {
+            if(auto* AS = llvm::dyn_cast<clang::AccessSpecDecl>(decl)) {
+                if(lastAccess) {
+                    auto spec = AS->getAccessUnsafe();
+                    int offsetToSpecStart = spec == clang::AS_private  ? 7
+                                            : spec == clang::AS_public ? 6
+                                                                       : 9;
+                    collect({lastAccess->getColonLoc(), AS->getAccessSpecifierLoc()},
+                            {1, -offsetToSpecStart});
+                }
+                lastAccess = AS;
+            }
+        }
+
+        // The last access specifier block.
+        if(lastAccess) {
+            collect({lastAccess->getColonLoc(), RD->getBraceRange().getEnd()}, {1, -1});
+        }
+    }
+
+    /// Collect function parameter list between '(' and ')'.
+    void collectParameterList(clang::SourceLocation leftSide, clang::SourceLocation rightSide) {
+        auto tokens = AST.tokBuf().expandedTokens({leftSide, rightSide});
+        auto leftParen = tokens.drop_until([](const auto& tk) {  //
+            return tk.kind() == clang::tok::l_paren;
+        });
+
+        if(leftParen.empty())
+            return;
+
+        auto rightParenIter =
+            std::find_if(leftParen.rbegin(), leftParen.rend(), [](const auto& tk) {
+                return tk.kind() == clang::tok::r_paren;
+            });
+
+        if(rightParenIter == leftParen.rend())
+            return;
+
+        collect({leftParen.front().location(), rightParenIter->location()}, {1, -1});
+    }
+
+    void collectCompoundStmt(const clang::Stmt* stmt) {
+        if(auto* CS = llvm::dyn_cast<clang::CompoundStmt>(stmt)) {
+            collect({CS->getLBracLoc(), CS->getRBracLoc()}, {1, -1});
+            for(auto child: stmt->children()) {
+                collectCompoundStmt(child);
+            }
+        }
     }
 
     using ASTDirectives = std::remove_reference_t<decltype(std::declval<ASTInfo>().directives())>;
@@ -308,10 +303,11 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
         }
     }
 
-    static index::Shared<std::vector<Folding>> extract(const Storage& storage) {
-        llvm::DenseMap<clang::FileID, std::vector<Folding>> extracted;
+    static index::Shared<std::vector<FoldingRange>>
+        extract(const index::Shared<std::vector<RichFolding>>& storage) {
+        llvm::DenseMap<clang::FileID, std::vector<FoldingRange>> extracted;
         for(auto& [fileID, richs]: storage) {
-            std::vector<Folding> res;
+            std::vector<FoldingRange> res;
             res.reserve(richs.size());
             for(auto& rich: richs) {
                 res.push_back(rich);
@@ -321,61 +317,21 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
         return extracted;
     }
 
-    static index::Shared<std::vector<Folding>>
-        collect(ASTInfo& AST, bool interestedOnly, std::optional<LocalSourceRange> targetRange) {
-
-        FoldingRangeCollector collector(AST, interestedOnly, targetRange);
-        collector.collectDrectives(AST.directives());
-        collector.TraverseTranslationUnitDecl(AST.tu());
-        return extract(collector.result);
-    }
+private:
+    std::vector<RichFolding> result;
+    index::Shared<std::vector<RichFolding>> indexResult;
 };
 
 }  // namespace
 
-namespace feature::foldingrange {
-
-json::Value capability(json::Value clientCapabilities) {
-    // Always return empty object.
-    // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_foldingRange
-    return {};
-}
-
-index::Shared<Result> foldingRange(ASTInfo& AST) {
-    return FoldingRangeCollector::collect(AST, /*interestedOnly=*/false, std::nullopt);
-}
-
-Result foldingRange(proto::FoldingRangeParams _, ASTInfo& AST) {
-    auto ranges = FoldingRangeCollector::collect(AST, /*interestedOnly=*/true, std::nullopt);
+std::vector<FoldingRange> foldingRange(ASTInfo& AST) {
+    auto ranges = FoldingRangeCollector::collect(AST, /*interestedOnly=*/true);
     return std::move(ranges[AST.getInterestedFile()]);
 }
 
-proto::FoldingRange toLspType(const FoldingRange& folding,
-                              const SourceConverter& SC,
-                              llvm::StringRef content) {
-    auto range = SC.toRange(folding.range, content);
-    return {
-        .startLine = range.start.line,
-        .endLine = range.end.line,
-        .startCharacter = range.start.character,
-        .endCharacter = range.end.character,
-        .kind = folding.kind,
-        .collapsedText = "",
-    };
-}
+index::Shared<std::vector<FoldingRange>> indexFoldingRange(ASTInfo& AST) {
+    return FoldingRangeCollector::collect(AST, /*interestedOnly=*/false);
 
-proto::FoldingRangeResult toLspResult(llvm::ArrayRef<FoldingRange> foldings,
-                                      const SourceConverter& SC,
-                                      llvm::StringRef content) {
+}  // namespace feature
 
-    proto::FoldingRangeResult result;
-    result.reserve(foldings.size());
-    for(const auto& folding: foldings) {
-        result.push_back(toLspType(folding, SC, content));
-    }
-    return result;
-}
-
-}  // namespace feature::foldingrange
-
-}  // namespace clice
+}  // namespace clice::feature
