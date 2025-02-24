@@ -2,6 +2,8 @@
 
 #include "llvm/ADT/StringMap.h"
 
+#include <expected>
+
 namespace clice {
 
 /// `CompilationDatabase` is responsible for managing the compile commands.
@@ -36,6 +38,9 @@ public:
     auto end() {
         return commands.end();
     }
+
+    /// Parse the content of compile_commands.json and return the map between file and commands.
+    static std::expected<llvm::StringMap<std::string>, std::string> parse(llvm::StringRef content);
 
 private:
     /// A map between file path and compile commands.
