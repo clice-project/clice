@@ -7,28 +7,18 @@ namespace clice::feature {
 
 namespace {
 
-struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> {
-
-    using Base = FilteredASTVisitor<FoldingRangeCollector>;
-
-    using Folding = feature::FoldingRange;
+class FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> {
+public:
+    FoldingRangeCollector(ASTInfo& AST, bool interestedOnly) :
+        FilteredASTVisitor(AST, interestedOnly, std::nullopt), result() {}
 
     /// Cache extra line number as the inner storage to speedup the collection.
-    struct RichFolding : Folding {
+    struct RichFolding : FoldingRange {
         uint32_t startLine;
         uint32_t endLine;
     };
 
-    using Storage = index::Shared<std::vector<RichFolding>>;
-
-    Storage result;
-
     constexpr static auto LastColOfLine = std::numeric_limits<unsigned>::max();
-
-    FoldingRangeCollector(ASTInfo& AST,
-                          bool interestedOnly,
-                          std::optional<LocalSourceRange> targetRange) :
-        FilteredASTVisitor(AST, interestedOnly, targetRange), result() {}
 
     /// Collect source range as a folding range.
     void collect(clang::SourceRange range,
@@ -305,10 +295,10 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
         }
     }
 
-    static index::Shared<std::vector<Folding>> extract(const Storage& storage) {
-        llvm::DenseMap<clang::FileID, std::vector<Folding>> extracted;
+    static index::Shared<std::vector<FoldingRange>> extract(const Storage& storage) {
+        llvm::DenseMap<clang::FileID, std::vector<FoldingRange>> extracted;
         for(auto& [fileID, richs]: storage) {
-            std::vector<Folding> res;
+            std::vector<FoldingRange> res;
             res.reserve(richs.size());
             for(auto& rich: richs) {
                 res.push_back(rich);
@@ -318,25 +308,26 @@ struct FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> 
         return extracted;
     }
 
-    static index::Shared<std::vector<Folding>>
-        collect(ASTInfo& AST, bool interestedOnly, std::optional<LocalSourceRange> targetRange) {
-
-        FoldingRangeCollector collector(AST, interestedOnly, targetRange);
+    static index::Shared<std::vector<FoldingRange>> collect(ASTInfo& AST, bool interestedOnly) {
+        FoldingRangeCollector collector(AST, interestedOnly);
         collector.collectDrectives(AST.directives());
         collector.TraverseTranslationUnitDecl(AST.tu());
         return extract(collector.result);
     }
+
+private:
+    index::Shared<std::vector<RichFolding>> result;
 };
 
 }  // namespace
 
 std::vector<FoldingRange> foldingRange(ASTInfo& AST) {
-    auto ranges = FoldingRangeCollector::collect(AST, /*interestedOnly=*/true, std::nullopt);
+    auto ranges = FoldingRangeCollector::collect(AST, /*interestedOnly=*/true);
     return std::move(ranges[AST.getInterestedFile()]);
 }
 
 index::Shared<std::vector<FoldingRange>> indexFoldingRange(ASTInfo& AST) {
-    return FoldingRangeCollector::collect(AST, /*interestedOnly=*/false, std::nullopt);
+    return FoldingRangeCollector::collect(AST, /*interestedOnly=*/false);
 
 }  // namespace feature
 
