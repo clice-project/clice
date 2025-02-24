@@ -49,6 +49,42 @@ Server::Server() {
 }
 
 async::Task<> Server::onReceive(json::Value value) {
+    auto object = value.getAsObject();
+    if(!object) [[unlikely]] {
+        log::fatal("Invalid LSP message, not an object: {}", value);
+    }
+
+    /// If the json object has an `id`, it's a request,
+    /// which needs a response. Otherwise, it's a notification.
+    auto id = object->get("id");
+
+    llvm::StringRef method;
+    if(auto result = object->getString("method")) {
+        method = *result;
+    } else [[unlikely]] {
+        log::warn("Invalid LSP message, method not found: {}", value);
+        if(id) {
+            co_await response(std::move(*id),
+                              proto::ErrorCodes::InvalidRequest,
+                              "Method not found");
+        }
+        co_return;
+    }
+
+    /// How to forward it to the corresponding method?
+    auto params = object->get("params");
+
+    if(method == "initialize") {
+        co_await initialize(std::move(*params));
+    } else {
+        log::warn("Invalid LSP message, method not found: {}", value);
+        if(id) {
+            co_await response(std::move(*id),
+                              proto::ErrorCodes::MethodNotFound,
+                              "Method not found");
+        }
+    }
+
     co_return;
 }
 
@@ -72,8 +108,21 @@ async::Task<> Server::notify(llvm::StringRef method, json::Value params) {
 async::Task<> Server::response(json::Value id, json::Value result) {
     co_await async::net::write(json::Object{
         {"jsonrpc", "2.0"            },
-        {"id",      id               },
+        {"id",      std::move(id)    },
         {"result",  std::move(result)},
+    });
+}
+
+async::Task<> Server::response(json::Value id, proto::ErrorCodes code, llvm::StringRef message) {
+    json::Object error{
+        {"code",    static_cast<int>(code)},
+        {"message", message               },
+    };
+
+    co_await async::net::write(json::Object{
+        {"jsonrpc", "2.0"           },
+        {"id",      std::move(id)   },
+        {"error",   std::move(error)},
     });
 }
 

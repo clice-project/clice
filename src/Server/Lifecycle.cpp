@@ -4,6 +4,11 @@
 
 namespace clice {
 
+async::Task<> Server::initialize(json::Value value) {
+    auto params = json::deserialize<proto::InitializedParams>(value);
+    co_return;
+}
+
 // async::Task<> Server::onInitialize(json::Value id, const proto::InitializeParams& params) {
 //     proto::InitializeResult result = {};
 //     result.serverInfo.name = "clice";
