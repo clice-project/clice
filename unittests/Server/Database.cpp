@@ -63,7 +63,7 @@ bool recursiveFindCDB(std::string& result) {
 
 TEST(CompilationDatabase, Command) {
     std::string cdbPath;
-    if(std::getenv("CI") != nullptr || !recursiveFindCDB(cdbPath)) {
+    if(std::getenv("CI") == nullptr || !recursiveFindCDB(cdbPath)) {
         return;
     }
 
