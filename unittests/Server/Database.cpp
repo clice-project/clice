@@ -28,13 +28,17 @@ bool getExecutablePath(char* buffer, size_t size) {
     if(len == -1) {
         return false;
     }
-    buffer[len] = '\0';
 #endif
     return true;
 }
 
 bool recursiveFindCDB(std::string& result) {
+#ifdef _WIN32
+    char buffer[MAX_PATH] = {0};
+#else
     char buffer[PATH_MAX] = {0};
+#endif
+
     if(!getExecutablePath(buffer, sizeof(buffer))) {
         return false;
     }
