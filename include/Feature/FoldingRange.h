@@ -14,6 +14,19 @@ struct FoldingRangeKind : refl::Enum<FoldingRangeKind> {
         Comment,
         Imports,
         Region,
+        Namespace,
+        Class,
+        Enum,
+        Struct,
+        Union,
+        LambdaCapture,
+        FunctionParams,
+        FunctionBody,
+        FunctionCall,
+        CompoundStmt,
+        AccessSpecifier,
+        ConditionDirective,
+        Initializer,
     };
 
     using Enum::Enum;
@@ -23,8 +36,14 @@ struct FoldingRangeKind : refl::Enum<FoldingRangeKind> {
 
 /// We don't record the coalesced text for a range, because it's rarely useful.
 struct FoldingRange {
-    FoldingRangeKind kind;
+    /// The range to fold.
     LocalSourceRange range;
+
+    /// Describes the kind of the folding range.
+    FoldingRangeKind kind;
+
+    /// The text to display when the folding range is collapsed.
+    std::string text;
 };
 
 /// Generate folding range for interested file only.

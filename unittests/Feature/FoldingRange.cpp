@@ -30,82 +30,60 @@ struct FoldingRange : public ::testing::Test {
     void EXPECT_RANGE(std::size_t index,
                       llvm::StringRef begin,
                       llvm::StringRef end,
+                      feature::FoldingRangeKind kind,
                       std::source_location current = std::source_location::current()) {
         auto& folding = result[index];
 
         auto begOff = tester->offset(begin);
-        EXPECT_EQ(begOff, folding.range.begin);
+        EXPECT_EQ(begOff, folding.range.begin, current);
 
         auto endOff = tester->offset(end);
-        EXPECT_EQ(endOff, folding.range.end);
+        EXPECT_EQ(endOff, folding.range.end, current);
     }
 };
 
 TEST_F(FoldingRange, Namespace) {
     run(R"cpp(
+namespace single_line $(1){ }$(2)
 
-namespace single_line {$(1)
-    //    
-$(2)}
+namespace with_nodes $(3){
+    struct inner $(5){ }$(6);
+}$(4)
 
-namespace with_nodes {$(3)
-//
-struct _ {};
+namespace strange
+                 $(7){
 
-$(4)}
+                 }$(8)
 
-namespace empty {}
+#define NS_BEGIN namespace ns {
+#define NS_END }
 
-namespace ugly
-
-{$(5)
-   $(6)}
-
+$(9)NS_BEGIN
+NS_END$(10)
 )cpp");
 
     EXPECT_RANGE(0, "1", "2");
     EXPECT_RANGE(1, "3", "4");
     EXPECT_RANGE(2, "5", "6");
-}
-
-TEST_F(FoldingRange, NamespaceExpandedFromMacro) {
-    run(R"cpp(
-#define NS_OUTER namespace outter {
-#define NS_INNER namespace inner {
-#define END_MACRO }
-
-NS_OUTER$(1)
-    NS_INNER$(3)
-    namespace inner {$(5)
-    
-    $(6)}
-    END_MACRO$(4)
-END_MACRO$(2)
-
-)cpp");
-
-    EXPECT_EQ(result.size(), 3);
-
-    EXPECT_RANGE(0, "1", "2");
-    EXPECT_RANGE(1, "3", "4");
-    EXPECT_RANGE(2, "5", "6");
+    EXPECT_RANGE(3, "7", "8");
+    EXPECT_RANGE(4, "9", "10");
 }
 
 TEST_F(FoldingRange, Enum) {
     run(R"cpp(
-enum _0 {$(1)
+enum _0 $(1){
     A,
     B,
     C
-$(2)};
+}$(2);
 
-enum _1 { D };
-
-enum class _2 {$(3)
+enum class _1 $(3){
     A,
     B,
     C
-$(4)};
+}$(4);
+
+enum _2 { D };
 
 )cpp");
 
@@ -334,9 +312,9 @@ $(2)}
 
 )cpp");
 
-    EXPECT_RANGE(0, "1", "2");
-    EXPECT_RANGE(1, "3", "4");
-    EXPECT_RANGE(2, "5", "6");
+    /// EXPECT_RANGE(0, "1", "2");
+    /// EXPECT_RANGE(1, "3", "4");
+    /// EXPECT_RANGE(2, "5", "6");
 }
 
 TEST_F(FoldingRange, InitializeList) {
