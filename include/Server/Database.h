@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Support/JSON.h"
 #include "llvm/ADT/StringMap.h"
 
 #include <expected>
@@ -40,6 +39,9 @@ public:
         return commands.end();
     }
 
+    /// Parse the content of compile_commands.json and return the map between file and commands.
+    static std::expected<llvm::StringMap<std::string>, std::string> parse(llvm::StringRef content);
+
 private:
     /// A map between file path and compile commands.
     llvm::StringMap<std::string> commands;
@@ -52,16 +54,5 @@ private:
     /// implementation unit, the scan could be delayed until compiling it.
     llvm::StringMap<std::string> moduleMap;
 };
-
-struct CompileCommand {
-    /// Absolute path of the file.
-    std::string file;
-
-    /// The compile command.
-    std::string command;
-};
-
-/// Try extract compile command from an item in CDB file. An reason will be returned if failed.
-std::expected<CompileCommand, std::string> parseCompileCommand(const json::Object* object);
 
 }  // namespace clice

@@ -2,47 +2,78 @@
 
 #include "Server/Database.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <limits.h>
+#endif
+
+#include <filesystem>
+
+namespace sfs = std::filesystem;
+
 namespace clice::testing {
 
 namespace {
 
-void check(llvm::StringRef jsonText) {
-    auto object = json::parse(llvm::StringRef(jsonText));
-    EXPECT_TRUE(bool(object));
+bool getExecutablePath(char* buffer, size_t size) {
+#ifdef _WIN32
+    DWORD len = GetModuleFileNameA(NULL, buffer, (DWORD)size);
+    if(len == 0 || len >= size) {
+        return false;
+    }
+#else
+    ssize_t len = readlink("/proc/self/exe", buffer, size - 1);
+    if(len == -1) {
+        return false;
+    }
+    buffer[len] = '\0';
+#endif
+    return true;
+}
 
-    auto res = parseCompileCommand(object->getAsObject());
-    EXPECT_TRUE(res.has_value());
-
-    if(!res.has_value()) {
-        llvm::outs() << res.error();
+bool recursiveFindCDB(std::string& result) {
+    char buffer[PATH_MAX] = {0};
+    if(!getExecutablePath(buffer, sizeof(buffer))) {
+        return false;
     }
 
-    auto [file, command] = std::move(res).value();
-    llvm::StringRef expectedFile = "/home/shiyu/github/clice/src/Driver/clice.cc";
-    EXPECT_EQ(file, expectedFile);
-    llvm::outs() << command << '\n';
+    sfs::path current_path = buffer;
+    while(true) {
+        if(auto cdb = current_path / "compile_commands.json"; sfs::exists(cdb)) {
+            result = cdb.string();
+            return true;
+        }
+
+        if(auto dir = current_path.filename().string(); dir.contains("clice")) {
+            result = dir;
+            return false;
+        }
+
+        current_path = current_path.parent_path();
+    }
+
+    return false;
 }
 
 TEST(CompilationDatabase, Command) {
-    auto cmake = R"json(
-{
-  "directory": "/home/shiyu/github/clice/build",
-  "command": "/usr/bin/clang++-20 -I/home/shiyu/github/clice/./.llvm/include -I/home/shiyu/github/clice/include -I/home/shiyu/github/clice/build/_deps/libuv-src/include -isystem /home/shiyu/github/clice/build/_deps/tomlplusplus-src/include  -fno-rtti -fno-exceptions -g -O0 -fsanitize=address -Wno-deprecated-declarations -g -std=gnu++23 -o CMakeFiles/clice.dir/src/Driver/clice.cc.o -c /home/shiyu/github/clice/src/Driver/clice.cc",
-  "file": "/home/shiyu/github/clice/src/Driver/clice.cc",
-  "output": "CMakeFiles/clice.dir/src/Driver/clice.cc.o"
-}
-  )json";
+    std::string cdbPath;
+    if(std::getenv("CI") != nullptr || !recursiveFindCDB(cdbPath)) {
+        return;
+    }
 
-    auto xmake = R"json(
-{
-  "directory": "/home/shiyu/github/clice",
-  "arguments": ["/usr/bin/clang", "-c", "-Qunused-arguments", "-m64", "-g", "-O0", "-std=c++23", "-Iinclude", "-fno-exceptions", "-fno-cxx-exceptions", "-isystem", "/home/shiyu/.xmake/packages/l/libuv/v1.49.2/5ba3a0ddfd5e4448beb78c29cbfeaaa4/include", "-isystem", "/home/shiyu/.xmake/packages/t/toml++/v3.4.0/bde7344d843e41928b1d325fe55450e0/include", "-isystem", "/home/shiyu/.xmake/packages/l/llvm/20.0.0/40421d4ceadb44b49ffc6cb766f3722a/include", "-fsanitize=address", "-fno-rtti", "-o", "build/.objs/clice/linux/x86_64/debug/src/Driver/clice.cc.o", "src/Driver/clice.cc"],
-  "file": "src/Driver/clice.cc"
-}
-  )json";
+    auto buffer = llvm::MemoryBuffer::getFile(cdbPath);
+    EXPECT_TRUE(bool(buffer));
 
-    // check(cmake);
-    // check(xmake);
+    auto res = CompilationDatabase::parse(buffer.get()->getBuffer());
+    EXPECT_TRUE(res.has_value());
+    EXPECT_TRUE(!res->empty());
+
+    for(auto& [file, command]: res.value()) {
+        EXPECT_TRUE(!file.empty());
+        EXPECT_TRUE(!command.empty());
+    }
 }
 
 TEST(CompilationDatabase, Module) {}
