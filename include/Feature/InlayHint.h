@@ -3,81 +3,8 @@
 #include "Basic/Document.h"
 #include "Basic/SourceCode.h"
 #include "Index/Shared.h"
-#include "Support/JSON.h"
 
 namespace clice {
-
-namespace proto {
-
-// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#inlayHintParams
-struct InlayHintParams {
-    /// The text document.
-    TextDocumentIdentifier textDocument;
-
-    /// The visible document range for which inlay hints should be computed.
-    Range range;
-};
-
-// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#inlayHintLabelPart
-struct InlayHintLablePart {
-    /// The label of the inlay hint.
-    string value;
-
-    /// The tooltip text when you hover over this label part.  Depending on
-    /// the client capability `inlayHint.resolveSupport` clients might resolve
-    /// this property late using the resolve request.
-    MarkupContent tooltip;
-
-    /// An optional source code location that represents this label part. This part will become a
-    /// clickable link that resolves to the definition of the symbol at the given location (not
-    /// necessarily the location itself), it shows the hover that shows at the given location,
-    std::optional<Location> location;
-
-    /// TODO:
-    // Command command;
-};
-
-// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#inlayHintKind
-struct InlayHintKind : refl::Enum<InlayHintKind> {
-    enum Kind : uint8_t {
-        Invalid = 0,
-        Type = 1,
-        Parameter = 2,
-    };
-
-    using Enum::Enum;
-
-    constexpr static auto InvalidEnum = Invalid;
-};
-
-// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#inlayHint
-struct InlayHint {
-    /// The position of this hint.
-    Position position;
-
-    /// The label of this hint.
-    std::vector<InlayHintLablePart> lables;
-
-    /// The kind of this hint.
-    InlayHintKind kind;
-
-    /// TODO:
-    /// Optional text edits that are performed when accepting this inlay hint.
-    // std::vector<TextEdit> textEdits;
-
-    /// Render padding before the hint.
-    bool paddingLeft = false;
-
-    /// Render padding before the hint.
-    bool paddingRight = false;
-
-    /// TODO:
-    // LspAny data;
-};
-
-using InlayHintsResult = std::vector<InlayHint>;
-
-}  // namespace proto
 
 namespace config {
 
@@ -148,11 +75,8 @@ struct InlayHintOption {
 }  // namespace config
 
 class ASTInfo;
-class SourceConverter;
 
-namespace feature::inlay_hint {
-
-json::Value capability(json::Value clientCapabilities);
+namespace feature {
 
 /// For each hint, we record extra kind tag more than LSP used, which is used to distinguish
 /// different cases coresponding to the item in `InlayHintOptions`.
@@ -211,23 +135,23 @@ struct InlayHintKind : refl::Enum<InlayHintKind> {
     }
 };
 
-constexpr proto::InlayHintKind toLspType(InlayHintKind kind) {
-    return kind.isLspTypeKind() ? proto::InlayHintKind::Type : proto::InlayHintKind::Parameter;
-}
-
-/// We don't store the document URI in each `Lable` object, it's always same in the given document
+/// We don't store the document URI in each `Label` object, it's always same in the given document
 /// of `ASTInfo`.
-struct LablePart {
+struct LabelPart {
+    /// The text of this label part.
     std::string value;
 
-    std::optional<LocalSourceRange> location;
+    /// The source code location that represents this label part. This part will become a clickable
+    /// link that resolves to the definition of the symbol at the given location (not necessarily
+    /// the location itself), it shows the hover that shows at the given location.
+    LocalSourceRange link = LocalSourceRange::placeholder();
 
     /// TODO: Should we store tooltip field in index ?
     /// MarkupContent tooltip;
 };
 
-/// Different with `proto::InlayHint`, this struct is used for index. It doesn't store many lable
-/// part but only one.
+/// Different from `proto::InlayHint`, this struct is used for index. It doesn't store many label
+/// parts but only one.
 struct InlayHint {
     /// The position of this hint.
     InlayHintKind kind;
@@ -235,36 +159,17 @@ struct InlayHint {
     /// The offset of hint position.
     std::uint32_t offset;
 
-    /// Currently, there can be multiple lable parts recorded during the collection of InlayHints.
-    std::vector<LablePart> labels;
+    /// Currently, there can be multiple label parts recorded during the collection of InlayHints.
+    std::vector<LabelPart> labels;
 };
 
-using Result = std::vector<InlayHint>;
-
 /// Compute inlay hints for MainfileID in given range and config.
-Result inlayHints(proto::InlayHintParams param,
-                  ASTInfo& info,
-                  const config::InlayHintOption& option);
+std::vector<InlayHint> inlayHints(proto::Range range, ASTInfo& info);
 
 /// Same with `inlayHints` but including all fileID, and all options in `config::InlayHintOption`
 /// will be enabled to support index.
-index::Shared<Result> inlayHints(ASTInfo& info);
+index::Shared<std::vector<InlayHint>> indexInlayHints(ASTInfo& info);
 
-/// Convert `InlayHint` to `proto::InlayHint`.
-proto::InlayHint toLspType(const InlayHint& hint,
-                           size_t maxHintLength,
-                           llvm::StringRef docuri,
-                           llvm::StringRef content,
-                           const SourceConverter& SC);
-
-/// Convert `Result` to `proto::InlayHintResult`.  If an option is provided, use the option to
-/// filter result. By default, all hints will be converted.
-proto::InlayHintsResult toLspType(llvm::ArrayRef<InlayHint> result,
-                                  llvm::StringRef docuri,
-                                  std::optional<config::InlayHintOption> config,
-                                  llvm::StringRef content,
-                                  const SourceConverter& SC);
-
-}  // namespace feature::inlay_hint
+}  // namespace feature
 
 }  // namespace clice

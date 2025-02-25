@@ -1,28 +1,14 @@
 #include "AST/FilterASTVisitor.h"
-#include "Basic/SourceConverter.h"
+#include "AST/Utility.h"
 #include "Compiler/Compilation.h"
 #include "Feature/InlayHint.h"
+#include "Server/LSPConverter.h"
 
 #include "clang/AST/TypeVisitor.h"
 
-namespace clice {
+namespace clice::feature {
 
 namespace {
-
-/// TODO:
-/// Replace blank tooltip to something useful.
-
-/// Create a blank markup content as a place holder.
-proto::MarkupContent blank() {
-    return {
-        .value = "",
-    };
-}
-
-using Kind = feature::inlay_hint::InlayHintKind;
-using feature::inlay_hint::LablePart;
-using feature::inlay_hint::InlayHint;
-using feature::inlay_hint::Result;
 
 /// For a given `clang::QualType`, build a list of `LablePart` and make each part clickable.
 /// e.g, for hints like:
@@ -37,9 +23,7 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
     ASTInfo& AST;
 
     // The result buffer to write.
-    std::vector<LablePart>& results;
-
-    // const clang::PrintingPolicy& policy;
+    std::vector<LabelPart>& results;
 
     void VisitPointerType(const clang::PointerType* T) {
         Visit(T->getPointeeType().getTypePtr());
@@ -62,10 +46,10 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
     }
 
     template <typename Decl>
-    void recordScope(const Decl* D, llvm::SmallVectorImpl<LablePart>& stack) {
+    void recordScope(const Decl* D, llvm::SmallVectorImpl<LabelPart>& stack) {
         stack.push_back({
-            .value = D->getName().str(),
-            .location = AST.toLocalRange(D->getSourceRange()).second,
+            .value = getDeclName(D),
+            .link = AST.toLocalRange(D->getSourceRange()).second,
         });
     }
 
@@ -74,7 +58,7 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
         // for a type like `NamespaceA::NamespaceB::MyStruct`, we traverse the DeclContext from
         // inner to outer to find all namespaces, in the order like `NamespaceB -> NamespaceA`. So
         // use a stack to store the result
-        llvm::SmallVector<LablePart, 3> stack;
+        llvm::SmallVector<LabelPart, 3> stack;
 
         while(DC) {
             if(const auto* ND = llvm::dyn_cast<clang::NamespaceDecl>(DC)) {
@@ -96,7 +80,7 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
         recursiveMarkScope(RD->getDeclContext());
         results.push_back({
             .value = RD->getName().str(),
-            .location = AST.toLocalRange(RD->getFirstDecl()->getSourceRange()).second,
+            .link = AST.toLocalRange(RD->getFirstDecl()->getSourceRange()).second,
         });
     }
 
@@ -178,7 +162,7 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
     }
 
     /// Build label parts for a given type, the result will be written to `hints`.
-    static void build(clang::QualType QT, std::vector<LablePart>& hints, ASTInfo& AST) {
+    static void build(clang::QualType QT, std::vector<LabelPart>& hints, ASTInfo& AST) {
         assert(!QT.isNull() && "QualType must not be Null.");
 
         if(isBuiltinType(QT) || isStdType(QT)) {
@@ -193,7 +177,7 @@ struct TypeHintLinkBuilder : clang::TypeVisitor<TypeHintLinkBuilder, void> {
     /// Same with `build`, but we have a known name of the type from `QT.getAsString()`.
     static void buildWithKnownName(clang::QualType QT,
                                    llvm::StringRef name,
-                                   std::vector<LablePart>& hints,
+                                   std::vector<LabelPart>& hints,
                                    ASTInfo& AST) {
         assert(!QT.isNull() && "QualType must not be Null.");
 
@@ -215,8 +199,10 @@ struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
 
     using Base = FilteredASTVisitor<InlayHintCollector>;
 
+    using Kind = InlayHintKind;
+
     /// The result of inlay hints for given AST.
-    using Storage = llvm::DenseMap<clang::FileID, Result>;
+    using Storage = llvm::DenseMap<clang::FileID, std::vector<InlayHint>>;
 
     /// The result of inlay hints.
     Storage result;
@@ -264,11 +250,11 @@ struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
         if(typeName.contains("lambda"))
             typeName = "(lambda)", isLambda = true;
 
-        std::vector<LablePart> labels;
+        std::vector<LabelPart> labels;
         if(isLambda || !option.typeLink) {
-            LablePart lable{.value = tryShrinkHintText(std::format(": {}", typeName))};
+            LabelPart lable{.value = tryShrinkHintText(std::format(": {}", typeName))};
             if(linkDeclRange.has_value())
-                lable.location = AST.toLocalRange(*linkDeclRange).second;
+                lable.link = AST.toLocalRange(*linkDeclRange).second;
             labels.push_back(std::move(lable));
         } else {
             labels.push_back({.value = ": "});
@@ -350,9 +336,9 @@ struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
             const bool hintRef = isPassedAsMutableLValueRef(params[i]);
 
             auto parmName = std::format("{}{}:", params[i]->getName(), hintRef ? "&" : "");
-            LablePart lable{
+            LabelPart lable{
                 .value = tryShrinkHintText(std::move(parmName)),
-                .location = AST.toLocalRange(params[i]->getSourceRange()).second,
+                .link = AST.toLocalRange(params[i]->getSourceRange()).second,
             };
 
             auto argBeginLoc = args[i]->getSourceRange().getBegin();
@@ -584,11 +570,11 @@ struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
     }
 
     void collectReturnTypeHint(clang::SourceLocation hintLoc, clang::QualType retType, Kind kind) {
-        std::vector<LablePart> labels;
+        std::vector<LabelPart> labels;
         if(!option.typeLink) {
             const auto& policy = AST.context().getPrintingPolicy();
 
-            LablePart lable;
+            LabelPart lable;
             lable.value = tryShrinkHintText(std::format("-> {}", retType.getAsString(policy)));
             labels.push_back(std::move(lable));
         } else {
@@ -679,9 +665,9 @@ struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
     }
 
     void collectArrayElemIndexHint(int index, clang::SourceLocation location) {
-        LablePart lable{
+        LabelPart lable{
             .value = std::format("[{}]=", index),  // This shouldn't be shrinked.
-            .location = AST.toLocalRange(location).second,
+            .link = AST.toLocalRange(location).second,
         };
 
         auto [locFileID, offset] = AST.getDecomposedLoc(location);
@@ -765,9 +751,9 @@ struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
             }
         }
 
-        LablePart lable{
+        LabelPart lable{
             .value = tryShrinkHintText(std::move(text)),
-            .location = AST.toLocalRange(linkRange).second,
+            .link = AST.toLocalRange(linkRange).second,
         };
 
         InlayHint hint{
@@ -805,9 +791,9 @@ struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
         auto size = ctx.getTypeSizeInChars(qual).getQuantity();
         auto align = ctx.getTypeAlignInChars(qual).getQuantity();
 
-        LablePart lable{
+        LabelPart lable{
             .value = tryShrinkHintText(std::format("size: {}, align: {}", size, align)),
-            .location = AST.toLocalRange(decl->getSourceRange()).second,
+            .link = AST.toLocalRange(decl->getSourceRange()).second,
         };
 
         // right side of identifier.
@@ -835,7 +821,7 @@ struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
                 hintText += enumDecl->isScopedUsingClassTag() ? " class" : " struct";
 
             // Format text to 'struct Example' or `class Example` or `enum class Example`
-            hintText.append(" ").append(decl->getName());
+            hintText.append(" ").append(getDeclName(decl));
             collectBlockEndHint(decl->getBraceRange().getEnd().getLocWithOffset(1),
                                 std::move(hintText),
                                 decl->getSourceRange(),
@@ -880,162 +866,80 @@ struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
     }
 };
 
-using feature::inlay_hint::InlayHintKind;
+// bool isAvailableWithOption(InlayHintKind kind, const config::InlayHintOption& config) {
+//     using enum InlayHintKind::Kind;
 
-bool isAvailableWithOption(InlayHintKind kind, const config::InlayHintOption& config) {
-    using enum InlayHintKind::Kind;
+//     switch(kind.kind()) {
+//         case Invalid: return false;
 
-    switch(kind.kind()) {
-        case Invalid: return false;
+//         case AutoDecl:
+//         case StructureBinding: return config.dedcucedType;
 
-        case AutoDecl:
-        case StructureBinding: return config.dedcucedType;
+//         case Parameter:
+//         case Constructor: return config.paramName;
 
-        case Parameter:
-        case Constructor: return config.paramName;
+//         case FunctionReturnType:
+//         case LambdaReturnType: return config.returnType;
 
-        case FunctionReturnType:
-        case LambdaReturnType: return config.returnType;
+//         case IfBlockEnd:
+//         case SwitchBlockEnd:
+//         case WhileBlockEnd:
+//         case ForBlockEnd:
+//         case NamespaceEnd:
+//         case TagDeclEnd:
+//         case FunctionEnd:
+//         case LambdaBodyEnd: return config.blockEnd;
 
-        case IfBlockEnd:
-        case SwitchBlockEnd:
-        case WhileBlockEnd:
-        case ForBlockEnd:
-        case NamespaceEnd:
-        case TagDeclEnd:
-        case FunctionEnd:
-        case LambdaBodyEnd: return config.blockEnd;
-
-        case ArrayIndex: return config.maxArrayElements > 0;
-        case StructSizeAndAlign: return config.structSizeAndAlign;
-        case MemberSizeAndOffset: return config.memberSizeAndOffset;
-        case ImplicitCast: return config.implicitCast;
-        case ChainCall: return config.chainCall;
-        case NumberLiteralToHex: return config.numberLiteralToHex;
-        case CStrLength: return config.cstrLength;
-    }
-}
+//         case ArrayIndex: return config.maxArrayElements > 0;
+//         case StructSizeAndAlign: return config.structSizeAndAlign;
+//         case MemberSizeAndOffset: return config.memberSizeAndOffset;
+//         case ImplicitCast: return config.implicitCast;
+//         case ChainCall: return config.chainCall;
+//         case NumberLiteralToHex: return config.numberLiteralToHex;
+//         case CStrLength: return config.cstrLength;
+//     }
+// }
 
 }  // namespace
-
-namespace feature::inlay_hint {
-
-json::Value inlayHintCapability(json::Value InlayHintClientCapabilities) {
-    return {};
-}
-
-/// Convert `Lable` to `proto:":InlayHintLablePart`. the hint text will be shrinked to the
-/// `maxHintLength` if it's not zero.
-proto::InlayHintLablePart toLspType(const LablePart& lable,
-                                    size_t maxHintLength,
-                                    llvm::StringRef docuri,
-                                    llvm::StringRef content,
-                                    const SourceConverter& SC) {
-    proto::InlayHintLablePart lspPart;
-    lspPart.tooltip = blank();
-    lspPart.value = maxHintLength ? InlayHintCollector::shrinkHintText(lable.value, maxHintLength)
-                                  : lable.value;
-    if(lable.location.has_value())
-        lspPart.location = {.uri = docuri.str(), .range = SC.toRange(*lable.location, content)};
-    return lspPart;
-}
-
-std::vector<proto::InlayHintLablePart> toLspType(llvm::ArrayRef<LablePart> lables,
-                                                 size_t maxHintLength,
-                                                 llvm::StringRef docuri,
-                                                 llvm::StringRef content,
-                                                 const SourceConverter& SC) {
-    std::vector<proto::InlayHintLablePart> lspLables;
-    lspLables.reserve(lables.size());
-    for(auto& lable: lables)
-        lspLables.push_back(toLspType(lable, maxHintLength, docuri, content, SC));
-    return lspLables;
-}
-
-/// Convert `InlayHint` to `proto::InlayHint`.
-proto::InlayHint toLspType(const InlayHint& hint,
-                           size_t maxHintLength,
-                           llvm::StringRef docuri,
-                           llvm::StringRef content,
-                           const SourceConverter& SC) {
-    proto::InlayHint lspHint;
-    /// Use hint.lables as the only element of `proto::InlayHint::lables`.
-    lspHint.lables = toLspType(hint.labels, maxHintLength, docuri, content, SC);
-    lspHint.kind = toLspType(hint.kind);
-    lspHint.position = SC.toPosition(content, hint.offset);
-    return lspHint;
-}
 
 namespace {
 
-clang::SourceLocation fromLineCol(clang::FileID file,
-                                  proto::Position pos,
-                                  const clang::SourceManager& SM) {
-    return SM.translateLineCol(file, pos.line + 1, pos.character + 1);
-}
+constexpr config::InlayHintOption EnableAll{
+    .maxLength = 0,
+    .maxArrayElements = 0,
+    .dedcucedType = true,
+    .returnType = true,
+    .blockEnd = true,
+    .paramName = true,
+    .typeLink = true,
+    .structSizeAndAlign = true,
+};
 
 }  // namespace
 
-Result inlayHints(proto::InlayHintParams param,
-                  ASTInfo& AST,
-                  const config::InlayHintOption& option) {
-    assert(param.range.start != param.range.end && "Invalid range from client.");
+std::vector<InlayHint> inlayHints(proto::Range range, ASTInfo& AST) {
+    assert(range.start != range.end && "Invalid range from client.");
 
     // Take 0-0 based Lsp Location from `param.range` and convert it to offset pair.
-    const clang::SourceManager& SM = AST.srcMgr();
-    clang::SourceRange requestRange{
-        fromLineCol(AST.getInterestedFile(), param.range.start, SM),
-        fromLineCol(AST.getInterestedFile(), param.range.end, SM),
+    auto fromLineCol = [&](proto::Position pos) -> clang::SourceLocation {
+        return AST.srcMgr().translateLineCol(AST.getInterestedFile(),
+                                             pos.line + 1,
+                                             pos.character + 1);
     };
+    clang::SourceRange requestRange{fromLineCol(range.start), fromLineCol(range.end)};
     assert(requestRange.isValid() && "Invalid SourceRange.");
 
     /// TODO:
     /// Check and fix invalid options before collecting hints.
 
     auto limit = AST.toLocalRange(requestRange).second;
-    auto result = InlayHintCollector::collect(AST, true, limit, option);
+    auto result = InlayHintCollector::collect(AST, /*interestedOnly=*/true, limit, EnableAll);
     return std::move(result[AST.getInterestedFile()]);
 }
 
-index::Shared<Result> inlayHints(ASTInfo& AST) {
-    config::InlayHintOption enableAll;
-    enableAll.maxLength = 0;
-    enableAll.maxArrayElements = 0;
-    enableAll.typeLink = true;
-    enableAll.blockEnd = true;
-    enableAll.implicitCast = true;
-    enableAll.chainCall = true;
-    enableAll.numberLiteralToHex = true;
-    enableAll.cstrLength = true;
-
-    return InlayHintCollector::collect(AST, false, std::nullopt, enableAll);
+index::Shared<std::vector<InlayHint>> indexInlayHints(ASTInfo& AST) {
+    return InlayHintCollector::collect(AST, /*interestedOnly=*/false, std::nullopt, EnableAll);
 }
 
-proto::InlayHintsResult toLspType(llvm::ArrayRef<InlayHint> result,
-                                  llvm::StringRef docuri,
-                                  std::optional<config::InlayHintOption> config,
-                                  llvm::StringRef content,
-                                  const SourceConverter& SC) {
-    proto::InlayHintsResult lspRes;
-    lspRes.reserve(result.size());
+}  // namespace clice::feature
 
-    /// NOTICE:
-    /// During converting hints from `InlayHint` to `proto::InlayHint`, the
-    /// `config::maxArrayElements` will be ignored because we can't recover the parent-child
-    /// relationship of AST node from `InlayHint`.
-
-    auto option = config.value_or(config::InlayHintOption{});
-    for(auto& hint: result) {
-        if(!isAvailableWithOption(hint.kind, *config))
-            continue;
-
-        lspRes.push_back(toLspType(hint, config->maxLength, docuri, content, SC));
-    }
-
-    lspRes.shrink_to_fit();
-    return lspRes;
-}
-
-}  // namespace feature::inlay_hint
-
-}  // namespace clice

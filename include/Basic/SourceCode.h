@@ -26,6 +26,10 @@ struct LocalSourceRange {
     constexpr bool valid() const {
         return begin != -1 && end != -1;
     }
+
+    constexpr static LocalSourceRange placeholder() {
+        return {static_cast<uint32_t>(-1), static_cast<uint32_t>(-1)};
+    }
 };
 
 struct Location {
