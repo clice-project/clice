@@ -314,7 +314,6 @@ std::vector<FoldingRange> foldingRange(ASTInfo& AST) {
 
 index::Shared<std::vector<FoldingRange>> indexFoldingRange(ASTInfo& AST) {
     return FoldingRangeCollector(AST, false).buildForIndex(AST);
-
 }  // namespace feature
 
 }  // namespace clice::feature

@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Basic/SourceCode.h"
 #include "Index/Shared.h"
 #include "Support/Enum.h"
