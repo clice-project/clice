@@ -164,11 +164,11 @@ struct InlayHint {
 };
 
 /// Compute inlay hints for MainfileID in given range and config.
-std::vector<InlayHint> inlayHints(proto::Range range, ASTInfo& info);
+std::vector<InlayHint> inlayHints(ASTInfo& AST, proto::Range range, const config::InlayHintOption& option);
 
 /// Same with `inlayHints` but including all fileID, and all options in `config::InlayHintOption`
 /// will be enabled to support index.
-index::Shared<std::vector<InlayHint>> indexInlayHints(ASTInfo& info);
+index::Shared<std::vector<InlayHint>> indexInlayHints(ASTInfo& AST);
 
 }  // namespace feature
 

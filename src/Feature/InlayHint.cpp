@@ -222,15 +222,30 @@ struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
 
     /// Shrink the hint text to the max length.
     static std::string shrinkHintText(std::string text, size_t maxLength) {
-        if(text.size() > maxLength)
+        if(maxLength > 3)
             text.resize(maxLength - 3), text.append("...");
+        else
+            text.resize(maxLength);
 
         text.shrink_to_fit();
         return text;
     }
 
     std::string tryShrinkHintText(std::string text) {
-        return interestedOnly ? shrinkHintText(std::move(text), option.maxLength) : text;
+        // Do not shrink hint text for index, or the max length is unlimited.
+        if(!interestedOnly || option.maxLength == 0) {
+            return text;
+        }
+
+        if(auto max = option.maxLength; text.size() > option.maxLength) {
+            if(max > 3) {
+                text.resize(max - 3), text.append("...");
+            } else {
+                text.resize(max);
+            }
+            text.shrink_to_fit();
+        }
+        return text;
     }
 
     /// Collect hint for variable declared with `auto` keywords.
@@ -902,22 +917,9 @@ struct InlayHintCollector : public FilteredASTVisitor<InlayHintCollector> {
 
 }  // namespace
 
-namespace {
-
-constexpr config::InlayHintOption EnableAll{
-    .maxLength = 0,
-    .maxArrayElements = 0,
-    .dedcucedType = true,
-    .returnType = true,
-    .blockEnd = true,
-    .paramName = true,
-    .typeLink = true,
-    .structSizeAndAlign = true,
-};
-
-}  // namespace
-
-std::vector<InlayHint> inlayHints(proto::Range range, ASTInfo& AST) {
+std::vector<InlayHint> inlayHints(ASTInfo& AST,
+                                  proto::Range range,
+                                  const config::InlayHintOption& option) {
     assert(range.start != range.end && "Invalid range from client.");
 
     // Take 0-0 based Lsp Location from `param.range` and convert it to offset pair.
@@ -933,11 +935,21 @@ std::vector<InlayHint> inlayHints(proto::Range range, ASTInfo& AST) {
     /// Check and fix invalid options before collecting hints.
 
     auto limit = AST.toLocalRange(requestRange).second;
-    auto result = InlayHintCollector::collect(AST, /*interestedOnly=*/true, limit, EnableAll);
+    auto result = InlayHintCollector::collect(AST, /*interestedOnly=*/true, limit, option);
     return std::move(result[AST.getInterestedFile()]);
 }
 
 index::Shared<std::vector<InlayHint>> indexInlayHints(ASTInfo& AST) {
+    constexpr config::InlayHintOption EnableAll{
+        .maxLength = 0,
+        .maxArrayElements = 0,
+        .dedcucedType = true,
+        .returnType = true,
+        .blockEnd = true,
+        .paramName = true,
+        .typeLink = true,
+        .structSizeAndAlign = true,
+    };
     return InlayHintCollector::collect(AST, /*interestedOnly=*/false, std::nullopt, EnableAll);
 }
 
