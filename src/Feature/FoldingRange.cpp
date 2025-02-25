@@ -46,8 +46,30 @@ public:
                                                   : FoldingRangeKind::Enum;
         addRange(decl->getBraceRange(), kind, "{...}");
 
-        if(auto RD = llvm::dyn_cast<clang::RecordDecl>(decl)) {
-            collectAccessSpecDecls(RD);
+        /// Collect public/protected/private blocks for a non-lambda struct/class.
+        if(auto RD = llvm::dyn_cast<clang::CXXRecordDecl>(decl)) {
+            if(RD->isLambda() || RD->isImplicit()) {
+                return true;
+            }
+
+            clang::AccessSpecDecl* last = nullptr;
+            for(auto* decl: RD->decls()) {
+                if(auto* AS = llvm::dyn_cast<clang::AccessSpecDecl>(decl)) {
+                    if(last) {
+                        addRange(
+                            clang::SourceRange(last->getColonLoc(), AS->getAccessSpecifierLoc()),
+                            FoldingRangeKind::AccessSpecifier,
+                            "");
+                    }
+                    last = AS;
+                }
+            }
+
+            if(last) {
+                addRange(clang::SourceRange(last->getColonLoc(), RD->getBraceRange().getEnd()),
+                         FoldingRangeKind::AccessSpecifier,
+                         "");
+            }
         }
 
         return true;
@@ -106,10 +128,11 @@ public:
     }
 
     bool VisitCXXConstructExpr(const clang::CXXConstructExpr* stmt) {
-        if(auto range = stmt->getParenOrBraceRange(); range.isValid())
+        if(auto range = stmt->getParenOrBraceRange(); range.isValid()) {
             addRange({range.getBegin().getLocWithOffset(1), range.getEnd()},
                      FoldingRangeKind::FunctionCall,
                      "(...)");
+        }
         return true;
     }
 
@@ -121,14 +144,16 @@ public:
     }
 
     auto buildForFile(ASTInfo& AST) {
-        collectDrectives(AST.directives());
         TraverseTranslationUnitDecl(AST.tu());
+        collectDrectives(AST.directives()[AST.getInterestedFile()]);
         return std::move(result);
     }
 
     auto buildForIndex(ASTInfo& AST) {
-        collectDrectives(AST.directives());
         TraverseTranslationUnitDecl(AST.tu());
+        for(auto& [fid, directive]: AST.directives()) {
+            collectDrectives(directive);
+        }
         return std::move(indexResult);
     }
 
@@ -143,38 +168,17 @@ private:
         auto [begin, end] = range;
         begin = AST.getExpansionLoc(begin);
         end = AST.getExpansionLoc(end);
+
+        /// If they are from the same macro expansion, skip it.
+        if(begin == end) {
+            return;
+        }
+
         auto [fid, localRange] = AST.toLocalRange(clang::SourceRange(begin, end));
         auto [beginOffset, endOffset] = localRange;
 
         auto& ranges = interestedOnly ? result : indexResult[fid];
         ranges.emplace_back(localRange, kind, std::move(text));
-    }
-
-    /// Collect public/protected/private blocks for a non-lambda struct/class.
-    void collectAccessSpecDecls(const clang::RecordDecl* RD) {
-        const clang::AccessSpecDecl* lastAccess = nullptr;
-
-        for(auto* decl: RD->decls()) {
-            if(auto* AS = llvm::dyn_cast<clang::AccessSpecDecl>(decl)) {
-                if(lastAccess) {
-                    auto spec = AS->getAccessUnsafe();
-                    int offsetToSpecStart = spec == clang::AS_private  ? 7
-                                            : spec == clang::AS_public ? 6
-                                                                       : 9;
-                    addRange({lastAccess->getColonLoc(), AS->getAccessSpecifierLoc()},
-                             FoldingRangeKind::AccessSpecifier,
-                             "");
-                }
-                lastAccess = AS;
-            }
-        }
-
-        // The last access specifier block.
-        if(lastAccess) {
-            addRange({lastAccess->getColonLoc(), RD->getBraceRange().getEnd()},
-                     FoldingRangeKind::AccessSpecifier,
-                     "");
-        }
     }
 
     void collectParameterList(clang::SourceLocation left, clang::SourceLocation right) {
@@ -217,17 +221,12 @@ private:
 
     using ASTDirectives = std::remove_reference_t<decltype(std::declval<ASTInfo>().directives())>;
 
-    void collectDrectives(const ASTDirectives& direcs) {
-        for(auto& [fileid, dirc]: direcs) {
-            if(fileid != AST.getInterestedFile())
-                continue;
+    void collectDrectives(const Directive& directive) {
+        collectConditionMacro(directive.conditions);
+        collectPragmaRegion(directive.pragmas);
 
-            collectConditionMacro(dirc.conditions);
-            collectPragmaRegion(dirc.pragmas);
-
-            /// TODO:
-            /// Collect multiline include statement.
-        }
+        /// TODO:
+        /// Collect multiline include statement.
     }
 
     /// Collect all condition macro's block as folding range.
@@ -285,33 +284,17 @@ private:
     void collectPragmaRegion(const std::vector<Pragma>& pragmas) {
         const auto& SM = AST.srcMgr();
 
-        auto lastLocOfLine = [this, &SM](clang::SourceLocation loc) {
-            auto line = SM.getPresumedLineNumber(loc);
-            return SM.translateLineCol(SM.getMainFileID(), line, LastColOfLine);
-        };
-
-        llvm::SmallVector<const Pragma*> stack = {};
+        llvm::SmallVector<const Pragma*> stack;
         for(auto& pragma: pragmas) {
-            switch(pragma.kind) {
-                case Pragma::Kind::Region: stack.push_back(&pragma); break;
-                case Pragma::Kind::EndRegion:
-                    if(!stack.empty()) {
-                        auto last = stack.pop_back_val();
-                        addRange({lastLocOfLine(last->loc), pragma.loc},
-                                 FoldingRangeKind::Region,
-                                 "");
-                    }
-                    break;
-                default: break;
-            }
-        }
+            if(pragma.kind == Pragma::Region) {
+                stack.push_back(&pragma);
+            } else if(pragma.kind == Pragma::EndRegion) {
+                if(stack.empty()) {
+                    continue;
+                }
 
-        // If there is some region without end pragma, use the end of file as the end region.
-        if(!stack.empty()) {
-            auto eof = SM.getLocForEndOfFile(SM.getMainFileID());
-            while(!stack.empty()) {
                 auto last = stack.pop_back_val();
-                ///  collect({lastLocOfLine(last->loc), eof});
+                addRange(clang::SourceRange(last->loc, pragma.loc), FoldingRangeKind::Region, "");
             }
         }
     }
