@@ -8,10 +8,10 @@ namespace clice {
 
 struct LocalSourceRange {
     /// The begin position offset to the source file.
-    uint32_t begin;
+    uint32_t begin = -1;
 
     /// The end position offset to the source file.
-    uint32_t end;
+    uint32_t end = -1;
 
     constexpr bool operator== (const LocalSourceRange& other) const = default;
 

@@ -119,7 +119,7 @@ struct Pragma {
     /// Kind of the pragma.
     Kind kind;
 
-    /// Location of the pragma token.
+    /// Location of the `#` token.
     clang::SourceLocation loc;
 };
 
