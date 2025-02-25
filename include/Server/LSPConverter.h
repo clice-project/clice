@@ -19,6 +19,8 @@ public:
 
     Result convert(const feature::Hover& hover);
 
+    Result convert(const std::vector<feature::InlayHint>& hints, config::InlayHintOption option);
+
 private:
     proto::PositionEncodingKind kind;
 };

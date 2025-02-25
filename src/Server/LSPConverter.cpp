@@ -290,4 +290,81 @@ LSPConverter::Result LSPConverter::convert(const feature::Hover& hover) {
     co_return json::Value("");
 }
 
+// namespace {
+// //
+// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#inlayHintKind
+// struct LspHintKind : refl::Enum<LspHintKind> {
+//     enum Kind : uint8_t {
+//         Invalid = 0,
+//         Type = 1,
+//         Parameter = 2,
+//     };
+
+//     using Enum::Enum;
+
+//     static LspHintKind fromKind(feature::InlayHintKind kind) {
+//         return kind.isLspTypeKind() ? Type : Parameter;
+//     }
+// };
+
+// //
+// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#inlayHintLabelPart
+// struct LabelPart {
+//     /// The label of the inlay hint.
+//     std::string value;
+
+//     /// The tooltip text when you hover over this label part.  Depending on
+//     /// the client capability `inlayHint.resolveSupport` clients might resolve
+//     /// this property late using the resolve request.
+//     /// TODO:
+//     /// MarkupContent tooltip;
+
+//     /// An optional source code location that represents this label part. This part will become
+//     /// a clickable link that resolves to the definition of the symbol at the given location
+//     /// (not necessarily the location itself), it shows the hover that shows at the given
+//     /// location,
+//     Location location;
+
+//     /// TODO:
+//     // Command command;
+// };
+
+// //
+// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#inlayHint
+// struct InlayHint {
+//     /// The position of this hint.
+//     proto::Position position;
+
+//     /// The label of this hint.
+//     std::vector<LabelPart> lables;
+
+//     /// The kind of this hint.
+//     LspHintKind kind;
+
+//     /// TODO:
+//     /// Optional text edits that are performed when accepting this inlay hint.
+//     // std::vector<TextEdit> textEdits;
+
+//     /// Render padding before the hint.
+//     bool paddingLeft = false;
+
+//     /// Render padding after the hint.
+//     bool paddingRight = false;
+
+//     /// TODO:
+//     // LspAny data;
+// };
+
+// }  // namespace
+
+LSPConverter::Result LSPConverter::convert(const std::vector<feature::InlayHint>& hints,
+                                           const config::InlayHintOption option) {
+    // std::vector<InlayHint> lspHints;
+
+    /// FIXME: Convert `feature::InlayHint` to Json response. Handle the optional field `LabelPart::location`.
+    /// co_return json::serialize(lspHints);
+
+    co_return json::Value("");
+}
+
 }  // namespace clice
