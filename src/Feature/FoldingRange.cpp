@@ -1,7 +1,7 @@
 #include "AST/FilterASTVisitor.h"
-#include "Basic/SourceConverter.h"
 #include "Compiler/Compilation.h"
 #include "Feature/FoldingRange.h"
+#include "Support/Compare.h"
 
 namespace clice::feature {
 
@@ -146,6 +146,7 @@ public:
     auto buildForFile(ASTInfo& AST) {
         TraverseTranslationUnitDecl(AST.tu());
         collectDrectives(AST.directives()[AST.getInterestedFile()]);
+        std::ranges::sort(result, refl::less);
         return std::move(result);
     }
 
@@ -154,6 +155,11 @@ public:
         for(auto& [fid, directive]: AST.directives()) {
             collectDrectives(directive);
         }
+
+        for(auto& [fid, ranges]: indexResult) {
+            std::ranges::sort(ranges, refl::less);
+        }
+
         return std::move(indexResult);
     }
 
@@ -217,7 +223,7 @@ private:
         if(rightParenIter == leftParen.rend())
             return;
 
-        addRange({leftParen.front().location(), rightParenIter->location()},
+        addRange(clang::SourceRange(leftParen.front().location(), rightParenIter->location()),
                  FoldingRangeKind::FunctionParams,
                  "(...)");
     }
