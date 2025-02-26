@@ -3,16 +3,16 @@
 
 namespace clice {
 
-Server::Server() : indexer(database, config::index), scheduler(database, {}) {
-    addMethod("initialize", &Server::onInitialize);
-    addMethod("initialized", &Server::onInitialized);
-    addMethod("shutdown", &Server::onShutdown);
-    addMethod("exit", &Server::onExit);
-
-    addMethod("textDocument/didOpen", &Server::onDidOpen);
-    addMethod("textDocument/didChange", &Server::onDidChange);
-    addMethod("textDocument/didSave", &Server::onDidSave);
-    addMethod("textDocument/didClose", &Server::onDidClose);
+Server::Server() {
+    // addMethod("initialize", &Server::onInitialize);
+    // addMethod("initialized", &Server::onInitialized);
+    // addMethod("shutdown", &Server::onShutdown);
+    // addMethod("exit", &Server::onExit);
+    //
+    // addMethod("textDocument/didOpen", &Server::onDidOpen);
+    // addMethod("textDocument/didChange", &Server::onDidChange);
+    // addMethod("textDocument/didSave", &Server::onDidSave);
+    // addMethod("textDocument/didClose", &Server::onDidClose);
 
     // addMethod("textDocument/declaration", &Server::onGotoDeclaration);
     // addMethod("textDocument/definition", &Server::onGotoDefinition);
@@ -39,42 +39,52 @@ Server::Server() : indexer(database, config::index), scheduler(database, {}) {
     // addMethod("textDocument/formatting", &Server::onFormatting);
     // addMethod("textDocument/rangeFormatting", &Server::onRangeFormatting);
 
-    addMethod("workspace/didChangeWatchedFiles", &Server::onDidChangeWatchedFiles);
-
-    addMethod("index/current", &Server::onIndexCurrent);
-    addMethod("index/all", &Server::onIndexAll);
-    addMethod("context/current", &Server::onContextCurrent);
-    addMethod("context/switch", &Server::onContextSwitch);
-    addMethod("context/all", &Server::onContextAll);
+    // addMethod("workspace/didChangeWatchedFiles", &Server::onDidChangeWatchedFiles);
+    //
+    // addMethod("index/current", &Server::onIndexCurrent);
+    // addMethod("index/all", &Server::onIndexAll);
+    // addMethod("context/current", &Server::onContextCurrent);
+    // addMethod("context/switch", &Server::onContextSwitch);
+    // addMethod("context/all", &Server::onContextAll);
 }
 
 async::Task<> Server::onReceive(json::Value value) {
-    assert(value.kind() == json::Value::Object);
     auto object = value.getAsObject();
-    assert(object && "value is not an object");
-    if(auto method = object->get("method")) {
-        auto name = *method->getAsString();
-        auto params = object->get("params");
-        if(auto id = object->get("id")) {
-            if(auto iter = requests.find(name); iter != requests.end()) {
-                /// auto tracer = Tracer();
-                log::info("Receive request: {0}", name);
-                co_await iter->second(std::move(*id),
-                                      params ? std::move(*params) : json::Value(nullptr));
-                log::info("Request {0} is done, elapsed {1}", name, 0);
+    if(!object) [[unlikely]] {
+        log::fatal("Invalid LSP message, not an object: {}", value);
+    }
 
-            } else {
-                log::warn("Unknown request: {0}", name);
-            }
-        } else {
-            if(auto iter = notifications.find(name); iter != notifications.end()) {
-                log::info("Notification: {0}", name);
-                co_await iter->second(params ? std::move(*params) : json::Value(nullptr));
-            } else {
-                log::warn("Unknown notification: {0}", name);
-            }
+    /// If the json object has an `id`, it's a request,
+    /// which needs a response. Otherwise, it's a notification.
+    auto id = object->get("id");
+
+    llvm::StringRef method;
+    if(auto result = object->getString("method")) {
+        method = *result;
+    } else [[unlikely]] {
+        log::warn("Invalid LSP message, method not found: {}", value);
+        if(id) {
+            co_await response(std::move(*id),
+                              proto::ErrorCodes::InvalidRequest,
+                              "Method not found");
+        }
+        co_return;
+    }
+
+    /// How to forward it to the corresponding method?
+    auto params = object->get("params");
+
+    if(method == "initialize") {
+        co_await initialize(std::move(*params));
+    } else {
+        log::warn("Invalid LSP message, method not found: {}", value);
+        if(id) {
+            co_await response(std::move(*id),
+                              proto::ErrorCodes::MethodNotFound,
+                              "Method not found");
         }
     }
+
     co_return;
 }
 
@@ -98,8 +108,21 @@ async::Task<> Server::notify(llvm::StringRef method, json::Value params) {
 async::Task<> Server::response(json::Value id, json::Value result) {
     co_await async::net::write(json::Object{
         {"jsonrpc", "2.0"            },
-        {"id",      id               },
+        {"id",      std::move(id)    },
         {"result",  std::move(result)},
+    });
+}
+
+async::Task<> Server::response(json::Value id, proto::ErrorCodes code, llvm::StringRef message) {
+    json::Object error{
+        {"code",    static_cast<int>(code)},
+        {"message", message               },
+    };
+
+    co_await async::net::write(json::Object{
+        {"jsonrpc", "2.0"           },
+        {"id",      std::move(id)   },
+        {"error",   std::move(error)},
     });
 }
 
