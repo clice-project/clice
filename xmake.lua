@@ -6,6 +6,7 @@ set_allowedmodes("debug", "release")
 
 option("enable_test", {default = true})
 option("dev", {default = true})
+option("release", {default = false})
 
 if has_config("dev") then
     set_policy("compatibility.version", "3.0")
@@ -23,6 +24,17 @@ if has_config("dev") then
     if has_config("enable_test") then
         add_requires("gtest[main]")
     end
+end
+
+if has_config("release") then
+    set_policy("build.optimization.lto", true)
+    set_policy("package.cmake_generator.ninja", true)
+
+    if is_plat("windows") then
+        set_runtimes("MT")
+    end
+
+    includes("@builtin/xpack")
 end
 
 add_requires("llvm", "libuv", "toml++")
@@ -72,10 +84,6 @@ target("clice")
 
     add_deps("clice-core")
 
-    on_config(function (target)
-        target:add("rpathdirs", path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib"))
-    end)
-
 target("integration_tests")
     set_default(false)
     set_kind("binary")
@@ -97,7 +105,6 @@ target("unit_tests")
     add_tests("default")
     
     on_config(function (target)
-        target:add("rpathdirs", path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib"))
         target:set("runargs", 
             "--test-dir=" .. path.absolute("tests"),
             "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
@@ -118,25 +125,32 @@ rule("clice_build_config")
     end)
 
 package("llvm")
-    if is_plat("windows") then
-        if is_mode("release") then
-            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
-            add_versions("20.0.0", "4ef335845ebb52f8237bda3bcc7246b06085fdf5edc5cc6cf7f3a7c9ef655c09")
-        else
+    if has_config("release") then
+        if is_plat("windows") then
+            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release-lto.7z")
+            add_versions("20.0.0", "c985d60825991eb6c7400be1b9872edf1de929908b12b282829efa52fda4c75c")
+        elseif is_plat("linux") then
+            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release-lto.tar.xz")
+            add_versions("20.0.0", "adeb46c441265a4e442aea1b9d55f3950bc240aa84e2498b106d8dfd64e123cc")
         end
-    elseif is_plat("linux") then
-        if is_mode("debug") then
-            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-debug.tar.xz")
-            add_versions("20.0.0", "7dc045424a9667f20845dec058d211476b84300ebcfc8c3a3aabf41bff37cfd9")
-        elseif is_mode("release") then
-            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
-            add_versions("20.0.0", "30ba7357eb40000f1d13d92242f7d87c3ff623e62205a41d10334d605739af89")
+    else
+        if is_plat("windows") then
+            if is_mode("release") then
+                add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
+                add_versions("20.0.0", "4ef335845ebb52f8237bda3bcc7246b06085fdf5edc5cc6cf7f3a7c9ef655c09")
+            end
+        elseif is_plat("linux") then
+            if is_mode("debug") then
+                add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-debug.tar.xz")
+                add_versions("20.0.0", "7dc045424a9667f20845dec058d211476b84300ebcfc8c3a3aabf41bff37cfd9")
+            elseif is_mode("release") then
+                add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
+                add_versions("20.0.0", "30ba7357eb40000f1d13d92242f7d87c3ff623e62205a41d10334d605739af89")
+            end
         end
     end
 
-    if is_plat("windows") then
-        add_configs("runtimes", {description = "Set compiler runtimes.", default = "MD", readonly = true})
-    elseif is_plat("linux") then
+    if is_plat("linux") then
         if is_mode("debug") then
             add_configs("shared", {description = "Build shared library.", default = true, type = "boolean", readonly = true})
         end
@@ -155,3 +169,25 @@ package("llvm")
         os.mv("lib", package:installdir())
         os.mv("include", package:installdir())
     end)
+
+if has_config("release") then
+    xpack("clice")
+        if is_plat("windows") then
+            set_formats("zip")
+            set_extension(".7z")
+        else
+            set_formats("targz")
+            set_extension(".tar.xz")
+        end
+
+        set_bindir(".")
+        set_prefixdir("clice")
+
+        add_targets("clice")
+        add_installfiles(path.join(os.projectdir(), "docs/clice.toml"))
+
+        on_load(function (package)
+            local llvm_dir = package:target("clice"):dep("clice-core"):pkg("llvm"):installdir()
+            package:add("installfiles", path.join(llvm_dir, "lib/clang/(**)"), {prefixdir = "lib/clang"})
+        end)
+end
