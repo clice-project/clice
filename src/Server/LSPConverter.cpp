@@ -177,6 +177,29 @@ public:
         return position;
     }
 
+    template <typename Range, typename Proj>
+    void toPositions(Range&& range, Proj&& proj) {
+        std::vector<uint32_t> offsets;
+        for(auto&& item: range) {
+            auto [begin, end] = proj(item);
+            offsets.emplace_back(begin);
+            offsets.emplace_back(end);
+        }
+
+        ranges::sort(offsets);
+        ranges::unique(offsets);
+
+        for(auto&& offset: offsets) {
+            toPosition(offset);
+        }
+    }
+
+    proto::Position toPosition2(uint32_t offset) {
+        auto it = cache.find(offset);
+        assert(it != cache.end() && "Offset is not cached");
+        return it->second;
+    }
+
 private:
     std::uint32_t line = 0;
     /// The offset of the last line end.
@@ -185,6 +208,8 @@ private:
     /// The input offset of last call.
     std::uint32_t lastInput = 0;
     proto::Position lastOutput = {0, 0};
+
+    llvm::DenseMap<std::uint32_t, proto::Position> cache;
 
     llvm::StringRef content;
     proto::PositionEncodingKind kind;
@@ -280,6 +305,89 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
 
         lastLine = endLine;
         lastChar = endChar;
+    }
+
+    co_return json::serialize(result);
+}
+
+namespace proto {
+
+/// A set of predefined range kinds.
+enum class FoldingRangeKind {
+    /// Folding range for a comment.
+    Comment,
+
+    /// Folding range for imports or includes.
+    Imports,
+
+    /// Folding range for a region.
+    Region,
+};
+
+/// Represents a folding range. To be valid, start and end line must be bigger
+/// than zero and smaller than the number of lines in the document. Clients
+/// are free to ignore invalid ranges.
+struct FoldingRange {
+    /// The zero-based start line of the range to fold. The folded area starts
+    /// after the line's last character. To be valid, the end must be zero or
+    /// larger and smaller than the number of lines in the document.
+    uint32_t startLine;
+
+    /// The zero-based character offset from where the folded range starts. If
+    /// not defined, defaults to the length of the start line.
+    std::optional<uint32_t> startCharacter;
+
+    /// The zero-based end line of the range to fold. The folded area ends with
+    /// the line's last character. To be valid, the end must be zero or larger
+    /// and smaller than the number of lines in the document.
+    uint32_t endLine;
+
+    /// The zero-based character offset before the folded range ends. If not
+    /// defined, defaults to the length of the end line.
+    std::optional<uint32_t> endCharacter;
+
+    /// Describes the kind of the folding range such as `comment` or `region`.
+    /// The kind is used to categorize folding ranges and used by commands like
+    /// 'Fold all comments'. See [FoldingRangeKind](#FoldingRangeKind) for an
+    /// enumeration of standardized kinds.
+    FoldingRangeKind kind;
+
+    /// The text that the client should show when the specified range is
+    /// collapsed. If not defined or not supported by the client, a default
+    /// will be chosen by the client.
+    ///
+    /// @since 3.17.0 - proposed
+    std::optional<std::string> collapsedText;
+};
+
+}  // namespace proto
+
+LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
+                                           llvm::ArrayRef<feature::FoldingRange> foldings) {
+    auto file = co_await async::fs::read(path.str());
+    if(!file) {
+        co_return json::Value(nullptr);
+    }
+    llvm::StringRef content = *file;
+
+    std::vector<proto::FoldingRange> result;
+
+    PositionConverter converter(content, kind);
+    converter.toPositions(foldings, [](auto&& folding) { return folding.range; });
+
+    for(auto&& folding: foldings) {
+        auto [beginOffset, endOffset] = folding.range;
+        auto [beginLine, beginChar] = converter.toPosition2(beginOffset);
+        auto [endLine, endChar] = converter.toPosition2(endOffset);
+
+        result.emplace_back(proto::FoldingRange{
+            .startLine = beginLine,
+            .startCharacter = beginChar,
+            .endLine = endLine,
+            .endCharacter = endChar,
+            .kind = proto::FoldingRangeKind::Region,
+            .collapsedText = folding.text,
+        });
     }
 
     co_return json::serialize(result);

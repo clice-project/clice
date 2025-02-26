@@ -343,6 +343,12 @@ struct Serde<E> {
     }
 };
 
+template <typename T>
+constexpr inline bool is_optional_v = false;
+
+template <typename T>
+constexpr inline bool is_optional_v<std::optional<T>> = true;
+
 template <refl::reflectable_struct T>
 struct Serde<T> {
     constexpr inline static bool stateful =
@@ -351,9 +357,16 @@ struct Serde<T> {
     template <typename... Serdes>
     static json::Value serialize(const T& t, Serdes&&... serdes) {
         json::Object object;
-        refl::foreach(t, [&](std::string_view name, auto& member) {
-            object.try_emplace(llvm::StringRef(name),
-                               json::serialize(member, std::forward<Serdes>(serdes)...));
+        refl::foreach(t, [&]<typename Field>(std::string_view name, const Field& field) {
+            if constexpr(is_optional_v<Field>) {
+                if(field) {
+                    object.try_emplace(llvm::StringRef(name),
+                                       json::serialize(*field, std::forward<Serdes>(serdes)...));
+                }
+            } else {
+                object.try_emplace(llvm::StringRef(name),
+                                   json::serialize(field, std::forward<Serdes>(serdes)...));
+            }
         });
         return object;
     }

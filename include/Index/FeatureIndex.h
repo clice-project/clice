@@ -4,6 +4,7 @@
 
 #include "Shared.h"
 #include "Feature/SemanticTokens.h"
+#include "Feature/FoldingRange.h"
 
 #include "llvm/ADT/DenseMap.h"
 #include "clang/Basic/SourceLocation.h"
