@@ -406,9 +406,9 @@ $(1)#pragma region level1
 )cpp");
 
     EXPECT_EQ(result.size(), 3);
-    EXPECT_RANGE(0, "3", "4", Region);
+    EXPECT_RANGE(0, "1", "6", Region);
     EXPECT_RANGE(1, "2", "5", Region);
-    EXPECT_RANGE(2, "1", "6", Region);
+    EXPECT_RANGE(2, "3", "4", Region);
 }
 
 }  // namespace

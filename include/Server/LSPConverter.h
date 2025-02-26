@@ -17,7 +17,7 @@ public:
 
     Result convert(llvm::StringRef path, llvm::ArrayRef<feature::SemanticToken> tokens);
 
-    Result convert(llvm::StringRef path, llvm::ArrayRef<feature::FoldingRange> ranges);
+    Result convert(llvm::StringRef path, llvm::ArrayRef<feature::FoldingRange> foldings);
 
     Result convert(const feature::Hover& hover);
 
