@@ -46,29 +46,31 @@ using enum feature::FoldingRangeKind::Kind;
 
 TEST_F(FoldingRange, Namespace) {
     run(R"cpp(
-namespace single_line $(1){ }$(2)
+namespace single_line { }
 
-namespace with_nodes $(3){
-    struct inner $(5){ }$(6);
-}$(4)
+namespace with_nodes $(1){
+    struct inner $(3){ 
+        int x;
+    }$(4);
+}$(2)
 
 namespace strange
-                 $(7){
+                 $(5){
 
-                 }$(8)
+                 }$(6)
 
 #define NS_BEGIN namespace ns {
 #define NS_END }
 
-$(9)NS_BEGIN
-NS_END$(10)
+$(7)NS_BEGIN
+NS_END$(8)
 )cpp");
 
+    EXPECT_EQ(result.size(), 4);
     EXPECT_RANGE(0, "1", "2", Namespace);
     EXPECT_RANGE(1, "3", "4", Namespace);
     EXPECT_RANGE(2, "5", "6", Namespace);
     EXPECT_RANGE(3, "7", "8", Namespace);
-    EXPECT_RANGE(4, "9", "10", Namespace);
 }
 
 TEST_F(FoldingRange, Enum) {
@@ -85,13 +87,13 @@ enum class e2 $(3){
     C
 }$(4);
 
-enum e3 $(5){ D }$(6);
+enum e3 { D };
 
 )cpp");
 
+    EXPECT_EQ(result.size(), 2);
     EXPECT_RANGE(0, "1", "2", Enum);
     EXPECT_RANGE(1, "3", "4", Enum);
-    EXPECT_RANGE(2, "5", "6", Enum);
 }
 
 TEST_F(FoldingRange, Record) {
@@ -101,36 +103,35 @@ struct s1 $(1){
     float y;
 }$(2);
 
-struct s2 $(3){}$(4);
+struct s2 {};
 
 struct s3;
 
-union u1 $(5){
+union u1 $(3){
     int x;
     float y;
+}$(4);
+
+struct u2 $(5){
+    struct s4 $(7){
+
+    }$(8);
 }$(6);
 
-struct u2 $(7){
-    struct s4 $(9){
+void foo() $(9){
+    struct s5 $(11){
 
-    }$(10);
-}$(8);
-
-void foo$(11)()$(12) $(13){
-    struct s5 $(15){
-
-    }$(16);
-}$(14)
+    }$(12);
+}$(10)
 )cpp");
 
+    EXPECT_EQ(result.size(), 6);
     EXPECT_RANGE(0, "1", "2", Struct);
-    EXPECT_RANGE(1, "3", "4", Struct);
-    EXPECT_RANGE(2, "5", "6", Union);
+    EXPECT_RANGE(1, "3", "4", Union);
+    EXPECT_RANGE(2, "5", "6", Struct);
     EXPECT_RANGE(3, "7", "8", Struct);
-    EXPECT_RANGE(4, "9", "10", Struct);
-    EXPECT_RANGE(5, "11", "12", FunctionParams);
-    EXPECT_RANGE(6, "13", "14", FunctionBody);
-    EXPECT_RANGE(7, "15", "16", Struct);
+    EXPECT_RANGE(4, "9", "10", FunctionBody);
+    EXPECT_RANGE(5, "11", "12", Struct);
 }
 
 TEST_F(FoldingRange, Method) {
@@ -139,219 +140,187 @@ struct s2 $(1){
     int x;
     float y;
 
-    s2$(3)()$(4) = default;
+    s2() = default;
 }$(2);
 
 struct s3;
 
-struct s3 $(5){ 
-    void method$(7)()$(8) $(9){ 
+struct s3 $(3){ 
+    void method() $(5){ 
         int x = 0;
-    }$(10)
+    }$(6)
 
-    void parameter$(11)()$(12) $(13){ 
+    void parameter() $(7){ 
  
-    }$(14)
+    }$(8)
 
-    void skip$(15)()$(16) {};
-}$(6);
+    void skip() {};
+}$(4);
 )cpp");
 
+    EXPECT_EQ(result.size(), 4);
     EXPECT_RANGE(0, "1", "2", Struct);
-    EXPECT_RANGE(1, "3", "4", FunctionParams);
-    EXPECT_RANGE(2, "5", "6", Struct);
-    EXPECT_RANGE(3, "7", "8", FunctionParams);
-    EXPECT_RANGE(4, "9", "10", FunctionBody);
-    EXPECT_RANGE(5, "11", "12", FunctionParams);
-    EXPECT_RANGE(6, "13", "14", FunctionBody);
-    EXPECT_RANGE(7, "15", "16", FunctionParams);
+    EXPECT_RANGE(1, "3", "4", Struct);
+    EXPECT_RANGE(2, "5", "6", FunctionBody);
+    EXPECT_RANGE(3, "7", "8", FunctionBody);
 }
 
 TEST_F(FoldingRange, Lambda) {
     run(R"cpp(
 auto z = $(1)[
     x = 0, y = 1
-]$(2) $(3)()$(4) $(5){
+]$(2) () $(3){
 
-}$(6);
+}$(4);
 
 static int array[4];
 
-auto s = $(7)[
+auto s = $(5)[
     x=0, 
     y = 1,
     z = array[
     0],
     k = -1
-]$(8) $(9)()$(10) $(11){ return; }$(12);
+]$(6) () $(7){ 
+    return; 
+}$(8);
 
-auto l1 = $(13)[]$(14) $(15)()$(16) $(17){}$(18);
+auto l1 = [] () {};
 
-auto l2 = $(19)[]$(20) $(21)()$(22) $(23){
-    //
-}$(24);
+auto l2 = [] () $(9){
+   
+}$(10);
 
-auto l3 = $(25)[]$(26) $(27)()$(28) $(29){
-    //
+auto l3 = [] () $(11){
     return 0;
-}$(30);
+}$(12);
 
-auto l4 = $(31)[]$(32) $(33)(
-        int x1,
-        int x2
-)$(34) $(35){}$(36);
-
+auto l4 = [] $(13)(
+    int x1,
+    int x2
+)$(14) {};
 )cpp");
 
+    EXPECT_EQ(result.size(), 7);
     EXPECT_RANGE(0, "1", "2", LambdaCapture);
-    EXPECT_RANGE(1, "3", "4", FunctionParams);
-    EXPECT_RANGE(2, "5", "6", FunctionBody);
-    EXPECT_RANGE(3, "7", "8", LambdaCapture);
-    EXPECT_RANGE(4, "9", "10", FunctionParams);
-    EXPECT_RANGE(5, "11", "12", FunctionBody);
-    EXPECT_RANGE(6, "13", "14", LambdaCapture);
-    EXPECT_RANGE(7, "15", "16", FunctionParams);
-    EXPECT_RANGE(8, "17", "18", FunctionBody);
-    EXPECT_RANGE(9, "19", "20", LambdaCapture);
-    EXPECT_RANGE(10, "21", "22", FunctionParams);
-    EXPECT_RANGE(11, "23", "24", FunctionBody);
-    EXPECT_RANGE(12, "25", "26", LambdaCapture);
-    EXPECT_RANGE(13, "27", "28", FunctionParams);
-    EXPECT_RANGE(14, "29", "30", FunctionBody);
-    EXPECT_RANGE(15, "31", "32", LambdaCapture);
-    EXPECT_RANGE(16, "33", "34", FunctionParams);
-    EXPECT_RANGE(17, "35", "36", FunctionBody);
-}
-
-TEST_F(FoldingRange, FunctionParams) {
-    run(R"cpp(
-void e $(1)()$(2) $(3){}$(4)
-
-void f $(5)(
-
-
-)$(6) $(7){}$(8)
-
-void g $(9)(
-int x,
-int y = 2
-//
-)$(10) $(11){}$(12)
-
-void d $(13)(
-    int p1,
-    int p2,
-    ...
-)$(14);
-)cpp");
-
-    EXPECT_RANGE(0, "1", "2", FunctionParams);
     EXPECT_RANGE(1, "3", "4", FunctionBody);
-    EXPECT_RANGE(2, "5", "6", FunctionParams);
+    EXPECT_RANGE(2, "5", "6", LambdaCapture);
     EXPECT_RANGE(3, "7", "8", FunctionBody);
-    EXPECT_RANGE(4, "9", "10", FunctionParams);
+    EXPECT_RANGE(4, "9", "10", FunctionBody);
     EXPECT_RANGE(5, "11", "12", FunctionBody);
-    EXPECT_RANGE(6, "13", "14", FunctionParams);
+    EXPECT_RANGE(6, "13", "14", FunctionBody);
 }
 
-TEST_F(FoldingRange, FunctionBody) {
+TEST_F(FoldingRange, Function) {
     run(R"cpp(
-void f $(1)()$(2) $(3){
+void e() {};
+
+void f $(1)(
+
+
+)$(2) $(3){
 
 }$(4)
 
-void g $(5)()$(6) $(7){
-    int x = 0;
+void g $(5)(
+    int x,
+    int y = 2
+)$(6) $(7){
+    int z;
 }$(8)
 
-void e $(9)()$(10) $(11){}$(12)
+void h() $(9){
+    int x = 0;
+}$(10)
 
-void n $(13)()$(14) $(15){
-    $(17){
-        
-    }$(18)
-}$(16)
+void i(  ) {   };
+
+void j $(11)(
+    int p1,
+    int p2,
+    ...
+)$(12);
+
+void k() $(13){
+
+}$(14)
 )cpp");
+
+    EXPECT_EQ(result.size(), 7);
     EXPECT_RANGE(0, "1", "2", FunctionParams);
     EXPECT_RANGE(1, "3", "4", FunctionBody);
     EXPECT_RANGE(2, "5", "6", FunctionParams);
     EXPECT_RANGE(3, "7", "8", FunctionBody);
-    EXPECT_RANGE(4, "9", "10", FunctionParams);
-    EXPECT_RANGE(5, "11", "12", FunctionBody);
-    EXPECT_RANGE(6, "13", "14", FunctionParams);
-    EXPECT_RANGE(7, "15", "16", FunctionBody);
-    /// FIXME: Add compound stmt EXPECT_RANGE(8, "17", "18", FunctionBody);
+    EXPECT_RANGE(4, "9", "10", FunctionBody);
+    EXPECT_RANGE(5, "11", "12", FunctionParams);
+    EXPECT_RANGE(6, "13", "14", FunctionBody);
 }
 
 TEST_F(FoldingRange, FunctionCall) {
     run(R"cpp(
-int f $(1)(int p1, int p2, int p3, int p4, int p5, int p6)$(2) $(3){ return p1 + p2; }$(4)
+int f(int p1, int p2, int p3, int p4, int p5, int p6) { return p1 + p2; }
 
-int main $(5)()$(6) $(7){
-
-    int _ = f $(9)(1, (1 + 2), 3, 4, 5, 6)$(10);
-
-    return f $(11)(
-        1, 2, 3, 
+int main() $(1){
+    int x = f(1, 2, 3, 4, 5, 6);
+    
+    int y = f $(2)(
+        1, 2, 3,
         4, 5, 6
-    )$(12);
-}$(8)
+    )$(3);
+
+    return f $(4)(
+        1, 2, 3,
+        4, 5, 6
+    )$(5);
+}$(6)
 )cpp");
 
-    EXPECT_RANGE(0, "1", "2", FunctionParams);
-    EXPECT_RANGE(1, "3", "4", FunctionBody);
-    EXPECT_RANGE(2, "5", "6", FunctionParams);
-    EXPECT_RANGE(3, "7", "8", FunctionBody);
-    EXPECT_RANGE(4, "9", "10", FunctionCall);
-    EXPECT_RANGE(5, "11", "12", FunctionCall);
+    EXPECT_EQ(result.size(), 3);
+    EXPECT_RANGE(0, "1", "6", FunctionBody);
+    EXPECT_RANGE(1, "2", "3", FunctionCall);
+    EXPECT_RANGE(2, "4", "5", FunctionCall);
 }
 
 TEST_F(FoldingRange, CompoundStmt) {
     run(R"cpp(
-int main $(1)()$(2) $(3){
+int main() $(1){
 
-    $(5){
+    $(3){
+        $(5){
+            //
+        }$(6)
+
         $(7){
             //
         }$(8)
 
-        $(9){
-            //
-        }$(10)
-
         //
-    }$(6)
+    }$(4)
 
     return 0;
-}$(4)
+}$(2)
 
 )cpp");
-
-    /// EXPECT_RANGE(0, "1", "2", FunctionParams);
-    /// EXPECT_RANGE(1, "3", "4", FunctionBody);
-    /// EXPECT_RANGE(2, "5", "6", FunctionBody);
-    /// EXPECT_RANGE(3, "7", "8", FunctionBody);
-    /// EXPECT_RANGE(4, "9", "10", FunctionBody);
 }
 
 TEST_F(FoldingRange, InitializeList) {
     run(R"cpp(
-struct L $(1){ int xs[4]; }$(2);
+struct L { int xs[4]; };
 
-L l1 = $(3){
+L l1 = $(1){
     1, 2, 3, 4
-}$(4);
+}$(2);
 
-L l2 = $(5){
+L l2 = $(3){
 //
 //
-}$(6);
+}$(4);
 
 )cpp");
 
-    EXPECT_RANGE(0, "1", "2", Struct);
+    EXPECT_EQ(result.size(), 2);
+    EXPECT_RANGE(0, "1", "2", Initializer);
     EXPECT_RANGE(1, "3", "4", Initializer);
-    EXPECT_RANGE(2, "5", "6", Initializer);
 }
 
 TEST_F(FoldingRange, AccessSpecifier) {
@@ -380,10 +349,8 @@ protected$(10):
 class c3 $(11){
 $(13)PUBLIC
     int a;
-
 $(15)PRIVATE$(14)
     int b;
-
 $(17)PROTECTED$(16)
     int c;
 }$(12);
@@ -418,9 +385,6 @@ TEST_F(FoldingRange, Directive) {
 
 #endif
 )cpp");
-
-    /// EXPECT_EQ(result.size(), 3);
-    /// FIXME: Add directive folding range.
 }
 
 TEST_F(FoldingRange, PragmaRegion) {
@@ -442,7 +406,6 @@ $(1)#pragma region level1
 )cpp");
 
     EXPECT_EQ(result.size(), 3);
-    /// FIXME: Modify Pragma range.
     EXPECT_RANGE(0, "3", "4", Region);
     EXPECT_RANGE(1, "2", "5", Region);
     EXPECT_RANGE(2, "1", "6", Region);

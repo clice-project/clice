@@ -177,6 +177,20 @@ private:
         auto [fid, localRange] = AST.toLocalRange(clang::SourceRange(begin, end));
         auto [beginOffset, endOffset] = localRange;
 
+        bool isSameLine = true;
+        auto content = AST.getFileContent(fid);
+        for(auto i = beginOffset; i < endOffset; ++i) {
+            if(content[i] == '\n') {
+                isSameLine = false;
+                break;
+            }
+        }
+
+        /// TODO: Currently, we only support folding range in different lines.
+        if(isSameLine) {
+            return;
+        }
+
         auto& ranges = interestedOnly ? result : indexResult[fid];
         ranges.emplace_back(localRange, kind, std::move(text));
     }
