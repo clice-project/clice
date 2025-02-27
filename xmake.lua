@@ -123,7 +123,7 @@ rule("clice_build_config")
         target:set("exceptions", "no-cxx")
         if target:is_plat("windows") then
             target:set("toolset", "ar", "llvm-ar")
-            if target:has_tool("cxx", "clang_cl") then
+            if target:toolchain("clang-cl") then
                 target:set("toolset", "ld", "lld-link")
                 target:set("toolset", "sh", "lld-link")
             else
