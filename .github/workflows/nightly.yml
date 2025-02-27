@@ -20,7 +20,7 @@ jobs:
             asset_name: clice-x64-windows-msvc.7z
             toolchain: clang
 
-          - os: ubuntu-20.04
+          - os: ubuntu-24.04
             artifact_name: clice.tar.xz
             asset_name: clice-x86_64-linux-gnu.tar.xz
             toolchain: clang-20
@@ -36,7 +36,7 @@ jobs:
           apps: llvm
 
       - name: Setup llvm & libstdc++ & cmake & ninja
-        if: matrix.os == 'ubuntu-20.04'
+        if: matrix.os == 'ubuntu-24.04'
         run: |
           sudo apt update
           sudo apt install -y gcc-14 g++-14 libstdc++-14-dev
