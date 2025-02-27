@@ -55,10 +55,6 @@ jobs:
           sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-20/bin/clang++ 100
           sudo update-alternatives --install /usr/bin/llvm-ar llvm-ar /usr/lib/llvm-20/bin/llvm-ar 100
           sudo update-alternatives --install /usr/bin/llvm-ranlib llvm-ranlib /usr/lib/llvm-20/bin/llvm-ranlib 100
-          sudo update-alternatives --set clang /usr/bin/clang-20
-          sudo update-alternatives --set clang++ /usr/bin/clang++-20
-          sudo update-alternatives --set llvm-ar /usr/bin/llvm-ar-20
-          sudo update-alternatives --set llvm-ranlib /usr/bin/llvm-ranlib-20
 
       - name: Checkout repository
         uses: actions/checkout@v4
