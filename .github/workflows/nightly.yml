@@ -66,8 +66,8 @@ jobs:
 
       - name: Package
         run: |
-          xmake config --yes -vD --toolchain=${{ matrix.toolchain }} --enable_test=n --dev=n --release=y
-          xmake pack
+          xmake config --yes --toolchain=${{ matrix.toolchain }} --enable_test=n --dev=n --release=y
+          xmake pack -v
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
