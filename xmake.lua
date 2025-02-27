@@ -32,12 +32,16 @@ if has_config("release") then
 
     if is_plat("windows") then
         set_runtimes("MT")
+        -- workaround
+        add_requires("llvm", "libuv[toolchains=clang-cl]", "toml++")
+    else
+        add_requires("llvm", "libuv", "toml++")
     end
 
     includes("@builtin/xpack")
+else
+    add_requires("llvm", "libuv", "toml++")
 end
-
-add_requires("llvm", "libuv", "toml++")
 
 add_rules("mode.release", "mode.debug")
 set_languages("c++23")
