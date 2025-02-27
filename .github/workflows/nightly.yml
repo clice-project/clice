@@ -40,7 +40,8 @@ jobs:
         run: |
           sudo apt remove llvm-16-linker-tools llvm-16 llvm-17-linker-tools llvm-17 llvm-18-linker-tools llvm-18
           sudo apt update
-          sudo apt install -y gcc-14 g++-14 libstdc++-14-dev
+          sudo apt install -y gcc-14 g++-14 libstdc++-14-dev cmake ninja-build
+
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
           sudo update-alternatives --set gcc /usr/bin/gcc-14
@@ -50,7 +51,14 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh 20 all
 
-          sudo apt install -y cmake ninja-build
+          sudo update-alternatives --install /usr/bin/clang clang /usr/lib/llvm-20/bin/clang 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-20/bin/clang++ 100
+          sudo update-alternatives --install /usr/bin/llvm-ar llvm-ar /usr/lib/llvm-20/bin/llvm-ar 100
+          sudo update-alternatives --install /usr/bin/llvm-ranlib llvm-ranlib /usr/lib/llvm-20/bin/llvm-ranlib 100
+          sudo update-alternatives --set clang /usr/bin/clang-20
+          sudo update-alternatives --set clang++ /usr/bin/clang++-20
+          sudo update-alternatives --set llvm-ar /usr/bin/llvm-ar-20
+          sudo update-alternatives --set llvm-ranlib /usr/bin/llvm-ranlib-20
 
       - name: Checkout repository
         uses: actions/checkout@v4
