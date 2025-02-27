@@ -6,9 +6,6 @@ permissions:
 on:
   push:
     branches: [ main ]
-  # test, remove it later
-  pull_request:
-    branches: [ main ]
 
 jobs:
   package:
@@ -67,7 +64,7 @@ jobs:
       - name: Package
         run: |
           xmake config --yes --toolchain=${{ matrix.toolchain }} --enable_test=n --dev=n --release=y
-          xmake pack -v
+          xmake pack
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
