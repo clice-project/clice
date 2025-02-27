@@ -30,8 +30,6 @@ if has_config("release") then
     set_policy("build.optimization.lto", true)
     set_policy("package.cmake_generator.ninja", true)
 
-    add_ldflags("-flto=thin", {force = true})
-
     if is_plat("windows") then
         set_runtimes("MT")
         -- workaround
