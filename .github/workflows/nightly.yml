@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: windows-2025
+          - os: windows-2022
             artifact_name: clice.7z
             asset_name: clice-x64-windows-msvc.7z
             toolchain: clang
@@ -28,12 +28,12 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      # - name: Setup llvm
-      #   if: matrix.os == 'windows-2025'
-      #   uses: MinoruSekine/setup-scoop@v4.0.1
-      #   with:
-      #     buckets: main
-      #     apps: llvm
+      - name: Setup llvm
+        if: matrix.os == 'windows-2022'
+        uses: MinoruSekine/setup-scoop@v4.0.1
+        with:
+          buckets: main
+          apps: llvm
 
       - name: Setup llvm & libstdc++ & cmake & ninja
         if: matrix.os == 'ubuntu-24.04'

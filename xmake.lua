@@ -122,7 +122,13 @@ rule("clice_build_config")
         target:add("cxflags", "/GR-", {tools = {"clang_cl", "cl"}})
         target:set("exceptions", "no-cxx")
         if target:is_plat("windows") then
-            target:add("ldflags", "-fuse-ld=lld-link")
+            target:set("toolset", "ar", "llvm-ar")
+            if target:has_tool("cxx", "clang_cl") then
+                target:set("toolset", "ld", "lld-link")
+                target:set("toolset", "sh", "lld-link")
+            else
+                target:add("ldflags", "-fuse-ld=lld-link")
+            end
         elseif target:is_plat("linux") then
             -- gnu ld need to fix link order
             target:add("ldflags", "-fuse-ld=lld")
