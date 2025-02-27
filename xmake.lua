@@ -33,7 +33,8 @@ if has_config("release") then
     if is_plat("windows") then
         set_runtimes("MT")
         -- workaround
-        add_requires("llvm", "libuv[toolchains=clang-cl]", "toml++")
+        add_requires("libuv-lto[toolchains=clang-cl]", {alias = "libuv"})
+        add_requires("llvm", "toml++")
     else
         add_requires("llvm", "libuv", "toml++")
     end
@@ -175,6 +176,11 @@ package("llvm")
     end)
 
 if has_config("release") then
+    -- workaround xmake bug
+    package("libuv-lto")
+        set_base("libuv")
+        on_test(function (package) end)
+
     xpack("clice")
         if is_plat("windows") then
             set_formats("zip")
