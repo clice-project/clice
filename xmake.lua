@@ -26,23 +26,22 @@ if has_config("dev") then
     end
 end
 
+local libuv_require = "libuv"
+
 if has_config("release") then
     set_policy("build.optimization.lto", true)
     set_policy("package.cmake_generator.ninja", true)
 
     if is_plat("windows") then
         set_runtimes("MT")
-        -- workaround
-        add_requires("libuv-lto[toolchains=clang-cl]", {alias = "libuv"})
-        add_requires("llvm", "toml++")
-    else
-        add_requires("llvm", "libuv", "toml++")
+        -- workaround cmake
+        libuv_require = "libuv[toolchains=clang-cl]"
     end
 
     includes("@builtin/xpack")
-else
-    add_requires("llvm", "libuv", "toml++")
 end
+
+add_requires("llvm", libuv_require, "toml++")
 
 add_rules("mode.release", "mode.debug")
 set_languages("c++23")
@@ -182,11 +181,6 @@ package("llvm")
     end)
 
 if has_config("release") then
-    -- workaround xmake bug
-    package("libuv-lto")
-        set_base("libuv")
-        on_test(function (package) end)
-
     xpack("clice")
         if is_plat("windows") then
             set_formats("zip")
