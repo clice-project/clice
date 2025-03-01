@@ -1,61 +1,101 @@
 #include "Support/Logger.h"
 #include "Server/Server.h"
+#include "Support/Format.h"
+
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/CommandLine.h"
 
-using namespace clice;
+namespace cl = llvm::cl;
 
-namespace cl {
+namespace {
 
-llvm::cl::opt<std::string> config("config",
-                                  llvm::cl::desc("The path of the config file"),
-                                  llvm::cl::value_desc("path"));
+static cl::OptionCategory category("clice options");
 
-llvm::cl::opt<std::string> mode("mode", llvm::cl::desc("Use pipe mode"));
+cl::opt<std::string>
+    mode("mode",
+         cl::cat(category),
+         cl::value_desc("pipe|socket|indexer"),
+         cl::desc("The mode of clice, default is pipe, socket is usually used for debugging"));
 
-llvm::cl::opt<std::string> resource_dir("resource-dir", llvm::cl::desc("Resource dir path"));
+cl::opt<std::string> config_path(
+    "config",
+    cl::cat(category),
+    cl::value_desc("path"),
+    cl::desc(
+        "The path of the clice config file, if not specified, the default config will be used"));
 
-}  // namespace cl
+cl::opt<std::string> resource_dir(
+    "resource-dir",
+    cl::cat(category),
+    cl::value_desc("path"),
+    cl::desc(R"(The path of the clang resource directory, default is "../../lib/clang/version")"));
 
-int main(int argc, const char** argv) {
+void printVersion(llvm::raw_ostream& os) {
+    os << std::format("clice version: {}\n", clice::config::version)
+       << std::format("llvm version: {}\n", clice::config::llvm_version);
+}
+
+int checkArguments(int argc, const char** argv) {
+    cl::SetVersionPrinter(printVersion);
+    cl::ParseCommandLineOptions(argc,
+                                argv,
+                                "clice is a new generation of language server for C/C++");
+
     for(int i = 0; i < argc; ++i) {
-        log::info("argv[{0}] = {1}", i, argv[i]);
+        clice::log::info("argv[{0}] = {1}", i, argv[i]);
     }
 
-    llvm::cl::SetVersionPrinter([](llvm::raw_ostream& os) { os << "clice version: 0.0.1\n"; });
-    llvm::cl::ParseCommandLineOptions(argc, argv, "clice language server");
-
-    if(cl::config.empty()) {
-        log::warn("No config file specified; using default configuration.");
+    if(::config_path.empty()) {
+        clice::log::info("No config file specified; using default configuration.");
     } else {
-        config::load(argv[0], cl::config.getValue());
-        log::info("Successfully loaded configuration file from {0}.", cl::config.getValue());
+        clice::config::load(argv[0], config_path.getValue());
+        clice::log::info("Successfully loaded configuration file from {0}.",
+                         config_path.getValue());
     }
 
     /// Get the resource directory.
-    if(!cl::resource_dir.empty()) {
-        fs::resource_dir = cl::resource_dir.getValue();
+    if(!resource_dir.empty()) {
+        clice::fs::resource_dir = resource_dir.getValue();
     } else {
-        if(auto error = fs::init_resource_dir(argv[0])) {
-            log::fatal("Failed to get resource directory, because {0}", error);
-            return 1;
+        clice::log::info("No resource directory specified; using default resource directory.");
+        if(auto result = clice::fs::init_resource_dir(argv[0]); !result) {
+            clice::log::warn("Cannot find default resource directory, because {}", result.error());
+            return -1;
         }
     }
 
-    static Server server;
-    auto loop = [](json::Value value) -> async::Task<> {
-        co_await server.onReceive(value);
-    };
+    return 0;
+}
 
-    async::init();
+}  // namespace
 
-    if(cl::mode == "pipe") {
-        async::net::listen(loop);
-        log::info("Server starts listening on stdin/stdout");
-    } else if(cl::mode == "socket") {
-        async::net::listen("127.0.0.1", 50051, loop);
-        log::info("Server starts listening on {}:{}", "127.0.0.1", 50051);
+int main(int argc, const char** argv) {
+    llvm::InitLLVM guard(argc, argv);
+    llvm::setBugReportMsg(
+        "Please report bugs to https://github.com/clice-project/clice/issues and include the crash backtrace");
+
+    /// Hide unrelated options.
+    cl::HideUnrelatedOptions(category);
+
+    if(int error = checkArguments(argc, argv); error != 0) {
+        return error;
     }
 
-    async::run();
+    // static clice::Server server;
+    // auto loop = [](json::Value value) -> async::Task<> {
+    //     co_await server.onReceive(value);
+    // };
+    //
+    // async::init();
+    //
+    // if(mode == "pipe") {
+    //    async::net::listen(loop);
+    //    clice::log::info("Server starts listening on stdin/stdout");
+    //} else if(mode == "socket") {
+    //    async::net::listen("127.0.0.1", 50051, loop);
+    //    clice::log::info("Server starts listening on {}:{}", "127.0.0.1", 50051);
+    //}
+    //
+    // async::run();
 }
 
