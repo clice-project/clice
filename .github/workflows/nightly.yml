@@ -6,6 +6,8 @@ permissions:
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   package:
@@ -47,9 +49,6 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 20 all
-
-          sudo update-alternatives --install /usr/bin/ar ar /usr/lib/llvm-20/bin/llvm-ar 20
-          sudo update-alternatives --install /usr/bin/ranlib ranlib /usr/lib/llvm-20/bin/llvm-ranlib 20
 
       - name: Checkout repository
         uses: actions/checkout@v4
