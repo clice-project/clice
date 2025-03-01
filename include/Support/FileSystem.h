@@ -38,15 +38,15 @@ using namespace llvm::sys::fs;
 
 inline std::string resource_dir = "";
 
-inline llvm::Error init_resource_dir(llvm::StringRef execute) {
+inline std::expected<void, std::error_code> init_resource_dir(llvm::StringRef execute) {
     llvm::SmallString<128> path;
     path::append(path, path::parent_path(execute), "..");
     path::append(path, "lib", "clang", "20");
     if(auto error = real_path(path, path)) {
-        return llvm::make_error<llvm::StringError>(error.message(), error);
+        return std::unexpected(error);
     }
     resource_dir = path.str();
-    return llvm::Error::success();
+    return std::expected<void, std::error_code>();
 }
 
 inline std::expected<std::string, std::error_code> createTemporaryFile(llvm::StringRef prefix,
