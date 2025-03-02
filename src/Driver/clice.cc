@@ -91,9 +91,6 @@ bool checkArguments(int argc, const char** argv) {
 
 }  // namespace
 
-/// The global server instance.
-static Server instance;
-
 int main(int argc, const char** argv) {
     llvm::InitLLVM guard(argc, argv);
     llvm::setBugReportMsg(
@@ -105,6 +102,8 @@ int main(int argc, const char** argv) {
 
     async::init();
 
+    /// The global server instance.
+    static Server instance;
     auto loop = [&](json::Value value) -> async::Task<> {
         co_await instance.onReceive(value);
     };
@@ -123,5 +122,7 @@ int main(int argc, const char** argv) {
     }
 
     async::run();
+
+    return 0;
 }
 
