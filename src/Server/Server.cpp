@@ -3,50 +3,7 @@
 
 namespace clice {
 
-Server::Server() {
-    // addMethod("initialize", &Server::onInitialize);
-    // addMethod("initialized", &Server::onInitialized);
-    // addMethod("shutdown", &Server::onShutdown);
-    // addMethod("exit", &Server::onExit);
-    //
-    // addMethod("textDocument/didOpen", &Server::onDidOpen);
-    // addMethod("textDocument/didChange", &Server::onDidChange);
-    // addMethod("textDocument/didSave", &Server::onDidSave);
-    // addMethod("textDocument/didClose", &Server::onDidClose);
-
-    // addMethod("textDocument/declaration", &Server::onGotoDeclaration);
-    // addMethod("textDocument/definition", &Server::onGotoDefinition);
-    // addMethod("textDocument/typeDefinition", &Server::onGotoTypeDefinition);
-    // addMethod("textDocument/implementation", &Server::onGotoImplementation);
-    // addMethod("textDocument/references", &Server::onFindReferences);
-    // addMethod("textDocument/callHierarchy/prepare", &Server::onPrepareCallHierarchy);
-    // addMethod("textDocument/callHierarchy/incomingCalls", &Server::onIncomingCall);
-    // addMethod("textDocument/callHierarchy/outgoingCalls", &Server::onOutgoingCall);
-    // addMethod("textDocument/typeHierarchy/prepare", &Server::onPrepareTypeHierarchy);
-    // addMethod("textDocument/typeHierarchy/supertypes", &Server::onSupertypes);
-    // addMethod("textDocument/typeHierarchy/subtypes", &Server::onSubtypes);
-    // addMethod("textDocument/documentHighlight", &Server::onDocumentHighlight);
-    // addMethod("textDocument/documentLink", &Server::onDocumentLink);
-    // addMethod("textDocument/hover", &Server::onHover);
-    // addMethod("textDocument/codeLens", &Server::onCodeLens);
-    // addMethod("textDocument/foldingRange", &Server::onFoldingRange);
-    // addMethod("textDocument/documentSymbol", &Server::onDocumentSymbol);
-    // addMethod("textDocument/semanticTokens/full", &Server::onSemanticTokens);
-    // addMethod("textDocument/inlayHint", &Server::onInlayHint);
-    // addMethod("textDocument/completion", &Server::onCodeCompletion);
-    // addMethod("textDocument/signatureHelp", &Server::onSignatureHelp);
-    // addMethod("textDocument/codeAction", &Server::onCodeAction);
-    // addMethod("textDocument/formatting", &Server::onFormatting);
-    // addMethod("textDocument/rangeFormatting", &Server::onRangeFormatting);
-
-    // addMethod("workspace/didChangeWatchedFiles", &Server::onDidChangeWatchedFiles);
-    //
-    // addMethod("index/current", &Server::onIndexCurrent);
-    // addMethod("index/all", &Server::onIndexAll);
-    // addMethod("context/current", &Server::onContextCurrent);
-    // addMethod("context/switch", &Server::onContextSwitch);
-    // addMethod("context/all", &Server::onContextAll);
-}
+Server::Server() {}
 
 async::Task<> Server::onReceive(json::Value value) {
     auto object = value.getAsObject();
@@ -71,20 +28,36 @@ async::Task<> Server::onReceive(json::Value value) {
         co_return;
     }
 
-    /// How to forward it to the corresponding method?
-    auto params = object->get("params");
-
-    if(method == "initialize") {
-        co_await initialize(std::move(*params));
-    } else {
-        log::warn("Invalid LSP message, method not found: {}", value);
-        if(id) {
-            co_await response(std::move(*id),
-                              proto::ErrorCodes::MethodNotFound,
-                              "Method not found");
-        }
+    json::Value params = json::Value(nullptr);
+    if(auto result = object->get("params")) {
+        params = std::move(*result);
     }
 
+    /// Handle request and notification separately.
+    /// TODO: Record the time of handling request and notification.
+    if(id) {
+        log::info("Handling request: {}", method);
+        auto result = co_await handleRequest(method, std::move(params));
+        co_await response(std::move(*id), std::move(result));
+        log::info("Handled request: {}", method);
+    } else {
+        log::info("Handling notification: {}", method);
+        co_await handleNotification(method, std::move(params));
+        log::info("Handled notification: {}", method);
+    }
+
+    co_return;
+}
+
+async::Task<json::Value> Server::handleRequest(llvm::StringRef name, json::Value params) {
+    if(name == "initialize") {
+        co_return converter.initialize(std::move(params));
+    } else {
+        co_return json::Value(nullptr);
+    }
+}
+
+async::Task<> Server::handleNotification(llvm::StringRef name, json::Value value) {
     co_return;
 }
 

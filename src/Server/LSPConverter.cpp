@@ -1,4 +1,5 @@
 #include "Server/LSPConverter.h"
+#include "Basic/SourceConverter.h"
 
 namespace clice {
 
@@ -136,8 +137,8 @@ std::uint32_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kin
 
 class PositionConverter {
 public:
-    PositionConverter(llvm::StringRef content, proto::PositionEncodingKind kind) :
-        content(content), kind(kind) {}
+    PositionConverter(llvm::StringRef content, proto::PositionEncodingKind encoding) :
+        content(content), encoding(encoding) {}
 
     /// Convert a offset to a proto::Position with given encoding.
     /// The input offset must be UTF-8 encoded and in order.
@@ -167,7 +168,7 @@ public:
         auto lineContent = content.substr(lastLineOffset, lineLength);
         auto position = proto::Position{
             .line = line,
-            .character = remeasure(lineContent, kind),
+            .character = remeasure(lineContent, encoding),
         };
 
         /// Cache the result.
@@ -212,10 +213,27 @@ private:
     llvm::DenseMap<std::uint32_t, proto::Position> cache;
 
     llvm::StringRef content;
-    proto::PositionEncodingKind kind;
+    proto::PositionEncodingKind encoding;
 };
 
 }  // namespace
+
+json::Value LSPConverter::initialize(json::Value value) {
+    params = json::deserialize<proto::InitializeParams>(value);
+
+    proto::InitializeResult result = {};
+    result.serverInfo.name = "clice";
+    result.serverInfo.version = "0.0.1";
+
+    return json::serialize(result);
+}
+
+llvm::StringRef LSPConverter::workspace() {
+    if(workspacePath.empty()) {
+        workspacePath = SourceConverter::toPath(params.workspaceFolders[0].uri);
+    }
+    return workspacePath;
+}
 
 LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
                                            llvm::ArrayRef<feature::SemanticToken> tokens) {
@@ -247,7 +265,7 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
 
     SemanticTokens result;
 
-    PositionConverter converter(content, kind);
+    PositionConverter converter(content, encoding());
     std::uint32_t lastLine = 0;
     std::uint32_t lastChar = 0;
 
@@ -288,7 +306,7 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
                     }
 
                     std::uint32_t length =
-                        remeasure(subContent.substr(lastLineOffset, lineLength), kind);
+                        remeasure(subContent.substr(lastLineOffset, lineLength), encoding());
                     result.add(line, character, length, token.kind, token.modifiers);
 
                     lastLineOffset += lineLength;
@@ -298,7 +316,7 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
 
             /// Process the last line if it's not empty.
             if(lineLength > 0) {
-                std::uint32_t length = remeasure(subContent.substr(lastLineOffset), kind);
+                std::uint32_t length = remeasure(subContent.substr(lastLineOffset), encoding());
                 result.add(1, 0, length, token.kind, token.modifiers);
             }
         }
@@ -372,7 +390,7 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
 
     std::vector<proto::FoldingRange> result;
 
-    PositionConverter converter(content, kind);
+    PositionConverter converter(content, encoding());
     converter.toPositions(foldings, [](auto&& folding) { return folding.range; });
 
     for(auto&& folding: foldings) {

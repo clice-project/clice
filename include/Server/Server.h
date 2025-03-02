@@ -73,6 +73,10 @@ public:
 
     async::Task<> onReceive(json::Value value);
 
+    async::Task<json::Value> handleRequest(llvm::StringRef name, json::Value params);
+
+    async::Task<> handleNotification(llvm::StringRef name, json::Value value);
+
 private:
     /// Send a request to the client.
     async::Task<> request(llvm::StringRef method, json::Value params);
@@ -102,6 +106,8 @@ public:
     /// CompilationDatabase database;
     /// Indexer indexer;
     /// Scheduler scheduler;
+
+    LSPConverter converter;
 };
 
 }  // namespace clice
