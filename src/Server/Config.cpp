@@ -73,19 +73,18 @@ static void parse(Object& object, auto&& value) {
     }
 }
 
-void load(llvm::StringRef execute, llvm::StringRef filename) {
+std::expected<void, std::string> load(llvm::StringRef execute, llvm::StringRef filename) {
     predefined["version"] = "0.0.1";
     predefined["binary"] = execute;
     predefined["llvm_version"] = "20";
 
     auto toml = toml::parse_file(filename);
     if(toml.failed()) {
-        log::fatal("Failed to parse config file: {0}. Because: {1}",
-                   filename,
-                   toml.error().description());
+        return std::unexpected<std::string>(toml.error().description());
     }
 
     parse(config, toml.table());
+    return {};
 }
 
 /// replace all predefined variables in the text.
