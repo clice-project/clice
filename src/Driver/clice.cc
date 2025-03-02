@@ -72,7 +72,7 @@ bool checkArguments(int argc, const char** argv) {
         log::info("No resource directory specified, using default resource directory");
         // Try to initialize default resource directory
         if(auto result = fs::init_resource_dir(argv[0]); !result) {
-            log::warn("Cannot find default resource directory because {}", result.error());
+            log::warn("Cannot find default resource directory, because {}", result.error());
             return false;
         }
     } else {
@@ -91,6 +91,9 @@ bool checkArguments(int argc, const char** argv) {
 
 }  // namespace
 
+/// The global server instance.
+static Server instance;
+
 int main(int argc, const char** argv) {
     llvm::InitLLVM guard(argc, argv);
     llvm::setBugReportMsg(
@@ -100,21 +103,25 @@ int main(int argc, const char** argv) {
         return 1;
     }
 
-    // static clice::Server server;
-    // auto loop = [](json::Value value) -> async::Task<> {
-    //     co_await server.onReceive(value);
-    // };
-    //
-    // async::init();
-    //
-    // if(mode == "pipe") {
-    //    async::net::listen(loop);
-    //    clice::log::info("Server starts listening on stdin/stdout");
-    //} else if(mode == "socket") {
-    //    async::net::listen("127.0.0.1", 50051, loop);
-    //    clice::log::info("Server starts listening on {}:{}", "127.0.0.1", 50051);
-    //}
-    //
-    // async::run();
+    async::init();
+
+    auto loop = [&](json::Value value) -> async::Task<> {
+        co_await instance.onReceive(value);
+    };
+
+    if(mode == "pipe") {
+        async::net::listen(loop);
+        log::info("Server starts listening on stdin/stdout");
+    } else if(mode == "socket") {
+        async::net::listen("127.0.0.1", 50051, loop);
+        log::info("Server starts listening on {}:{}", "127.0.0.1", 50051);
+    } else if(mode == "indexer") {
+        /// TODO:
+    } else {
+        log::fatal("Invalid mode: {}", mode.getValue());
+        return 1;
+    }
+
+    async::run();
 }
 
