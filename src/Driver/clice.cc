@@ -6,6 +6,7 @@
 #include "llvm/Support/CommandLine.h"
 
 namespace cl = llvm::cl;
+using namespace clice;
 
 namespace {
 
@@ -35,36 +36,57 @@ void printVersion(llvm::raw_ostream& os) {
        << std::format("llvm version: {}\n", clice::config::llvm_version);
 }
 
-int checkArguments(int argc, const char** argv) {
+/// Check the command line arguments and initialize the clice.
+bool checkArguments(int argc, const char** argv) {
+    /// Hide unrelated options.
+    cl::HideUnrelatedOptions(category);
+
+    // Set version printer and parse command line options
     cl::SetVersionPrinter(printVersion);
     cl::ParseCommandLineOptions(argc,
                                 argv,
                                 "clice is a new generation of language server for C/C++");
 
     for(int i = 0; i < argc; ++i) {
-        clice::log::info("argv[{0}] = {1}", i, argv[i]);
+        log::info("argv[{}] = {}", i, argv[i]);
     }
 
-    if(::config_path.empty()) {
-        clice::log::info("No config file specified; using default configuration.");
+    // Handle configuration file loading
+    if(config_path.empty()) {
+        log::info("No configuration file specified, using default settings");
     } else {
-        clice::config::load(argv[0], config_path.getValue());
-        clice::log::info("Successfully loaded configuration file from {0}.",
-                         config_path.getValue());
-    }
-
-    /// Get the resource directory.
-    if(!resource_dir.empty()) {
-        clice::fs::resource_dir = resource_dir.getValue();
-    } else {
-        clice::log::info("No resource directory specified; using default resource directory.");
-        if(auto result = clice::fs::init_resource_dir(argv[0]); !result) {
-            clice::log::warn("Cannot find default resource directory, because {}", result.error());
-            return -1;
+        llvm::StringRef path = config_path;
+        // Try to load the configuration file and check the result
+        if(auto result = config::load(argv[0], path); result) {
+            log::info("Configuration file loaded successfully from: {}", path);
+        } else {
+            log::warn("Failed to load configuration file from: {} because {}",
+                      path,
+                      result.error());
+            return false;
         }
     }
 
-    return 0;
+    // Initialize resource directory
+    if(resource_dir.empty()) {
+        log::info("No resource directory specified, using default resource directory");
+        // Try to initialize default resource directory
+        if(auto result = fs::init_resource_dir(argv[0]); !result) {
+            log::warn("Cannot find default resource directory because {}", result.error());
+            return false;
+        }
+    } else {
+        // Set and check the specified resource directory
+        fs::resource_dir = resource_dir.getValue();
+        if(fs::exists(fs::resource_dir)) {
+            log::info("Resource directory found: {}", fs::resource_dir);
+        } else {
+            log::warn("Resource directory not found: {}", fs::resource_dir);
+            return false;
+        }
+    }
+
+    return true;
 }
 
 }  // namespace
@@ -74,11 +96,8 @@ int main(int argc, const char** argv) {
     llvm::setBugReportMsg(
         "Please report bugs to https://github.com/clice-project/clice/issues and include the crash backtrace");
 
-    /// Hide unrelated options.
-    cl::HideUnrelatedOptions(category);
-
-    if(int error = checkArguments(argc, argv); error != 0) {
-        return error;
+    if(!checkArguments(argc, argv)) {
+        return 1;
     }
 
     // static clice::Server server;
