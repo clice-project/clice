@@ -9,4 +9,9 @@ struct SemanticTokensParams {
     TextDocumentIdentifier textDocument;
 };
 
+struct FoldingRangeParams {
+    /// The text document.
+    TextDocumentIdentifier textDocument;
+};
+
 }  // namespace clice::proto

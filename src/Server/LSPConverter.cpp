@@ -188,10 +188,11 @@ public:
         }
 
         ranges::sort(offsets);
-        ranges::unique(offsets);
 
         for(auto&& offset: offsets) {
-            toPosition(offset);
+            if(auto it = cache.find(offset); it == cache.end()) {
+                cache.try_emplace(offset, toPosition(offset));
+            }
         }
     }
 
@@ -228,7 +229,7 @@ json::Value LSPConverter::initialize(json::Value value) {
     auto& semantictokens = result.capabilities.semanticTokensProvider;
     for(auto& name: SymbolKind::all()) {
         std::string type{name};
-        type[0] = std::toupper(type[0]);
+        type[0] = std::tolower(type[0]);
         semantictokens.legend.tokenTypes.emplace_back(std::move(type));
     }
 
@@ -266,7 +267,9 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
             data.emplace_back(character);
             data.emplace_back(length);
             data.emplace_back(kind.value());
-            data.emplace_back(modifiers.value());
+
+            /// FIXME: Add modifiers.
+            data.emplace_back(0);
         }
     };
 
@@ -409,7 +412,8 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
             .startLine = beginLine,
             .startCharacter = beginChar,
             .endLine = endLine,
-            .endCharacter = endChar,
+            /// FIXME: Figure out how to handle end character.
+            .endCharacter = endChar - 1,
             .kind = proto::FoldingRangeKind::Region,
             .collapsedText = folding.text,
         });

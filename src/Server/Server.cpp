@@ -67,6 +67,11 @@ async::Task<json::Value> Server::handleRequest(llvm::StringRef method, json::Val
             auto path = SourceConverter::toPath(params2.textDocument.uri);
             auto tokens = co_await indexer.semanticTokens(path);
             co_return co_await converter.convert(path, tokens);
+        } else if(method == "foldingRange") {
+            auto params2 = json::deserialize<proto::FoldingRangeParams>(params);
+            auto path = SourceConverter::toPath(params2.textDocument.uri);
+            auto foldings = co_await indexer.foldingRanges(path);
+            co_return co_await converter.convert(path, foldings);
         }
     }
 

@@ -118,6 +118,9 @@ struct ServerCapabilities {
 
     /// The server provides semantic tokens support.
     SemanticTokensOptions semanticTokensProvider;
+
+    /// The server provides folding provider support.
+    bool foldingRangeProvider = true;
 };
 
 struct InitializeResult {
