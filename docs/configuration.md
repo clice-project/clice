@@ -177,3 +177,41 @@ If `index.instantiation` is `true`, clice will traverse declarations in template
 
 If `index.instantiation` is `false`, clice will not index entities inside template instantiations, and `go-to-definition` will return no results.
 <br>
+
+## Feature
+
+### Semantic Tokens
+
+| Name                                 | Type               | Default |
+| ------------------------------------ | ------------------ | ------- |
+| `feature.semanticTokens.typeMap`     | `array` of `table` | `[]`    |
+| `feature.semanticTokens.modifierMap` | `array` of `table` | `[]`    |
+
+Maps the customized semantic symbol kinds or modifier to LSP semantic token types or modifiers.
+
+Example:
+
+```toml
+[feature.semanticTokens]
+typeMap = [
+    {"from": "header", "to": "string"},
+    {"from": "attribute", "to": "decorator"},
+]
+
+modifierMap = [
+    {"from": "const", "to": "readonly"},
+    {"from": "pureVirtual", "to": "abstract"},
+]
+```
+
+For all clice symbol kinds, please refer to [SymbolKind](https://github.com/clice-project/clice/blob/main/include/AST/SymbolKind.h). The first letter of the name should be translated to lowercase. For all LSP semantic token types, refer to [SemanticTokenKind](https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocument_semanticTokens).
+
+
+| Name                              | Type      | Default |
+| --------------------------------- | --------- | ------- |
+| `feature.semanticTokens.standard` | `boolean` | `false` |
+
+If `true`, clice will map the semantic token types and modifiers to the standard ones automatically.
+
+### Folding Range
+
