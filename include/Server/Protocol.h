@@ -1,3 +1,12 @@
 #pragma once
 
-#include "Basic/Lifecycle.h" 
+#include "Basic/Lifecycle.h"
+
+namespace clice::proto {
+
+struct SemanticTokensParams {
+    /// The text document.
+    TextDocumentIdentifier textDocument;
+};
+
+}  // namespace clice::proto

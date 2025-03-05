@@ -266,21 +266,18 @@ public:
 
     using underlying_type = underlying;
 
-    constexpr Enum(underlying value) : m_Value(value) {
+    constexpr Enum(underlying value) {
         static_assert(
             requires { Derived::All; },
             "Derived enum must define all possible enum values.");
 
-        auto check = [](auto value) {
-            for(auto kind: Derived::All) {
-                if(kind == value) {
-                    return true;
-                }
+        for(auto& element: Derived::All) {
+            if(element == value) {
+                m_Value = element;
             }
-            return false;
-        };
+        }
 
-        assert(check(value) && "Invalid enum value.");
+        assert(!m_Value.empty() && "Invalid enum value.");
     }
 
     constexpr Enum(const Enum&) = default;

@@ -113,4 +113,53 @@ async::Task<> Indexer::index(std::string file) {
     tasks.try_emplace(file, std::move(next));
 }
 
+async::Task<std::optional<index::FeatureIndex>>
+    Indexer::getFeatureIndex(std::string& buffer, llvm::StringRef file) const {
+    std::string path;
+    if(auto tu = tus.find(file); tu != tus.end()) {
+        path = tu->second->indexPath;
+    }
+
+    if(auto header = headers.find(file); header != headers.end()) {
+        for(auto&& index: header->second->indices) {
+            path = index.path;
+            break;
+        }
+    }
+
+    auto content = co_await async::fs::read(path + ".fidx");
+    if(!content) {
+        co_return std::nullopt;
+    }
+
+    buffer = std::move(*content);
+
+    co_return index::FeatureIndex(buffer.data(), buffer.size(), false);
+}
+
+async::Task<std::vector<feature::SemanticToken>>
+    Indexer::semanticTokens(llvm::StringRef file) const {
+    std::vector<feature::SemanticToken> result;
+
+    std::string buffer;
+    auto index = co_await getFeatureIndex(buffer, file);
+    if(!index) {
+        co_return result;
+    }
+
+    co_return index->semanticTokens();
+}
+
+async::Task<std::vector<feature::FoldingRange>> Indexer::foldingRanges(llvm::StringRef file) const {
+    std::vector<feature::FoldingRange> result;
+
+    std::string buffer;
+    auto index = co_await getFeatureIndex(buffer, file);
+    if(!index) {
+        co_return result;
+    }
+
+    co_return index->foldingRanges();
+}
+
 }  // namespace clice

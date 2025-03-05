@@ -73,9 +73,9 @@ public:
 
     async::Task<> onReceive(json::Value value);
 
-    async::Task<json::Value> handleRequest(llvm::StringRef name, json::Value params);
+    async::Task<json::Value> handleRequest(llvm::StringRef method, json::Value params);
 
-    async::Task<> handleNotification(llvm::StringRef name, json::Value value);
+    async::Task<> handleNotification(llvm::StringRef method, json::Value value);
 
 private:
     /// Send a request to the client.
@@ -99,15 +99,9 @@ private:
 
 public:
     std::uint32_t id = 0;
-    // Indexer indexer;
-    // LSPConverter& converter;
-
-    /// SourceConverter converter;
-    /// CompilationDatabase database;
-    /// Indexer indexer;
-    /// Scheduler scheduler;
-
+    Indexer indexer;
     LSPConverter converter;
+    CompilationDatabase database;
 };
 
 }  // namespace clice

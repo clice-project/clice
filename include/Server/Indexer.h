@@ -1,14 +1,13 @@
 #pragma once
 
 #include "Config.h"
-#include "Compiler/Command.h"
-#include "Async/Async.h"
-#include "llvm/ADT/StringSet.h"
 #include "IncludeGraph.h"
+#include "Async/Async.h"
+#include "Compiler/Command.h"
+#include "Index/FeatureIndex.h"
+#include "llvm/ADT/StringSet.h"
 
 namespace clice {
-
-class IncludeGraph;
 
 class Indexer : public IncludeGraph {
 public:
@@ -25,6 +24,13 @@ public:
     void save();
 
     void load();
+
+    async::Task<std::optional<index::FeatureIndex>> getFeatureIndex(std::string& buffer,
+                                                                    llvm::StringRef file) const;
+
+    async::Task<std::vector<feature::SemanticToken>> semanticTokens(llvm::StringRef file) const;
+
+    async::Task<std::vector<feature::FoldingRange>> foldingRanges(llvm::StringRef file) const;
 
 private:
     async::Task<> index(std::string file);

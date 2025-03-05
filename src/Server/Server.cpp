@@ -3,7 +3,7 @@
 
 namespace clice {
 
-Server::Server() {}
+Server::Server() : indexer(database, config::index) {}
 
 async::Task<> Server::onReceive(json::Value value) {
     auto object = value.getAsObject();
@@ -49,15 +49,37 @@ async::Task<> Server::onReceive(json::Value value) {
     co_return;
 }
 
-async::Task<json::Value> Server::handleRequest(llvm::StringRef name, json::Value params) {
-    if(name == "initialize") {
-        co_return converter.initialize(std::move(params));
-    } else {
-        co_return json::Value(nullptr);
+async::Task<json::Value> Server::handleRequest(llvm::StringRef method, json::Value params) {
+    if(method == "initialize") {
+        auto result = converter.initialize(std::move(params));
+        config::init(converter.workspace());
+
+        /// FIXME: Use a better way to handle compile commands.
+        for(auto&& dir: config::server.compile_commands_dirs) {
+            database.updateCommands(dir + "/compile_commands.json");
+        }
+
+        co_return result;
+    } else if(method.consume_front("textDocument/")) {
+
+        if(method == "semanticTokens/full") {
+            auto params2 = json::deserialize<proto::SemanticTokensParams>(params);
+            auto path = SourceConverter::toPath(params2.textDocument.uri);
+            auto tokens = co_await indexer.semanticTokens(path);
+            co_return co_await converter.convert(path, tokens);
+        }
     }
+
+    co_return json::Value(nullptr);
 }
 
-async::Task<> Server::handleNotification(llvm::StringRef name, json::Value value) {
+async::Task<> Server::handleNotification(llvm::StringRef method, json::Value value) {
+    if(method.consume_front("index/")) {
+        if(method == "all") {
+            indexer.indexAll();
+        }
+    }
+
     co_return;
 }
 

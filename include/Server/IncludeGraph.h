@@ -200,7 +200,7 @@ private:
                                 TranslationUnit* tu,
                                 llvm::DenseMap<clang::FileID, uint32_t>& files);
 
-private:
+protected:
     const config::IndexOptions& options;
     llvm::StringMap<Header*> headers;
     llvm::StringMap<TranslationUnit*> tus;

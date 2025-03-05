@@ -225,6 +225,13 @@ json::Value LSPConverter::initialize(json::Value value) {
     result.serverInfo.name = "clice";
     result.serverInfo.version = "0.0.1";
 
+    auto& semantictokens = result.capabilities.semanticTokensProvider;
+    for(auto& name: SymbolKind::all()) {
+        std::string type{name};
+        type[0] = std::toupper(type[0]);
+        semantictokens.legend.tokenTypes.emplace_back(std::move(type));
+    }
+
     return json::serialize(result);
 }
 
@@ -322,7 +329,7 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
         }
 
         lastLine = endLine;
-        lastChar = endChar;
+        lastChar = beginChar;
     }
 
     co_return json::serialize(result);
