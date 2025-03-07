@@ -73,9 +73,20 @@ public:
 
     async::Task<> onReceive(json::Value value);
 
-    async::Task<json::Value> handleRequest(llvm::StringRef method, json::Value params);
+    /// Handle requests, a request must have a response.
+    async::Task<json::Value> onRequest(llvm::StringRef method, json::Value value);
 
-    async::Task<> handleNotification(llvm::StringRef method, json::Value value);
+    /// Handle requests started with `textDocument/`.
+    async::Task<json::Value> onTextDocument(llvm::StringRef method, json::Value value);
+
+    /// Handle requests started with `context/`.
+    async::Task<json::Value> onContext(llvm::StringRef method, json::Value value);
+
+    /// Handle requests started with `index/`.
+    async::Task<json::Value> onIndex(llvm::StringRef method, json::Value value);
+
+    /// Handle notifications, a notification doesn't require response.
+    async::Task<> onNotification(llvm::StringRef method, json::Value value);
 
 private:
     /// Send a request to the client.

@@ -37,21 +37,21 @@ async::Task<> Server::onReceive(json::Value value) {
     /// TODO: Record the time of handling request and notification.
     if(id) {
         log::info("Handling request: {}", method);
-        auto result = co_await handleRequest(method, std::move(params));
+        auto result = co_await onRequest(method, std::move(params));
         co_await response(std::move(*id), std::move(result));
         log::info("Handled request: {}", method);
     } else {
         log::info("Handling notification: {}", method);
-        co_await handleNotification(method, std::move(params));
+        co_await onNotification(method, std::move(params));
         log::info("Handled notification: {}", method);
     }
 
     co_return;
 }
 
-async::Task<json::Value> Server::handleRequest(llvm::StringRef method, json::Value params) {
+async::Task<json::Value> Server::onRequest(llvm::StringRef method, json::Value value) {
     if(method == "initialize") {
-        auto result = converter.initialize(std::move(params));
+        auto result = converter.initialize(std::move(value));
         config::init(converter.workspace());
 
         /// FIXME: Use a better way to handle compile commands.
@@ -62,38 +62,55 @@ async::Task<json::Value> Server::handleRequest(llvm::StringRef method, json::Val
         co_return json::serialize(result);
 
     } else if(method.consume_front("textDocument/")) {
-
-        if(method == "semanticTokens/full") {
-            auto params2 = json::deserialize<proto::SemanticTokensParams>(params);
-            auto path = SourceConverter::toPath(params2.textDocument.uri);
-            auto tokens = co_await indexer.semanticTokens(path);
-            co_return co_await converter.convert(path, tokens);
-        } else if(method == "foldingRange") {
-            auto params2 = json::deserialize<proto::FoldingRangeParams>(params);
-            auto path = SourceConverter::toPath(params2.textDocument.uri);
-            auto foldings = co_await indexer.foldingRanges(path);
-            co_return co_await converter.convert(path, foldings);
-        }
-    } else if(method.consume_front("index/")) {
-
+        co_return co_await onTextDocument(method, std::move(value));
     } else if(method.consume_front("context/")) {
-        if(method == "current") {
-            auto param2 = json::deserialize<proto::TextDocumentParams>(params);
-            auto path = SourceConverter::toURI(param2.textDocument.uri);
-            auto result = indexer.contextCurrent(path);
-            co_return result ? json::serialize(*result) : json::Value(nullptr);
-        } else if(method == "switch") {
-        } else if(method == "all") {
-            auto param2 = json::deserialize<proto::TextDocumentParams>(params);
-            auto path = SourceConverter::toURI(param2.textDocument.uri);
-            auto result = indexer.contextAll(path);
-        }
+        co_return co_await onIndex(method, std::move(value));
+    } else if(method.consume_front("index/")) {
+        co_return co_await onContext(method, std::move(value));
     }
 
     co_return json::Value(nullptr);
 }
 
-async::Task<> Server::handleNotification(llvm::StringRef method, json::Value value) {
+async::Task<json::Value> Server::onTextDocument(llvm::StringRef method, json::Value value) {
+    if(method == "semanticTokens/full") {
+        auto params2 = json::deserialize<proto::SemanticTokensParams>(value);
+        auto path = SourceConverter::toPath(params2.textDocument.uri);
+        auto tokens = co_await indexer.semanticTokens(path);
+        co_return co_await converter.convert(path, tokens);
+    } else if(method == "foldingRange") {
+        auto params2 = json::deserialize<proto::FoldingRangeParams>(value);
+        auto path = SourceConverter::toPath(params2.textDocument.uri);
+        auto foldings = co_await indexer.foldingRanges(path);
+        co_return co_await converter.convert(path, foldings);
+    }
+
+    co_return json::Value(nullptr);
+}
+
+async::Task<json::Value> Server::onContext(llvm::StringRef method, json::Value value) {
+    if(method == "current") {
+        auto param2 = json::deserialize<proto::TextDocumentParams>(value);
+        auto path = SourceConverter::toURI(param2.textDocument.uri);
+        auto result = indexer.contextCurrent(path);
+        co_return result ? json::serialize(*result) : json::Value(nullptr);
+    } else if(method == "switch") {
+    } else if(method == "all") {
+        auto param2 = json::deserialize<proto::TextDocumentParams>(value);
+        auto path = SourceConverter::toURI(param2.textDocument.uri);
+        auto result = indexer.contextAll(path);
+    } else if(method == "resolve") {
+        /// indexer.contextResolve()
+    }
+
+    co_return json::Value(nullptr);
+}
+
+async::Task<json::Value> Server::onIndex(llvm::StringRef method, json::Value value) {
+    co_return json::Value(nullptr);
+}
+
+async::Task<> Server::onNotification(llvm::StringRef method, json::Value value) {
     if(method.consume_front("index/")) {
         if(method == "all") {
             indexer.indexAll();
