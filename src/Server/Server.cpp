@@ -81,7 +81,7 @@ async::Task<json::Value> Server::handleRequest(llvm::StringRef method, json::Val
             auto param2 = json::deserialize<proto::TextDocumentParams>(params);
             auto path = SourceConverter::toURI(param2.textDocument.uri);
             auto result = indexer.contextCurrent(path);
-            co_return json::serialize(result);
+            co_return result ? json::serialize(*result) : json::Value(nullptr);
         } else if(method == "switch") {
         } else if(method == "all") {
             auto param2 = json::deserialize<proto::TextDocumentParams>(params);
