@@ -219,7 +219,7 @@ private:
 
 }  // namespace
 
-json::Value LSPConverter::initialize(json::Value value) {
+proto::InitializeResult LSPConverter::initialize(json::Value value) {
     params = json::deserialize<proto::InitializeParams>(value);
 
     proto::InitializeResult result = {};
@@ -233,7 +233,7 @@ json::Value LSPConverter::initialize(json::Value value) {
         semantictokens.legend.tokenTypes.emplace_back(std::move(type));
     }
 
-    return json::serialize(result);
+    return result;
 }
 
 llvm::StringRef LSPConverter::workspace() {
@@ -243,37 +243,23 @@ llvm::StringRef LSPConverter::workspace() {
     return workspacePath;
 }
 
-LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
-                                           llvm::ArrayRef<feature::SemanticToken> tokens) {
-    /// FIXME: Use a better way to handle file content.
-    auto file = co_await async::fs::read(path.str());
-    if(!file) {
-        co_return json::Value(nullptr);
-    }
-    llvm::StringRef content = *file;
+proto::SemanticTokens LSPConverter::transform(llvm::StringRef content,
+                                              llvm::ArrayRef<feature::SemanticToken> tokens) {
+    proto::SemanticTokens result;
 
-    struct SemanticTokens {
-        /// The actual tokens.
-        std::vector<std::uint32_t> data;
+    auto addGroup = [&](uint32_t line,
+                        uint32_t character,
+                        uint32_t length,
+                        SymbolKind kind,
+                        SymbolModifiers modifiers) {
+        result.data.emplace_back(line);
+        result.data.emplace_back(character);
+        result.data.emplace_back(length);
+        result.data.emplace_back(kind.value());
 
-        void add(std::uint32_t line,
-                 std::uint32_t character,
-                 std::uint32_t length,
-                 SymbolKind kind,
-                 SymbolModifiers modifiers) {
-            /// FIXME: Add a map between lsp kinds and our kinds.
-            /// [line, character, length, tokenType, tokenModifiers]
-            data.emplace_back(line);
-            data.emplace_back(character);
-            data.emplace_back(length);
-            data.emplace_back(kind.value());
-
-            /// FIXME: Add modifiers.
-            data.emplace_back(0);
-        }
+        /// FIXME:
+        result.data.emplace_back(0);
     };
-
-    SemanticTokens result;
 
     PositionConverter converter(content, encoding());
     std::uint32_t lastLine = 0;
@@ -288,7 +274,7 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
             std::uint32_t line = beginLine - lastLine;
             std::uint32_t character = (line == 0 ? beginChar - lastChar : beginChar);
             std::uint32_t length = endChar - beginChar;
-            result.add(line, character, length, token.kind, token.modifiers);
+            addGroup(line, character, length, token.kind, token.modifiers);
         } else {
             /// If the token spans multiple lines, split it into multiple tokens.
             auto subContent = content.substr(beginOffset, endOffset - beginOffset);
@@ -317,7 +303,7 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
 
                     std::uint32_t length =
                         remeasure(subContent.substr(lastLineOffset, lineLength), encoding());
-                    result.add(line, character, length, token.kind, token.modifiers);
+                    addGroup(line, character, length, token.kind, token.modifiers);
 
                     lastLineOffset += lineLength;
                     lineLength = 0;
@@ -327,7 +313,7 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
             /// Process the last line if it's not empty.
             if(lineLength > 0) {
                 std::uint32_t length = remeasure(subContent.substr(lastLineOffset), encoding());
-                result.add(1, 0, length, token.kind, token.modifiers);
+                addGroup(1, 0, length, token.kind, token.modifiers);
             }
         }
 
@@ -335,69 +321,12 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
         lastChar = beginChar;
     }
 
-    co_return json::serialize(result);
+    return result;
 }
 
-namespace proto {
-
-/// A set of predefined range kinds.
-enum class FoldingRangeKind {
-    /// Folding range for a comment.
-    Comment,
-
-    /// Folding range for imports or includes.
-    Imports,
-
-    /// Folding range for a region.
-    Region,
-};
-
-/// Represents a folding range. To be valid, start and end line must be bigger
-/// than zero and smaller than the number of lines in the document. Clients
-/// are free to ignore invalid ranges.
-struct FoldingRange {
-    /// The zero-based start line of the range to fold. The folded area starts
-    /// after the line's last character. To be valid, the end must be zero or
-    /// larger and smaller than the number of lines in the document.
-    uint32_t startLine;
-
-    /// The zero-based character offset from where the folded range starts. If
-    /// not defined, defaults to the length of the start line.
-    std::optional<uint32_t> startCharacter;
-
-    /// The zero-based end line of the range to fold. The folded area ends with
-    /// the line's last character. To be valid, the end must be zero or larger
-    /// and smaller than the number of lines in the document.
-    uint32_t endLine;
-
-    /// The zero-based character offset before the folded range ends. If not
-    /// defined, defaults to the length of the end line.
-    std::optional<uint32_t> endCharacter;
-
-    /// Describes the kind of the folding range such as `comment` or `region`.
-    /// The kind is used to categorize folding ranges and used by commands like
-    /// 'Fold all comments'. See [FoldingRangeKind](#FoldingRangeKind) for an
-    /// enumeration of standardized kinds.
-    FoldingRangeKind kind;
-
-    /// The text that the client should show when the specified range is
-    /// collapsed. If not defined or not supported by the client, a default
-    /// will be chosen by the client.
-    ///
-    /// @since 3.17.0 - proposed
-    std::optional<std::string> collapsedText;
-};
-
-}  // namespace proto
-
-LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
-                                           llvm::ArrayRef<feature::FoldingRange> foldings) {
-    auto file = co_await async::fs::read(path.str());
-    if(!file) {
-        co_return json::Value(nullptr);
-    }
-    llvm::StringRef content = *file;
-
+std::vector<proto::FoldingRange>
+    LSPConverter::transform(llvm::StringRef content,
+                            llvm::ArrayRef<feature::FoldingRange> foldings) {
     std::vector<proto::FoldingRange> result;
 
     PositionConverter converter(content, encoding());
@@ -419,7 +348,27 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
         });
     }
 
-    co_return json::serialize(result);
+    return result;
+}
+
+LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
+                                           llvm::ArrayRef<feature::SemanticToken> tokens) {
+    auto file = co_await async::fs::read(path.str());
+    if(!file) {
+        co_return json::Value(nullptr);
+    }
+    llvm::StringRef content = *file;
+    co_return json::serialize(transform(content, tokens));
+}
+
+LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
+                                           llvm::ArrayRef<feature::FoldingRange> foldings) {
+    auto file = co_await async::fs::read(path.str());
+    if(!file) {
+        co_return json::Value(nullptr);
+    }
+    llvm::StringRef content = *file;
+    co_return json::serialize(transform(content, foldings));
 }
 
 LSPConverter::Result LSPConverter::convert(const feature::Hover& hover) {

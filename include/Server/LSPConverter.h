@@ -16,7 +16,7 @@ class LSPConverter {
 public:
     using Result = async::Task<json::Value>;
 
-    json::Value initialize(json::Value value);
+    proto::InitializeResult initialize(json::Value value);
 
     auto encoding() {
         return params.capabilities.general.positionEncodings[0];
@@ -30,6 +30,12 @@ public:
     llvm::StringRef workspace();
 
 public:
+    proto::SemanticTokens transform(llvm::StringRef content,
+                                    llvm::ArrayRef<feature::SemanticToken> tokens);
+
+    std::vector<proto::FoldingRange> transform(llvm::StringRef content,
+                                               llvm::ArrayRef<feature::FoldingRange> foldings);
+
     Result convert(llvm::StringRef path, llvm::ArrayRef<feature::SemanticToken> tokens);
 
     Result convert(llvm::StringRef path, llvm::ArrayRef<feature::FoldingRange> foldings);

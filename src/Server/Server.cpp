@@ -59,7 +59,8 @@ async::Task<json::Value> Server::handleRequest(llvm::StringRef method, json::Val
             database.updateCommands(dir + "/compile_commands.json");
         }
 
-        co_return result;
+        co_return json::serialize(result);
+
     } else if(method.consume_front("textDocument/")) {
 
         if(method == "semanticTokens/full") {
@@ -72,6 +73,20 @@ async::Task<json::Value> Server::handleRequest(llvm::StringRef method, json::Val
             auto path = SourceConverter::toPath(params2.textDocument.uri);
             auto foldings = co_await indexer.foldingRanges(path);
             co_return co_await converter.convert(path, foldings);
+        }
+    } else if(method.consume_front("index/")) {
+
+    } else if(method.consume_front("context/")) {
+        if(method == "current") {
+            auto param2 = json::deserialize<proto::TextDocumentParams>(params);
+            auto path = SourceConverter::toURI(param2.textDocument.uri);
+            auto result = indexer.contextCurrent(path);
+            co_return json::serialize(result);
+        } else if(method == "switch") {
+        } else if(method == "all") {
+            auto param2 = json::deserialize<proto::TextDocumentParams>(params);
+            auto path = SourceConverter::toURI(param2.textDocument.uri);
+            auto result = indexer.contextAll(path);
         }
     }
 
