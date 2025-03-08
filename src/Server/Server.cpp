@@ -62,14 +62,14 @@ async::Task<json::Value> Server::onRequest(llvm::StringRef method, json::Value v
         indexer.load();
 
         co_return json::serialize(result);
-    } else if(method.starts_with("exit")) {
+    } else if(method == "shutdown") {
         indexer.save();
     } else if(method.consume_front("textDocument/")) {
         co_return co_await onTextDocument(method, std::move(value));
     } else if(method.consume_front("context/")) {
-        co_return co_await onIndex(method, std::move(value));
-    } else if(method.consume_front("index/")) {
         co_return co_await onContext(method, std::move(value));
+    } else if(method.consume_front("index/")) {
+        co_return co_await onIndex(method, std::move(value));
     }
 
     co_return json::Value(nullptr);
@@ -94,16 +94,20 @@ async::Task<json::Value> Server::onTextDocument(llvm::StringRef method, json::Va
 async::Task<json::Value> Server::onContext(llvm::StringRef method, json::Value value) {
     if(method == "current") {
         auto param2 = json::deserialize<proto::TextDocumentParams>(value);
-        auto path = SourceConverter::toURI(param2.textDocument.uri);
-        // auto result = indexer.currentContext(path);
-        // co_return result.valid() ? json::serialize(result) : json::Value(nullptr);
+        auto path = SourceConverter::toPath(param2.textDocument.uri);
+        auto result = indexer.currentContext(path);
+        co_return result ? json::serialize(*result) : json::Value(nullptr);
     } else if(method == "switch") {
+        auto params = json::deserialize<proto::HeaderContextParams>(value);
+        indexer.switchContext(params.header, params.context);
     } else if(method == "all") {
         auto param2 = json::deserialize<proto::TextDocumentParams>(value);
-        auto path = SourceConverter::toURI(param2.textDocument.uri);
-        /// auto result = indexer.contextAll(path);
+        auto path = SourceConverter::toPath(param2.textDocument.uri);
+        auto result = indexer.allContexts(path);
+        co_return json::serialize(result);
     } else if(method == "resolve") {
-        /// indexer.contextResolve()
+        co_return json::serialize(
+            indexer.resolveContext(json::deserialize<proto::HeaderContext>(value)));
     }
 
     co_return json::Value(nullptr);

@@ -39,4 +39,6 @@ using SemanticTokensParams = TextDocumentParams;
 
 using FoldingRangeParams = TextDocumentParams;
 
+
+
 }  // namespace clice::proto

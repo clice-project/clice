@@ -72,12 +72,22 @@ struct TranslationUnit {
     uint32_t version = 0;
 };
 
+struct HeaderContext {
+    TranslationUnit* tu = nullptr;
+    
+    Context context;
+
+    bool valid() {
+        return tu != nullptr;
+    }
+};
+
 struct Header {
     /// The path of the header file.
     std::string srcPath;
 
     /// The active header context.
-    /// HeaderContext active;
+    HeaderContext active;
 
     /// All indices of the header.
     std::vector<HeaderIndex> indices;
@@ -114,20 +124,6 @@ protected:
     json::Value dump();
 
     async::Task<> index(llvm::StringRef file, CompilationDatabase& database);
-
-public:
-    /// Return all header context of the given file.
-    /// FIXME: The results are grouped by the index file. And a header actually
-    /// may have thousands of contexts, of course, users don't want to see all
-    /// of them. For each index file, we return the first 10 contexts. In the future
-    /// we may add a parameter to control the number of contexts or set filter.
-    /// proto::HeaderContextGroups contextAll(llvm::StringRef file);
-
-    /// Switch to the given header context.
-    /// void contextSwitch(const proto::HeaderContext& context);
-
-    /// Resolve the header context to the include chain.
-    /// std::vector<proto::IncludeLocation> contextResolve(const proto::HeaderContext& context);
 
 private:
     struct SymbolID {

@@ -113,22 +113,126 @@ async::Task<> Indexer::index(std::string file) {
     tasks.try_emplace(file, std::move(next));
 }
 
-// HeaderContext Indexer::currentContext(llvm::StringRef file) {
-//     auto it = headers.find(file);
-//     if(it == headers.end()) {
-//         return HeaderContext{};
-//     }
-//
-//     auto header = it->second;
-//     return header->active;
-// }
-//
-// bool Indexer::switchContext(llvm::StringRef header, HeaderContext context) {
-//     auto it = tus.find(context.file);
-//     if(it == tus.end()) {
-//         return false;
-//     }
-// }
+Header* Indexer::getHeader(llvm::StringRef file) const {
+    auto it = headers.find(file);
+    if(it == headers.end()) {
+        return nullptr;
+    }
+    return it->second;
+}
+
+TranslationUnit* Indexer::getTranslationUnit(llvm::StringRef file) const {
+    auto it = tus.find(file);
+    if(it == tus.end()) {
+        return nullptr;
+    }
+    return it->second;
+}
+
+std::optional<proto::HeaderContext> Indexer::currentContext(llvm::StringRef file) const {
+    auto header = getHeader(file);
+    if(!header || !header->active.valid()) {
+        return std::nullopt;
+    }
+
+    auto& active = header->active;
+    return proto::HeaderContext{
+        .file = active.tu->srcPath,
+        .version = active.tu->version,
+        .include = active.context.include,
+    };
+}
+
+bool Indexer::switchContext(llvm::StringRef headerFile, proto::HeaderContext context) {
+    Header* header = getHeader(headerFile);
+    if(!header) {
+        return false;
+    }
+
+    TranslationUnit* tu = getTranslationUnit(context.file);
+    if(!tu || tu->version != context.version) {
+        return false;
+    }
+
+    auto index = header->getIndex(tu, context.include);
+    if(!index) {
+        return false;
+    }
+
+    header->active = HeaderContext{
+        .tu = tu,
+        .context = {.index = *index, .include = context.include},
+    };
+
+    return true;
+}
+
+std::vector<proto::IncludeLocation> Indexer::resolveContext(proto::HeaderContext context) const {
+    auto tu = getTranslationUnit(context.file);
+    if(!tu || tu->version != context.version) {
+        return {};
+    }
+
+    auto include = context.include;
+    auto& locations = tu->locations;
+    if(locations.size() <= include) [[unlikely]] {
+        /// FIXME: This should never occur, we should log.
+        return {};
+    }
+
+    std::vector<proto::IncludeLocation> result;
+    while(include != -1) {
+        auto& location = locations[include];
+        result.emplace_back(proto::IncludeLocation{
+            .line = location.line,
+            .filename = pathPool[location.filename],
+        });
+        include = location.include;
+    }
+    return result;
+}
+
+std::vector<std::vector<proto::HeaderContext>> Indexer::allContexts(llvm::StringRef headerFile,
+                                                                    uint32_t limit,
+                                                                    llvm::StringRef contextFile) {
+    auto header = getHeader(headerFile);
+    if(!header) {
+        return {};
+    }
+
+    llvm::DenseMap<uint32_t, std::vector<proto::HeaderContext>> groups;
+
+    if(auto tu = getTranslationUnit(contextFile)) {
+        for(auto context: header->contexts[tu]) {
+            groups[context.index].emplace_back(proto::HeaderContext{
+                .file = tu->srcPath,
+                .version = tu->version,
+                .include = context.include,
+            });
+        }
+    } else {
+        for(auto&& [tu, contexts]: header->contexts) {
+            for(auto& context: contexts) {
+                auto& group = groups[context.index];
+                if(group.size() >= 10) {
+                    continue;
+                }
+
+                group.emplace_back(proto::HeaderContext{
+                    .file = tu->srcPath,
+                    .version = tu->version,
+                    .include = context.include,
+                });
+            }
+        }
+    }
+
+    std::vector<std::vector<proto::HeaderContext>> result;
+    for(auto& [_, group]: groups) {
+        result.emplace_back(std::move(group));
+    }
+    return result;
+}
 
 async::Task<std::optional<index::FeatureIndex>>
     Indexer::getFeatureIndex(std::string& buffer, llvm::StringRef file) const {
