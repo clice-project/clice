@@ -59,8 +59,11 @@ async::Task<json::Value> Server::onRequest(llvm::StringRef method, json::Value v
             database.updateCommands(dir + "/compile_commands.json");
         }
 
-        co_return json::serialize(result);
+        indexer.load();
 
+        co_return json::serialize(result);
+    } else if(method.starts_with("exit")) {
+        indexer.save();
     } else if(method.consume_front("textDocument/")) {
         co_return co_await onTextDocument(method, std::move(value));
     } else if(method.consume_front("context/")) {
@@ -92,13 +95,13 @@ async::Task<json::Value> Server::onContext(llvm::StringRef method, json::Value v
     if(method == "current") {
         auto param2 = json::deserialize<proto::TextDocumentParams>(value);
         auto path = SourceConverter::toURI(param2.textDocument.uri);
-        auto result = indexer.contextCurrent(path);
-        co_return result ? json::serialize(*result) : json::Value(nullptr);
+        // auto result = indexer.currentContext(path);
+        // co_return result.valid() ? json::serialize(result) : json::Value(nullptr);
     } else if(method == "switch") {
     } else if(method == "all") {
         auto param2 = json::deserialize<proto::TextDocumentParams>(value);
         auto path = SourceConverter::toURI(param2.textDocument.uri);
-        auto result = indexer.contextAll(path);
+        /// auto result = indexer.contextAll(path);
     } else if(method == "resolve") {
         /// indexer.contextResolve()
     }

@@ -113,6 +113,23 @@ async::Task<> Indexer::index(std::string file) {
     tasks.try_emplace(file, std::move(next));
 }
 
+// HeaderContext Indexer::currentContext(llvm::StringRef file) {
+//     auto it = headers.find(file);
+//     if(it == headers.end()) {
+//         return HeaderContext{};
+//     }
+//
+//     auto header = it->second;
+//     return header->active;
+// }
+//
+// bool Indexer::switchContext(llvm::StringRef header, HeaderContext context) {
+//     auto it = tus.find(context.file);
+//     if(it == tus.end()) {
+//         return false;
+//     }
+// }
+
 async::Task<std::optional<index::FeatureIndex>>
     Indexer::getFeatureIndex(std::string& buffer, llvm::StringRef file) const {
     std::string path;

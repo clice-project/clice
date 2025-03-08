@@ -133,116 +133,86 @@ async::Task<> IncludeGraph::index(llvm::StringRef file, CompilationDatabase& dat
     co_await updateIndices(**info, tu, files);
 }
 
-proto::HeaderContextGroups IncludeGraph::contextAll(llvm::StringRef file) {
-    llvm::StringMap<std::vector<proto::HeaderContext>> groups;
+// proto::HeaderContextGroups IncludeGraph::contextAll(llvm::StringRef file) {
+//     llvm::StringMap<std::vector<proto::HeaderContext>> groups;
+//
+//     if(auto iter = headers.find(file); iter != headers.end()) {
+//         auto header = iter->second;
+//         for(auto& [tu, contexts]: header->contexts) {
+//             for(auto& context: contexts) {
+//                 auto& group = groups[tu->indexPath];
+//                 if(group.size() < 10) {
+//                     group.emplace_back(file.str(), tu->srcPath, context.index, tu->version);
+//                 }
+//             }
+//         }
+//     }
+//
+//     proto::HeaderContextGroups result;
+//     for(auto& [_, group]: groups) {
+//         result.emplace_back(std::move(group));
+//     }
+//     return result;
+// }
 
-    if(auto iter = headers.find(file); iter != headers.end()) {
-        auto header = iter->second;
-        for(auto& [tu, contexts]: header->contexts) {
-            for(auto& context: contexts) {
-                auto& group = groups[tu->indexPath];
-                if(group.size() < 10) {
-                    group.emplace_back(file.str(), tu->srcPath, context.index, tu->version);
-                }
-            }
-        }
-    }
+// void IncludeGraph::contextSwitch(const proto::HeaderContext& context) {
+//     Header* header = nullptr;
+//     if(auto iter = headers.find(context.srcFile); iter != headers.end()) {
+//         header = iter->second;
+//     } else {
+//         return;
+//     }
+//
+//     TranslationUnit* tu = nullptr;
+//     if(auto iter = tus.find(context.contextFile); iter != tus.end()) {
+//         tu = iter->second;
+//     } else {
+//         return;
+//     }
+//
+//     /// Check whether the context is valid.
+//     if(tu->version != context.version) {
+//         return;
+//     }
+//
+//     /// Switch to the new context.
+//     header->active = {tu, context.index};
+// }
 
-    proto::HeaderContextGroups result;
-    for(auto& [_, group]: groups) {
-        result.emplace_back(std::move(group));
-    }
-    return result;
-}
-
-std::optional<proto::HeaderContext> IncludeGraph::contextCurrent(llvm::StringRef file) {
-    if(auto iter = headers.find(file); iter != headers.end()) {
-        auto header = iter->second;
-        auto [tu, index] = header->active;
-        if(tu) {
-            return proto::HeaderContext{
-                .srcFile = file.str(),
-                .contextFile = tu->srcPath,
-                .index = index,
-                .version = tu->version,
-            };
-        }
-
-        /// If no active translation unit, we just return the first context.
-        if(!header->contexts.empty()) {
-            /// FIXME: Is it possible that a tu does not have any context?
-            auto& [tu, contexts] = *header->contexts.begin();
-            header->active = {tu, 0};
-            return proto::HeaderContext{
-                .srcFile = file.str(),
-                .contextFile = tu->srcPath,
-                .index = 0,
-                .version = tu->version,
-            };
-        }
-    }
-
-    return std::nullopt;
-}
-
-void IncludeGraph::contextSwitch(const proto::HeaderContext& context) {
-    Header* header = nullptr;
-    if(auto iter = headers.find(context.srcFile); iter != headers.end()) {
-        header = iter->second;
-    } else {
-        return;
-    }
-
-    TranslationUnit* tu = nullptr;
-    if(auto iter = tus.find(context.contextFile); iter != tus.end()) {
-        tu = iter->second;
-    } else {
-        return;
-    }
-
-    /// Check whether the context is valid.
-    if(tu->version != context.version) {
-        return;
-    }
-
-    /// Switch to the new context.
-    header->active = {tu, context.index};
-}
-
-std::vector<proto::IncludeLocation>
-    IncludeGraph::contextResolve(const proto::HeaderContext& context) {
-    Header* header = nullptr;
-    if(auto iter = headers.find(context.srcFile); iter != headers.end()) {
-        header = iter->second;
-    } else {
-        return {};
-    }
-
-    TranslationUnit* tu = nullptr;
-    if(auto iter = tus.find(context.contextFile); iter != tus.end()) {
-        tu = iter->second;
-    } else {
-        return {};
-    }
-
-    if(tu->version != context.version) {
-        return {};
-    }
-
-    std::vector<proto::IncludeLocation> locations;
-
-    auto include = header->contexts[tu][context.index].include;
-    while(include != -1) {
-        auto& location = tu->locations[include];
-        locations.push_back(proto::IncludeLocation{
-            .line = location.line - 1,
-            .filename = pathPool[location.filename],
-        });
-        include = location.include;
-    }
-
-    return locations;
-}
+// std::vector<proto::IncludeLocation>
+//     IncludeGraph::contextResolve(const proto::HeaderContext& context) {
+//     Header* header = nullptr;
+//     if(auto iter = headers.find(context.srcFile); iter != headers.end()) {
+//         header = iter->second;
+//     } else {
+//         return {};
+//     }
+//
+//     TranslationUnit* tu = nullptr;
+//     if(auto iter = tus.find(context.contextFile); iter != tus.end()) {
+//         tu = iter->second;
+//     } else {
+//         return {};
+//     }
+//
+//     if(tu->version != context.version) {
+//         return {};
+//     }
+//
+//     std::vector<proto::IncludeLocation> locations;
+//
+//     auto include = header->contexts[tu][context.index].include;
+//     while(include != -1) {
+//         auto& location = tu->locations[include];
+//         locations.push_back(proto::IncludeLocation{
+//             .line = location.line - 1,
+//             .filename = pathPool[location.filename],
+//         });
+//         include = location.include;
+//     }
+//
+//     return locations;
+// }
 
 std::vector<std::string> IncludeGraph::indices(TranslationUnit* tu) {
     std::vector<std::string> indices;

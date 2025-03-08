@@ -25,11 +25,12 @@ struct HeaderIndex {
 };
 
 struct Context {
-    /// The include chain that introduces this context.
-    uint32_t include = -1;
-
-    /// The index information of this context.
+    /// The index of header context in indices.
     uint32_t index = -1;
+
+    /// The location index in corresponding tu's
+    /// all include locations.
+    uint32_t include = -1;
 };
 
 struct IncludeLocation {
@@ -46,19 +47,7 @@ struct IncludeLocation {
     uint32_t filename = -1;
 };
 
-struct Header {
-    /// The path of the header file.
-    std::string srcPath;
-
-    /// All indices of this header.
-    std::vector<HeaderIndex> indices;
-
-    /// All header contexts of this header.
-    llvm::DenseMap<TranslationUnit*, std::vector<Context>> contexts;
-
-    /// The active translation unit and the index of the context.
-    std::pair<TranslationUnit*, uint32_t> active = {nullptr, -1};
-};
+struct Header;
 
 struct TranslationUnit {
     /// The source file path.
@@ -83,33 +72,36 @@ struct TranslationUnit {
     uint32_t version = 0;
 };
 
-namespace proto {
+struct Header {
+    /// The path of the header file.
+    std::string srcPath;
 
-struct IncludeLocation {
-    /// The line number of the include directive.
-    uint32_t line;
+    /// The active header context.
+    /// HeaderContext active;
 
-    /// The filename of the included header.
-    std::string filename;
+    /// All indices of the header.
+    std::vector<HeaderIndex> indices;
+
+    /// All header contexts of this header.
+    llvm::DenseMap<TranslationUnit*, std::vector<Context>> contexts;
+
+    /// Given a translation unit and a include location, return its
+    /// its corresponding index.
+    std::optional<uint32_t> getIndex(TranslationUnit* tu, uint32_t include) {
+        auto it = contexts.find(tu);
+        if(it == contexts.end()) {
+            return std::nullopt;
+        }
+
+        for(auto& context: it->second) {
+            if(context.include == include) {
+                return context.index;
+            }
+        }
+
+        return std::nullopt;
+    }
 };
-
-struct HeaderContext {
-    /// The path of the source file.
-    std::string srcFile;
-
-    /// The path of the context file.
-    std::string contextFile;
-
-    /// The index of the context.
-    uint32_t index = -1;
-
-    /// The version of the context.
-    uint32_t version = 0;
-};
-
-using HeaderContextGroups = std::vector<std::vector<HeaderContext>>;
-
-}  // namespace proto
 
 class IncludeGraph {
 protected:
@@ -129,16 +121,13 @@ public:
     /// may have thousands of contexts, of course, users don't want to see all
     /// of them. For each index file, we return the first 10 contexts. In the future
     /// we may add a parameter to control the number of contexts or set filter.
-    proto::HeaderContextGroups contextAll(llvm::StringRef file);
-
-    /// Return current header context of the given file.
-    std::optional<proto::HeaderContext> contextCurrent(llvm::StringRef file);
+    /// proto::HeaderContextGroups contextAll(llvm::StringRef file);
 
     /// Switch to the given header context.
-    void contextSwitch(const proto::HeaderContext& context);
+    /// void contextSwitch(const proto::HeaderContext& context);
 
     /// Resolve the header context to the include chain.
-    std::vector<proto::IncludeLocation> contextResolve(const proto::HeaderContext& context);
+    /// std::vector<proto::IncludeLocation> contextResolve(const proto::HeaderContext& context);
 
 private:
     struct SymbolID {
