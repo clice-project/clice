@@ -31,7 +31,9 @@ public:
         }
     }
 
-    llvm::ArrayRef<feature::SemanticToken> semanticTokens() const;
+    std::vector<feature::SemanticToken> semanticTokens() const;
+
+    std::vector<feature::FoldingRange> foldingRanges() const;
 
 public:
     char* base;

@@ -3,6 +3,7 @@
 #include "Server/IncludeGraph.h"
 #include "Index/SymbolIndex.h"
 #include "Index/FeatureIndex.h"
+#include "Index/Shared2.h"
 #include "Support/Compare.h"
 #include "Support/Logger.h"
 #include "llvm/ADT/DenseSet.h"
@@ -133,269 +134,6 @@ async::Task<> IncludeGraph::index(llvm::StringRef file, CompilationDatabase& dat
     co_await updateIndices(**info, tu, files);
 }
 
-proto::HeaderContextGroups IncludeGraph::contextAll(llvm::StringRef file) {
-    llvm::StringMap<std::vector<proto::HeaderContext>> groups;
-
-    if(auto iter = headers.find(file); iter != headers.end()) {
-        auto header = iter->second;
-        for(auto& [tu, contexts]: header->contexts) {
-            for(auto& context: contexts) {
-                auto& group = groups[tu->indexPath];
-                if(group.size() < 10) {
-                    group.emplace_back(file.str(), tu->srcPath, context.index, tu->version);
-                }
-            }
-        }
-    }
-
-    proto::HeaderContextGroups result;
-    for(auto& [_, group]: groups) {
-        result.emplace_back(std::move(group));
-    }
-    return result;
-}
-
-std::optional<proto::HeaderContext> IncludeGraph::contextCurrent(llvm::StringRef file) {
-    if(auto iter = headers.find(file); iter != headers.end()) {
-        auto header = iter->second;
-        auto [tu, index] = header->active;
-        if(tu) {
-            return proto::HeaderContext{
-                .srcFile = file.str(),
-                .contextFile = tu->srcPath,
-                .index = index,
-                .version = tu->version,
-            };
-        }
-
-        /// If no active translation unit, we just return the first context.
-        if(!header->contexts.empty()) {
-            /// FIXME: Is it possible that a tu does not have any context?
-            auto& [tu, contexts] = *header->contexts.begin();
-            header->active = {tu, 0};
-            return proto::HeaderContext{
-                .srcFile = file.str(),
-                .contextFile = tu->srcPath,
-                .index = 0,
-                .version = tu->version,
-            };
-        }
-    }
-
-    return std::nullopt;
-}
-
-void IncludeGraph::contextSwitch(const proto::HeaderContext& context) {
-    Header* header = nullptr;
-    if(auto iter = headers.find(context.srcFile); iter != headers.end()) {
-        header = iter->second;
-    } else {
-        return;
-    }
-
-    TranslationUnit* tu = nullptr;
-    if(auto iter = tus.find(context.contextFile); iter != tus.end()) {
-        tu = iter->second;
-    } else {
-        return;
-    }
-
-    /// Check whether the context is valid.
-    if(tu->version != context.version) {
-        return;
-    }
-
-    /// Switch to the new context.
-    header->active = {tu, context.index};
-}
-
-std::vector<proto::IncludeLocation>
-    IncludeGraph::contextResolve(const proto::HeaderContext& context) {
-    Header* header = nullptr;
-    if(auto iter = headers.find(context.srcFile); iter != headers.end()) {
-        header = iter->second;
-    } else {
-        return {};
-    }
-
-    TranslationUnit* tu = nullptr;
-    if(auto iter = tus.find(context.contextFile); iter != tus.end()) {
-        tu = iter->second;
-    } else {
-        return {};
-    }
-
-    if(tu->version != context.version) {
-        return {};
-    }
-
-    std::vector<proto::IncludeLocation> locations;
-
-    auto include = header->contexts[tu][context.index].include;
-    while(include != -1) {
-        auto& location = tu->locations[include];
-        locations.push_back(proto::IncludeLocation{
-            .line = location.line - 1,
-            .filename = pathPool[location.filename],
-        });
-        include = location.include;
-    }
-
-    return locations;
-}
-
-std::vector<std::string> IncludeGraph::indices(TranslationUnit* tu) {
-    std::vector<std::string> indices;
-    if(tu) {
-        indices.emplace_back(tu->indexPath);
-        for(auto& header: tu->headers) {
-            for(auto& context: header->contexts[tu]) {
-                indices.emplace_back(header->indices[context.index].path);
-            }
-        }
-    } else {
-        for(auto& [_, tu]: tus) {
-            indices.emplace_back(tu->indexPath);
-        }
-
-        for(auto& [_, header]: headers) {
-            for(auto& index: header->indices) {
-                indices.emplace_back(index.path);
-            }
-        }
-    }
-    return indices;
-}
-
-async::Task<std::vector<IncludeGraph::SymbolID>>
-    IncludeGraph::resolve(const proto::TextDocumentPositionParams& params) {
-    std::vector<SymbolID> ids;
-    auto path = SourceConverter::toPath(params.textDocument.uri);
-
-    std::uint32_t offset = 0;
-    {
-        auto content = co_await async::fs::read(path);
-        if(!content) {
-            co_return ids;
-        }
-        offset = SC.toOffset(*content, params.position);
-    }
-
-    std::vector<std::string> indices;
-    if(auto iter = tus.find(path); iter != tus.end()) {
-        indices.emplace_back(iter->second->indexPath);
-    } else if(auto iter = headers.find(path); iter != headers.end()) {
-        /// FIXME: What is the expected result of resolving a symbol that may refers different
-        /// declaration in different header contexts? Currently, we just return the first one.
-        for(auto& index: iter->second->indices) {
-            indices.emplace_back(index.path);
-        }
-    }
-
-    co_await async::gather(indices, [&](const std::string& path) -> async::Task<bool> {
-        auto binary = co_await async::fs::read(path + ".sidx");
-        if(!binary) {
-            co_return true;
-        }
-
-        llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
-        co_await async::submit([&] {
-            index::SymbolIndex index(binary->data(), binary->size(), false);
-            index.locateSymbols(offset, symbols);
-        });
-
-        if(symbols.empty()) {
-            co_return true;
-        }
-
-        /// If we found the symbol, we just return it. And break other tasks.
-        for(auto& symbol: symbols) {
-            ids.emplace_back(symbol.id(), symbol.name().str());
-        }
-        co_return false;
-    });
-
-    co_return ids;
-}
-
-async::Task<> IncludeGraph::lookup(llvm::ArrayRef<SymbolID> targets,
-                                   llvm::ArrayRef<std::string> files,
-                                   LookupCallback callback) {
-    co_await async::gather(files, [&](const std::string& indexPath) -> async::Task<bool> {
-        auto binary = co_await async::fs::read(indexPath + ".sidx");
-        if(!binary) {
-            co_return false;
-        }
-
-        llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
-        index::SymbolIndex index(binary->data(), binary->size(), false);
-        co_await async::submit([&] {
-            for(auto& target: targets) {
-                if(auto symbol = index.locateSymbol(target.hash, target.name)) {
-                    symbols.emplace_back(*symbol);
-                }
-            }
-        });
-
-        if(symbols.empty()) {
-            co_return true;
-        }
-
-        auto srcPath = index.path().str();
-        auto content = co_await async::fs::read(srcPath);
-        if(!content) {
-            co_return true;
-        }
-
-        for(auto& symbol: symbols) {
-            if(!callback(srcPath, *content, symbol)) {
-                co_return false;
-            }
-        }
-
-        co_return true;
-    });
-}
-
-async::Task<proto::ReferenceResult> IncludeGraph::lookup(const proto::ReferenceParams& params,
-                                                         RelationKind kind) {
-    auto ids = co_await resolve(params);
-    /// FIXME: If the size of ids equal to one and it is not an external symbol, we should
-    /// just search the symbol in the current translation unit.
-
-    proto::ReferenceResult result;
-
-    std::vector<std::string> files = indices();
-    co_await lookup(ids,
-                    files,
-                    [&](llvm::StringRef path,
-                        llvm::StringRef content,
-                        const index::SymbolIndex::Symbol& symbol) {
-                        /// FIXME: We may should collect and sort the ranges in one file.
-                        /// So that we can cut off the context to speed up the process.
-                        for(auto relation: symbol.relations()) {
-                            if(relation.kind() & kind) {
-                                result.emplace_back(proto::Location{
-                                    .uri = SourceConverter::toURI(path),
-                                    .range = SC.toRange(*relation.range(), content),
-                                });
-                            }
-                        }
-                        return true;
-                    });
-
-    co_return result;
-}
-
-async::Task<proto::HierarchyPrepareResult>
-    IncludeGraph::prepareHierarchy(const proto::HierarchyPrepareParams& params) {
-    auto ids = co_await resolve(params);
-
-    proto::HierarchyPrepareResult result;
-    std::vector<std::string> files = indices();
-    co_return result;
-}
-
 std::string IncludeGraph::getIndexPath(llvm::StringRef file) {
     auto now = std::chrono::system_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
@@ -438,40 +176,47 @@ async::Task<TranslationUnit*> IncludeGraph::check(llvm::StringRef file) {
 uint32_t IncludeGraph::addIncludeChain(std::vector<IncludeLocation>& locations,
                                        llvm::DenseMap<clang::FileID, uint32_t>& files,
                                        clang::SourceManager& SM,
-                                       clang::FileID fid) {
+                                       clang::FileID fid,
+                                       ASTInfo& AST) {
     auto [iter, success] = files.try_emplace(fid, locations.size());
     if(!success) {
         return iter->second;
     }
 
     auto index = iter->second;
-    locations.emplace_back();
-    auto entry = SM.getFileEntryRefForID(fid);
-    assert(entry && "Invalid file entry");
 
-    {
-        auto path = path::real_path(entry->getName());
-        auto [iter, success] = pathIndices.try_emplace(path, pathPool.size());
-        locations[index].filename = iter->second;
-    }
-
-    if(auto presumed = SM.getPresumedLoc(SM.getIncludeLoc(fid), false); presumed.isValid()) {
+    auto includeLoc = SM.getIncludeLoc(fid);
+    if(includeLoc.isValid()) {
+        auto presumed = SM.getPresumedLoc(includeLoc, false);
+        locations.emplace_back();
         locations[index].line = presumed.getLine();
-        auto include = addIncludeChain(locations, files, SM, presumed.getFileID());
+
+        auto path = AST.getFilePath(presumed.getFileID());
+        auto [iter, success] = pathIndices.try_emplace(path, pathPool.size());
+        if(success) {
+            pathPool.emplace_back(path);
+        }
+        locations[index].file = iter->second;
+
+        uint32_t include = -1;
+        if(presumed.getIncludeLoc().isValid()) {
+            include =
+                addIncludeChain(locations, files, SM, SM.getFileID(presumed.getIncludeLoc()), AST);
+        }
         locations[index].include = include;
     }
 
     return index;
 }
 
-void IncludeGraph::addContexts(ASTInfo& info,
+void IncludeGraph::addContexts(ASTInfo& AST,
                                TranslationUnit* tu,
                                llvm::DenseMap<clang::FileID, uint32_t>& files) {
-    auto& SM = info.srcMgr();
+    auto& SM = AST.srcMgr();
 
     std::vector<IncludeLocation> locations;
 
-    for(auto& [fid, directive]: info.directives()) {
+    for(auto& [fid, directive]: AST.directives()) {
         for(auto& include: directive.includes) {
             /// If the include is invalid, it indicates that the file is skipped because of
             /// include guard, or `#pragma once`. Such file cannot provide header context.
@@ -481,7 +226,7 @@ void IncludeGraph::addContexts(ASTInfo& info,
             }
 
             /// Add all include chains.
-            addIncludeChain(locations, files, SM, include.fid);
+            addIncludeChain(locations, files, SM, include.fid, AST);
         }
     }
 
@@ -496,17 +241,15 @@ void IncludeGraph::addContexts(ASTInfo& info,
             continue;
         }
 
-        auto entry = SM.getFileEntryRefForID(fid);
-        assert(entry && "Invalid file entry");
-        auto name = path::real_path(entry->getName());
+        auto path = AST.getFilePath(fid);
 
         Header* header = nullptr;
-        if(auto iter = headers.find(name); iter != headers.end()) {
+        if(auto iter = headers.find(path); iter != headers.end()) {
             header = iter->second;
         } else {
             header = new Header;
-            header->srcPath = name;
-            headers.try_emplace(name, header);
+            header->srcPath = path;
+            headers.try_emplace(path, header);
         }
 
         /// Add new header context.
@@ -526,43 +269,7 @@ void IncludeGraph::addContexts(ASTInfo& info,
 async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
                                           TranslationUnit* tu,
                                           llvm::DenseMap<clang::FileID, uint32_t>& files) {
-    struct Index {
-        llvm::XXH128_hash_t symbolHash = {0, 0};
-        std::optional<index::SymbolIndex> symbol;
-
-        llvm::XXH128_hash_t featureHash = {0, 0};
-        std::optional<index::FeatureIndex> feature;
-    };
-
-    auto indices = co_await async::submit([&info] {
-        llvm::DenseMap<clang::FileID, Index> indices;
-
-        auto symbolIndices = index::index(info);
-        for(auto& [fid, index]: symbolIndices) {
-            indices[fid].symbol.emplace(std::move(index));
-        }
-
-        auto featureIndices = index::indexFeature(info);
-        for(auto& [fid, index]: featureIndices) {
-            indices[fid].feature.emplace(std::move(index));
-        }
-
-        for(auto& [fid, index]: indices) {
-            if(index.symbol) {
-                auto data = llvm::ArrayRef<uint8_t>(reinterpret_cast<uint8_t*>(index.symbol->base),
-                                                    index.symbol->size);
-                index.symbolHash = llvm::xxh3_128bits(data);
-            }
-
-            if(index.feature) {
-                auto data = llvm::ArrayRef<uint8_t>(reinterpret_cast<uint8_t*>(index.feature->base),
-                                                    index.feature->size);
-                index.featureHash = llvm::xxh3_128bits(data);
-            }
-        }
-
-        return indices;
-    });
+    auto indices = co_await async::submit([&info] { return index::Index2::build(info); });
 
     auto& SM = info.srcMgr();
 
@@ -572,28 +279,12 @@ async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
                 tu->indexPath = getIndexPath(tu->srcPath);
             }
 
-            if(index.symbol) {
-                co_await async::fs::write(tu->indexPath + ".sidx",
-                                          index.symbol->base,
-                                          index.symbol->size);
-            }
-
-            if(index.feature) {
-                co_await async::fs::write(tu->indexPath + ".fidx",
-                                          index.feature->base,
-                                          index.feature->size);
-            }
+            co_await index.write(tu->indexPath);
 
             continue;
         }
 
-        auto entry = SM.getFileEntryRefForID(fid);
-        if(!entry) {
-            log::info("Invalid file entry for file id: {}", fid.getHashValue());
-        }
-        assert(entry && "Invalid file entry");
-
-        auto name = path::real_path(entry->getName());
+        auto name = info.getFilePath(fid);
         assert(headers.contains(name) && "Invalid header name");
 
         auto header = headers[name];
@@ -629,35 +320,7 @@ async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
             .featureHash = index.featureHash,
         });
 
-        // if(header->srcPath == "/home/ykiko/C++/clice/include/Support/JSON.h") {
-        //     if(index.symbol) {
-        //         auto json = index.symbol->toJSON();
-        //         llvm::SmallString<128> path;
-        //         llvm::raw_svector_ostream stream(path);
-        //         stream << json;
-        //
-        //        co_await async::fs::write(indices.back().path + ".json", path.data(),
-        //        path.size());
-        //    }
-        //
-        //    // if(index.feature) {
-        //    //     println("{{ hash: {}, index: {} }}",
-        //    //             json::serialize(index.featureHash),
-        //    //             json::serialize(index.feature->semanticTokens()));
-        //    // }
-        //}
-
-        if(index.symbol) {
-            co_await async::fs::write(indices.back().path + ".sidx",
-                                      index.symbol->base,
-                                      index.symbol->size);
-        }
-
-        if(index.feature) {
-            co_await async::fs::write(indices.back().path + ".fidx",
-                                      index.feature->base,
-                                      index.feature->size);
-        }
+        co_await index.write(indices.back().path);
     }
 }
 

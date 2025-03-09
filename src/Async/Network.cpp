@@ -29,7 +29,8 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     if(nread == UV_EOF) [[unlikely]] {
         uv_read_stop(stream);
         uv_close(uv_cast<uv_handle_t>(*stream), nullptr);
-        uv_close(uv_cast<uv_handle_t>(*writer), nullptr);
+        /// FIXME: Figure out why the writer is already closed.
+        ///uv_close(uv_cast<uv_handle_t>(*writer), nullptr);
         return;
     }
 

@@ -44,8 +44,25 @@ Shared<FeatureIndex> indexFeature(ASTInfo& info) {
     return result;
 }
 
-llvm::ArrayRef<feature::SemanticToken> FeatureIndex::semanticTokens() const {
+std::vector<feature::SemanticToken> FeatureIndex::semanticTokens() const {
     return binary::Proxy<memory::FeatureIndex>{base, base}.get<"tokens">().as_array();
+}
+
+std::vector<feature::FoldingRange> FeatureIndex::foldingRanges() const {
+    auto array = binary::Proxy<memory::FeatureIndex>{base, base}.get<"foldings">();
+
+    std::vector<feature::FoldingRange> result;
+    result.reserve(array.size());
+
+    /// FIXME: Use iterator or other thing to make cast easier.
+    for(std::size_t i = 0, n = array.size(); i < n; ++i) {
+        auto&& range = array[i];
+        result.emplace_back(range.get<"range">().value(),
+                            range.get<"kind">().value(),
+                            range.get<"text">().as_string().str());
+    }
+
+    return result;
 }
 
 }  // namespace clice::index

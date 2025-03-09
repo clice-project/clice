@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <expected>
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
@@ -8,7 +9,7 @@
 namespace clice::config {
 
 /// Read the config file, call when the program starts.
-void load(llvm::StringRef execute, llvm::StringRef filename);
+std::expected<void, std::string> load(llvm::StringRef execute, llvm::StringRef filename);
 
 /// Initialize the config, replace all predefined variables in the config file.
 /// called in `Server::initialize`.

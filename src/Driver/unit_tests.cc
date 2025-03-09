@@ -37,8 +37,8 @@ int main(int argc, char** argv) {
     if(!cl::resource_dir.empty()) {
         fs::resource_dir = cl::resource_dir.getValue();
     } else {
-        if(auto error = fs::init_resource_dir(argv[0])) {
-            llvm::outs() << std::format("Failed to get resource directory, because {}\n", error);
+        if(auto result = fs::init_resource_dir(argv[0]); !result) {
+            llvm::outs() << std::format("Failed to get resource directory, because {}\n", result.error());
             return 1;
         }
     }
