@@ -3,6 +3,7 @@
 #include "Server/IncludeGraph.h"
 #include "Index/SymbolIndex.h"
 #include "Index/FeatureIndex.h"
+#include "Index/Shared2.h"
 #include "Support/Compare.h"
 #include "Support/Logger.h"
 #include "llvm/ADT/DenseSet.h"
@@ -420,43 +421,7 @@ void IncludeGraph::addContexts(ASTInfo& AST,
 async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
                                           TranslationUnit* tu,
                                           llvm::DenseMap<clang::FileID, uint32_t>& files) {
-    struct Index {
-        llvm::XXH128_hash_t symbolHash = {0, 0};
-        std::optional<index::SymbolIndex> symbol;
-
-        llvm::XXH128_hash_t featureHash = {0, 0};
-        std::optional<index::FeatureIndex> feature;
-    };
-
-    auto indices = co_await async::submit([&info] {
-        llvm::DenseMap<clang::FileID, Index> indices;
-
-        auto symbolIndices = index::index(info);
-        for(auto& [fid, index]: symbolIndices) {
-            indices[fid].symbol.emplace(std::move(index));
-        }
-
-        auto featureIndices = index::indexFeature(info);
-        for(auto& [fid, index]: featureIndices) {
-            indices[fid].feature.emplace(std::move(index));
-        }
-
-        for(auto& [fid, index]: indices) {
-            if(index.symbol) {
-                auto data = llvm::ArrayRef<uint8_t>(reinterpret_cast<uint8_t*>(index.symbol->base),
-                                                    index.symbol->size);
-                index.symbolHash = llvm::xxh3_128bits(data);
-            }
-
-            if(index.feature) {
-                auto data = llvm::ArrayRef<uint8_t>(reinterpret_cast<uint8_t*>(index.feature->base),
-                                                    index.feature->size);
-                index.featureHash = llvm::xxh3_128bits(data);
-            }
-        }
-
-        return indices;
-    });
+    auto indices = co_await async::submit([&info] { return index::Index2::build(info); });
 
     auto& SM = info.srcMgr();
 
@@ -466,28 +431,12 @@ async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
                 tu->indexPath = getIndexPath(tu->srcPath);
             }
 
-            if(index.symbol) {
-                co_await async::fs::write(tu->indexPath + ".sidx",
-                                          index.symbol->base,
-                                          index.symbol->size);
-            }
-
-            if(index.feature) {
-                co_await async::fs::write(tu->indexPath + ".fidx",
-                                          index.feature->base,
-                                          index.feature->size);
-            }
+            co_await index.write(tu->indexPath);
 
             continue;
         }
 
-        auto entry = SM.getFileEntryRefForID(fid);
-        if(!entry) {
-            log::info("Invalid file entry for file id: {}", fid.getHashValue());
-        }
-        assert(entry && "Invalid file entry");
-
-        auto name = path::real_path(entry->getName());
+        auto name = info.getFilePath(fid);
         assert(headers.contains(name) && "Invalid header name");
 
         auto header = headers[name];
@@ -523,35 +472,7 @@ async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
             .featureHash = index.featureHash,
         });
 
-        // if(header->srcPath == "/home/ykiko/C++/clice/include/Support/JSON.h") {
-        //     if(index.symbol) {
-        //         auto json = index.symbol->toJSON();
-        //         llvm::SmallString<128> path;
-        //         llvm::raw_svector_ostream stream(path);
-        //         stream << json;
-        //
-        //        co_await async::fs::write(indices.back().path + ".json", path.data(),
-        //        path.size());
-        //    }
-        //
-        //    // if(index.feature) {
-        //    //     println("{{ hash: {}, index: {} }}",
-        //    //             json::serialize(index.featureHash),
-        //    //             json::serialize(index.feature->semanticTokens()));
-        //    // }
-        //}
-
-        if(index.symbol) {
-            co_await async::fs::write(indices.back().path + ".sidx",
-                                      index.symbol->base,
-                                      index.symbol->size);
-        }
-
-        if(index.feature) {
-            co_await async::fs::write(indices.back().path + ".fidx",
-                                      index.feature->base,
-                                      index.feature->size);
-        }
+        co_await index.write(indices.back().path);
     }
 }
 
