@@ -52,6 +52,44 @@ public:
                     llvm::StringRef contextFile = llvm::StringRef()) const;
 
 public:
+    struct SymbolID {
+        uint64_t hash;
+        std::string name;
+    };
+
+    /// Return all indices of the given translation unit. If the file is empty,
+    /// return all indices of the IncludeGraph.
+    std::vector<std::string> indices(TranslationUnit* tu = nullptr);
+
+    /// Resolve the symbol at the given position.
+    async::Task<std::vector<SymbolID>> resolve(const proto::TextDocumentPositionParams& params);
+
+    using LookupCallback = llvm::unique_function<bool(llvm::StringRef path,
+                                                      llvm::StringRef content,
+                                                      const index::SymbolIndex::Symbol& symbol)>;
+
+    async::Task<> lookup(llvm::ArrayRef<SymbolID> targets,
+                         llvm::ArrayRef<std::string> files,
+                         LookupCallback callback);
+
+    /// Lookup the reference information according to the given position.
+    async::Task<proto::ReferenceResult> lookup(const proto::ReferenceParams& params,
+                                               RelationKind kind);
+
+    /// According to the given file and offset, resolve the symbol at the offset.
+    async::Task<proto::HierarchyPrepareResult>
+        prepareHierarchy(const proto::HierarchyPrepareParams& params);
+
+    async::Task<proto::CallHierarchyIncomingCallsResult>
+        incomingCalls(const proto::HierarchyParams& params);
+
+    async::Task<proto::CallHierarchyOutgoingCallsResult>
+        outgoingCalls(const proto::HierarchyParams& params);
+
+    async::Task<proto::TypeHierarchyResult> typeHierarchy(const proto::HierarchyParams& params,
+                                                          bool super);
+
+public:
     async::Task<std::optional<index::FeatureIndex>> getFeatureIndex(std::string& buffer,
                                                                     llvm::StringRef file) const;
 
