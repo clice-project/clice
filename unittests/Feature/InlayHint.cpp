@@ -1,6 +1,5 @@
 #include "Test/CTest.h"
 #include "Feature/InlayHint.h"
-#include "Basic/SourceConverter.h"
 
 namespace clice::testing {
 
@@ -16,12 +15,12 @@ constexpr config::InlayHintOption LikeClangd{
     .chainCall = false,
 };
 
-using namespace feature::inlay_hint;
-
 struct InlayHints : public ::testing::Test {
+    using InlayHint = feature::InlayHint;
+
 protected:
     std::optional<Tester> tester;
-    Result result;
+    std::vector<feature::InlayHint> result;
 
     void run(llvm::StringRef code,
              proto::Range range = {},
@@ -36,7 +35,7 @@ protected:
             limit = {.start = {}, .end = tester->endOfFile()};
         }
 
-        result = inlayHints({.range = limit}, *info, option);
+        result = feature::inlayHints(*info, limit, option);
     }
 
     size_t indexOf(llvm::StringRef key) {
@@ -49,17 +48,9 @@ protected:
         return std::distance(result.begin(), iter);
     }
 
-    static std::string joinLabels(const InlayHint& hint) {
+    static std::string joinLabels(const feature::InlayHint& hint) {
         std::string text;
         for(auto& lable: hint.labels) {
-            text += lable.value;
-        }
-        return text;
-    }
-
-    static std::string joinLabels(const proto::InlayHint& hint) {
-        std::string text;
-        for(auto& lable: hint.lables) {
             text += lable.value;
         }
         return text;
@@ -474,7 +465,7 @@ namespace _2 {
     auto& info = tx.info;
     EXPECT_TRUE(info.has_value());
 
-    auto maps = inlayHints(*info);
+    auto maps = feature::indexInlayHints(*info);
 
     // 2 fileID
     EXPECT_EQ(maps.size(), 2);
@@ -487,17 +478,11 @@ namespace _2 {
         if(fid == mainID) {
             EXPECT_EQ(result.size(), 1);
         } else {
-            /// Drop  `structSizeAndAlign` of `struct _2345678`.
-            config::InlayHintOption fixOption{
-                .blockEnd = true,
-                .structSizeAndAlign = false,
-            };
+            EXPECT_EQ(result.size(), 3);
+            EXPECT_TRUE(result[0].labels[0].value.contains("namespace _1"));
+            EXPECT_EQ(joinLabels(result[1]), "size: 1, align: 1");
+            EXPECT_EQ(joinLabels(result[2]), ": _1::_2345678");
 
-            SourceConverter SC;
-            auto lspRes = toLspType(result, "", fixOption, header, SC);
-            EXPECT_EQ(lspRes.size(), 2);
-            EXPECT_TRUE(lspRes[0].lables[0].value.contains("namespace _1"));
-            EXPECT_EQ(joinLabels(lspRes[1]), ": _1::_2345678");
         }
     }
 }
@@ -551,9 +536,8 @@ auto var2$(2) = std::vector<int>{};
     EXPECT_AT("1", [this](const InlayHint& hint) {
         EXPECT_EQ(2, hint.labels.size());
 
-        bool textOnly = !hint.labels[1].location.has_value();
+        bool textOnly = !hint.labels[1].link.valid();
         EXPECT_TRUE(textOnly);
-
         return textOnly && joinLabels(hint) == ": int";
     });
 
@@ -563,9 +547,8 @@ auto var2$(2) = std::vector<int>{};
         EXPECT_EQ(hint.labels[0].value, ": ");
         EXPECT_EQ(hint.labels[1].value, "std::vector<int>");
 
-        bool textOnly = !hint.labels[1].location.has_value();
+        bool textOnly = !hint.labels[1].link.valid();
         EXPECT_TRUE(textOnly);
-
         return textOnly;
     });
 }
@@ -601,8 +584,8 @@ TEST_F(InlayHints, TypeLinkWithScope) {
 
         auto namespace_has_link = [this](const InlayHint& hint) {
             EXPECT_EQ(6, hint.labels.size());
-            EXPECT_TRUE(hint.labels[1].location.has_value());
-            EXPECT_TRUE(hint.labels[3].location.has_value());
+            EXPECT_TRUE(hint.labels[1].link.valid());
+            EXPECT_TRUE(hint.labels[3].link.valid());
             return true;
         };
 
@@ -637,8 +620,8 @@ TEST_F(InlayHints, TypeLinkWithScope) {
 
         auto nested_struct_has_link = [this](const InlayHint& hint) {
             EXPECT_EQ(6, hint.labels.size());
-            EXPECT_TRUE(hint.labels[1].location.has_value());
-            EXPECT_TRUE(hint.labels[3].location.has_value());
+            EXPECT_TRUE(hint.labels[1].link.valid());
+            EXPECT_TRUE(hint.labels[3].link.valid());
             return true;
         };
 
