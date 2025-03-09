@@ -98,8 +98,9 @@ async::Task<json::Value> Server::onContext(llvm::StringRef method, json::Value v
         auto result = indexer.currentContext(path);
         co_return result ? json::serialize(*result) : json::Value(nullptr);
     } else if(method == "switch") {
-        auto params = json::deserialize<proto::HeaderContextParams>(value);
-        indexer.switchContext(params.header, params.context);
+        auto params = json::deserialize<proto::HeaderContextSwitchParams>(value);
+        auto header = SourceConverter::toPath(params.header);
+        indexer.switchContext(header, params.context);
     } else if(method == "all") {
         auto param2 = json::deserialize<proto::TextDocumentParams>(value);
         auto path = SourceConverter::toPath(param2.textDocument.uri);

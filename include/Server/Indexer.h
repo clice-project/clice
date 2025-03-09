@@ -9,29 +9,6 @@
 
 namespace clice {
 
-namespace proto {
-
-struct IncludeLocation {
-    uint32_t line = -1;
-
-    std::string filename;
-};
-
-struct HeaderContext {
-    std::string file;
-
-    uint32_t version;
-
-    uint32_t include;
-};
-
-struct HeaderContextParams {
-    std::string header;
-    HeaderContext context;
-};
-
-}  // namespace proto
-
 class Indexer : public IncludeGraph {
 public:
     Indexer(CompilationDatabase& database, const config::IndexOptions& options);
@@ -69,10 +46,10 @@ public:
     /// of contexts for each different header context. The maximum of group count is determined
     /// by limit. Optionally, you can specify a 'contextFile' to filter the results, returning only
     /// contexts related to that file.
-    std::vector<std::vector<proto::HeaderContext>>
+    std::vector<proto::HeaderContextGroup>
         allContexts(llvm::StringRef headerFile,
                     uint32_t limit = 10,
-                    llvm::StringRef contextFile = llvm::StringRef());
+                    llvm::StringRef contextFile = llvm::StringRef()) const;
 
 public:
     async::Task<std::optional<index::FeatureIndex>> getFeatureIndex(std::string& buffer,

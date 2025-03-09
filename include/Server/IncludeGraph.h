@@ -44,7 +44,7 @@ struct IncludeLocation {
     /// a header may be included by multiple files, so we use
     /// a string pool to cache the file name to reduce the memory
     /// usage.
-    uint32_t filename = -1;
+    uint32_t file = -1;
 };
 
 struct Header;
@@ -74,7 +74,7 @@ struct TranslationUnit {
 
 struct HeaderContext {
     TranslationUnit* tu = nullptr;
-    
+
     Context context;
 
     bool valid() {
@@ -175,7 +175,8 @@ private:
     uint32_t addIncludeChain(std::vector<IncludeLocation>& locations,
                              llvm::DenseMap<clang::FileID, uint32_t>& files,
                              clang::SourceManager& SM,
-                             clang::FileID fid);
+                             clang::FileID fid,
+                             ASTInfo& AST);
 
     void addContexts(ASTInfo& info,
                      TranslationUnit* tu,

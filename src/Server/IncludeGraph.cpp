@@ -327,40 +327,47 @@ async::Task<TranslationUnit*> IncludeGraph::check(llvm::StringRef file) {
 uint32_t IncludeGraph::addIncludeChain(std::vector<IncludeLocation>& locations,
                                        llvm::DenseMap<clang::FileID, uint32_t>& files,
                                        clang::SourceManager& SM,
-                                       clang::FileID fid) {
+                                       clang::FileID fid,
+                                       ASTInfo& AST) {
     auto [iter, success] = files.try_emplace(fid, locations.size());
     if(!success) {
         return iter->second;
     }
 
     auto index = iter->second;
-    locations.emplace_back();
-    auto entry = SM.getFileEntryRefForID(fid);
-    assert(entry && "Invalid file entry");
 
-    {
-        auto path = path::real_path(entry->getName());
-        auto [iter, success] = pathIndices.try_emplace(path, pathPool.size());
-        locations[index].filename = iter->second;
-    }
-
-    if(auto presumed = SM.getPresumedLoc(SM.getIncludeLoc(fid), false); presumed.isValid()) {
+    auto includeLoc = SM.getIncludeLoc(fid);
+    if(includeLoc.isValid()) {
+        auto presumed = SM.getPresumedLoc(includeLoc, false);
+        locations.emplace_back();
         locations[index].line = presumed.getLine();
-        auto include = addIncludeChain(locations, files, SM, presumed.getFileID());
+
+        auto path = AST.getFilePath(presumed.getFileID());
+        auto [iter, success] = pathIndices.try_emplace(path, pathPool.size());
+        if(success) {
+            pathPool.emplace_back(path);
+        }
+        locations[index].file = iter->second;
+
+        uint32_t include = -1;
+        if(presumed.getIncludeLoc().isValid()) {
+            include =
+                addIncludeChain(locations, files, SM, SM.getFileID(presumed.getIncludeLoc()), AST);
+        }
         locations[index].include = include;
     }
 
     return index;
 }
 
-void IncludeGraph::addContexts(ASTInfo& info,
+void IncludeGraph::addContexts(ASTInfo& AST,
                                TranslationUnit* tu,
                                llvm::DenseMap<clang::FileID, uint32_t>& files) {
-    auto& SM = info.srcMgr();
+    auto& SM = AST.srcMgr();
 
     std::vector<IncludeLocation> locations;
 
-    for(auto& [fid, directive]: info.directives()) {
+    for(auto& [fid, directive]: AST.directives()) {
         for(auto& include: directive.includes) {
             /// If the include is invalid, it indicates that the file is skipped because of
             /// include guard, or `#pragma once`. Such file cannot provide header context.
@@ -370,7 +377,7 @@ void IncludeGraph::addContexts(ASTInfo& info,
             }
 
             /// Add all include chains.
-            addIncludeChain(locations, files, SM, include.fid);
+            addIncludeChain(locations, files, SM, include.fid, AST);
         }
     }
 
@@ -385,17 +392,15 @@ void IncludeGraph::addContexts(ASTInfo& info,
             continue;
         }
 
-        auto entry = SM.getFileEntryRefForID(fid);
-        assert(entry && "Invalid file entry");
-        auto name = path::real_path(entry->getName());
+        auto path = AST.getFilePath(fid);
 
         Header* header = nullptr;
-        if(auto iter = headers.find(name); iter != headers.end()) {
+        if(auto iter = headers.find(path); iter != headers.end()) {
             header = iter->second;
         } else {
             header = new Header;
-            header->srcPath = name;
-            headers.try_emplace(name, header);
+            header->srcPath = path;
+            headers.try_emplace(path, header);
         }
 
         /// Add new header context.

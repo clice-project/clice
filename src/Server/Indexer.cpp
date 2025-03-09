@@ -184,17 +184,17 @@ std::vector<proto::IncludeLocation> Indexer::resolveContext(proto::HeaderContext
     while(include != -1) {
         auto& location = locations[include];
         result.emplace_back(proto::IncludeLocation{
-            .line = location.line,
-            .filename = pathPool[location.filename],
+            .line = location.line - 1,
+            .file = pathPool[location.file],
         });
         include = location.include;
     }
     return result;
 }
 
-std::vector<std::vector<proto::HeaderContext>> Indexer::allContexts(llvm::StringRef headerFile,
-                                                                    uint32_t limit,
-                                                                    llvm::StringRef contextFile) {
+std::vector<proto::HeaderContextGroup> Indexer::allContexts(llvm::StringRef headerFile,
+                                                            uint32_t limit,
+                                                            llvm::StringRef contextFile) const {
     auto header = getHeader(headerFile);
     if(!header) {
         return {};
@@ -227,9 +227,9 @@ std::vector<std::vector<proto::HeaderContext>> Indexer::allContexts(llvm::String
         }
     }
 
-    std::vector<std::vector<proto::HeaderContext>> result;
-    for(auto& [_, group]: groups) {
-        result.emplace_back(std::move(group));
+    std::vector<proto::HeaderContextGroup> result;
+    for(auto& [index, group]: groups) {
+        result.emplace_back(header->indices[index].path, std::move(group));
     }
     return result;
 }
