@@ -62,7 +62,7 @@ TEST(SourceCode, tokenize) {
         },
         false);
 
-    EXPECT_EQ(count, 5);
+    EXPECT_EQ(count, 6);
 }
 
 }  // namespace clice::testing
