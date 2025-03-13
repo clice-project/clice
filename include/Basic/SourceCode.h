@@ -54,6 +54,10 @@ std::uint32_t getTokenLength(const clang::SourceManager& SM, clang::SourceLocati
 /// Get the spelling of the token at the given location.
 llvm::StringRef getTokenSpelling(const clang::SourceManager& SM, clang::SourceLocation location);
 
+/// A fake location could be used to calculate the token location offset when lexer
+/// runs in raw mode.
+inline clang::SourceLocation fakeLoc = clang::SourceLocation::getFromRawEncoding(1);
+
 /// @brief Run `clang::Lexer` in raw mode and tokenize the content.
 /// @param content The content to tokenize.
 /// @param callback The callback to call for each token. Return false to break.

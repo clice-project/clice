@@ -86,8 +86,7 @@ public:
 
 private:
     void addToken(clang::FileID fid, const clang::Token& token, SymbolKind kind) {
-        auto fake = clang::SourceLocation::getFromRawEncoding(1);
-        auto offset = token.getLocation().getRawEncoding() - fake.getRawEncoding();
+        auto offset = token.getLocation().getRawEncoding() - fakeLoc.getRawEncoding();
         LocalSourceRange range{offset, offset + token.getLength()};
 
         auto& tokens = emitForIndex ? sharedResult[fid] : result;

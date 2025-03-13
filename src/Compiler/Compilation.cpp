@@ -74,12 +74,12 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
     }
 
     auto [pch, bound] = params.pch;
+
+    auto& PPOpts = instance->getPreprocessorOpts();
+    PPOpts.ImplicitPCHInclude = std::move(pch);
+
     if(bound != 0) {
-        auto& PPOpts = instance->getPreprocessorOpts();
-        PPOpts.UsePredefines = false;
-        PPOpts.ImplicitPCHInclude = std::move(pch);
         PPOpts.PrecompiledPreambleBytes = {bound, false};
-        PPOpts.DisablePCHOrModuleValidation = clang::DisableValidationForModuleKind::PCH;
     }
 
     for(auto& [name, path]: params.pcms) {
@@ -167,7 +167,6 @@ std::expected<ASTInfo, std::string> ExecuteAction(std::unique_ptr<clang::Compile
 
 std::expected<ASTInfo, std::string> compile(CompilationParams& params) {
     auto instance = impl::createInstance(params);
-
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
 

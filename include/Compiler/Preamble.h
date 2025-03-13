@@ -26,13 +26,12 @@ struct PCHInfo {
     std::vector<std::string> deps;
 };
 
+/// Compute the preamble bound of given content. We just
+/// run lex until we find first not directive.
 std::uint32_t computePreambleBound(llvm::StringRef content);
 
-/// Computes the preamble bounds for the given content.
-/// If the bounds are not provided explicitly, they will be calculated based on the content.
-///
-/// - If the header is empty, the bounds can be determined by lexing the source file.
-/// - If the header is not empty, the preprocessor must be executed to compute the bounds.
-std::uint32_t computeBounds(CompilationParams& params);
+/// Same as above, but return a group of bounds for chained PCH
+/// building.
+std::vector<uint32_t> computePreambleBounds(llvm::StringRef content);
 
 }  // namespace clice

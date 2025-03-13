@@ -30,14 +30,14 @@ inline void EXPECT_EQ(const LHS& lhs,
                       std::source_location current = std::source_location::current()) {
     if(!refl::equal(lhs, rhs)) {
         std::string left;
-        if constexpr(requires { json::Serde<LHS>::serialize; }) {
+        if constexpr(json::serializable<LHS>) {
             llvm::raw_string_ostream(left) << json::serialize(lhs);
         } else {
             left = "cannot dump value";
         }
 
         std::string right;
-        if constexpr(requires { json::Serde<RHS>::serialize; }) {
+        if constexpr(json::serializable<RHS>) {
             llvm::raw_string_ostream(right) << json::serialize(rhs);
         } else {
             right = "cannot dump value";
