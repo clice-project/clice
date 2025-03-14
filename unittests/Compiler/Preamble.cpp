@@ -8,43 +8,48 @@ namespace clice::testing {
 namespace {
 
 TEST(Preamble, ComputePreambleBound) {
-    proto::Position pos;
-    SourceConverter converter;
+    Annotation annotation = {""};
 
-    Annotation annotation = {"\n\n\nint x = 1;"};
+    auto test = [](llvm::StringRef content,
+                   std::vector<llvm::StringRef> marks,
+                   std::source_location current = std::source_location::current()) {
+        Annotation annotation{content};
+        auto bounds = computePreambleBounds(annotation.source());
 
-    auto compute = [&](llvm::StringRef source) {
-        annotation = {source};
-        auto content = annotation.source();
-        return converter.toPosition(content, computePreambleBound(content));
+        println("{}", dump(bounds));
+
+        EXPECT_EQ(bounds.size(), marks.size(), current);
+
+        for(std::uint32_t i = 0; i < bounds.size(); i++) {
+            EXPECT_EQ(bounds[i], annotation.offset(marks[i]), current);
+        }
     };
 
-    pos = compute("#include <iostream>$(end)");
-    EXPECT_EQ(pos, annotation.pos("end"));
+    annotation = {"#include <iostream>$(end)"};
 
-    pos = compute("#include <iostream>$(end)\n");
-    EXPECT_EQ(pos, annotation.pos("end"));
+    test("#include <iostream>$(0)", {"0"});
+    test("#include <iostream>$(0)\n", {"0"});
 
-    pos = compute(R"cpp(
+    test(R"cpp(
 #ifdef TEST
-#include <iostream>
+#include <iostream>$(0)
 #define 1
-#endif$(end)
-    )cpp");
-    EXPECT_EQ(pos, annotation.pos("end"));
+#endif$(1)
+    )cpp",
+         {"0", "1"});
 
-    pos = compute(R"cpp(
-#include <iostream>$(end)
+    test(R"cpp(
+#include <iostream>$(0)
 int x = 1;
-    )cpp");
-    EXPECT_EQ(pos, annotation.pos("end"));
+    )cpp",
+         {"0"});
 
-    pos = compute(R"cpp(
+    test(R"cpp(
 module;
-#include <iostream>$(end)
+#include <iostream>$(0)
 export module test;
-    )cpp");
-    EXPECT_EQ(pos, annotation.pos("end"));
+    )cpp",
+         {"0"});
 }
 
 TEST(Preamble, BuildPreambleForTU) {

@@ -25,9 +25,12 @@ std::vector<std::uint32_t> computePreambleBounds(llvm::StringRef content) {
     /// Whether the token is after `module`.
     bool isAfterModule = false;
 
-    auto addResult = [&](const clang::Token& end) {
-        result.emplace_back(end.getLocation().getRawEncoding() - fakeLoc.getRawEncoding() +
-                            end.getLength());
+    auto addResult = [&](const clang::Token& token) {
+        auto offset =
+            token.getLocation().getRawEncoding() - fakeLoc.getRawEncoding() + token.getLength();
+        if(result.empty() || result.back() != offset) {
+            result.emplace_back(offset);
+        }
     };
 
     tokenize(content, [&](const clang::Token& token) {
@@ -42,7 +45,8 @@ std::vector<std::uint32_t> computePreambleBounds(llvm::StringRef content) {
                 /// If we encounter a `#` at the start of a line, it must be a directive.
                 isAfterHash = true;
                 return true;
-            } else if(token.is(clang::tok::raw_identifier) && token.getRawIdentifier() == "module") {
+            } else if(token.is(clang::tok::raw_identifier) &&
+                      token.getRawIdentifier() == "module") {
                 /// If we encounter a module keyword at the start of a line, it may be
                 /// a module declaration or global module fragment.
                 isAfterModule = true;
@@ -62,9 +66,11 @@ std::vector<std::uint32_t> computePreambleBounds(llvm::StringRef content) {
 
         if(isAfterModule) {
             if(token.is(clang::tok::semi)) {
-                addResult(token);
+                isAfterModule = false;
+            } else {
+                /// If we meet a module declaration, directly return.
+                return false;
             }
-            isAfterModule = false;
         }
 
         end = token;
