@@ -5,7 +5,7 @@ permissions:
 
 on:
   push:
-    branches: [ main ]
+    branches: [ non-existent-branch ]
 
 jobs:
   package:
