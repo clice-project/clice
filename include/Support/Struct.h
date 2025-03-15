@@ -12,10 +12,10 @@ namespace clice::refl {
 namespace impl {
 
 struct Any {
-    constexpr Any(std::size_t);
+    consteval Any(std::size_t);
 
     template <typename T>
-    constexpr operator T () const;
+    consteval operator T () const;
 };
 
 template <typename T, std::size_t N>

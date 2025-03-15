@@ -6,6 +6,7 @@
 #include "Compiler/Command.h"
 #include "Index/FeatureIndex.h"
 #include "llvm/ADT/StringSet.h"
+#include "Feature/Lookup.h"
 
 namespace clice {
 

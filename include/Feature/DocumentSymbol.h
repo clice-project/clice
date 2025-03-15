@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Basic/Document.h"
+#include "Server/Protocol.h"
 #include "AST/SourceCode.h"
 #include "Index/Shared.h"
 #include "Support/JSON.h"
