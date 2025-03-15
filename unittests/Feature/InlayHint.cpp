@@ -1,6 +1,6 @@
 #include "Test/CTest.h"
 #include "Feature/InlayHint.h"
-#include "Basic/SourceConverter.h"
+#include "Server/SourceConverter.h"
 
 namespace clice::testing {
 

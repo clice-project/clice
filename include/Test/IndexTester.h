@@ -1,6 +1,6 @@
 #include "Test/CTest.h"
 #include "Index/SymbolIndex.h"
-#include "Basic/SourceConverter.h"
+#include "Server/SourceConverter.h"
 
 namespace clice::testing {
 

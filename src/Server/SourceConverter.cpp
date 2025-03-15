@@ -1,5 +1,5 @@
 #include "Server/Protocol.h"
-#include "Basic/SourceConverter.h"
+#include "Server/SourceConverter.h"
 #include "Support/FileSystem.h"
 #include "clang/Basic/SourceManager.h"
 #include "llvm/ADT/StringExtras.h"

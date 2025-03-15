@@ -1,5 +1,5 @@
 #include "AST/FilterASTVisitor.h"
-#include "Basic/SourceConverter.h"
+#include "Server/SourceConverter.h"
 #include "Compiler/Compilation.h"
 #include "Feature/InlayHint.h"
 

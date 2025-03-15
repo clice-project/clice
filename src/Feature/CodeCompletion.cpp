@@ -1,5 +1,4 @@
 #include "AST/SymbolKind.h"
-#include "Basic/SourceConverter.h"
 #include "Compiler/Compilation.h"
 #include "Feature/CodeCompletion.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
