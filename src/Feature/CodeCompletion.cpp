@@ -116,16 +116,18 @@ private:
 
 std::vector<CodeCompletionItem> codeCompletion(CompilationParams& params,
                                                const config::CodeCompletionOption& option) {
-    std::vector<CodeCompletionItem> completions;
-    auto consumer =
-        new CodeCompletionCollector(completions, params.line, params.column, params.content);
+    // std::vector<CodeCompletionItem> completions;
+    // auto consumer =
+    //     new CodeCompletionCollector(completions, params.line, params.column, params.content);
+    //
+    // if(auto info = compile(params, consumer)) {
+    //    for(auto& item: completions) {}
+    //    return completions;
+    //} else {
+    //    std::abort();
+    //}
 
-    if(auto info = compile(params, consumer)) {
-        for(auto& item: completions) {}
-        return completions;
-    } else {
-        std::abort();
-    }
+    return std::vector<CodeCompletionItem>{};
 }
 
 }  // namespace clice::feature

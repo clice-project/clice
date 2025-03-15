@@ -60,15 +60,16 @@ private:
 
 std::vector<SignatureHelpItem> signatureHelp(CompilationParams& params,
                                              const config::SignatureHelpOption& option) {
-    std::vector<SignatureHelpItem> completions;
-    auto consumer = new SignatureHelpCollector({});
-
-    if(auto info = compile(params, consumer)) {
-        for(auto& item: completions) {}
-        return completions;
-    } else {
-        std::abort();
-    }
+    // std::vector<SignatureHelpItem> completions;
+    // auto consumer = new SignatureHelpCollector({});
+    //
+    // if(auto info = compile(params, consumer)) {
+    //    for(auto& item: completions) {}
+    //    return completions;
+    //} else {
+    //    std::abort();
+    //}
+    return std::vector<SignatureHelpItem>{};
 }
 
 }  // namespace clice::feature
