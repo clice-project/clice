@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AST/SourceLocation.h"
+#include "SourceLocation.h"
 #include "clang/Lex/Token.h"
 #include "llvm/ADT/FunctionExtras.h"
 

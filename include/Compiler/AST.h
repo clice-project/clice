@@ -1,9 +1,8 @@
 #pragma once
 
 #include "Directive.h"
-#include "Basic/SourceCode.h"
+#include "AST/SourceCode.h"
 #include "AST/Resolver.h"
-#include "Basic/SourceCode.h"
 
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"

@@ -3,7 +3,7 @@
 #include "Index/Index.h"
 #include "Index/USR.h"
 #include "AST/Semantic.h"
-#include "Basic/SourceCode.h"
+#include "AST/SourceCode.h"
 #include "Index/SymbolIndex.h"
 #include "Support/Binary.h"
 #include "Support/Compare.h"

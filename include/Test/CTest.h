@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Test.h"
+#include "Server/Protocol.h"
 #include "Compiler/Compilation.h"
 
 namespace clice::testing {

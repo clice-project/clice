@@ -3,7 +3,7 @@
 #include "Config.h"
 #include "Protocol.h"
 #include "Async/Async.h"
-#include "Basic/SourceConverter.h"
+#include "Server/SourceConverter.h"
 #include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
 #include "Support/JSON.h"

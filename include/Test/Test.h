@@ -1,7 +1,6 @@
 #pragma once
 
 #include "gtest/gtest.h"
-#include "Basic/Location.h"
 #include "Support/JSON.h"
 #include "Support/Format.h"
 #include "Support/Compare.h"

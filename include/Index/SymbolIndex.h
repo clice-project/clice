@@ -4,7 +4,7 @@
 #include "ArrayView.h"
 #include "AST/SymbolKind.h"
 #include "AST/RelationKind.h"
-#include "Basic/SourceCode.h"
+#include "AST/SourceCode.h"
 #include "Support/JSON.h"
 
 namespace clice {

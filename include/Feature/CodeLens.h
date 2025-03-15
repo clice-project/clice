@@ -1,7 +1,2 @@
-#include "Basic/Document.h"
+#pragma once
 
-namespace clice::proto {
-
-struct CodeLensParams {};
-
-}  // namespace clice::proto

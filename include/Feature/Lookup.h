@@ -1,4 +1,6 @@
-#include "Basic/Document.h"
+#pragma once
+
+#include "Server/Protocol.h"
 #include "Support/Struct.h"
 #include "AST/SymbolKind.h"
 
