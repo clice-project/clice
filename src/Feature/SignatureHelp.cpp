@@ -9,9 +9,7 @@ class SignatureHelpCollector final : public clang::CodeCompleteConsumer {
 public:
     SignatureHelpCollector(clang::CodeCompleteOptions options) :
         clang::CodeCompleteConsumer(options), allocator(new clang::GlobalCodeCompletionAllocator()),
-        info(allocator) {
-        // TODO:
-    }
+        info(allocator) {}
 
     void ProcessOverloadCandidates(clang::Sema& sema,
                                    unsigned CurrentArg,
@@ -59,6 +57,20 @@ private:
 };
 
 }  // namespace
+
+std::vector<SignatureHelpItem> signatureHelp(CompilationParams& params,
+                                             const config::SignatureHelpOption& option) {
+    // std::vector<SignatureHelpItem> completions;
+    // auto consumer = new SignatureHelpCollector({});
+    //
+    // if(auto info = compile(params, consumer)) {
+    //    for(auto& item: completions) {}
+    //    return completions;
+    //} else {
+    //    std::abort();
+    //}
+    return std::vector<SignatureHelpItem>{};
+}
 
 }  // namespace clice::feature
 

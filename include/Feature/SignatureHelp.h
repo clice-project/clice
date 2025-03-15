@@ -2,41 +2,26 @@
 
 #include "Basic/Location.h"
 
-namespace clice::proto {
-
-struct SignatureInformation {
-    /// The label of this signature. Will be shown in the UI.
-    string label;
-
-    // FIXME:
-    // ...
-};
-
-struct SignatureHelp {
-    /// One or more signatures. If no signatures are available the signature help
-    /// request should return `null`.
-    std::vector<SignatureInformation> signatures;
-};
-
-struct SignatureHelpParams {};
-
-}  // namespace clice::proto
-
 namespace clice {
-class Compiler;
-}
 
-namespace clice::config {
+struct CompilationParams;
+
+namespace config {
 
 struct SignatureHelpOption {};
 
-}  // namespace clice::config
+}  // namespace config
 
-namespace clice::feature {
+namespace feature {
 
-proto::SignatureHelp signatureHelp(Compiler& compiler,
-                                   llvm::StringRef filepath,
-                                   proto::Position position,
-                                   const config::SignatureHelpOption& option);
+struct SignatureHelpItem {};
 
-}
+using SignatureHelpResult = std::vector<SignatureHelpItem>;
+
+SignatureHelpResult signatureHelp(CompilationParams& params,
+                                  const config::SignatureHelpOption& option);
+
+}  // namespace feature
+
+}  // namespace clice
+

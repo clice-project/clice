@@ -26,7 +26,7 @@ void tokenize(llvm::StringRef content,
     defaultLangOpts.CPlusPlus26 = 1;
     defaultLangOpts.LineComment = !ignoreComments;
 
-    clang::Lexer lexer(clang::SourceLocation::getFromRawEncoding(1),
+    clang::Lexer lexer(fakeLoc,
                        langOpts ? *langOpts : defaultLangOpts,
                        content.begin(),
                        content.begin(),
@@ -35,12 +35,12 @@ void tokenize(llvm::StringRef content,
 
     clang::Token token;
     while(true) {
-        bool end = lexer.LexFromRawLexer(token);
-        if(!callback(token)) {
+        lexer.LexFromRawLexer(token);
+        if(token.is(clang::tok::eof)) {
             break;
         }
 
-        if(end || token.is(clang::tok::eof)) {
+        if(!callback(token)) {
             break;
         }
     }

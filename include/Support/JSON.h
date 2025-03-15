@@ -20,6 +20,9 @@ using namespace llvm::json;
 template <typename V>
 struct Serde;
 
+template <typename V>
+concept serializable = requires { sizeof(Serde<V>); };
+
 /// Check if the serde if given type is stateful.
 template <typename V>
 concept stateful_serde = requires {
@@ -89,7 +92,13 @@ T deserialize(const json::Value& value, Serdes&&... serdes) {
 
 template <>
 struct Serde<json::Value> {
-    /// Never use json::Value as a serde.
+    static json::Value serialize(auto&& value) {
+        return json::Value(std::forward<decltype(value)>(value));
+    }
+
+    static json::Value deserialize(auto&& value) {
+        return json::Value(std::forward<decltype(value)>(value));
+    }
 };
 
 template <>

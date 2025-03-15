@@ -44,83 +44,9 @@ struct CompletionPrefix {
     }
 };
 
-proto::CompletionItemKind kindForDecl(const clang::NamedDecl* decl) {
-    auto kind = SymbolKind::from(decl);
-    switch(kind.value()) {
-        case SymbolKind::Keyword: return proto::CompletionItemKind::Keyword;
-        case SymbolKind::Namespace: return proto::CompletionItemKind::Module;
-        case SymbolKind::Class: return proto::CompletionItemKind::Class;
-        case SymbolKind::Struct: return proto::CompletionItemKind::Struct;
-        case SymbolKind::Union: return proto::CompletionItemKind::Struct;
-        case SymbolKind::Enum: return proto::CompletionItemKind::Enum;
-        case SymbolKind::Type: return proto::CompletionItemKind::TypeParameter;
-        case SymbolKind::Field: return proto::CompletionItemKind::Field;
-        case SymbolKind::EnumMember: return proto::CompletionItemKind::EnumMember;
-        case SymbolKind::Function: return proto::CompletionItemKind::Function;
-        case SymbolKind::Method: return proto::CompletionItemKind::Method;
-        case SymbolKind::Variable: return proto::CompletionItemKind::Variable;
-        case SymbolKind::Parameter: return proto::CompletionItemKind::Variable;
-        case SymbolKind::Label: return proto::CompletionItemKind::Variable;
-        case SymbolKind::Concept: return proto::CompletionItemKind::TypeParameter;
-        case SymbolKind::Operator: return proto::CompletionItemKind::Operator;
-        case SymbolKind::Comment:
-        case SymbolKind::Number:
-        case SymbolKind::Character:
-        case SymbolKind::String:
-        case SymbolKind::Directive:
-        case SymbolKind::Header:
-        case SymbolKind::Module:
-        case SymbolKind::Macro:
-        case SymbolKind::MacroParameter:
-        case SymbolKind::Attribute:
-        case SymbolKind::Paren:
-        case SymbolKind::Bracket:
-        case SymbolKind::Brace:
-        case SymbolKind::Angle:
-        case SymbolKind::Invalid: {
-            return proto::CompletionItemKind::Text;
-        };
-    }
-
-    llvm_unreachable("Unknown SymbolKind");
-}
-
-std::string getName(const clang::NamedDecl* decl) {
-    auto name = decl->getDeclName();
-    switch(name.getNameKind()) {
-        case clang::DeclarationName::Identifier: {
-            return name.getAsIdentifierInfo()->getName().str();
-        }
-        case clang::DeclarationName::CXXConstructorName:
-        case clang::DeclarationName::CXXDestructorName: {
-            return name.getCXXNameType().getAsString();
-        }
-        case clang::DeclarationName::CXXConversionFunctionName: {
-            return "operator " + name.getCXXNameType().getAsString();
-        }
-        case clang::DeclarationName::CXXOperatorName: {
-            return clang::getOperatorSpelling(name.getCXXOverloadedOperator());
-        }
-        case clang::DeclarationName::CXXDeductionGuideName: {
-            return getName(name.getCXXDeductionGuideTemplate());
-        }
-        case clang::DeclarationName::CXXLiteralOperatorName: {
-            return name.getCXXLiteralIdentifier()->getName().str();
-        }
-        case clang::DeclarationName::CXXUsingDirective: {
-            std::abort();
-        };
-        case clang::DeclarationName::ObjCZeroArgSelector:
-        case clang::DeclarationName::ObjCOneArgSelector:
-        case clang::DeclarationName::ObjCMultiArgSelector: {
-            std::abort();
-        }
-    }
-}
-
 class CodeCompletionCollector final : public clang::CodeCompleteConsumer {
 public:
-    CodeCompletionCollector(proto::CompletionResult& completions,
+    CodeCompletionCollector(std::vector<CodeCompletionItem>& completions,
                             uint32_t line,
                             uint32_t column,
                             llvm::StringRef content) :
@@ -183,43 +109,25 @@ private:
     llvm::StringRef content;
     std::shared_ptr<clang::GlobalCodeCompletionAllocator> allocator;
     clang::CodeCompletionTUInfo info;
-    proto::CompletionResult& completions;
+    std::vector<CodeCompletionItem>& completions;
 };
 
 }  // namespace
 
-json::Value capability(json::Value clientCapabilities) {
-    return json::Object{
-        // We don't set `(` etc as allCommitCharacters as they interact
-        // poorly with snippet results.
-        // See https://github.com/clangd/vscode-clangd/issues/357
-        // Hopefully we can use them one day without this side-effect:
-        //     https://github.com/microsoft/vscode/issues/42544
-        {"resolveProvider",   false                               },
-        // We do extra checks, e.g. that > is part of ->.
-        {"triggerCharacters", {".", "<", ">", ":", "\"", "/", "*"}},
-    };
-}
+std::vector<CodeCompletionItem> codeCompletion(CompilationParams& params,
+                                               const config::CodeCompletionOption& option) {
+    // std::vector<CodeCompletionItem> completions;
+    // auto consumer =
+    //     new CodeCompletionCollector(completions, params.line, params.column, params.content);
+    //
+    // if(auto info = compile(params, consumer)) {
+    //    for(auto& item: completions) {}
+    //    return completions;
+    //} else {
+    //    std::abort();
+    //}
 
-proto::CompletionResult codeCompletion(CompilationParams& params,
-                                       uint32_t line,
-                                       uint32_t column,
-                                       llvm::StringRef file,
-                                       const config::CodeCompletionOption& option) {
-    proto::CompletionResult completions;
-    auto consumer = new CodeCompletionCollector(completions, line, column, params.content);
-
-    params.srcPath = file;
-    params.file = file;
-    params.line = line;
-    params.column = column;
-
-    if(auto info = compile(params, consumer)) {
-        for(auto& item: completions) {}
-        return completions;
-    } else {
-        std::abort();
-    }
+    return std::vector<CodeCompletionItem>{};
 }
 
 }  // namespace clice::feature

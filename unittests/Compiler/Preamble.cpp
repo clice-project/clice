@@ -8,43 +8,48 @@ namespace clice::testing {
 namespace {
 
 TEST(Preamble, ComputePreambleBound) {
-    proto::Position pos;
-    SourceConverter converter;
+    Annotation annotation = {""};
 
-    Annotation annotation = {"\n\n\nint x = 1;"};
+    auto test = [](llvm::StringRef content,
+                   std::vector<llvm::StringRef> marks,
+                   std::source_location current = std::source_location::current()) {
+        Annotation annotation{content};
+        auto bounds = computePreambleBounds(annotation.source());
 
-    auto compute = [&](llvm::StringRef source) {
-        annotation = {source};
-        auto content = annotation.source();
-        return converter.toPosition(content, computePreambleBound(content));
+        println("{}", dump(bounds));
+
+        EXPECT_EQ(bounds.size(), marks.size(), current);
+
+        for(std::uint32_t i = 0; i < bounds.size(); i++) {
+            EXPECT_EQ(bounds[i], annotation.offset(marks[i]), current);
+        }
     };
 
-    pos = compute("#include <iostream>$(end)");
-    EXPECT_EQ(pos, annotation.pos("end"));
+    annotation = {"#include <iostream>$(end)"};
 
-    pos = compute("#include <iostream>$(end)\n");
-    EXPECT_EQ(pos, annotation.pos("end"));
+    test("#include <iostream>$(0)", {"0"});
+    test("#include <iostream>$(0)\n", {"0"});
 
-    pos = compute(R"cpp(
+    test(R"cpp(
 #ifdef TEST
-#include <iostream>
+#include <iostream>$(0)
 #define 1
-#endif$(end)
-    )cpp");
-    EXPECT_EQ(pos, annotation.pos("end"));
+#endif$(1)
+    )cpp",
+         {"0", "1"});
 
-    pos = compute(R"cpp(
-#include <iostream>$(end)
+    test(R"cpp(
+#include <iostream>$(0)
 int x = 1;
-    )cpp");
-    EXPECT_EQ(pos, annotation.pos("end"));
+    )cpp",
+         {"0"});
 
-    pos = compute(R"cpp(
+    test(R"cpp(
 module;
-#include <iostream>$(end)
+#include <iostream>$(0)
 export module test;
-    )cpp");
-    EXPECT_EQ(pos, annotation.pos("end"));
+    )cpp",
+         {"0"});
 }
 
 TEST(Preamble, BuildPreambleForTU) {
@@ -89,6 +94,70 @@ int x = foo();
         params.pch = {outPath, out.preamble.size()};
         auto info = compile(params);
         EXPECT_TRUE(bool(info));
+    }
+}
+
+TEST(Preamble, BuildChainedPreamble) {
+    llvm::StringRef content = R"(
+#include <cstdio>
+)";
+
+    CompilationParams params;
+    params.srcPath = "main.pch";
+    params.content = content;
+    params.command = "clang++ -std=c++20 -xc++ main.pch";
+    params.outPath = path::join(".", "header1.pch");
+    params.bound = computePreambleBound(content);
+
+    {
+        PCHInfo out;
+        auto AST = compile(params, out);
+        if(!AST) {
+            println("error: {}", AST.error());
+        }
+        llvm::outs() << "bound: " << *params.bound << "\n";
+    }
+
+    content = R"(
+#include <cstdio>
+#include <cmath>
+)";
+
+    params.pch = std::pair{params.outPath.str(), *params.bound};
+    params.content = content;
+    params.outPath = path::join(".", "header2.pch");
+    params.bound = computePreambleBound(content);
+
+    {
+        PCHInfo out;
+        auto AST = compile(params, out);
+        if(!AST) {
+            println("error: {}", AST.error());
+        }
+        llvm::outs() << "bound: " << *params.bound << "\n";
+    }
+
+    content = R"(
+int main() {
+    auto y = abs(1.0);
+    return 0;
+}
+)";
+
+    params.pch = std::pair{params.outPath.str(), 0};
+    params.srcPath = "main.cpp";
+    params.command = "clang++ -std=c++20 main.cpp";
+    params.content = content;
+    params.outPath = path::join(".", "header2.pch");
+    params.bound.reset();
+
+    {
+        auto AST = compile(params);
+        if(!AST) {
+            println("error: {}", AST.error());
+        }
+        llvm::outs() << "bound: " << *params.bound << "\n";
+        /// AST->tu()->dump();
     }
 }
 

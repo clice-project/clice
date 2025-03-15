@@ -1,11 +1,11 @@
 #include "Test/CTest.h"
-#include "Feature/CodeCompletion.h"
+#include "Feature/SignatureHelp.h"
 
 namespace clice::testing {
 
 namespace {
 
-TEST(Feature, CodeCompletion) {
+TEST(Feature, SignatureHelp) {
     const char* code = R"cpp(
 int foo = 2;
 
@@ -20,8 +20,8 @@ int main() {
     params.command = "clang++ -std=c++20 main.cpp";
     params.file = "main.cpp";
 
-    config::CodeCompletionOption options = {};
-    auto result = feature::codeCompletion(params, options);
+    config::SignatureHelpOption options = {};
+    auto result = feature::signatureHelp(params, options);
 }
 
 }  // namespace
