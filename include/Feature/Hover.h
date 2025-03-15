@@ -1,7 +1,7 @@
 #pragma once
 
 #include "AST/SymbolKind.h"
-#include "Basic/SourceCode.h"
+#include "AST/SourceCode.h"
 #include "Index/Shared.h"
 
 namespace clice {

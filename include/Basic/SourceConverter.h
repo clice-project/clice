@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Basic/Location.h"
-#include "Basic/SourceCode.h"
+#include "AST/SourceCode.h"
 #include "clang/Basic/SourceLocation.h"
 
 namespace clice {

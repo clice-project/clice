@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Basic/Document.h"
-#include "Basic/SourceCode.h"
+#include "AST/SourceCode.h"
 #include "Index/Shared.h"
 #include "Support/JSON.h"
 

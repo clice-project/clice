@@ -1,5 +1,5 @@
 #include "Compiler/Preamble.h"
-#include "Basic/SourceCode.h"
+#include "AST/SourceCode.h"
 #include "Support/Format.h"
 
 namespace clice {

@@ -1,5 +1,5 @@
 #include "Test/Test.h"
-#include "Basic/SourceCode.h"
+#include "AST/SourceCode.h"
 
 namespace clice::testing {
 
