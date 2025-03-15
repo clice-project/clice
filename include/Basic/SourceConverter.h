@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Basic/Location.h"
+#include "Basic/Lifecycle.h"
 #include "AST/SourceCode.h"
 #include "clang/Basic/SourceLocation.h"
 
