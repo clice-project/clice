@@ -8,18 +8,25 @@ namespace clice {
 
 /// Information about `#include` directive.
 struct Include {
-    /// The file id of the included file. If the file is skipped because of
-    /// include guard, or `#pragma once`, this will be invalid.
+    /// whether this header is skipped because of #pragma once
+    /// or a header guard macro.
+    bool skipped;
+
+    /// The file id of included file.
     clang::FileID fid;
 
     /// Location of the `include`.
     clang::SourceLocation location;
+
+    /// The range of filename(includes `""` or `<>`).
+    clang::SourceRange fileNameRange;
 };
 
 /// Information about `__has_include` directive.
 struct HasInclude {
-    /// The path of the included file.
-    llvm::StringRef path;
+    /// The file id of included file, may be empty if there is
+    /// not such file.
+    clang::FileID fid;
 
     /// Location of the filename token start.
     clang::SourceLocation location;

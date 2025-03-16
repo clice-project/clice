@@ -78,6 +78,28 @@ struct PPCallback : public clang::PPCallbacks {
     ///                         Rewritten Preprocessor Callbacks
     /// ============================================================================
 
+    void InclusionDirective(clang::SourceLocation hashLoc,
+                            const clang::Token& includeTok,
+                            llvm::StringRef,
+                            bool,
+                            clang::CharSourceRange filenameRange,
+                            clang::OptionalFileEntryRef,
+                            llvm::StringRef,
+                            llvm::StringRef,
+                            const clang::Module*,
+                            bool,
+                            clang::SrcMgr::CharacteristicKind) override {
+        prevFID = SM.getFileID(hashLoc);
+
+        /// An `IncludeDirective` call is always followed by either a `LexedFileChanged`
+        /// or a `FileSkipped`. so we cannot get the file id of included file here.
+        directives[prevFID].includes.emplace_back(Include{
+            .fid = {},
+            .location = includeTok.getLocation(),
+            .fileNameRange = filenameRange.getAsRange(),
+        });
+    }
+
     void LexedFileChanged(clang::FileID currFID,
                           LexedFileChangeReason reason,
                           clang::SrcMgr::CharacteristicKind,
@@ -85,26 +107,27 @@ struct PPCallback : public clang::PPCallbacks {
                           clang::SourceLocation) override {
         if(reason == LexedFileChangeReason::EnterFile && currFID.isValid() && prevFID.isValid() &&
            this->prevFID.isValid() && prevFID == this->prevFID) {
-            directives[prevFID].includes.back().fid = currFID;
+            /// Once the file has changed, it means that the last include is not skipped.
+            /// Therefore, we initialize its file id with the current file id.
+            auto& include = directives[prevFID].includes.back();
+            include.skipped = false;
+            include.fid = currFID;
         }
     }
 
-    void InclusionDirective(clang::SourceLocation hashLoc,
-                            const clang::Token& includeTok,
-                            llvm::StringRef fileName,
-                            bool,
-                            clang::CharSourceRange,
-                            clang::OptionalFileEntryRef,
-                            llvm::StringRef searchPath,
-                            llvm::StringRef relativePath,
-                            const clang::Module*,
-                            bool,
-                            clang::SrcMgr::CharacteristicKind) override {
-        prevFID = SM.getFileID(hashLoc);
-        directives[prevFID].includes.emplace_back(Include{
-            .fid = {},
-            .location = includeTok.getLocation(),
-        });
+    void FileSkipped(const clang::FileEntryRef& file,
+                     const clang::Token&,
+                     clang::SrcMgr::CharacteristicKind) override {
+        if(prevFID.isValid()) {
+            /// File with guard will have only one file id in `SourceManager`, use
+            /// `translateFile` to find it.
+            auto& include = directives[prevFID].includes.back();
+            include.skipped = true;
+
+            /// Get the FileID for the given file. If the source file is included multiple
+            /// times, the FileID will be the first inclusion.
+            include.fid = SM.translateFile(file);
+        }
     }
 
     void HasInclude(clang::SourceLocation location,
@@ -112,10 +135,12 @@ struct PPCallback : public clang::PPCallbacks {
                     bool,
                     clang::OptionalFileEntryRef file,
                     clang::SrcMgr::CharacteristicKind) override {
-        directives[SM.getFileID(location)].hasIncludes.emplace_back(clice::HasInclude{
-            file ? file->getName() : "",
-            location,
-        });
+        clang::FileID fid;
+        if(file) {
+            fid = SM.translateFile(*file);
+        }
+
+        directives[SM.getFileID(location)].hasIncludes.emplace_back(fid, location);
     }
 
     void PragmaDirective(clang::SourceLocation Loc,
