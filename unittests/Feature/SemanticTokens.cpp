@@ -74,6 +74,8 @@ $(2)#include $(3)"stddef.h"
 $(4)# $(5)include $(6)"stddef.h"
 )cpp");
 
+    /// FIXME: Included file could be macro.
+
     EXPECT_TOKEN("0", Directive, 8);
     EXPECT_TOKEN("1", Header, 10);
     EXPECT_TOKEN("2", Directive, 8);

@@ -26,8 +26,7 @@ std::vector<std::uint32_t> computePreambleBounds(llvm::StringRef content) {
     bool isAfterModule = false;
 
     auto addResult = [&](const clang::Token& token) {
-        auto offset =
-            token.getLocation().getRawEncoding() - fakeLoc.getRawEncoding() + token.getLength();
+        auto offset = token.getEndLoc().getRawEncoding() - fakeLoc.getRawEncoding();
         if(result.empty() || result.back() != offset) {
             result.emplace_back(offset);
         }
