@@ -98,6 +98,8 @@ public:
 
     async::Task<std::vector<feature::FoldingRange>> foldingRanges(llvm::StringRef file) const;
 
+    async::Task<std::vector<feature::DocumentLink>> documentLinks(llvm::StringRef file) const;
+
 private:
     async::Task<> index(std::string file);
 
