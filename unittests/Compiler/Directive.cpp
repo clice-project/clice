@@ -24,42 +24,56 @@ struct Directive : ::testing::Test, Tester {
         pragmas = info->directives()[fid].pragmas;
     }
 
-    void EXPECT_INCLUDE(std::size_t index, llvm::StringRef position, llvm::StringRef path,
+    void EXPECT_INCLUDE(std::size_t index,
+                        llvm::StringRef position,
+                        llvm::StringRef path,
                         std::source_location current = std::source_location::current()) {
         auto& include = includes[index];
-        auto entry = SM->getFileEntryRefForID(include.fid);
-        EXPECT_EQ(SourceConverter().toPosition(include.location, *SM), pos(position), current);
-        EXPECT_EQ(entry ? entry->getName() : "", path, current);
+        auto [_, offset] = info->getDecomposedLoc(include.location);
+        EXPECT_EQ(offset, this->offset(position), current);
+        EXPECT_EQ(include.skipped ? "" : info->getFilePath(include.fid), path, current);
     }
 
-    void EXPECT_HAS_INCLUDE(std::size_t index, llvm::StringRef position, llvm::StringRef path,
+    void EXPECT_HAS_INCLUDE(std::size_t index,
+                            llvm::StringRef position,
+                            llvm::StringRef path,
                             std::source_location current = std::source_location::current()) {
         auto& hasInclude = hasIncludes[index];
-        EXPECT_EQ(SourceConverter().toPosition(hasInclude.location, *SM), pos(position), current);
-        EXPECT_EQ(hasInclude.path, path, current);
+        auto [_, offset] = info->getDecomposedLoc(hasInclude.location);
+        EXPECT_EQ(offset, this->offset(position), current);
+        EXPECT_EQ(hasInclude.fid.isValid() ? info->getFilePath(hasInclude.fid) : "", path, current);
     }
 
-    void EXPECT_CON(std::size_t index, Condition::BranchKind kind, llvm::StringRef position,
+    void EXPECT_CON(std::size_t index,
+                    Condition::BranchKind kind,
+                    llvm::StringRef position,
                     std::source_location current = std::source_location::current()) {
         auto& condition = conditions[index];
+        auto [_, offset] = info->getDecomposedLoc(condition.loc);
         EXPECT_EQ(condition.kind, kind, current);
-        EXPECT_EQ(SourceConverter().toPosition(condition.loc, *SM), pos(position), current);
+        EXPECT_EQ(offset, this->offset(position), current);
     }
 
-    void EXPECT_MACRO(std::size_t index, MacroRef::Kind kind, llvm::StringRef position,
+    void EXPECT_MACRO(std::size_t index,
+                      MacroRef::Kind kind,
+                      llvm::StringRef position,
                       std::source_location current = std::source_location::current()) {
         auto& macro = macros[index];
+        auto [_, offset] = info->getDecomposedLoc(macro.loc);
         EXPECT_EQ(macro.kind, kind, current);
-        EXPECT_EQ(SourceConverter().toPosition(macro.loc, *SM), pos(position), current);
+        EXPECT_EQ(offset, this->offset(position), current);
     }
 
-    void EXPECT_PRAGMA(std::size_t index, Pragma::Kind kind, llvm::StringRef position,
+    void EXPECT_PRAGMA(std::size_t index,
+                       Pragma::Kind kind,
+                       llvm::StringRef position,
                        llvm::StringRef text,
                        std::source_location current = std::source_location::current()) {
         auto& pragma = pragmas[index];
+        auto [_, offset] = info->getDecomposedLoc(pragma.loc);
         EXPECT_EQ(pragma.kind, kind, current);
         EXPECT_EQ(pragma.stmt, text, current);
-        EXPECT_EQ(SourceConverter().toPosition(pragma.loc, *SM), pos(position), current);
+        EXPECT_EQ(offset, this->offset(position), current);
     }
 };
 
@@ -107,26 +121,31 @@ TEST_F(Directive, Include) {
     EXPECT_INCLUDE(3, "3", "");
     EXPECT_INCLUDE(4, "4", pguard_macro);
     EXPECT_INCLUDE(5, "5", "");
+
+    /// TODO: test include source range.
 }
 
 TEST_F(Directive, HasInclude) {
     const char* test = "";
-
     const char* main = R"cpp(
+#include "test.h"
 #if __has_include($(0)"test.h")
+#endif
+
+#if __has_include($(1)"test2.h")
 #endif
 )cpp";
 
     addMain("main.cpp", main);
 
-    llvm::SmallString<128> path;
-    path::append(path, ".", "test.h");
+    auto path = path::join(".", "test.h");
     addFile(path, test);
 
     run();
 
-    EXPECT_EQ(hasIncludes.size(), 1);
+    EXPECT_EQ(hasIncludes.size(), 2);
     EXPECT_HAS_INCLUDE(0, "0", path);
+    EXPECT_HAS_INCLUDE(1, "1", "");
 }
 
 TEST_F(Directive, Condition) {

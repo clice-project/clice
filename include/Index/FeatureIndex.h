@@ -5,6 +5,7 @@
 #include "Shared.h"
 #include "Feature/SemanticTokens.h"
 #include "Feature/FoldingRange.h"
+#include "Feature/DocumentLink.h"
 
 #include "llvm/ADT/DenseMap.h"
 #include "clang/Basic/SourceLocation.h"
@@ -34,6 +35,8 @@ public:
     std::vector<feature::SemanticToken> semanticTokens() const;
 
     std::vector<feature::FoldingRange> foldingRanges() const;
+
+    std::vector<feature::DocumentLink> documentLinks() const;
 
 public:
     char* base;

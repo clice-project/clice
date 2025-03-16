@@ -351,6 +351,22 @@ std::vector<proto::FoldingRange>
     return result;
 }
 
+std::vector<proto::DocumentLink>
+    LSPConverter::transform(llvm::StringRef content, llvm::ArrayRef<feature::DocumentLink> links) {
+    PositionConverter converter(content, encoding());
+
+    std::vector<proto::DocumentLink> result;
+    for(auto& link: links) {
+        proto::Range range{
+            converter.toPosition(link.range.begin),
+            converter.toPosition(link.range.end),
+        };
+        result.emplace_back(range, SourceConverter::toURI(link.file));
+    }
+
+    return result;
+}
+
 LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
                                            llvm::ArrayRef<feature::SemanticToken> tokens) {
     auto file = co_await async::fs::read(path.str());
@@ -369,6 +385,16 @@ LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
     }
     llvm::StringRef content = *file;
     co_return json::serialize(transform(content, foldings));
+}
+
+LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
+                                           llvm::ArrayRef<feature::DocumentLink> links) {
+    auto file = co_await async::fs::read(path.str());
+    if(!file) {
+        co_return json::Value(nullptr);
+    }
+    llvm::StringRef content = *file;
+    co_return json::serialize(transform(content, links));
 }
 
 LSPConverter::Result LSPConverter::convert(const feature::Hover& hover) {

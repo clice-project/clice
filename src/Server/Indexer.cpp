@@ -435,4 +435,16 @@ async::Task<std::vector<feature::FoldingRange>> Indexer::foldingRanges(llvm::Str
     co_return index->foldingRanges();
 }
 
+async::Task<std::vector<feature::DocumentLink>> Indexer::documentLinks(llvm::StringRef file) const {
+    std::vector<feature::DocumentLink> result;
+
+    std::string buffer;
+    auto index = co_await getFeatureIndex(buffer, file);
+    if(!index) {
+        co_return result;
+    }
+
+    co_return index->documentLinks();
+}
+
 }  // namespace clice

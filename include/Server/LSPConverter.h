@@ -7,6 +7,7 @@
 #include "Feature/FoldingRange.h"
 #include "Feature/DocumentSymbol.h"
 #include "Feature/SemanticTokens.h"
+#include "Feature/DocumentLink.h"
 #include "Server/Protocol.h"
 
 namespace clice {
@@ -36,9 +37,14 @@ public:
     std::vector<proto::FoldingRange> transform(llvm::StringRef content,
                                                llvm::ArrayRef<feature::FoldingRange> foldings);
 
+    std::vector<proto::DocumentLink> transform(llvm::StringRef content,
+                                               llvm::ArrayRef<feature::DocumentLink> links);
+
     Result convert(llvm::StringRef path, llvm::ArrayRef<feature::SemanticToken> tokens);
 
     Result convert(llvm::StringRef path, llvm::ArrayRef<feature::FoldingRange> foldings);
+
+    Result convert(llvm::StringRef path, llvm::ArrayRef<feature::DocumentLink> links);
 
     Result convert(const feature::Hover& hover);
 

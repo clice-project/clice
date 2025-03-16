@@ -7,7 +7,7 @@ const llvm::DenseSet<clang::FileID>& ASTInfo::files() {
         /// FIXME: handle preamble and embed file id.
         for(auto& [fid, diretive]: directives()) {
             for(auto& include: diretive.includes) {
-                if(include.fid.isValid()) {
+                if(!include.skipped) {
                     allFiles.insert(include.fid);
                 }
             }
@@ -24,15 +24,15 @@ std::vector<std::string> ASTInfo::deps() {
 
     for(auto& [fid, diretive]: directives()) {
         for(auto& include: diretive.includes) {
-            if(include.fid.isValid()) {
-                auto entry = srcMgr().getFileEntryRefForID(include.fid);
-                assert(entry && "Invalid file entry");
-                deps.try_emplace(entry->getName());
+            if(!include.skipped) {
+                deps.try_emplace(getFilePath(include.fid));
             }
         }
 
         for(auto& hasInclude: diretive.hasIncludes) {
-            deps.try_emplace(hasInclude.path);
+            if(hasInclude.fid.isValid()) {
+                deps.try_emplace(getFilePath(hasInclude.fid));
+            }
         }
     }
 
@@ -46,6 +46,7 @@ std::vector<std::string> ASTInfo::deps() {
 }
 
 llvm::StringRef ASTInfo::getFilePath(clang::FileID fid) {
+    assert(fid.isValid() && "Invalid fid");
     if(auto it = pathCache.find(fid); it != pathCache.end()) {
         return it->second;
     }

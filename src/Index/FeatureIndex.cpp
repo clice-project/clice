@@ -9,6 +9,7 @@ namespace memory {
 struct FeatureIndex {
     std::vector<feature::SemanticToken> tokens;
     std::vector<feature::FoldingRange> foldings;
+    std::vector<feature::DocumentLink> links;
 };
 
 }  // namespace memory
@@ -24,17 +25,13 @@ Shared<FeatureIndex> indexFeature(ASTInfo& info) {
         indices[fid].foldings = std::move(result);
     }
 
+    for(auto&& [fid, result]: feature::indexDocumentLink(info)) {
+        indices[fid].links = std::move(result);
+    }
+
     Shared<FeatureIndex> result;
 
     for(auto&& [fid, index]: indices) {
-        /// FIXME: Figure out why index result will contain them.
-        auto& SM = info.srcMgr();
-        auto loc = SM.getLocForStartOfFile(fid);
-        if(SM.isWrittenInBuiltinFile(loc) || SM.isWrittenInCommandLineFile(loc) ||
-           SM.isWrittenInScratchSpace(loc)) {
-            continue;
-        }
-
         auto [buffer, size] = binary::binarify(static_cast<memory::FeatureIndex>(index));
         result.try_emplace(
             fid,
@@ -60,6 +57,21 @@ std::vector<feature::FoldingRange> FeatureIndex::foldingRanges() const {
         result.emplace_back(range.get<"range">().value(),
                             range.get<"kind">().value(),
                             range.get<"text">().as_string().str());
+    }
+
+    return result;
+}
+
+std::vector<feature::DocumentLink> FeatureIndex::documentLinks() const {
+    auto array = binary::Proxy<memory::FeatureIndex>{base, base}.get<"links">();
+
+    std::vector<feature::DocumentLink> result;
+    result.reserve(array.size());
+
+    /// FIXME: Use iterator or other thing to make cast easier.
+    for(std::size_t i = 0, n = array.size(); i < n; ++i) {
+        auto&& range = array[i];
+        result.emplace_back(range.get<"range">().value(), range.get<"file">().as_string().str());
     }
 
     return result;

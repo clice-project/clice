@@ -86,6 +86,11 @@ async::Task<json::Value> Server::onTextDocument(llvm::StringRef method, json::Va
         auto path = SourceConverter::toPath(params2.textDocument.uri);
         auto foldings = co_await indexer.foldingRanges(path);
         co_return co_await converter.convert(path, foldings);
+    } else if(method == "documentLink") {
+        auto params2 = json::deserialize<proto::DocumentLinkParams>(value);
+        auto path = SourceConverter::toPath(params2.textDocument.uri);
+        auto links = co_await indexer.documentLinks(path);
+        co_return co_await converter.convert(path, links);
     }
 
     co_return json::Value(nullptr);

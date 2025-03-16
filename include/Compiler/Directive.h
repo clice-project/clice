@@ -8,33 +8,25 @@ namespace clice {
 
 /// Information about `#include` directive.
 struct Include {
-    /// The file id of the included file. If the file is skipped because of
-    /// include guard, or `#pragma once`, this will be invalid.
+    /// whether this header is skipped because of #pragma once
+    /// or a header guard macro.
+    bool skipped;
+
+    /// The file id of included file.
     clang::FileID fid;
 
     /// Location of the `include`.
     clang::SourceLocation location;
 
-    /// The name of the included file.
-    std::string fileName;
-
-    /// If the file was found via an absolute include path, `searchPath` will be empty.
-    /// For framework includes, the `searchPath` and `relativePath` will be split up.
-    ///
-    /// For example, if an include of "Some/Some.h" is found via the framework path
-    /// "path/to/Frameworks/Some.framework/Headers/Some.h"
-    /// `searchPath` will be "path/to/Frameworks/Some.framework/Headers"
-    /// `relativePath` will be "Some.h".
-    std::string searchPath;
-
-    /// See `searchPath`.
-    std::string relativePath;
+    /// The range of filename(includes `""` or `<>`).
+    clang::SourceRange fileNameRange;
 };
 
 /// Information about `__has_include` directive.
 struct HasInclude {
-    /// The path of the included file.
-    llvm::StringRef path;
+    /// The file id of included file, may be empty if there is
+    /// not such file.
+    clang::FileID fid;
 
     /// Location of the filename token start.
     clang::SourceLocation location;

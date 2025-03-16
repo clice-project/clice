@@ -221,7 +221,7 @@ void IncludeGraph::addContexts(ASTInfo& AST,
             /// If the include is invalid, it indicates that the file is skipped because of
             /// include guard, or `#pragma once`. Such file cannot provide header context.
             /// So we just skip it.
-            if(include.fid.isInvalid()) {
+            if(include.skipped) {
                 continue;
             }
 

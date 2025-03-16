@@ -289,6 +289,11 @@ enum class FoldingRangeKind {
     Region,
 };
 
+struct DocumentLink {
+    Range range;
+    URI target;
+};
+
 /// Represents a folding range. To be valid, start and end line must be bigger
 /// than zero and smaller than the number of lines in the document. Clients
 /// are free to ignore invalid ranges.
@@ -366,6 +371,14 @@ struct ServerCapabilities {
     /// The server provides semantic tokens support.
     SemanticTokensOptions semanticTokensProvider;
 
+    struct DocumentLinkOptions {
+        /// Document links have a resolve provider as well.
+        bool resolveProvider = false;
+    };
+
+    /// The server provides document link support.
+    DocumentLinkOptions documentLinkProvider;
+
     /// The server provides folding provider support.
     bool foldingRangeProvider = true;
 };
@@ -424,6 +437,8 @@ enum class SemanticTokenTypes {
 using SemanticTokensParams = TextDocumentParams;
 
 using FoldingRangeParams = TextDocumentParams;
+
+using DocumentLinkParams = TextDocumentParams;
 
 struct HeaderContext {
     /// The path of context file.
