@@ -104,9 +104,6 @@ struct PPCallback : public clang::PPCallbacks {
         directives[prevFID].includes.emplace_back(Include{
             .fid = {},
             .location = includeTok.getLocation(),
-            .fileName = fileName.str(),
-            .searchPath = searchPath.str(),
-            .relativePath = relativePath.str(),
         });
     }
 

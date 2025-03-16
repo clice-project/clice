@@ -14,21 +14,6 @@ struct Include {
 
     /// Location of the `include`.
     clang::SourceLocation location;
-
-    /// The name of the included file.
-    std::string fileName;
-
-    /// If the file was found via an absolute include path, `searchPath` will be empty.
-    /// For framework includes, the `searchPath` and `relativePath` will be split up.
-    ///
-    /// For example, if an include of "Some/Some.h" is found via the framework path
-    /// "path/to/Frameworks/Some.framework/Headers/Some.h"
-    /// `searchPath` will be "path/to/Frameworks/Some.framework/Headers"
-    /// `relativePath` will be "Some.h".
-    std::string searchPath;
-
-    /// See `searchPath`.
-    std::string relativePath;
 };
 
 /// Information about `__has_include` directive.

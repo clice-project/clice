@@ -46,6 +46,7 @@ std::vector<std::string> ASTInfo::deps() {
 }
 
 llvm::StringRef ASTInfo::getFilePath(clang::FileID fid) {
+    assert(fid.isValid() && "Invalid fid");
     if(auto it = pathCache.find(fid); it != pathCache.end()) {
         return it->second;
     }
