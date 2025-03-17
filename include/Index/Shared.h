@@ -3,6 +3,12 @@
 #include "llvm/ADT/DenseMap.h"
 #include "clang/Basic/SourceLocation.h"
 
+namespace clice {
+
+class ASTInfo;
+
+}
+
 namespace clice::index {
 
 template <typename T>

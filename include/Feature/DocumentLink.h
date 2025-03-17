@@ -5,11 +5,7 @@
 #include "AST/SourceCode.h"
 #include "Index/Shared.h"
 
-namespace clice {
-
-class ASTInfo;
-
-namespace feature {
+namespace clice::feature {
 
 struct DocumentLink {
     /// The range of the whole link.
@@ -27,7 +23,5 @@ DocumentLinkResult documentLink(ASTInfo& AST);
 /// Generate document link for all source file.
 index::Shared<DocumentLinkResult> indexDocumentLink(ASTInfo& AST);
 
-}  // namespace feature
-
-}  // namespace clice
+}  // namespace clice::feature
 
