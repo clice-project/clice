@@ -6,31 +6,29 @@ namespace clice::testing {
 
 namespace {
 
-using namespace feature::document_symbol;
-
 struct DocumentSymbol : public ::testing::Test {
 
 protected:
     std::optional<Tester> tester;
 
-    Result run(llvm::StringRef code) {
+    auto run(llvm::StringRef code) {
         tester.emplace("main.cpp", code);
         tester->run();
 
         auto& info = tester->info;
         EXPECT_TRUE(info.has_value());
 
-        return documentSymbol(*info, {});
+        return feature::documentSymbol(*info);
     }
 
-    static void total_size(const Result& result, size_t& size) {
+    static void total_size(const std::vector<feature::DocumentSymbol>& result, size_t& size) {
         for(auto& item: result) {
             ++size;
             total_size(item.children, size);
         }
     }
 
-    static size_t total_size(const Result& result) {
+    static size_t total_size(const std::vector<feature::DocumentSymbol>& result) {
         size_t size = 0;
         total_size(result, size);
         return size;
@@ -239,7 +237,7 @@ int y = 2;
     auto& info = tx.info;
     EXPECT_TRUE(info.has_value());
 
-    auto maps = documentSymbol(*info);
+    auto maps = feature::indexDocumentSymbol(*info);
     for(auto& [fileID, result]: maps) {
         if(fileID == info->srcMgr().getMainFileID()) {
             EXPECT_EQ(total_size(result), 2);

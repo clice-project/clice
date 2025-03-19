@@ -3,62 +3,51 @@
 #include "Compiler/Compilation.h"
 #include "Feature/DocumentSymbol.h"
 
-namespace clice {
+namespace clice::feature {
 
 namespace {
 
-using feature::document_symbol::DocumentSymbol;
-
-/// Clangd's DocumentSymbol Implementation:
-/// https://github.com/llvm/llvm-project/blob/main/clang-tools-extra/clangd/FindSymbols.cpp#L286
-
 /// Use DFS to traverse the AST and collect document symbols.
 struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollector> {
-
     using Base = FilteredASTVisitor<DocumentSymbolCollector>;
 
-    using Storage = index::Shared<feature::document_symbol::Result>;
-
     /// DFS state stack.
-    std::vector<std::pair<DocumentSymbol, clang::SourceLocation>> stack;
-
-    /// Result of document symbols.
-    Storage result;
+    /// std::vector<std::pair<DocumentSymbol, clang::SourceLocation>> stack;
+    index::Shared<std::vector<DocumentSymbol>> result;
 
     DocumentSymbolCollector(ASTInfo& AST, bool interestedOnly) :
         Base(AST, interestedOnly, std::nullopt) {}
 
     /// Entry a new AST node which may has some children nodes.
     void entry(DocumentSymbol symbol, clang::SourceLocation loc) {
-        stack.push_back({std::move(symbol), loc});
+        /// stack.push_back({std::move(symbol), loc});
     }
 
     /// Leave the current AST node.
     void leave() {
-        stack.back().first.children.shrink_to_fit();
-        auto last = std::move(stack.back());
-        stack.pop_back();
-
-        collect(std::move(last.first), last.second);
+        /// stack.back().first.children.shrink_to_fit();
+        /// auto last = std::move(stack.back());
+        /// stack.pop_back();
+        /// collect(std::move(last.first), last.second);
     }
 
     /// Collect a leaf node as the DocumentSymbol.
     void collect(DocumentSymbol symbol, clang::SourceLocation loc) {
-        feature::document_symbol::Result* state;
-
-        if(!stack.empty()) {
-            state = &stack.back().first.children;
-        } else {
-            clang::FileID fileID = interestedOnly ? AST.getInterestedFile() : AST.getFileID(loc);
-            state = &result[fileID];
-        }
-
-        state->push_back(std::move(symbol));
+        // document_symbol::Result* state;
+        //
+        // if(!stack.empty()) {
+        //    state = &stack.back().first.children;
+        //} else {
+        //    clang::FileID fileID = interestedOnly ? AST.getInterestedFile() : AST.getFileID(loc);
+        //    state = &result[fileID];
+        //}
+        //
+        // state->push_back(std::move(symbol));
     }
 
     /// Mark the symbol as deprecated.
     void markDeprecated(DocumentSymbol& symbol) {
-        symbol.tags.push_back(proto::SymbolTag{proto::SymbolTag::Deprecated});
+        /// symbol.tags.push_back(proto::SymbolTag{proto::SymbolTag::Deprecated});
     }
 
     /// For a given location, it could be one of SpellingLoc or ExpansionLoc (from macro expansion).
@@ -77,7 +66,7 @@ struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollect
 
         auto range = AST.toLocalRange(toLiteralRange(decl->getSourceRange())).second;
         DocumentSymbol symbol{
-            .kind = proto::SymbolKind::Namespace,
+            .kind = SymbolKind::Namespace,
             .name = decl->isAnonymousNamespace() ? Default : decl->getNameAsString(),
             .range = range,
             .selectionRange = range,
@@ -93,7 +82,7 @@ struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollect
     bool TraverseEnumDecl(clang::EnumDecl* decl) {
         auto range = AST.toLocalRange(toLiteralRange(decl->getSourceRange())).second;
         DocumentSymbol symbol{
-            .kind = proto::SymbolKind::Enum,
+            .kind = SymbolKind::Enum,
             .name = decl->getNameAsString(),
             .range = range,
             .selectionRange = range,
@@ -110,7 +99,7 @@ struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollect
         for(auto* etor: decl->enumerators()) {
             auto range = AST.toLocalRange(toLiteralRange(etor->getSourceRange())).second;
             DocumentSymbol symbol{
-                .kind = proto::SymbolKind::EnumMember,
+                .kind = SymbolKind::EnumMember,
                 .name = etor->getNameAsString(),
                 .range = range,
                 .selectionRange = range,
@@ -142,9 +131,7 @@ struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollect
             .range = range,
             .selectionRange = range,
         };
-        symbol.kind = decl->isAbstract() ? proto::SymbolKind::Interface
-                      : decl->isClass()  ? proto::SymbolKind::Class
-                                         : proto::SymbolKind::Struct;
+        symbol.kind = decl->isClass() ? SymbolKind::Class : SymbolKind::Struct;
 
         if(auto name = decl->getName(); !name.empty())
             symbol.name = name;
@@ -160,7 +147,7 @@ struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollect
     bool VisitFieldDecl(const clang::FieldDecl* decl) {
         auto range = AST.toLocalRange(toLiteralRange(decl->getSourceRange())).second;
         DocumentSymbol symbol{
-            .kind = proto::SymbolKind::Field,
+            .kind = SymbolKind::Field,
             .name = decl->getNameAsString(),
             .range = range,
             .selectionRange = range,
@@ -192,7 +179,7 @@ struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollect
     DocumentSymbol extractFunctionSymbol(const clang::FunctionDecl* decl) {
         auto local = AST.toLocalRange(toLiteralRange(decl->getSourceRange())).second;
         DocumentSymbol symbol{
-            .kind = proto::SymbolKind::Function,
+            .kind = SymbolKind::Function,
             .name = decl->getNameAsString(),
             .range = local,
             .selectionRange = local,
@@ -269,7 +256,7 @@ struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollect
 
         auto local = AST.toLocalRange(toLiteralRange(decl->getSourceRange())).second;
         DocumentSymbol symbol{
-            .kind = decl->isConstexpr() ? proto::SymbolKind::Constant : proto::SymbolKind::Variable,
+            .kind = SymbolKind::Variable,
             .name = decl->getNameAsString(),
             .detail = decl->getType().getAsString(),
             .range = local,
@@ -283,78 +270,22 @@ struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollect
         return true;
     }
 
-    static Storage collect(ASTInfo& AST, bool interestedOnly) {
+    static auto collect(ASTInfo& AST, bool interestedOnly) {
         DocumentSymbolCollector collector{AST, interestedOnly};
         collector.TraverseTranslationUnitDecl(AST.tu());
-        assert(collector.stack.empty() && "Unclosed scope to collect DocumentSymbol.");
+        /// assert(collector.stack.empty() && "Unclosed scope to collect DocumentSymbol.");
         return std::move(collector.result);
     }
 };
 
 }  // namespace
 
-namespace feature::document_symbol {
-
-// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#serverCapabilities
-// ```
-// 	/**
-//	 * The server provides document symbol support.
-//	 */
-//	documentSymbolProvider?: boolean | DocumentSymbolOptions;
-// ```
-// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentSymbolOptions
-json::Value capability(json::Value clientCapabilities) {
-    return json::Object{
-        {"documentSymbolProvider", true},
-    };
+std::vector<DocumentSymbol> documentSymbol(ASTInfo& AST) {
+    return {};
 }
 
-/// Get all document symbols in each file.
-index::Shared<Result> documentSymbol(ASTInfo& AST) {
-    return DocumentSymbolCollector::collect(AST, false);
+index::Shared<std::vector<DocumentSymbol>> indexDocumentSymbol(ASTInfo& AST) {
+    return index::Shared<std::vector<DocumentSymbol>>{};
 }
 
-Result documentSymbol(ASTInfo& AST, MainFileOnlyFlag _) {
-    auto result = DocumentSymbolCollector::collect(AST, true);
-    return std::move(result[AST.getInterestedFile()]);
-}
-
-proto::DocumentSymbol toLspType(const DocumentSymbol& result,
-                                const SourceConverter& SC,
-                                llvm::StringRef content) {
-    proto::DocumentSymbol lspRes;
-
-    lspRes.name = result.name;
-    lspRes.detail = result.detail;
-    lspRes.kind = result.kind;
-    lspRes.tags = result.tags;
-
-    lspRes.range = SC.toRange(result.range, content);
-    lspRes.selectionRange = SC.toRange(result.selectionRange, content);
-
-    lspRes.children.reserve(result.children.size());
-    for(auto& child: result.children) {
-        lspRes.children.push_back(toLspType(child, SC, content));
-    }
-
-    lspRes.children.shrink_to_fit();
-    return lspRes;
-}
-
-proto::DocumentSymbolResult toLspResult(llvm::ArrayRef<DocumentSymbol> result,
-                                        const SourceConverter& SC,
-                                        llvm::StringRef content) {
-    proto::DocumentSymbolResult lspRes;
-    lspRes.reserve(result.size());
-
-    for(auto& symbol: result) {
-        lspRes.push_back(toLspType(symbol, SC, content));
-    }
-
-    lspRes.shrink_to_fit();
-    return lspRes;
-}
-
-}  // namespace feature::document_symbol
-
-}  // namespace clice
+}  // namespace clice::feature
