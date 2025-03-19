@@ -8,22 +8,32 @@
 namespace clice::feature {
 
 struct DocumentSymbol {
-    SymbolKind kind;
-
-    std::string name;
-
-    std::string detail;
-
+    /// The range of symbol name in source code.
     LocalSourceRange selectionRange;
 
+    /// The range of whole symbol.
     LocalSourceRange range;
 
+    /// The symbol kind of this document symbol.
+    SymbolKind kind;
+
+    /// The symbol name.
+    std::string name;
+
+    /// Extra information about this symbol.
+    std::string detail;
+
+    /// The symbols that this symbol contains
     std::vector<DocumentSymbol> children;
 };
 
-std::vector<DocumentSymbol> documentSymbol(ASTInfo& AST);
+using DocumentSymbols = std::vector<DocumentSymbol>;
 
-index::Shared<std::vector<DocumentSymbol>> indexDocumentSymbol(ASTInfo& AST);
+/// Generate document symbols for only interested file.
+DocumentSymbols documentSymbols(ASTInfo& AST);
+
+/// Generate document symbols for all file in AST.
+index::Shared<DocumentSymbols> indexDocumentSymbols(ASTInfo& AST);
 
 }  // namespace clice::feature
 

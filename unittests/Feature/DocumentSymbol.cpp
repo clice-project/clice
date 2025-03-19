@@ -18,7 +18,7 @@ protected:
         auto& info = tester->info;
         EXPECT_TRUE(info.has_value());
 
-        return feature::documentSymbol(*info);
+        return feature::documentSymbols(*info);
     }
 
     static void total_size(const std::vector<feature::DocumentSymbol>& result, size_t& size) {
@@ -237,7 +237,7 @@ int y = 2;
     auto& info = tx.info;
     EXPECT_TRUE(info.has_value());
 
-    auto maps = feature::indexDocumentSymbol(*info);
+    auto maps = feature::indexDocumentSymbols(*info);
     for(auto& [fileID, result]: maps) {
         if(fileID == info->srcMgr().getMainFileID()) {
             EXPECT_EQ(total_size(result), 2);
