@@ -14,9 +14,9 @@ struct DocumentSymbol {
 
     std::string detail;
 
-    LocalSourceRange range;
-
     LocalSourceRange selectionRange;
+
+    LocalSourceRange range;
 
     std::vector<DocumentSymbol> children;
 };
