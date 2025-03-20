@@ -39,6 +39,8 @@ public:
 
     std::vector<feature::DocumentLink> documentLinks() const;
 
+    std::vector<feature::DocumentSymbol> documentSymbols() const;
+
 public:
     char* base;
     std::size_t size;

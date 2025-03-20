@@ -82,4 +82,15 @@ std::vector<feature::DocumentLink> FeatureIndex::documentLinks() const {
     return result;
 }
 
+std::vector<feature::DocumentSymbol> FeatureIndex::documentSymbols() const {
+    auto array = binary::Proxy<memory::FeatureIndex>{base, base}.get<"symbols">();
+
+    std::vector<feature::DocumentSymbol> result;
+    result.reserve(array.size());
+
+    /// FIXME:
+
+    return result;
+}
+
 }  // namespace clice::index
