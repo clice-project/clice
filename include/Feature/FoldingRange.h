@@ -4,11 +4,7 @@
 #include "Index/Shared.h"
 #include "Support/Enum.h"
 
-namespace clice {
-
-class ASTInfo;
-
-namespace feature {
+namespace clice::feature {
 
 struct FoldingRangeKind : refl::Enum<FoldingRangeKind> {
     enum Kind : uint8_t {
@@ -54,6 +50,5 @@ std::vector<FoldingRange> foldingRange(ASTInfo& AST);
 /// Generate folding range for all files.
 index::Shared<std::vector<FoldingRange>> indexFoldingRange(ASTInfo& AST);
 
-}  // namespace feature
+}  // namespace clice::feature
 
-}  // namespace clice

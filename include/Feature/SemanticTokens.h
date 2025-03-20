@@ -4,17 +4,13 @@
 #include "AST/SourceCode.h"
 #include "Index/Shared.h"
 
-namespace clice {
-
-class ASTInfo;
-
-namespace config {
+namespace clice::config {
 
 struct SemanticTokensOption {};
 
-};  // namespace config
+};  // namespace clice::config
 
-namespace feature {
+namespace clice::feature {
 
 struct SemanticToken {
     LocalSourceRange range;
@@ -28,7 +24,5 @@ std::vector<SemanticToken> semanticTokens(ASTInfo& AST);
 /// Generate semantic tokens for all files.
 index::Shared<std::vector<SemanticToken>> indexSemanticTokens(ASTInfo& AST);
 
-}  // namespace feature
-
-}  // namespace clice
+}  // namespace clice::feature
 

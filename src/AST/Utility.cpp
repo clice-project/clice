@@ -147,7 +147,9 @@ std::string getDeclName(const clang::NamedDecl* decl) {
     auto name = decl->getDeclName();
     switch(name.getNameKind()) {
         case clang::DeclarationName::Identifier: {
-            result += name.getAsIdentifierInfo()->getName();
+            if(auto II = name.getAsIdentifierInfo()) {
+                result += name.getAsIdentifierInfo()->getName();
+            }
             break;
         }
 

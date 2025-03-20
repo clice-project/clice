@@ -108,42 +108,54 @@ struct Section {
 };
 
 template <typename T>
-struct layout;
+constexpr inline bool is_std_string_v = false;
+
+template <>
+constexpr inline bool is_std_string_v<std::string> = true;
+
+template <typename T>
+constexpr inline bool is_std_vector_v = false;
+
+template <typename T, typename A>
+constexpr inline bool is_std_vector_v<std::vector<T, A>> = true;
+
+template <typename T>
+constexpr inline bool is_std_tuple_v = false;
+
+template <typename... Ts>
+constexpr inline bool is_std_tuple_v<std::tuple<Ts...>> = true;
+
+template <typename T, typename Primary = void>
+consteval auto layout() {
+    using namespace binary::impl;
+    if constexpr(is_directly_binarizable_v<T>) {
+        return std::tuple<>();
+    } else if constexpr(is_std_string_v<T>) {
+        return std::tuple<Section<char>>();
+    } else if constexpr(is_std_vector_v<T>) {
+        using V = typename T::value_type;
+        if constexpr(std::is_same_v<V, Primary>) {
+            return std::tuple<Section<V>>();
+        } else {
+            return std::tuple_cat(std::tuple<Section<V>>(), layout<V>());
+        }
+    } else if constexpr(is_std_tuple_v<T>) {
+        return []<typename... Ts>(type_list<Ts...>) {
+            return std::tuple_cat(layout<Ts>()...);
+        }(tuple_to_list_t<T>());
+    } else if constexpr(refl::reflectable_struct<T>) {
+        return []<typename... Ts>(type_list<Ts...>) {
+            return std::tuple_cat(layout<Ts, T>()...);
+        }(refl::member_types<T>());
+    } else {
+        static_assert(dependent_false<T>, "unsupported type");
+    }
+}
 
 /// Get the binary layout of a type. Make sure every type in the
 /// layout is unique.
 template <typename T>
-using layout_t = tuple_uniuqe_t<typename layout<T>::type>;
-
-template <typename T>
-    requires (is_directly_binarizable_v<T>)
-struct layout<T> {
-    using type = std::tuple<>;
-};
-
-template <>
-struct layout<std::string> {
-    using type = std::tuple<Section<char>>;
-};
-
-/// Every time we encounter a `std::vector<T>`, we will add a `section<T>`.
-template <typename T>
-struct layout<std::vector<T>> {
-    using type = decltype(std::tuple_cat(std::declval<std::tuple<Section<T>>>(),
-                                         std::declval<layout_t<T>>()));
-};
-
-template <typename... Ts>
-struct layout<std::tuple<Ts...>> {
-    using type = decltype(std::tuple_cat(std::declval<layout_t<Ts>>()...));
-};
-
-/// For reflectable struct, recursively get the layout.
-template <typename T>
-    requires (refl::reflectable_struct<T> && !is_directly_binarizable_v<T>)
-struct layout<T> {
-    using type = layout_t<typename refl::member_types<T>::to_tuple>;
-};
+using layout_t = tuple_uniuqe_t<decltype(layout<T>())>;
 
 template <typename T>
 struct Packer {
@@ -171,47 +183,54 @@ struct Packer {
         }
     }
 
-    /// Write the object to the buffer and return the binary representation.
     template <typename Object>
-    auto write(const Object& object) {
-        if constexpr(is_directly_binarizable_v<Object> && !refl::reflectable_struct<Object>) {
-            return object;
-        } else if constexpr(std::same_as<Object, std::string>) {
-            auto& section = std::get<Section<char>>(layout);
-            uint32_t size = object.size();
-            uint32_t offset = section.offset + section.count;
-            section.count += size + 1;
+        requires (is_directly_binarizable_v<Object> && !refl::reflectable_struct<Object>)
+    Object write(const Object& object) {
+        return object;
+    }
 
-            std::memcpy(buffer + offset, object.data(), size);
-            buffer[offset + size] = '\0';
+    template <typename Object>
+        requires (is_std_string_v<Object>)
+    string write(const Object& object) {
+        auto& section = std::get<Section<char>>(layout);
+        uint32_t size = object.size();
+        uint32_t offset = section.offset + section.count;
+        section.count += size + 1;
 
-            return string{offset, size};
-        } else if constexpr(requires { typename Object::value_type; }) {
-            using V = typename Object::value_type;
-            auto& section = std::get<Section<V>>(layout);
-            uint32_t size = object.size();
-            uint32_t offset = section.offset + section.count * sizeof(binarify_t<V>);
-            section.count += size;
+        std::memcpy(buffer + offset, object.data(), size);
+        buffer[offset + size] = '\0';
 
-            for(std::size_t i = 0; i < size; ++i) {
-                ::new (buffer + offset + i * sizeof(binarify_t<V>)) auto{write(object[i])};
-            }
+        return string{offset, size};
+    }
 
-            return array<V>{offset, size};
-        } else if constexpr(refl::reflectable_struct<Object>) {
-            std::array<char, sizeof(binarify_t<Object>)> buffer;
-            std::memset(buffer.data(), 0, sizeof(buffer));
+    template <typename Object, typename V = typename Object::value_type>
+        requires (is_std_vector_v<Object>)
+    array<V> write(const Object& object) {
+        auto& section = std::get<Section<V>>(layout);
+        uint32_t size = object.size();
+        uint32_t offset = section.offset + section.count * sizeof(binarify_t<V>);
+        section.count += size;
 
-            binarify_t<Object> result;
-            refl::foreach(result, object, [&](auto& lhs, auto& rhs) {
-                auto offset = reinterpret_cast<char*>(&lhs) - reinterpret_cast<char*>(&result);
-                ::new (buffer.data() + offset) auto{write(rhs)};
-            });
-
-            return buffer;
-        } else {
-            static_assert(dependent_false<Object>, "Unsupported type.");
+        for(std::size_t i = 0; i < size; ++i) {
+            ::new (buffer + offset + i * sizeof(binarify_t<V>)) auto{write(object[i])};
         }
+
+        return array<V>{offset, size};
+    }
+
+    template <typename Object>
+        requires (refl::reflectable_struct<Object>)
+    std::array<char, sizeof(binarify_t<Object>)> write(const Object& object) {
+        std::array<char, sizeof(binarify_t<Object>)> buffer;
+        std::memset(buffer.data(), 0, sizeof(buffer));
+
+        binarify_t<Object> result;
+        refl::foreach(result, object, [&](auto& lhs, auto& rhs) {
+            auto offset = reinterpret_cast<char*>(&lhs) - reinterpret_cast<char*>(&result);
+            ::new (buffer.data() + offset) auto{write(rhs)};
+        });
+
+        return buffer;
     }
 
     char* pack(const auto& object) {

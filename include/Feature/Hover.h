@@ -4,17 +4,13 @@
 #include "AST/SourceCode.h"
 #include "Index/Shared.h"
 
-namespace clice {
-
-class ASTInfo;
-
-namespace config {
+namespace clice::config {
 
 struct HoverOptions {};
 
-}  // namespace config
+}  // namespace clice::config
 
-namespace feature {
+namespace clice::feature {
 
 struct HoverItem {
     enum class HoverKind : uint8_t {
@@ -83,7 +79,5 @@ Hover hover(ASTInfo& AST, uint32_t offset);
 /// Generate the hover information for all files in the given AST.
 index::Shared<Hovers> indexHover(ASTInfo& AST);
 
-}  // namespace feature
-
-}  // namespace clice
+}  // namespace clice::feature
 

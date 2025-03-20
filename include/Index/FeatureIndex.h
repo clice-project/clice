@@ -6,6 +6,7 @@
 #include "Feature/SemanticTokens.h"
 #include "Feature/FoldingRange.h"
 #include "Feature/DocumentLink.h"
+#include "Feature/DocumentSymbol.h"
 
 #include "llvm/ADT/DenseMap.h"
 #include "clang/Basic/SourceLocation.h"
@@ -37,6 +38,8 @@ public:
     std::vector<feature::FoldingRange> foldingRanges() const;
 
     std::vector<feature::DocumentLink> documentLinks() const;
+
+    std::vector<feature::DocumentSymbol> documentSymbols() const;
 
 public:
     char* base;

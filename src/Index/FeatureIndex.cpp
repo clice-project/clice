@@ -10,6 +10,7 @@ struct FeatureIndex {
     std::vector<feature::SemanticToken> tokens;
     std::vector<feature::FoldingRange> foldings;
     std::vector<feature::DocumentLink> links;
+    feature::DocumentSymbols symbols;
 };
 
 }  // namespace memory
@@ -27,6 +28,10 @@ Shared<FeatureIndex> indexFeature(ASTInfo& info) {
 
     for(auto&& [fid, result]: feature::indexDocumentLink(info)) {
         indices[fid].links = std::move(result);
+    }
+
+    for(auto&& [fid, result]: feature::indexDocumentSymbols(info)) {
+        indices[fid].symbols = std::move(result);
     }
 
     Shared<FeatureIndex> result;
@@ -73,6 +78,17 @@ std::vector<feature::DocumentLink> FeatureIndex::documentLinks() const {
         auto&& range = array[i];
         result.emplace_back(range.get<"range">().value(), range.get<"file">().as_string().str());
     }
+
+    return result;
+}
+
+std::vector<feature::DocumentSymbol> FeatureIndex::documentSymbols() const {
+    auto array = binary::Proxy<memory::FeatureIndex>{base, base}.get<"symbols">();
+
+    std::vector<feature::DocumentSymbol> result;
+    result.reserve(array.size());
+
+    /// FIXME:
 
     return result;
 }

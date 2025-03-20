@@ -77,6 +77,25 @@ TEST(Binary, Nested) {
     std::free(const_cast<void*>(proxy.base));
 }
 
+struct Node {
+    int value;
+    std::vector<Node> nodes;
+};
+
+TEST(Binary, Recursively) {
+    Node node = {
+        1,
+        {
+          {3},
+          {4},
+          {5, {{3}, {4}, {5}}},
+          },
+    };
+
+    auto proxy = binary::binarify(node).first;
+    std::free(const_cast<void*>(proxy.base));
+}
+
 }  // namespace
 }  // namespace clice::testing
 

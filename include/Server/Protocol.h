@@ -440,6 +440,19 @@ using FoldingRangeParams = TextDocumentParams;
 
 using DocumentLinkParams = TextDocumentParams;
 
+using DocumentSymbolParams = TextDocumentParams;
+
+enum class SymbolKind {};
+
+struct DocumentSymbol {
+    std::string name;
+    std::string detail;
+    SymbolKind kind;
+    Range range;
+    Range selectionRange;
+    std::vector<DocumentSymbol> children;
+};
+
 struct HeaderContext {
     /// The path of context file.
     std::string file;
