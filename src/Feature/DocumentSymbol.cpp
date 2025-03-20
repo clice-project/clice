@@ -2,27 +2,54 @@
 #include "AST/Utility.h"
 #include "Compiler/Compilation.h"
 #include "Feature/DocumentSymbol.h"
+#include "Support/Ranges.h"
+#include "Support/Compare.h"
 
 namespace clice::feature {
 
 namespace {
 
 /// Use DFS to traverse the AST and collect document symbols.
-struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollector> {
-    using Base = FilteredASTVisitor<DocumentSymbolCollector>;
+class DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollector> {
 
-    struct SymbolFrame {
-        DocumentSymbols symbols;
-        DocumentSymbols* cursor = &symbols;
-    };
+public:
+    using Base = FilteredASTVisitor<DocumentSymbolCollector>;
 
     DocumentSymbolCollector(ASTInfo& AST, bool interestedOnly) :
         Base(AST, interestedOnly, std::nullopt) {}
 
-    template <auto MF, typename Decl>
-    bool collect(Decl* decl) {
-        const clang::NamedDecl* ND = decl;
+    bool isInterested(clang::Decl* decl) {
+        switch(decl->getKind()) {
+            case clang::Decl::Namespace:
+            case clang::Decl::Enum:
+            case clang::Decl::EnumConstant:
+            case clang::Decl::Function:
+            case clang::Decl::CXXMethod:
+            case clang::Decl::CXXConstructor:
+            case clang::Decl::CXXDestructor:
+            case clang::Decl::CXXConversion:
+            case clang::Decl::CXXDeductionGuide:
+            case clang::Decl::Record:
+            case clang::Decl::CXXRecord:
+            case clang::Decl::Field:
+            case clang::Decl::Var:
+            case clang::Decl::Binding:
+            case clang::Decl::Concept: {
+                return true;
+            }
 
+            default: {
+                return false;
+            }
+        }
+    }
+
+    bool hookTraverseDecl(clang::Decl* decl, auto MF) {
+        if(!isInterested(decl)) {
+            return (this->*MF)(decl);
+        }
+
+        auto ND = llvm::cast<clang::NamedDecl>(decl);
         auto [fid, selectionRange] = AST.toLocalRange(AST.getExpansionLoc(ND->getLocation()));
 
         auto& frame = interestedOnly ? result : sharedResult[fid];
@@ -30,6 +57,9 @@ struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollect
 
         /// Add new symbol.
         auto& symbol = frame.cursor->emplace_back();
+        symbol.kind = SymbolKind::from(decl);
+        symbol.name = getDeclName(ND);
+        symbol.selectionRange = selectionRange;
 
         /// Adjust the node.
         frame.cursor = &symbol.children;
@@ -42,27 +72,12 @@ struct DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollect
         return res;
     }
 
-#define COLLECT_DECL(type)                                                                         \
-    bool Traverse##type(clang::type* decl) {                                                       \
-        return collect<&Base::Traverse##type>(decl);                                               \
-    }
+public:
+    struct SymbolFrame {
+        DocumentSymbols symbols;
+        DocumentSymbols* cursor = &symbols;
+    };
 
-    /// FIXME: Figure out which AST nodes we need to handle.
-    COLLECT_DECL(NamespaceDecl);
-    COLLECT_DECL(EnumDecl);
-    COLLECT_DECL(EnumConstantDecl);
-    COLLECT_DECL(RecordDecl);
-    COLLECT_DECL(CXXRecordDecl);
-    COLLECT_DECL(FieldDecl);
-    COLLECT_DECL(FunctionDecl);
-    COLLECT_DECL(CXXMethodDecl);
-    COLLECT_DECL(CXXConversionDecl);
-    COLLECT_DECL(VarDecl);
-    COLLECT_DECL(ConceptDecl);
-
-#undef COLLECT_DECL
-
-private:
     SymbolFrame result;
     index::Shared<SymbolFrame> sharedResult;
 };
@@ -70,11 +85,24 @@ private:
 }  // namespace
 
 DocumentSymbols documentSymbols(ASTInfo& AST) {
-    return {};
+    DocumentSymbolCollector collector(AST, true);
+    collector.TraverseDecl(AST.tu());
+
+    auto& frame = collector.result;
+    ranges::sort(frame.symbols, refl::less);
+    return std::move(frame.symbols);
 }
 
 index::Shared<DocumentSymbols> indexDocumentSymbols(ASTInfo& AST) {
-    return index::Shared<DocumentSymbols>{};
+    DocumentSymbolCollector collector(AST, true);
+    collector.TraverseDecl(AST.tu());
+
+    index::Shared<DocumentSymbols> result;
+    for(auto& [fid, frame]: collector.sharedResult) {
+        ranges::sort(frame.symbols, refl::less);
+        result.try_emplace(fid, std::move(frame.symbols));
+    }
+    return result;
 }
 
 }  // namespace clice::feature

@@ -74,7 +74,12 @@ public:
             }
         }
 
-        return Base::TraverseDecl(decl);
+        /// if constexpr(requires)
+        if constexpr(requires { getDerived().hookTraverseDecl(decl, &Base::TraverseDecl); }) {
+            return getDerived().hookTraverseDecl(decl, &Base::TraverseDecl);
+        } else {
+            return Base::TraverseDecl(decl);
+        }
     }
 
     bool TraverseStmt(clang::Stmt* stmt) {
