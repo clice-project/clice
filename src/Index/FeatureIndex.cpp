@@ -37,7 +37,7 @@ Shared<FeatureIndex> indexFeature(ASTInfo& info) {
     Shared<FeatureIndex> result;
 
     for(auto&& [fid, index]: indices) {
-        auto [buffer, size] = binary::binarify(static_cast<memory::FeatureIndex>(index));
+        auto [buffer, size] = binary::serialize(static_cast<memory::FeatureIndex>(index));
         result.try_emplace(
             fid,
             FeatureIndex{static_cast<char*>(const_cast<void*>(buffer.base)), size, true});

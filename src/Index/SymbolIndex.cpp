@@ -298,7 +298,7 @@ public:
                 index.path = AST.getFilePath(fid);
             }
 
-            auto [buffer, size] = clice::binary::binarify(static_cast<memory::SymbolIndex>(index));
+            auto [buffer, size] = clice::binary::serialize(static_cast<memory::SymbolIndex>(index));
             result.try_emplace(
                 fid,
                 SymbolIndex{static_cast<char*>(const_cast<void*>(buffer.base)), size, true});
