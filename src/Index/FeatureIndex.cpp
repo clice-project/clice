@@ -10,6 +10,7 @@ struct FeatureIndex {
     std::vector<feature::SemanticToken> tokens;
     std::vector<feature::FoldingRange> foldings;
     std::vector<feature::DocumentLink> links;
+    feature::DocumentSymbols symbols;
 };
 
 }  // namespace memory
@@ -27,6 +28,10 @@ Shared<FeatureIndex> indexFeature(ASTInfo& info) {
 
     for(auto&& [fid, result]: feature::indexDocumentLink(info)) {
         indices[fid].links = std::move(result);
+    }
+
+    for(auto&& [fid, result]: feature::indexDocumentSymbols(info)) {
+        indices[fid].symbols = std::move(result);
     }
 
     Shared<FeatureIndex> result;

@@ -60,6 +60,7 @@ public:
         symbol.kind = SymbolKind::from(decl);
         symbol.name = getDeclName(ND);
         symbol.selectionRange = selectionRange;
+        symbol.range = selectionRange;
 
         /// Adjust the node.
         frame.cursor = &symbol.children;

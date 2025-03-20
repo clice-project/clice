@@ -6,6 +6,7 @@
 #include "Feature/SemanticTokens.h"
 #include "Feature/FoldingRange.h"
 #include "Feature/DocumentLink.h"
+#include "Feature/DocumentSymbol.h"
 
 #include "llvm/ADT/DenseMap.h"
 #include "clang/Basic/SourceLocation.h"
