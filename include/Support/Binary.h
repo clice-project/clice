@@ -317,4 +317,25 @@ std::pair<Proxy<Object>, size_t> serialize(const Object& object) {
     };
 }
 
+template <typename Object>
+Object deserialize(Proxy<Object> proxy) {
+    if constexpr(is_directly_binarizable_v<Object>) {
+        return proxy.value();
+    } else if constexpr(std::is_same_v<Object, std::string>) {
+        return proxy.as_string().str();
+    } else if constexpr(is_specialization_of<Object, std::vector>) {
+        Object result;
+        for(std::size_t i = 0; i < proxy.size(); i++) {
+            result.emplace_back(deserialize(proxy[i]));
+        }
+        return result;
+    } else if constexpr(refl::reflectable_struct<Object>) {
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return Object{deserialize(proxy.template get<Is>())...};
+        }(std::make_index_sequence<refl::member_count<Object>()>());
+    } else {
+        static_assert(dependent_false<Object>, "");
+    }
+}
+
 }  // namespace clice::binary

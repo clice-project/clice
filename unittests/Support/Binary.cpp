@@ -97,6 +97,8 @@ TEST(Binary, Recursively) {
     };
 
     auto proxy = binary::serialize(node).first;
+    auto node2 = binary::deserialize(proxy);
+    EXPECT_EQ(node, node2);
     std::free(const_cast<void*>(proxy.base));
 }
 
