@@ -287,10 +287,10 @@ public:
         });
     }
 
-    llvm::DenseMap<clang::FileID, SymbolIndex> build() {
+    auto build() {
         run();
 
-        llvm::DenseMap<clang::FileID, SymbolIndex> result;
+        llvm::DenseMap<clang::FileID, std::vector<char>> result;
         for(auto& [fid, index]: indices) {
             index.sort();
 
@@ -299,9 +299,7 @@ public:
             }
 
             auto [buffer, size] = clice::binary::serialize(static_cast<memory::SymbolIndex>(index));
-            result.try_emplace(
-                fid,
-                SymbolIndex{static_cast<char*>(const_cast<void*>(buffer.base)), size, true});
+            result.try_emplace(fid, std::move(buffer));
         }
 
         return std::move(result);
@@ -314,7 +312,7 @@ private:
 
 }  // namespace
 
-Shared<SymbolIndex> index(ASTInfo& info) {
+Shared<std::vector<char>> index(ASTInfo& info) {
     SymbolIndexCollector collector(info);
     return collector.build();
 }

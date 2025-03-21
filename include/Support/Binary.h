@@ -7,9 +7,11 @@
 
 #include "Enum.h"
 #include "Struct.h"
+#include "Format.h"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/MemoryBuffer.h"
 
 namespace clice::binary {
 
@@ -52,13 +54,11 @@ consteval auto binarify() {
     } else if constexpr(is_specialization_of<T, std::vector>) {
         return identity<binary::array<typename T::value_type>>();
     } else if constexpr(is_specialization_of<T, std::tuple>) {
-        return []<typename... Ts>(type_list<Ts...>) {
-            return identity<std::tuple<binarify_t<Ts>...>>();
-        }(tuple_to_list_t<T>());
+        return tuple_to_list_t<T>::apply(
+            []<typename... Ts> { return identity<std::tuple<binarify_t<Ts>...>>(); });
     } else if constexpr(refl::reflectable_struct<T>) {
-        return []<typename... Ts>(type_list<Ts...>) {
-            return identity<std::tuple<binarify_t<Ts>...>>();
-        }(refl::member_types<T>());
+        return refl::member_types<T>::apply(
+            []<typename... Ts> { return identity<std::tuple<binarify_t<Ts>...>>(); });
     } else {
         static_assert(dependent_false<T>, "unsupported type");
     }
@@ -91,13 +91,11 @@ consteval auto layout() {
             return std::tuple_cat(std::tuple<Section<V>>(), layout<V>());
         }
     } else if constexpr(is_specialization_of<T, std::tuple>) {
-        return []<typename... Ts>(type_list<Ts...>) {
-            return std::tuple_cat(layout<Ts>()...);
-        }(tuple_to_list_t<T>());
+        return tuple_to_list_t<T>::apply(
+            []<typename... Ts> { return std::tuple_cat(layout<Ts>()...); });
     } else if constexpr(refl::reflectable_struct<T>) {
-        return []<typename... Ts>(type_list<Ts...>) {
-            return std::tuple_cat(layout<Ts, T>()...);
-        }(refl::member_types<T>());
+        return refl::member_types<T>::apply(
+            []<typename... Ts> { return std::tuple_cat(layout<Ts, T>()...); });
     } else {
         static_assert(dependent_false<T>, "unsupported type");
     }
@@ -117,7 +115,7 @@ struct Packer {
     uint32_t size = 0;
 
     /// The buffer to store the binary data.
-    char* buffer = nullptr;
+    std::vector<char> buffer;
 
     /// Recursively traverse the object and calculate the size of each section.
     template <typename Object>
@@ -148,7 +146,7 @@ struct Packer {
         uint32_t offset = section.offset + section.count;
         section.count += size + 1;
 
-        std::memcpy(buffer + offset, object.data(), size);
+        std::memcpy(buffer.data() + offset, object.data(), size);
         buffer[offset + size] = '\0';
 
         return string{offset, size};
@@ -163,7 +161,7 @@ struct Packer {
         section.count += size;
 
         for(std::size_t i = 0; i < size; ++i) {
-            ::new (buffer + offset + i * sizeof(binarify_t<V>)) auto{write(object[i])};
+            ::new (buffer.data() + offset + i * sizeof(binarify_t<V>)) auto{write(object[i])};
         }
 
         return array<V>{offset, size};
@@ -184,7 +182,7 @@ struct Packer {
         return buffer;
     }
 
-    char* pack(const auto& object) {
+    std::vector<char> pack(const auto& object) {
         /// First initialize the layout.
         init(object);
 
@@ -206,18 +204,15 @@ struct Packer {
 
         refl::foreach(layout, try_each);
 
-        /// Allocate the buffer and write the data to the buffer.
-        buffer = static_cast<char*>(std::malloc(size));
-
         /// Make sure the buffer is clean. So we can compare the result.
         /// Every padding in the struct should be filled with 0.
-        std::memset(buffer, 0, size);
+        buffer.resize(size, 0);
 
         /// Write the object to the buffer.
         auto result = write(object);
-        std::memcpy(buffer, &result, sizeof(result));
+        std::memcpy(buffer.data(), &result, sizeof(result));
 
-        return buffer;
+        return std::move(buffer);
     }
 };
 
@@ -308,13 +303,10 @@ struct Proxy {
 
 /// Binirize an object.
 template <typename Object>
-std::pair<Proxy<Object>, size_t> serialize(const Object& object) {
-    Packer<Object> packer;
-    auto buffer = packer.pack(object);
-    return {
-        Proxy<Object>{buffer, reinterpret_cast<const binarify_t<Object>*>(buffer)},
-        packer.size
-    };
+auto serialize(const Object& object) {
+    auto buffer = Packer<Object>().pack(object);
+    auto proxy = Proxy<Object>{buffer.data(), buffer.data()};
+    return std::tuple(std::move(buffer), proxy);
 }
 
 template <typename Object>

@@ -5,6 +5,18 @@ namespace clice::testing {
 
 namespace {
 
+template <typename Object, typename... Ts>
+constexpr inline bool check_sections =
+    std::is_same_v<binary::layout_t<Object>, std::tuple<binary::Section<Ts>...>>;
+
+TEST(Binary, String) {
+    std::string s1 = "123";
+    static_assert(check_sections<std::string, char>);
+    auto [buffer, proxy] = binary::serialize(s1);
+    std::string s2 = binary::deserialize(proxy);
+    EXPECT_EQ(s1, s2);
+}
+
 TEST(Binary, Binarify) {
     static_assert(binary::is_directly_binarizable_v<int>);
     static_assert(std::same_as<binary::binarify_t<int>, int>);
@@ -48,12 +60,10 @@ struct Point {
 
 TEST(Binary, Simple) {
     using namespace clice::binary;
-    auto proxy = binary::serialize(Point{1, 2}).first;
+    auto [buffer, proxy] = binary::serialize(Point{1, 2});
 
     EXPECT_EQ(proxy.value().x, 1);
     EXPECT_EQ(proxy.value().y, 2);
-
-    std::free(const_cast<void*>(proxy.base));
 }
 
 struct Points {
@@ -65,14 +75,12 @@ TEST(Binary, Nested) {
         {Point{1, 2}, Point{3, 4}}
     };
 
-    auto proxy = binary::serialize(points).first;
+    auto [buffer, proxy] = binary::serialize(points);
 
     auto points2 = proxy.get<"points">();
 
     EXPECT_EQ(points2[0].value(), Point{1, 2});
     EXPECT_EQ(points2[1].value(), Point{3, 4});
-
-    std::free(const_cast<void*>(proxy.base));
 }
 
 struct Node {
@@ -96,10 +104,9 @@ TEST(Binary, Recursively) {
             }, },
     };
 
-    auto proxy = binary::serialize(node).first;
+    auto [buffer, proxy] = binary::serialize(node);
     auto node2 = binary::deserialize(proxy);
     EXPECT_EQ(node, node2);
-    std::free(const_cast<void*>(proxy.base));
 }
 
 }  // namespace

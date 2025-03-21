@@ -93,6 +93,6 @@ public:
     bool own;
 };
 
-Shared<SymbolIndex> index(ASTInfo& info);
+Shared<std::vector<char>> index(ASTInfo& info);
 
 }  // namespace clice::index

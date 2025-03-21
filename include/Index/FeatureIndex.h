@@ -47,6 +47,6 @@ public:
     bool own;
 };
 
-Shared<FeatureIndex> indexFeature(ASTInfo& info);
+Shared<std::vector<char>> indexFeature(ASTInfo& info);
 
 }  // namespace clice::index

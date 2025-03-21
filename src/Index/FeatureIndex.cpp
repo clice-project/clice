@@ -15,7 +15,7 @@ struct FeatureIndex {
 
 }  // namespace memory
 
-Shared<FeatureIndex> indexFeature(ASTInfo& info) {
+Shared<std::vector<char>> indexFeature(ASTInfo& info) {
     Shared<memory::FeatureIndex> indices;
 
     for(auto&& [fid, result]: feature::indexSemanticTokens(info)) {
@@ -34,13 +34,11 @@ Shared<FeatureIndex> indexFeature(ASTInfo& info) {
         indices[fid].symbols = std::move(result);
     }
 
-    Shared<FeatureIndex> result;
+    Shared<std::vector<char>> result;
 
     for(auto&& [fid, index]: indices) {
         auto [buffer, size] = binary::serialize(static_cast<memory::FeatureIndex>(index));
-        result.try_emplace(
-            fid,
-            FeatureIndex{static_cast<char*>(const_cast<void*>(buffer.base)), size, true});
+        result.try_emplace(fid, std::move(buffer));
     }
 
     return result;
