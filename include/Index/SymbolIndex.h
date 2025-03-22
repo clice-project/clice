@@ -17,19 +17,7 @@ namespace clice::index {
 
 class SymbolIndex {
 public:
-    SymbolIndex(char* base, std::size_t size, bool own = true) : base(base), size(size), own(own) {}
-
-    SymbolIndex(SymbolIndex&& other) noexcept : base(other.base), size(other.size), own(other.own) {
-        other.base = nullptr;
-        other.size = 0;
-        other.own = false;
-    }
-
-    ~SymbolIndex() {
-        if(own) {
-            std::free(base);
-        }
-    }
+    SymbolIndex(char* base, std::size_t size) : base(base), size(size) {}
 
     struct Symbol;
 
@@ -73,12 +61,6 @@ public:
     /// The path of the source file.
     llvm::StringRef path() const;
 
-    /// All symbols in the index.
-    ArrayView<Symbol> symbols() const;
-
-    /// All occurrences in the index.
-    ArrayView<Occurrence> occurrences() const;
-
     /// Locate symbols at the given position.
     void locateSymbols(uint32_t position, llvm::SmallVectorImpl<Symbol>& symbols) const;
 
@@ -90,7 +72,6 @@ public:
 public:
     char* base;
     std::size_t size;
-    bool own;
 };
 
 Shared<std::vector<char>> index(ASTInfo& info);

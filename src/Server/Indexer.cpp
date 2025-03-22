@@ -290,7 +290,7 @@ async::Task<std::vector<Indexer::SymbolID>>
 
         llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
         co_await async::submit([&] {
-            index::SymbolIndex index(binary->data(), binary->size(), false);
+            index::SymbolIndex index(binary->data(), binary->size());
             index.locateSymbols(offset, symbols);
         });
 
@@ -318,7 +318,8 @@ async::Task<> Indexer::lookup(llvm::ArrayRef<SymbolID> targets,
         }
 
         llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
-        index::SymbolIndex index(binary->data(), binary->size(), false);
+        index::SymbolIndex index(binary->data(), binary->size());
+
         co_await async::submit([&] {
             for(auto& target: targets) {
                 if(auto symbol = index.locateSymbol(target.hash, target.name)) {
@@ -407,7 +408,7 @@ async::Task<std::optional<index::FeatureIndex>>
 
     buffer = std::move(*content);
 
-    co_return index::FeatureIndex(buffer.data(), buffer.size(), false);
+    co_return index::FeatureIndex(buffer.data(), buffer.size());
 }
 
 async::Task<std::vector<feature::SemanticToken>>

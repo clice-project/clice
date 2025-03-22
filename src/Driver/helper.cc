@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
         }
 
         if(format == "symbol") {
-            index::SymbolIndex index(content->data(), content->size(), false);
+            index::SymbolIndex index(content->data(), content->size());
             auto json = index.toJSON();
 
             llvm::SmallString<128> path;

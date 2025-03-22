@@ -103,28 +103,6 @@ llvm::StringRef SymbolIndex::path() const {
     return index.get<"path">().as_string();
 }
 
-ArrayView<SymbolIndex::Symbol> SymbolIndex::symbols() const {
-    binary::Proxy<memory::SymbolIndex> index{base, base};
-    auto symbols = index.get<"symbols">().as_array();
-    return ArrayView<SymbolIndex::Symbol>{
-        base,
-        symbols.data(),
-        symbols.size(),
-        sizeof(decltype(symbols)::value_type),
-    };
-}
-
-ArrayView<SymbolIndex::Occurrence> SymbolIndex::occurrences() const {
-    binary::Proxy<memory::SymbolIndex> index{base, base};
-    auto occurrences = index.get<"occurrences">().as_array();
-    return ArrayView<SymbolIndex::Occurrence>{
-        base,
-        occurrences.data(),
-        occurrences.size(),
-        sizeof(decltype(occurrences)::value_type),
-    };
-}
-
 /// Locate symbols at the given position.
 void SymbolIndex::locateSymbols(uint32_t position,
                                 llvm::SmallVectorImpl<SymbolIndex::Symbol>& symbols) const {
@@ -230,8 +208,8 @@ template <>
 struct Serde<index::SymbolIndex> {
     static json::Value serialize(const index::SymbolIndex& v) {
         return json::Object{
-            {"symbols",     json::serialize(v.symbols())    },
-            {"occurrences", json::serialize(v.occurrences())},
+            ///  {"symbols",     json::serialize(v.symbols())    },
+            /// {"occurrences", json::serialize(v.occurrences())},
         };
     }
 };
