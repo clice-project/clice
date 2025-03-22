@@ -15,64 +15,74 @@ class ASTInfo;
 
 namespace clice::index {
 
-class SymbolIndex {
-public:
-    SymbolIndex(char* base, std::size_t size) : base(base), size(size) {}
+/// An ID used to determine whether symbols from different translation units are identical.
 
-    struct Symbol;
+struct SymbolID {
+    /// The hash value of the symbol's Unified Symbol Resolution (USR)
+    std::uint64_t hash;
 
-    struct Relation : Relative {
-        /// Relation kind.
-        RelationKind kind() const;
-
-        /// Occurrence range.
-        std::optional<LocalSourceRange> range() const;
-
-        /// Whole symbol range.
-        std::optional<LocalSourceRange> symbolRange() const;
-
-        std::optional<Symbol> symbol() const;
-    };
-
-    struct SymbolID : Relative {
-        /// Symbol id.
-        uint64_t id() const;
-
-        /// Symbol name.
-        llvm::StringRef name() const;
-    };
-
-    struct Symbol : SymbolID {
-        /// Symbol kind.
-        SymbolKind kind() const;
-
-        /// All relations of this symbol.
-        ArrayView<Relation> relations() const;
-    };
-
-    struct Occurrence : Relative {
-        /// Occurrence range.
-        LocalSourceRange range() const;
-
-        /// Occurrence symbol.
-        Symbol symbol() const;
-    };
-
-    /// The path of the source file.
-    llvm::StringRef path() const;
-
-    /// Locate symbols at the given position.
-    void locateSymbols(uint32_t position, llvm::SmallVectorImpl<Symbol>& symbols) const;
-
-    /// Locate symbol with the given id(usually from another index).
-    std::optional<Symbol> locateSymbol(uint64_t id, llvm::StringRef name) const;
-
-    json::Value toJSON() const;
-
-public:
-    char* base;
-    std::size_t size;
+    /// The symbol name(not full qualified).
+    std::string name;
 };
+
+// class SymbolIndex {
+// public:
+//     SymbolIndex(char* base, std::size_t size) : base(base), size(size) {}
+//
+//     struct Symbol;
+//
+//     struct Relation : Relative {
+//         /// Relation kind.
+//         RelationKind kind() const;
+//
+//         /// Occurrence range.
+//         std::optional<LocalSourceRange> range() const;
+//
+//         /// Whole symbol range.
+//         std::optional<LocalSourceRange> symbolRange() const;
+//
+//         std::optional<Symbol> symbol() const;
+//     };
+//
+//     struct SymbolID : Relative {
+//         /// Symbol id.
+//         uint64_t id() const;
+//
+//         /// Symbol name.
+//         llvm::StringRef name() const;
+//     };
+//
+//     struct Symbol : SymbolID {
+//         /// Symbol kind.
+//         SymbolKind kind() const;
+//
+//         /// All relations of this symbol.
+//         ArrayView<Relation> relations() const;
+//     };
+//
+//     struct Occurrence : Relative {
+//         /// Occurrence range.
+//         LocalSourceRange range() const;
+//
+//         /// Occurrence symbol.
+//         Symbol symbol() const;
+//     };
+//
+//     /// The path of the source file.
+//     llvm::StringRef path() const;
+//
+//     /// Locate symbols at the given position.
+//     /// void locateSymbols(uint32_t position, llvm::SmallVectorImpl<Symbol>& symbols) const;
+//
+//     /// Locate symbol with the given id(usually from another index).
+//     /// std::optional<Symbol> locateSymbol(uint64_t id, llvm::StringRef name) const;
+//
+//     json::Value toJSON() const;
+//
+// public:
+//     char* base;
+//     std::size_t size;
+// };
 
 Shared<std::vector<char>> index(ASTInfo& info);
 

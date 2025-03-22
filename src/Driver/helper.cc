@@ -56,19 +56,19 @@ int main(int argc, char** argv) {
         }
 
         if(format == "symbol") {
-            index::SymbolIndex index(content->data(), content->size());
-            auto json = index.toJSON();
-
-            llvm::SmallString<128> path;
-            path += file;
-
-            path::replace_path_prefix(path, dir, output);
-            path::replace_extension(path, ".json");
-
-            auto result = fs::write(path, std::format("{}", json));
-            if(!result) {
-                llvm::errs() << "Failed to write file: " << path << "\n";
-            }
+            // index::SymbolIndex index(content->data(), content->size());
+            // auto json = index.toJSON();
+            //
+            // llvm::SmallString<128> path;
+            // path += file;
+            //
+            // path::replace_path_prefix(path, dir, output);
+            // path::replace_extension(path, ".json");
+            //
+            // auto result = fs::write(path, std::format("{}", json));
+            // if(!result) {
+            //    llvm::errs() << "Failed to write file: " << path << "\n";
+            //}
         }
     }
 
