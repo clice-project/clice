@@ -1,4 +1,6 @@
 #include "Compiler/AST.h"
+#include "Index/USR.h"
+#include "AST/Utility.h"
 
 namespace clice {
 
@@ -102,6 +104,35 @@ std::pair<clang::FileID, LocalSourceRange> ASTInfo::toLocalRange(clang::SourceRa
             };
         }
     }
+}
+
+index::SymbolID ASTInfo::getSymbolID(const clang::NamedDecl* decl) {
+    uint64_t hash;
+    auto iter = symbolHashCache.find(decl);
+    if(iter != symbolHashCache.end()) {
+        hash = iter->second;
+    } else {
+        llvm::SmallString<128> USR;
+        index::generateUSRForDecl(decl, USR);
+        hash = llvm::xxh3_64bits(USR);
+        symbolHashCache.try_emplace(decl, hash);
+    }
+    return index::SymbolID{hash, getDeclName(decl)};
+}
+
+index::SymbolID ASTInfo::getSymbolID(const clang::MacroInfo* macro) {
+    uint64_t hash;
+    auto name = getTokenSpelling(SM, macro->getDefinitionLoc());
+    auto iter = symbolHashCache.find(macro);
+    if(iter != symbolHashCache.end()) {
+        hash = iter->second;
+    } else {
+        llvm::SmallString<128> USR;
+        index::generateUSRForMacro(name, macro->getDefinitionLoc(), SM, USR);
+        hash = llvm::xxh3_64bits(USR);
+        symbolHashCache.try_emplace(macro, hash);
+    }
+    return index::SymbolID{hash, name.str()};
 }
 
 }  // namespace clice

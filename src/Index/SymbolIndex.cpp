@@ -1,6 +1,5 @@
 #include <numeric>
 
-#include "Index/Index.h"
 #include "Index/USR.h"
 #include "AST/Semantic.h"
 #include "AST/SourceCode.h"
@@ -9,6 +8,72 @@
 #include "Support/Compare.h"
 
 namespace clice::index {
+
+namespace memory {
+
+template <typename T>
+using Array = std::vector<T>;
+
+using String = std::string;
+
+struct ValueRef {
+    uint32_t offset = std::numeric_limits<uint32_t>::max();
+
+    bool valid() const {
+        return offset != std::numeric_limits<uint32_t>::max();
+    }
+
+    operator uint32_t () const {
+        return offset;
+    }
+};
+
+struct Relation {
+    RelationKind kind;
+
+    /// The `data` array contains two fields whose meanings depend on the `kind`.
+    /// Each `RelationKind` specifies the interpretation of these fields as follows:
+    ///
+    /// - `Definition` and `Declaration`:
+    ///   - `data[0]`: The range of the name token.
+    ///   - `data[1]`: The range of the whole symbol.
+    ///
+    /// - `Reference` and `WeakReference`:
+    ///   - `data[0]`: The range of the reference.
+    ///   - `data[1]`: Empty (unused).
+    ///
+    /// - `Interface`, `Implementation`, `TypeDefinition`, `Base`, `Derived`,
+    ///   `Constructor`, and `Destructor`:
+    ///   - `data[0]`: The target symbol.
+    ///   - `data[1]`: Empty (unused).
+    ///
+    /// - `Caller` and `Callee`:
+    ///   - `data[0]`: The target symbol (e.g., the called function).
+    ///   - `data[1]`: The range of the call site.
+    ///
+    ValueRef data;
+    ValueRef data1;
+};
+
+struct Symbol {
+    SymbolID id;
+    SymbolKind kind;
+    Array<Relation> relations;
+};
+
+struct Occurrence {
+    ValueRef location;
+    ValueRef symbol;
+};
+
+struct SymbolIndex {
+    String path;
+    Array<Symbol> symbols;
+    Array<Occurrence> occurrences;
+    Array<LocalSourceRange> ranges;
+};
+
+}  // namespace memory
 
 namespace {
 
@@ -22,12 +87,11 @@ struct SymbolIndexStorage : memory::SymbolIndex {
         return iter->second;
     }
 
-    std::uint32_t getSymbol(const void* symbol, uint64_t id, std::string name, SymbolKind kind) {
+    std::uint32_t getSymbol(const void* symbol, SymbolID id, SymbolKind kind) {
         auto [iter, success] = symbolCache.try_emplace(symbol, symbols.size());
         if(success) {
             symbols.emplace_back(memory::Symbol{
-                .id = id,
-                .name = std::move(name),
+                .id = std::move(id),
                 .kind = kind,
             });
         }
@@ -57,7 +121,7 @@ struct SymbolIndexStorage : memory::SymbolIndex {
 
             ranges::sort(views::zip(symbols, new2old), refl::less, [](const auto& element) {
                 auto& symbol = std::get<0>(element);
-                return std::tuple(symbol.id, symbol.name, symbol.kind);
+                return std::tuple(symbol.id, symbol.kind);
             });
 
             for(uint32_t i = 0; i < symbols.size(); ++i) {
@@ -132,35 +196,10 @@ struct SymbolIndexStorage : memory::SymbolIndex {
 
 class SymbolIndexCollector : public SemanticVisitor<SymbolIndexCollector> {
 public:
-    SymbolIndexCollector(ASTInfo& info) : SemanticVisitor(info, false) {}
-
-    /// Get the symbol id for the given decl.
-    uint64_t getSymbolID(const void* symbol, bool isMacro = false) {
-        auto iter = symbolIDs.find(symbol);
-        if(iter != symbolIDs.end()) {
-            return iter->second;
-        }
-
-        llvm::SmallString<128> USR;
-        if(isMacro) {
-            auto def = static_cast<const clang::MacroInfo*>(symbol);
-            auto name = getTokenSpelling(SM, def->getDefinitionLoc());
-            index::generateUSRForMacro(name, def->getDefinitionLoc(), SM, USR);
-        } else {
-            index::generateUSRForDecl(static_cast<const clang::Decl*>(symbol), USR);
-        }
-
-        assert(!USR.empty() && "Invalid USR");
-        auto id = llvm::xxh3_64bits(USR);
-        symbolIDs.try_emplace(symbol, id);
-        return id;
-    }
+    SymbolIndexCollector(ASTInfo& AST) : SemanticVisitor(AST, false) {}
 
     std::uint32_t getSymbol(SymbolIndexStorage& file, const clang::NamedDecl* decl) {
-        auto symbol = file.getSymbol(decl,
-                                     getSymbolID(decl),
-                                     decl->getNameAsString(),
-                                     SymbolKind::from(decl));
+        auto symbol = file.getSymbol(decl, AST.getSymbolID(decl), SymbolKind::from(decl));
         return symbol;
     }
 
@@ -189,10 +228,7 @@ public:
         auto [fid, local] = AST.toLocalRange(location);
         auto& index = indices[fid];
         auto loc = index.getLocation(local);
-        auto symbol = index.getSymbol(decl,
-                                      getSymbolID(decl),
-                                      decl->getNameAsString(),
-                                      SymbolKind::from(decl));
+        auto symbol = index.getSymbol(decl, AST.getSymbolID(decl), SymbolKind::from(decl));
         index.addOccurrence(loc, symbol);
     }
 
@@ -215,7 +251,7 @@ public:
         auto [fid, local] = AST.toLocalRange(location);
         auto& file = indices[fid];
         auto loc = file.getLocation(local);
-        auto symbol = file.getSymbol(def, getSymbolID(def, true), name.str(), SymbolKind::Macro);
+        auto symbol = file.getSymbol(def, AST.getSymbolID(def), SymbolKind::Macro);
         file.addOccurrence(loc, symbol);
 
         /// If the macro is a definition, set definition range for it.

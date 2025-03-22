@@ -1,4 +1,3 @@
-#include "Index/Index.h"
 #include "Index/SymbolIndex.h"
 #include "Support/FileSystem.h"
 #include "llvm/Support/CommandLine.h"
