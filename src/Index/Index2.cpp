@@ -18,14 +18,14 @@ Shared<Index2> Index2::build(ASTInfo& AST) {
 
     for(auto& [fid, index]: indices) {
         if(index.symbol) {
-            auto data = llvm::ArrayRef<uint8_t>(reinterpret_cast<uint8_t*>(index.symbol->base),
-                                                index.symbol->size);
+            auto data = llvm::ArrayRef<uint8_t>(reinterpret_cast<uint8_t*>(index.symbol->data()),
+                                                index.symbol->size());
             index.symbolHash = llvm::xxh3_128bits(data);
         }
 
         if(index.feature) {
-            auto data = llvm::ArrayRef<uint8_t>(reinterpret_cast<uint8_t*>(index.feature->base),
-                                                index.feature->size);
+            auto data = llvm::ArrayRef<uint8_t>(reinterpret_cast<uint8_t*>(index.feature->data()),
+                                                index.feature->size());
             index.featureHash = llvm::xxh3_128bits(data);
         }
     }

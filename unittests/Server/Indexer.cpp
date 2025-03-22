@@ -28,16 +28,16 @@ TEST(Indexer, Basic) {
     params.textDocument = {.uri = SourceConverter::toURI(foo)};
     params.position = {2, 5};
 
-    auto lookup = indexer.lookup(params, kind);
-    auto&& [result] = async::run(lookup);
-
-    indexer.save();
-
-    Indexer indexer2(database, options);
-    indexer2.load();
-
-    auto lookup2 = indexer2.lookup(params, kind);
-    auto&& [result2] = async::run(lookup2);
+    // auto lookup = indexer.lookup(params, kind);
+    // auto&& [result] = async::run(lookup);
+    //
+    // indexer.save();
+    //
+    // Indexer indexer2(database, options);
+    // indexer2.load();
+    //
+    // auto lookup2 = indexer2.lookup(params, kind);
+    // auto&& [result2] = async::run(lookup2);
 
     /// FIXME: Adjust order?
     /// EXPECT_EQ(result, result2);

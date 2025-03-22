@@ -260,130 +260,53 @@ std::vector<std::string> Indexer::indices(TranslationUnit* tu) {
 async::Task<std::vector<Indexer::SymbolID>>
     Indexer::resolve(const proto::TextDocumentPositionParams& params) {
     std::vector<SymbolID> ids;
-    auto path = SourceConverter::toPath(params.textDocument.uri);
-
-    std::uint32_t offset = 0;
-    {
-        auto content = co_await async::fs::read(path);
-        if(!content) {
-            co_return ids;
-        }
-        offset = SC.toOffset(*content, params.position);
-    }
-
-    std::vector<std::string> indices;
-    if(auto iter = tus.find(path); iter != tus.end()) {
-        indices.emplace_back(iter->second->indexPath);
-    } else if(auto iter = headers.find(path); iter != headers.end()) {
-        /// FIXME: What is the expected result of resolving a symbol that may refers different
-        /// declaration in different header contexts? Currently, we just return the first one.
-        for(auto& index: iter->second->indices) {
-            indices.emplace_back(index.path);
-        }
-    }
-
-    co_await async::gather(indices, [&](const std::string& path) -> async::Task<bool> {
-        auto binary = co_await async::fs::read(path + ".sidx");
-        if(!binary) {
-            co_return true;
-        }
-
-        llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
-        co_await async::submit([&] {
-            index::SymbolIndex index(binary->data(), binary->size(), false);
-            index.locateSymbols(offset, symbols);
-        });
-
-        if(symbols.empty()) {
-            co_return true;
-        }
-
-        /// If we found the symbol, we just return it. And break other tasks.
-        for(auto& symbol: symbols) {
-            ids.emplace_back(symbol.id(), symbol.name().str());
-        }
-        co_return false;
-    });
-
-    co_return ids;
-}
-
-async::Task<> Indexer::lookup(llvm::ArrayRef<SymbolID> targets,
-                              llvm::ArrayRef<std::string> files,
-                              LookupCallback callback) {
-    co_await async::gather(files, [&](const std::string& indexPath) -> async::Task<bool> {
-        auto binary = co_await async::fs::read(indexPath + ".sidx");
-        if(!binary) {
-            co_return false;
-        }
-
-        llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
-        index::SymbolIndex index(binary->data(), binary->size(), false);
-        co_await async::submit([&] {
-            for(auto& target: targets) {
-                if(auto symbol = index.locateSymbol(target.hash, target.name)) {
-                    symbols.emplace_back(*symbol);
-                }
-            }
-        });
-
-        if(symbols.empty()) {
-            co_return true;
-        }
-
-        auto srcPath = index.path().str();
-        auto content = co_await async::fs::read(srcPath);
-        if(!content) {
-            co_return true;
-        }
-
-        for(auto& symbol: symbols) {
-            if(!callback(srcPath, *content, symbol)) {
-                co_return false;
-            }
-        }
-
-        co_return true;
-    });
-}
-
-async::Task<proto::ReferenceResult> Indexer::lookup(const proto::ReferenceParams& params,
-                                                    RelationKind kind) {
-    auto ids = co_await resolve(params);
-    /// FIXME: If the size of ids equal to one and it is not an external symbol, we should
-    /// just search the symbol in the current translation unit.
-
-    proto::ReferenceResult result;
-
-    std::vector<std::string> files = indices();
-    co_await lookup(ids,
-                    files,
-                    [&](llvm::StringRef path,
-                        llvm::StringRef content,
-                        const index::SymbolIndex::Symbol& symbol) {
-                        /// FIXME: We may should collect and sort the ranges in one file.
-                        /// So that we can cut off the context to speed up the process.
-                        for(auto relation: symbol.relations()) {
-                            if(relation.kind() & kind) {
-                                result.emplace_back(proto::Location{
-                                    .uri = SourceConverter::toURI(path),
-                                    .range = SC.toRange(*relation.range(), content),
-                                });
-                            }
-                        }
-                        return true;
-                    });
-
-    co_return result;
-}
-
-async::Task<proto::HierarchyPrepareResult>
-    Indexer::prepareHierarchy(const proto::HierarchyPrepareParams& params) {
-    auto ids = co_await resolve(params);
-
-    proto::HierarchyPrepareResult result;
-    std::vector<std::string> files = indices();
-    co_return result;
+    // auto path = SourceConverter::toPath(params.textDocument.uri);
+    //
+    // std::uint32_t offset = 0;
+    //{
+    //    auto content = co_await async::fs::read(path);
+    //    if(!content) {
+    //        co_return ids;
+    //    }
+    //    offset = SC.toOffset(*content, params.position);
+    //}
+    //
+    // std::vector<std::string> indices;
+    // if(auto iter = tus.find(path); iter != tus.end()) {
+    //    indices.emplace_back(iter->second->indexPath);
+    //} else if(auto iter = headers.find(path); iter != headers.end()) {
+    //    /// FIXME: What is the expected result of resolving a symbol that may refers different
+    //    /// declaration in different header contexts? Currently, we just return the first one.
+    //    for(auto& index: iter->second->indices) {
+    //        indices.emplace_back(index.path);
+    //    }
+    //}
+    //
+    // co_await async::gather(indices, [&](const std::string& path) -> async::Task<bool> {
+    //    auto binary = co_await async::fs::read(path + ".sidx");
+    //    if(!binary) {
+    //        co_return true;
+    //    }
+    //
+    //    llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
+    //    co_await async::submit([&] {
+    //        index::SymbolIndex index(binary->data(), binary->size());
+    //        index.locateSymbols(offset, symbols);
+    //    });
+    //
+    //    if(symbols.empty()) {
+    //        co_return true;
+    //    }
+    //
+    //    /// If we found the symbol, we just return it. And break other tasks.
+    //    for(auto& symbol: symbols) {
+    //        ids.emplace_back(symbol.id(), symbol.name().str());
+    //    }
+    //    co_return false;
+    //});
+    //
+    // co_return ids;
+    co_return std::vector<Indexer::SymbolID>{};
 }
 
 async::Task<std::optional<index::FeatureIndex>>
@@ -407,7 +330,7 @@ async::Task<std::optional<index::FeatureIndex>>
 
     buffer = std::move(*content);
 
-    co_return index::FeatureIndex(buffer.data(), buffer.size(), false);
+    co_return index::FeatureIndex(buffer.data(), buffer.size());
 }
 
 async::Task<std::vector<feature::SemanticToken>>

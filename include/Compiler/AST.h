@@ -3,6 +3,7 @@
 #include "Directive.h"
 #include "AST/SourceCode.h"
 #include "AST/Resolver.h"
+#include "Index/SymbolID.h"
 
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
@@ -131,6 +132,12 @@ public:
         };
     }
 
+    /// Get symbol ID for given declaration.
+    index::SymbolID getSymbolID(const clang::NamedDecl* decl);
+
+    /// Get symbol ID for given marco.
+    index::SymbolID getSymbolID(const clang::MacroInfo* macro);
+
 private:
     /// The interested file ID.
     clang::FileID interested;
@@ -157,6 +164,9 @@ private:
 
     /// Cache for file path. It is used to avoid multiple file path lookup.
     llvm::DenseMap<clang::FileID, llvm::StringRef> pathCache;
+
+    /// Cache for symbol id.
+    llvm::DenseMap<const void*, uint32_t> symbolHashCache;
 
     llvm::BumpPtrAllocator pathStorage;
 };

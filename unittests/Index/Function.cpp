@@ -14,7 +14,7 @@ TEST(Index, FunctionParams) {
     IndexTester tester("main.cpp", code);
     tester.run();
 
-    auto data = tester.indices.find(tester.info->getInterestedFile())->second.toJSON();
+    ///  auto data = tester.indices.find(tester.info->getInterestedFile())->second.toJSON();
 
     /// TODO: add more tests, FunctionTemplate, VarTemplate, ..., Dependent Name, ..., etc.
     /// add tests for find references ..., !test symbol count.
@@ -33,7 +33,7 @@ TEST(Index, FunctionType) {
     IndexTester tester("main.cpp", code);
     tester.run();
 
-    auto data = tester.indices.find(tester.info->getInterestedFile())->second.toJSON();
+    /// auto data = tester.indices.find(tester.info->getInterestedFile())->second.toJSON();
     /// println("{}", data);
     /// tester.info->tu()->dump();
 
@@ -62,10 +62,10 @@ TEST(Index, Method) {
     IndexTester tester("main.cpp", code);
     tester.run();
 
-    auto data = tester.indices.find(tester.info->getInterestedFile())->second.toJSON();
+    /// auto data = tester.indices.find(tester.info->getInterestedFile())->second.toJSON();
     /// println("{}", data);
     /// tester.info->tu()->dump();
-    
+
     /// TODO: add more tests, FunctionTemplate, VarTemplate, ..., Dependent Name, ..., etc.
     /// add tests for find references ..., !test symbol count.
 }

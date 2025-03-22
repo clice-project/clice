@@ -7,39 +7,20 @@
 
 #include "Enum.h"
 #include "Struct.h"
+#include "Format.h"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/MemoryBuffer.h"
 
 namespace clice::binary {
 
-namespace impl {
-
-template <typename Tuple>
-struct tuple_uniuqe {
-    using type = Tuple;
-};
-
-/// Uniuqe the types in the tuple.
-template <typename Tuple>
-using tuple_uniuqe_t = typename tuple_uniuqe<Tuple>::type;
-
-template <typename T, typename... Ts>
-    requires (!std::is_same_v<T, Ts> && ...)
-struct tuple_uniuqe<std::tuple<T, Ts...>> {
-    using type = decltype(std::tuple_cat(std::declval<std::tuple<T>>(),
-                                         std::declval<tuple_uniuqe_t<std::tuple<Ts...>>>()));
-};
-
-template <typename T, typename... Ts>
-    requires (std::is_same_v<T, Ts> || ...)
-struct tuple_uniuqe<std::tuple<T, Ts...>> {
-    using type = tuple_uniuqe_t<std::tuple<Ts...>>;
-};
-
 template <typename T>
 struct array {
+    /// The offset to the beginning of binary buffer.
     uint32_t offset;
+
+    /// The size of array.
     uint32_t size;
 };
 
@@ -47,52 +28,41 @@ using string = array<char>;
 
 /// Check whether a type can be directly binarized.
 template <typename T>
-constexpr inline bool is_directly_binarizable_v = false;
+constexpr inline bool is_directly_binarizable_v = [] {
+    if constexpr(std::is_integral_v<T> || refl::reflectable_enum<T>) {
+        return true;
+    } else if constexpr(refl::reflectable_struct<T>) {
+        return refl::member_types<T>::apply(
+            []<typename... Ts>() { return (is_directly_binarizable_v<Ts> && ...); });
+    } else {
+        return false;
+    }
+}();
 
 template <typename T>
-    requires (std::is_integral_v<T> || refl::reflectable_enum<T>)
-constexpr inline bool is_directly_binarizable_v<T> = true;
-
-template <refl::reflectable_struct T>
-constexpr inline bool is_directly_binarizable_v<T> = refl::member_types<T>::apply(
-    []<typename... Ts>() { return (is_directly_binarizable_v<Ts> && ...); });
+consteval auto binarify();
 
 template <typename T>
-struct binarify;
+using binarify_t = typename decltype(binarify<T>())::type;
 
-/// Transform a type to its binary representation. All `std::string`
-/// will be transformed to `string`. All `std::vector<T>` will be
-/// transformed to `array<T>`.
 template <typename T>
-using binarify_t = typename binarify<T>::type;
-
-/// For types that can be directly binarized, the binary representation
-/// is the same as the original type.
-template <typename T>
-    requires (is_directly_binarizable_v<T>)
-struct binarify<T> {
-    using type = T;
-};
-
-template <>
-struct binarify<std::string> {
-    using type = string;
-};
-
-template <typename V>
-struct binarify<std::vector<V>> {
-    using type = array<V>;
-};
-
-template <typename... Ts>
-struct binarify<std::tuple<Ts...>> {
-    using type = std::tuple<binarify_t<Ts>...>;
-};
-
-/// For reflectable struct, transform it recursively.
-template <typename T>
-    requires (refl::reflectable_struct<T> && !is_directly_binarizable_v<T>)
-struct binarify<T> : binarify<typename refl::member_types<T>::to_tuple> {};
+consteval auto binarify() {
+    if constexpr(is_directly_binarizable_v<T>) {
+        return identity<T>();
+    } else if constexpr(std::is_same_v<T, std::string>) {
+        return identity<binary::string>();
+    } else if constexpr(is_specialization_of<T, std::vector>) {
+        return identity<binary::array<typename T::value_type>>();
+    } else if constexpr(is_specialization_of<T, std::tuple>) {
+        return tuple_to_list_t<T>::apply(
+            []<typename... Ts> { return identity<std::tuple<binarify_t<Ts>...>>(); });
+    } else if constexpr(refl::reflectable_struct<T>) {
+        return refl::member_types<T>::apply(
+            []<typename... Ts> { return identity<std::tuple<binarify_t<Ts>...>>(); });
+    } else {
+        static_assert(dependent_false<T>, "unsupported type");
+    }
+}
 
 /// A section in the binary data.
 template <typename T>
@@ -107,46 +77,25 @@ struct Section {
     uint32_t offset = 0;
 };
 
-template <typename T>
-constexpr inline bool is_std_string_v = false;
-
-template <>
-constexpr inline bool is_std_string_v<std::string> = true;
-
-template <typename T>
-constexpr inline bool is_std_vector_v = false;
-
-template <typename T, typename A>
-constexpr inline bool is_std_vector_v<std::vector<T, A>> = true;
-
-template <typename T>
-constexpr inline bool is_std_tuple_v = false;
-
-template <typename... Ts>
-constexpr inline bool is_std_tuple_v<std::tuple<Ts...>> = true;
-
 template <typename T, typename Primary = void>
 consteval auto layout() {
-    using namespace binary::impl;
     if constexpr(is_directly_binarizable_v<T>) {
         return std::tuple<>();
-    } else if constexpr(is_std_string_v<T>) {
+    } else if constexpr(std::is_same_v<T, std::string>) {
         return std::tuple<Section<char>>();
-    } else if constexpr(is_std_vector_v<T>) {
+    } else if constexpr(is_specialization_of<T, std::vector>) {
         using V = typename T::value_type;
         if constexpr(std::is_same_v<V, Primary>) {
             return std::tuple<Section<V>>();
         } else {
             return std::tuple_cat(std::tuple<Section<V>>(), layout<V>());
         }
-    } else if constexpr(is_std_tuple_v<T>) {
-        return []<typename... Ts>(type_list<Ts...>) {
-            return std::tuple_cat(layout<Ts>()...);
-        }(tuple_to_list_t<T>());
+    } else if constexpr(is_specialization_of<T, std::tuple>) {
+        return tuple_to_list_t<T>::apply(
+            []<typename... Ts> { return std::tuple_cat(layout<Ts>()...); });
     } else if constexpr(refl::reflectable_struct<T>) {
-        return []<typename... Ts>(type_list<Ts...>) {
-            return std::tuple_cat(layout<Ts, T>()...);
-        }(refl::member_types<T>());
+        return refl::member_types<T>::apply(
+            []<typename... Ts> { return std::tuple_cat(layout<Ts, T>()...); });
     } else {
         static_assert(dependent_false<T>, "unsupported type");
     }
@@ -166,7 +115,7 @@ struct Packer {
     uint32_t size = 0;
 
     /// The buffer to store the binary data.
-    char* buffer = nullptr;
+    std::vector<char> buffer;
 
     /// Recursively traverse the object and calculate the size of each section.
     template <typename Object>
@@ -190,21 +139,21 @@ struct Packer {
     }
 
     template <typename Object>
-        requires (is_std_string_v<Object>)
+        requires (std::is_same_v<Object, std::string>)
     string write(const Object& object) {
         auto& section = std::get<Section<char>>(layout);
         uint32_t size = object.size();
         uint32_t offset = section.offset + section.count;
         section.count += size + 1;
 
-        std::memcpy(buffer + offset, object.data(), size);
+        std::memcpy(buffer.data() + offset, object.data(), size);
         buffer[offset + size] = '\0';
 
         return string{offset, size};
     }
 
     template <typename Object, typename V = typename Object::value_type>
-        requires (is_std_vector_v<Object>)
+        requires (is_specialization_of<Object, std::vector>)
     array<V> write(const Object& object) {
         auto& section = std::get<Section<V>>(layout);
         uint32_t size = object.size();
@@ -212,7 +161,7 @@ struct Packer {
         section.count += size;
 
         for(std::size_t i = 0; i < size; ++i) {
-            ::new (buffer + offset + i * sizeof(binarify_t<V>)) auto{write(object[i])};
+            ::new (buffer.data() + offset + i * sizeof(binarify_t<V>)) auto{write(object[i])};
         }
 
         return array<V>{offset, size};
@@ -233,7 +182,7 @@ struct Packer {
         return buffer;
     }
 
-    char* pack(const auto& object) {
+    std::vector<char> pack(const auto& object) {
         /// First initialize the layout.
         init(object);
 
@@ -255,22 +204,17 @@ struct Packer {
 
         refl::foreach(layout, try_each);
 
-        /// Allocate the buffer and write the data to the buffer.
-        buffer = static_cast<char*>(std::malloc(size));
-
         /// Make sure the buffer is clean. So we can compare the result.
         /// Every padding in the struct should be filled with 0.
-        std::memset(buffer, 0, size);
+        buffer.resize(size, 0);
 
         /// Write the object to the buffer.
         auto result = write(object);
-        std::memcpy(buffer, &result, sizeof(result));
+        std::memcpy(buffer.data(), &result, sizeof(result));
 
-        return buffer;
+        return std::move(buffer);
     }
 };
-
-}  // namespace impl
 
 template <std::size_t N>
 struct fixed_string : std::array<char, N + 1> {
@@ -297,7 +241,7 @@ fixed_string(const char (&)[M]) -> fixed_string<M - 1>;
 /// A helper class to access the binary data.
 template <typename T>
 struct Proxy {
-    using underlying_type = impl::binarify_t<T>;
+    using underlying_type = binarify_t<T>;
     const void* base;
     const void* data;
 
@@ -333,7 +277,7 @@ struct Proxy {
 
     auto as_array() const {
         auto [offset, size] = value();
-        using U = impl::binarify_t<typename T::value_type>;
+        using U = binarify_t<typename T::value_type>;
         return llvm::ArrayRef<U>{
             reinterpret_cast<const U*>(static_cast<const char*>(base) + offset),
             size,
@@ -359,13 +303,31 @@ struct Proxy {
 
 /// Binirize an object.
 template <typename Object>
-std::pair<Proxy<Object>, size_t> binarify(const Object& object) {
-    impl::Packer<Object> packer;
-    auto buffer = packer.pack(object);
-    return {
-        Proxy<Object>{buffer, reinterpret_cast<const impl::binarify_t<Object>*>(buffer)},
-        packer.size
-    };
+auto serialize(const Object& object) {
+    auto buffer = Packer<Object>().pack(object);
+    auto proxy = Proxy<Object>{buffer.data(), buffer.data()};
+    return std::tuple(std::move(buffer), proxy);
+}
+
+template <typename Object>
+Object deserialize(Proxy<Object> proxy) {
+    if constexpr(is_directly_binarizable_v<Object>) {
+        return proxy.value();
+    } else if constexpr(std::is_same_v<Object, std::string>) {
+        return proxy.as_string().str();
+    } else if constexpr(is_specialization_of<Object, std::vector>) {
+        Object result;
+        for(std::size_t i = 0; i < proxy.size(); i++) {
+            result.emplace_back(deserialize(proxy[i]));
+        }
+        return result;
+    } else if constexpr(refl::reflectable_struct<Object>) {
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return Object{deserialize(proxy.template get<Is>())...};
+        }(std::make_index_sequence<refl::member_count<Object>()>());
+    } else {
+        static_assert(dependent_false<Object>, "");
+    }
 }
 
 }  // namespace clice::binary

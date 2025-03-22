@@ -23,71 +23,16 @@ struct Serde;
 template <typename V>
 concept serializable = requires { sizeof(Serde<V>); };
 
-/// Check if the serde if given type is stateful.
-template <typename V>
-concept stateful_serde = requires {
-    Serde<V>::stateful;
-    requires Serde<V>::stateful;
-};
-
 /// Serialize an object to a JSON value.
-template <typename V, typename... Serdes>
-json::Value serialize(const V& v, Serdes&&... serdes) {
-    if constexpr(!stateful_serde<V>) {
-        return Serde<V>::serialize(v);
-    } else if constexpr(sizeof...(Serdes) > 0) {
-        using S = Serde<V>;
-        if constexpr((std::is_same_v<S, std::remove_cvref_t<Serdes>> || ...)) {
-            auto try_each =
-                [&]<typename First, typename... Rest>(auto& self, First&& first, Rest&&... rest) {
-                    if constexpr(std::is_same_v<std::remove_cvref_t<First>, S>) {
-                        /// If we already have a direct serde, use it.
-                        return std::forward<First>(first).serialize(v);
-                    } else if constexpr(sizeof...(rest) > 0) {
-                        /// Try the next serde.
-                        return self(self, std::forward<Rest>(rest)...);
-                    } else {
-                        static_assert(dependent_false<V>, "Unexpected control flow");
-                    }
-                };
-            return try_each(try_each, std::forward<Serdes>(serdes)...);
-        } else {
-            /// Otherwise, pass the serdes to the next serde.
-            return Serde<V>::serialize(v, std::forward<Serdes>(serdes)...);
-        }
-    } else {
-        static_assert(dependent_false<V>, "Stateful serde requires at least one serde");
-    }
+template <typename V>
+json::Value serialize(const V& v) {
+    return Serde<V>::serialize(v);
 }
 
 /// Deserialize a JSON value to an object.
-template <typename T, typename... Serdes>
-T deserialize(const json::Value& value, Serdes&&... serdes) {
-    if constexpr(!stateful_serde<T>) {
-        return Serde<T>::deserialize(value);
-    } else if constexpr(sizeof...(Serdes) > 0) {
-        using S = Serde<T>;
-        if constexpr((std::is_same_v<S, std::remove_cvref_t<Serdes>> || ...)) {
-            auto try_each =
-                [&]<typename First, typename... Rest>(auto& self, First&& first, Rest&&... rest) {
-                    if constexpr(std::is_same_v<std::remove_cvref_t<First>, S>) {
-                        /// If we already have a direct serde, use it.
-                        return std::forward<First>(first).deserialize(value);
-                    } else if constexpr(sizeof...(rest) > 0) {
-                        /// Try the next serde.
-                        return self(self, std::forward<Rest>(rest)...);
-                    } else {
-                        static_assert(dependent_false<T>, "Unexpected control flow");
-                    }
-                };
-            return try_each(try_each, std::forward<Serdes>(serdes)...);
-        } else {
-            /// Otherwise, pass the serdes to the next serde.
-            return Serde<T>::deserialize(value, std::forward<Serdes>(serdes)...);
-        }
-    } else {
-        static_assert(dependent_false<T>, "Stateful Serde requires at least one serde");
-    }
+template <typename T>
+T deserialize(const json::Value& value) {
+    return Serde<T>::deserialize(value);
 }
 
 template <>
@@ -249,8 +194,6 @@ struct Serde<Range> {
     using key_type = typename Range::key_type;
     using mapped_type = typename Range::mapped_type;
 
-    constexpr inline static bool stateful = stateful_serde<key_type> || stateful_serde<mapped_type>;
-
     template <typename... Serdes>
     static json::Value serialize(const Range& range, Serdes&&... serdes) {
         json::Object object;
@@ -292,8 +235,6 @@ template <set_range Range>
 struct Serde<Range> {
     using key_type = typename Range::key_type;
 
-    constexpr inline static bool stateful = stateful_serde<key_type>;
-
     template <typename... Serdes>
     static json::Value serialize(const Range& range, Serdes&&... serdes) {
         json::Array array;
@@ -317,8 +258,6 @@ struct Serde<Range> {
 template <sequence_range Range>
 struct Serde<Range> {
     using value_type = typename Range::value_type;
-
-    constexpr inline static bool stateful = stateful_serde<value_type>;
 
     template <typename... Serdes>
     static json::Value serialize(const Range& range, Serdes&&... serdes) {
@@ -360,9 +299,6 @@ constexpr inline bool is_optional_v<std::optional<T>> = true;
 
 template <refl::reflectable_struct T>
 struct Serde<T> {
-    constexpr inline static bool stateful =
-        refl::member_types<T>::apply([]<typename... Ts> { return (stateful_serde<Ts> || ...); });
-
     template <typename... Serdes>
     static json::Value serialize(const T& t, Serdes&&... serdes) {
         json::Object object;
