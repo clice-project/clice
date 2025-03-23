@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Directive.h"
+#include "AST/SymbolID.h"
 #include "AST/SourceCode.h"
 #include "AST/Resolver.h"
 
@@ -123,6 +124,9 @@ public:
     /// files, we cut off the range at the end of the first file.
     std::pair<clang::FileID, LocalSourceRange> toLocalRange(clang::SourceRange range);
 
+    /// Same as `toLocalRange`, but will translate range to expansion range.
+    std::pair<clang::FileID, LocalSourceRange> toLocalExpansionRange(clang::SourceRange range);
+
     Location toLocation(clang::SourceRange range) {
         auto [fid, localRange] = toLocalRange(range);
         return Location{
@@ -130,6 +134,12 @@ public:
             .range = localRange,
         };
     }
+
+    /// Get symbol ID for given declaration.
+    index::SymbolID getSymbolID(const clang::NamedDecl* decl);
+
+    /// Get symbol ID for given marco.
+    index::SymbolID getSymbolID(const clang::MacroInfo* macro);
 
 private:
     /// The interested file ID.
@@ -157,6 +167,9 @@ private:
 
     /// Cache for file path. It is used to avoid multiple file path lookup.
     llvm::DenseMap<clang::FileID, llvm::StringRef> pathCache;
+
+    /// Cache for symbol id.
+    llvm::DenseMap<const void*, uint32_t> symbolHashCache;
 
     llvm::BumpPtrAllocator pathStorage;
 };
