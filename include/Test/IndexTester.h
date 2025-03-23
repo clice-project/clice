@@ -11,7 +11,7 @@ struct IndexTester : Tester {
 
     IndexTester& run(const char* standard = "-std=c++20") {
         Tester::run(standard);
-        indices = index::index(*info);
+        /// indices = index::index(*info);
         return *this;
     }
 

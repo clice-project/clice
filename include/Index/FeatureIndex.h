@@ -31,11 +31,11 @@ public:
 
     std::vector<feature::DocumentSymbol> documentSymbols() const;
 
+    static Shared<std::vector<char>> build(ASTInfo& AST);
+
 public:
     char* base;
     std::size_t size;
 };
-
-Shared<std::vector<char>> indexFeature(ASTInfo& info);
 
 }  // namespace clice::index

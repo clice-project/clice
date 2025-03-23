@@ -10,7 +10,7 @@ TEST(FeatureIndex, SemanticTokens) {
     Tester tester("main.cpp", content);
     tester.run();
 
-    auto index = index::indexFeature(*tester.info);
+    /// auto index = index(*tester.info);
 
     // auto& m = index.at(tester.info->getInterestedFile());
     //

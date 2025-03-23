@@ -52,11 +52,11 @@ public:
     /// Locate the symbol with given symbol id.
     Symbol locateSymbol(const SymbolID& id);
 
+    static Shared<std::vector<char>> build(ASTInfo& AST);
+
 private:
     const char* data;
     std::uint32_t size;
 };
-
-Shared<std::vector<char>> index(ASTInfo& info);
 
 }  // namespace clice::index

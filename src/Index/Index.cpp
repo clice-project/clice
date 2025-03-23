@@ -1,17 +1,17 @@
-#include "Index/Shared2.h"
-#include "Compiler/Compilation.h"
+#include "Index/Index.h"
+#include "Compiler/AST.h"
 
 namespace clice::index {
 
-Shared<Index2> Index2::build(ASTInfo& AST) {
-    llvm::DenseMap<clang::FileID, Index2> indices;
+Shared<Index> Index::build(ASTInfo& AST) {
+    llvm::DenseMap<clang::FileID, Index> indices;
 
-    auto symbolIndices = index::index(AST);
+    auto symbolIndices = SymbolIndex::build(AST);
     for(auto& [fid, index]: symbolIndices) {
         indices[fid].symbol.emplace(std::move(index));
     }
 
-    auto featureIndices = index::indexFeature(AST);
+    auto featureIndices = FeatureIndex::build(AST);
     for(auto& [fid, index]: featureIndices) {
         indices[fid].feature.emplace(std::move(index));
     }

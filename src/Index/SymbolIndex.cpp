@@ -415,7 +415,7 @@ llvm::StringRef SymbolIndex::content() {
     return index.get<"content">().as_string();
 }
 
-Shared<std::vector<char>> index(ASTInfo& AST) {
+Shared<std::vector<char>> SymbolIndex::build(ASTInfo& AST) {
     return SymbolIndexCollector(AST).build();
 }
 

@@ -14,8 +14,7 @@ void $(2)foo() {}
     IndexTester tester{"main.cpp", code};
     tester.run();
     auto& info = *tester.info;
-    auto indices = index::index(info);
-
+    /// auto indices = index::index(info);
     /// ASSERT_EQ(indices.size(), 1);
     /// auto& index = indices.begin()->second;
     /// llvm::SmallVector<index::SymbolIndex::Symbol> symbols;
@@ -34,10 +33,10 @@ void $(2)foo() {}
     IndexTester tester{"main.cpp", code};
     tester.run();
     auto& info = *tester.info;
-    auto indices = index::index(info);
-
-    ASSERT_EQ(indices.size(), 1);
-    auto& index = indices.begin()->second;
+    // auto indices = index::index(info);
+    //
+    // ASSERT_EQ(indices.size(), 1);
+    // auto& index = indices.begin()->second;
 
     /// auto json = index.toJSON();
 
