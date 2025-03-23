@@ -1,6 +1,5 @@
 #include <numeric>
 
-#include "Index/USR.h"
 #include "AST/Semantic.h"
 #include "AST/SourceCode.h"
 #include "Index/SymbolIndex.h"
@@ -9,24 +8,9 @@
 
 namespace clice::index {
 
+namespace {
+
 namespace memory {
-
-template <typename T>
-using Array = std::vector<T>;
-
-using String = std::string;
-
-struct ValueRef {
-    uint32_t offset = std::numeric_limits<uint32_t>::max();
-
-    bool valid() const {
-        return offset != std::numeric_limits<uint32_t>::max();
-    }
-
-    operator uint32_t () const {
-        return offset;
-    }
-};
 
 struct Relation {
     RelationKind kind;
@@ -51,31 +35,49 @@ struct Relation {
     ///   - `data[0]`: The target symbol (e.g., the called function).
     ///   - `data[1]`: The range of the call site.
     ///
-    ValueRef data;
-    ValueRef data1;
+    std::uint32_t data = -1;
+    std::uint32_t data1 = -1;
 };
 
 struct Symbol {
+    /// The symbol id.
     SymbolID id;
+
+    /// The symbol kind.
     SymbolKind kind;
-    Array<Relation> relations;
+
+    /// The relations of this symbol.
+    std::vector<Relation> relations;
 };
 
 struct Occurrence {
-    ValueRef location;
-    ValueRef symbol;
+    /// The location(index) of this symbol occurrence.
+    std::uint32_t location = -1;
+
+    /// The referenced symbol(index) of the this symbol occurrence.
+    std::uint32_t symbol = -1;
 };
 
 struct SymbolIndex {
-    String path;
-    Array<Symbol> symbols;
-    Array<Occurrence> occurrences;
-    Array<LocalSourceRange> ranges;
+    /// The path of source file.
+    std::string path;
+
+    /// The content of source file.
+    std::string content;
+
+    /// FIXME: add includes or module names?
+
+    /// All symbols in this file.
+    std::vector<Symbol> symbols;
+
+    /// All occurrences in this file.
+    std::vector<Occurrence> occurrences;
+
+    /// All ranges in this file.
+    std::vector<LocalSourceRange> ranges;
 };
 
 }  // namespace memory
-
-namespace {
 
 struct SymbolIndexStorage : memory::SymbolIndex {
     std::uint32_t getLocation(LocalSourceRange range) {
@@ -163,10 +165,10 @@ struct SymbolIndexStorage : memory::SymbolIndex {
             for(auto& relation: symbol.relations) {
                 auto kind = relation.kind;
                 if(kind.is_one_of(RelationKind::Definition, RelationKind::Declaration)) {
-                    relation.data = {locationMap[relation.data]};
-                    relation.data1 = {locationMap[relation.data1]};
+                    relation.data = locationMap[relation.data];
+                    relation.data1 = locationMap[relation.data1];
                 } else if(kind.is_one_of(RelationKind::Reference, RelationKind::WeakReference)) {
-                    relation.data = {locationMap[relation.data]};
+                    relation.data = locationMap[relation.data];
                 } else if(kind.is_one_of(RelationKind::Interface,
                                          RelationKind::Implementation,
                                          RelationKind::TypeDefinition,
@@ -174,10 +176,10 @@ struct SymbolIndexStorage : memory::SymbolIndex {
                                          RelationKind::Derived,
                                          RelationKind::Constructor,
                                          RelationKind::Destructor)) {
-                    relation.data = {symbolMap[relation.data]};
+                    relation.data = symbolMap[relation.data];
                 } else if(kind.is_one_of(RelationKind::Caller, RelationKind::Callee)) {
-                    relation.data = {symbolMap[relation.data]};
-                    relation.data1 = {locationMap[relation.data1]};
+                    relation.data = symbolMap[relation.data];
+                    relation.data1 = locationMap[relation.data1];
                 } else {
                     assert(false && "Invalid relation kind");
                 }
@@ -255,17 +257,17 @@ public:
         file.addOccurrence(loc, symbol);
 
         /// If the macro is a definition, set definition range for it.
-        memory::ValueRef data1 = {};
+        std::uint32_t data1 = {};
         if(kind & RelationKind::Definition) {
             auto [fid2, range] = AST.toLocalRange(clang::SourceRange(begin, end));
             assert(fid == fid2 && "Invalid macro definition location");
-            data1.offset = file.getLocation(range);
+            data1 = file.getLocation(range);
         }
 
         auto& relations = file.symbols[symbol].relations;
         relations.emplace_back(memory::Relation{
             .kind = kind,
-            .data = {loc},
+            .data = loc,
             .data1 = data1,
         });
     }
@@ -285,7 +287,7 @@ public:
         auto& file = indices[fid];
 
         /// Calculate the data for the relation.
-        memory::ValueRef data[2] = {};
+        std::uint32_t data[2] = {};
         using enum RelationKind::Kind;
 
         if(kind.is_one_of(Definition, Declaration)) {
@@ -295,10 +297,10 @@ public:
             auto [fid2, definitionRange] = AST.toLocalRange(clang::SourceRange(begin, end));
             assert(fid == fid2 && "Invalid definition location");
 
-            data[0].offset = file.getLocation(relationRange);
-            data[1].offset = file.getLocation(definitionRange);
+            data[0] = file.getLocation(relationRange);
+            data[1] = file.getLocation(definitionRange);
         } else if(kind.is_one_of(Reference, WeakReference)) {
-            data[0].offset = file.getLocation(relationRange);
+            data[0] = file.getLocation(relationRange);
         } else if(kind.is_one_of(Interface,
                                  Implementation,
                                  TypeDefinition,
@@ -306,10 +308,10 @@ public:
                                  Derived,
                                  Constructor,
                                  Destructor)) {
-            data[0].offset = getSymbol(file, normalize(target));
+            data[0] = getSymbol(file, normalize(target));
         } else if(kind.is_one_of(Caller, Callee)) {
-            data[0].offset = getSymbol(file, normalize(target));
-            data[1].offset = file.getLocation(relationRange);
+            data[0] = getSymbol(file, normalize(target));
+            data[1] = file.getLocation(relationRange);
         } else {
             std::unreachable();
         }

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Directive.h"
+#include "AST/SymbolID.h"
 #include "AST/SourceCode.h"
 #include "AST/Resolver.h"
-#include "Index/SymbolID.h"
 
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
