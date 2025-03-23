@@ -79,7 +79,8 @@ struct SymbolIndex {
 
 }  // namespace memory
 
-struct SymbolIndexBuilder : memory::SymbolIndex {
+class SymbolIndexBuilder : public memory::SymbolIndex {
+public:
     SymbolIndexBuilder(ASTInfo& AST) : AST(AST) {}
 
     std::uint32_t getLocation(LocalSourceRange range) {
@@ -114,7 +115,21 @@ struct SymbolIndexBuilder : memory::SymbolIndex {
     }
 
     void addOccurrence(uint32_t location, uint32_t symbol) {
-        occurrences.emplace_back(memory::Occurrence{location, symbol});
+        occurrences.emplace_back(memory::Occurrence{
+            .location = location,
+            .symbol = symbol,
+        });
+    }
+
+    void addRelation(uint32_t symbol,
+                     RelationKind kind,
+                     uint32_t data,
+                     uint32_t data1 = std::numeric_limits<uint32_t>::max()) {
+        symbols[symbol].relations.emplace_back(memory::Relation{
+            .kind = kind,
+            .data = data,
+            .data1 = data1,
+        });
     }
 
     void sort() {
@@ -206,6 +221,11 @@ struct SymbolIndexBuilder : memory::SymbolIndex {
         }
     }
 
+    memory::SymbolIndex dump() {
+        return std::move(static_cast<memory::SymbolIndex>(*this));
+    }
+
+private:
     ASTInfo& AST;
     llvm::DenseMap<const void*, uint32_t> symbolCache;
     llvm::DenseMap<std::pair<uint32_t, uint32_t>, uint32_t> locationCache;
@@ -216,7 +236,7 @@ public:
     SymbolIndexCollector(ASTInfo& AST) : SemanticVisitor(AST, false) {}
 
     SymbolIndexBuilder& getBuilder(clang::FileID fid) {
-        auto [it, success] = indices.try_emplace(fid, AST);
+        auto [it, success] = builders.try_emplace(fid, AST);
         return it->second;
     }
 
@@ -242,9 +262,9 @@ public:
         }
 
         /// Add the occurrence.
-        auto [fid, local] = AST.toLocalRange(location);
+        auto [fid, range] = AST.toLocalRange(location);
         auto& builder = getBuilder(fid);
-        auto loc = builder.getLocation(local);
+        auto loc = builder.getLocation(range);
         auto symbol = builder.getSymbol(decl);
         builder.addOccurrence(loc, symbol);
     }
@@ -257,34 +277,26 @@ public:
             return;
         }
 
-        auto begin = def->getDefinitionLoc();
-        auto end = def->getDefinitionEndLoc();
-        assert(begin.isFileID() && end.isFileID() && "Invalid location");
-
-        /// Get the macro name.
-        auto name = getTokenSpelling(SM, begin);
-
-        /// Add the occurrence.
-        auto [fid, local] = AST.toLocalRange(location);
+        /// Add macro occurrence.
+        auto [fid, range] = AST.toLocalRange(location);
         auto& builder = getBuilder(fid);
-        auto loc = builder.getLocation(local);
+        auto loc = builder.getLocation(range);
         auto symbol = builder.getSymbol(def);
         builder.addOccurrence(loc, symbol);
 
         /// If the macro is a definition, set definition range for it.
-        std::uint32_t data1 = {};
+        std::uint32_t definitionLoc = std::numeric_limits<std::uint32_t>::max();
+
         if(kind & RelationKind::Definition) {
+            auto begin = def->getDefinitionLoc();
+            auto end = def->getDefinitionEndLoc();
+            assert(begin.isFileID() && end.isFileID() && "Invalid location");
             auto [fid2, range] = AST.toLocalRange(clang::SourceRange(begin, end));
             assert(fid == fid2 && "Invalid macro definition location");
-            data1 = builder.getLocation(range);
+            definitionLoc = builder.getLocation(range);
         }
 
-        auto& relations = builder.symbols[symbol].relations;
-        relations.emplace_back(memory::Relation{
-            .kind = kind,
-            .data = loc,
-            .data1 = data1,
-        });
+        builder.addRelation(symbol, kind, loc, definitionLoc);
     }
 
     void handleRelation(const clang::NamedDecl* decl,
@@ -295,7 +307,11 @@ public:
         auto& builder = getBuilder(fid);
 
         /// Calculate the data for the relation.
-        std::uint32_t data[2] = {};
+        std::uint32_t data[2] = {
+            std::numeric_limits<std::uint32_t>::max(),
+            std::numeric_limits<std::uint32_t>::max(),
+        };
+
         using enum RelationKind::Kind;
 
         if(kind.is_one_of(Definition, Declaration)) {
@@ -322,22 +338,19 @@ public:
 
         /// Add the relation.
         auto symbol = builder.getSymbol(normalize(decl));
-        builder.symbols[symbol].relations.emplace_back(memory::Relation{
-            .kind = kind,
-            .data = data[0],
-            .data1 = data[1],
-        });
+        builder.addRelation(symbol, kind, data[0], data[1]);
     }
 
     auto build() {
         run();
 
         llvm::DenseMap<clang::FileID, std::vector<char>> result;
-        for(auto& [fid, index]: indices) {
-            index.sort();
+        for(auto& [fid, builder]: builders) {
+            builder.sort();
+            auto index = builder.dump();
             index.path = AST.getFilePath(fid);
             index.content = AST.getFileContent(fid);
-            auto [buffer, _] = binary::serialize(static_cast<memory::SymbolIndex>(index));
+            auto [buffer, _] = binary::serialize(index);
             result.try_emplace(fid, std::move(buffer));
         }
 
@@ -346,7 +359,7 @@ public:
 
 private:
     llvm::DenseMap<const void*, uint64_t> symbolIDs;
-    llvm::DenseMap<clang::FileID, SymbolIndexBuilder> indices;
+    llvm::DenseMap<clang::FileID, SymbolIndexBuilder> builders;
 };
 
 }  // namespace
