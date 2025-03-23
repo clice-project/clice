@@ -1,12 +1,40 @@
 #pragma once
 
 #include "Shared.h"
+#include "LazyArray.h"
 #include "AST/SymbolID.h"
 #include "AST/SourceCode.h"
 #include "AST/SymbolKind.h"
 #include "AST/RelationKind.h"
 
 namespace clice::index {
+
+class Symbol;
+
+struct Relation : Relative {
+    /// Return the relation kind.
+    RelationKind kind() const;
+
+    /// Return the range of relation.
+    LocalSourceRange range() const;
+
+    /// Return the definition range.
+    LocalSourceRange definitionRange() const;
+
+    /// The the target symbol.
+    Symbol target() const;
+};
+
+struct Symbol : Relative {
+    /// Return the symbol id.
+    SymbolID id() const;
+
+    /// Return the symbol kind.
+    SymbolKind kind() const;
+
+    /// Return all relations of this symbol.
+    LazyArray<Relation> relations() const;
+};
 
 class SymbolIndex {
 public:
@@ -19,9 +47,10 @@ public:
     llvm::StringRef content();
 
     /// Locate the symbols with given offset.
-    std::vector<SymbolID> locateSymbol(uint32_t offset);
+    std::vector<Symbol> locateSymbol(uint32_t offset);
 
-    void locateSymbol(const SymbolID& id, RelationKind kind);
+    /// Locate the symbol with given symbol id.
+    Symbol locateSymbol(const SymbolID& id);
 
 private:
     const char* data;

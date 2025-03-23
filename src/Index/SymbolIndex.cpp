@@ -364,6 +364,48 @@ private:
 
 }  // namespace
 
+RelationKind Relation::kind() const {
+    binary::Proxy<memory::Relation> proxy{base, data};
+    return proxy->kind;
+}
+
+LocalSourceRange Relation::range() const {
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    binary::Proxy<memory::Relation> proxy{base, data};
+    return index.get<"ranges">().as_array()[proxy->data];
+}
+
+LocalSourceRange Relation::definitionRange() const {
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    binary::Proxy<memory::Relation> proxy{base, data};
+    return index.get<"ranges">().as_array()[proxy->data1];
+}
+
+Symbol Relation::target() const {
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    binary::Proxy<memory::Relation> proxy{base, data};
+    return Symbol{base, &index.get<"symbols">().as_array()[proxy->data1]};
+}
+
+SymbolID Symbol::id() const {
+    binary::Proxy<memory::Symbol> proxy{base, data};
+    return binary::deserialize(proxy.get<"id">());
+}
+
+SymbolKind Symbol::kind() const {
+    binary::Proxy<memory::Symbol> proxy{base, data};
+    return proxy.get<"kind">();
+}
+
+LazyArray<Relation> Symbol::relations() const {
+    binary::Proxy<memory::Symbol> proxy{base, data};
+    auto relations = proxy.get<"relations">();
+    return LazyArray<Relation>(base,
+                               &proxy.get<"relations">().as_array()[0],
+                               relations.size(),
+                               sizeof(memory::Relation));
+}
+
 Shared<std::vector<char>> index(ASTInfo& AST) {
     return SymbolIndexCollector(AST).build();
 }
