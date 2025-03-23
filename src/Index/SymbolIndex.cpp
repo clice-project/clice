@@ -1,7 +1,6 @@
 #include <numeric>
 
 #include "AST/Semantic.h"
-#include "AST/SourceCode.h"
 #include "Index/SymbolIndex.h"
 #include "Support/Binary.h"
 #include "Support/Compare.h"
@@ -404,6 +403,16 @@ LazyArray<Relation> Symbol::relations() const {
                                &proxy.get<"relations">().as_array()[0],
                                relations.size(),
                                sizeof(memory::Relation));
+}
+
+llvm::StringRef SymbolIndex::path() {
+    binary::Proxy<memory::SymbolIndex> index{data, data};
+    return index.get<"path">().as_string();
+}
+
+llvm::StringRef SymbolIndex::content() {
+    binary::Proxy<memory::SymbolIndex> index{data, data};
+    return index.get<"content">().as_string();
 }
 
 Shared<std::vector<char>> index(ASTInfo& AST) {

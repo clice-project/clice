@@ -1,94 +1,92 @@
-#include "Index/FeatureIndex.h"
-#include "Support/Binary.h"
 #include "Compiler/AST.h"
+#include "Support/Binary.h"
+#include "Index/FeatureIndex.h"
 
 namespace clice::index {
 
 namespace memory {
 
 struct FeatureIndex {
+    /// The path of source file.
+    std::string path;
+
+    /// The content of source file.
+    std::string content;
+
+    /// The index of semantic tokens.
     std::vector<feature::SemanticToken> tokens;
+
+    /// The index of folding ranges.
     std::vector<feature::FoldingRange> foldings;
+
+    /// The index of document links.
     std::vector<feature::DocumentLink> links;
+
+    /// The index of document symbols.
     feature::DocumentSymbols symbols;
 };
 
 }  // namespace memory
 
-Shared<std::vector<char>> indexFeature(ASTInfo& info) {
+Shared<std::vector<char>> indexFeature(ASTInfo& AST) {
     Shared<memory::FeatureIndex> indices;
 
-    for(auto&& [fid, result]: feature::indexSemanticTokens(info)) {
+    for(auto&& [fid, result]: feature::indexSemanticTokens(AST)) {
         indices[fid].tokens = std::move(result);
     }
 
-    for(auto&& [fid, result]: feature::indexFoldingRange(info)) {
+    for(auto&& [fid, result]: feature::indexFoldingRange(AST)) {
         indices[fid].foldings = std::move(result);
     }
 
-    for(auto&& [fid, result]: feature::indexDocumentLink(info)) {
+    for(auto&& [fid, result]: feature::indexDocumentLink(AST)) {
         indices[fid].links = std::move(result);
     }
 
-    for(auto&& [fid, result]: feature::indexDocumentSymbols(info)) {
+    for(auto&& [fid, result]: feature::indexDocumentSymbols(AST)) {
         indices[fid].symbols = std::move(result);
     }
 
     Shared<std::vector<char>> result;
 
     for(auto&& [fid, index]: indices) {
-        auto [buffer, size] = binary::serialize(static_cast<memory::FeatureIndex>(index));
+        index.path = AST.getFilePath(fid);
+        index.content = AST.getFileContent(fid);
+        auto [buffer, _] = binary::serialize(index);
         result.try_emplace(fid, std::move(buffer));
     }
 
     return result;
 }
 
+llvm::StringRef FeatureIndex::path() {
+    binary::Proxy<memory::FeatureIndex> index{base, base};
+    return index.get<"path">().as_string();
+}
+
+llvm::StringRef FeatureIndex::content() {
+    binary::Proxy<memory::FeatureIndex> index{base, base};
+    return index.get<"content">().as_string();
+}
+
 std::vector<feature::SemanticToken> FeatureIndex::semanticTokens() const {
-    return binary::Proxy<memory::FeatureIndex>{base, base}.get<"tokens">().as_array();
+    binary::Proxy<memory::FeatureIndex> index{base, base};
+    return binary::deserialize(index.get<"tokens">());
 }
 
 std::vector<feature::FoldingRange> FeatureIndex::foldingRanges() const {
-    auto array = binary::Proxy<memory::FeatureIndex>{base, base}.get<"foldings">();
-
-    std::vector<feature::FoldingRange> result;
-    result.reserve(array.size());
-
-    /// FIXME: Use iterator or other thing to make cast easier.
-    for(std::size_t i = 0, n = array.size(); i < n; ++i) {
-        auto&& range = array[i];
-        result.emplace_back(range.get<"range">().value(),
-                            range.get<"kind">().value(),
-                            range.get<"text">().as_string().str());
-    }
-
-    return result;
+    binary::Proxy<memory::FeatureIndex> index{base, base};
+    return binary::deserialize(index.get<"foldings">());
 }
 
 std::vector<feature::DocumentLink> FeatureIndex::documentLinks() const {
-    auto array = binary::Proxy<memory::FeatureIndex>{base, base}.get<"links">();
-
-    std::vector<feature::DocumentLink> result;
-    result.reserve(array.size());
-
-    /// FIXME: Use iterator or other thing to make cast easier.
-    for(std::size_t i = 0, n = array.size(); i < n; ++i) {
-        auto&& range = array[i];
-        result.emplace_back(range.get<"range">().value(), range.get<"file">().as_string().str());
-    }
-
-    return result;
+    binary::Proxy<memory::FeatureIndex> index{base, base};
+    return binary::deserialize(index.get<"links">());
 }
 
 std::vector<feature::DocumentSymbol> FeatureIndex::documentSymbols() const {
-    auto array = binary::Proxy<memory::FeatureIndex>{base, base}.get<"symbols">();
-
-    std::vector<feature::DocumentSymbol> result;
-    result.reserve(array.size());
-
-    /// FIXME:
-
-    return result;
+    binary::Proxy<memory::FeatureIndex> index{base, base};
+    return binary::deserialize(index.get<"symbols">());
 }
 
 }  // namespace clice::index

@@ -17,6 +17,12 @@ class FeatureIndex {
 public:
     FeatureIndex(char* base, std::size_t size) : base(base), size(size) {}
 
+    /// The path of source file.
+    llvm::StringRef path();
+
+    /// The content of source file.
+    llvm::StringRef content();
+
     std::vector<feature::SemanticToken> semanticTokens() const;
 
     std::vector<feature::FoldingRange> foldingRanges() const;
