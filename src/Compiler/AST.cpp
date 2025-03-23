@@ -106,6 +106,16 @@ std::pair<clang::FileID, LocalSourceRange> ASTInfo::toLocalRange(clang::SourceRa
     }
 }
 
+std::pair<clang::FileID, LocalSourceRange>
+    ASTInfo::toLocalExpansionRange(clang::SourceRange range) {
+    auto [begin, end] = range;
+    if(begin == end) {
+        return toLocalRange(getExpansionLoc(begin));
+    } else {
+        return toLocalRange(clang::SourceRange(getExpansionLoc(begin), getExpansionLoc(end)));
+    }
+}
+
 index::SymbolID ASTInfo::getSymbolID(const clang::NamedDecl* decl) {
     uint64_t hash;
     auto iter = symbolHashCache.find(decl);

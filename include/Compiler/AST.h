@@ -124,6 +124,9 @@ public:
     /// files, we cut off the range at the end of the first file.
     std::pair<clang::FileID, LocalSourceRange> toLocalRange(clang::SourceRange range);
 
+    /// Same as `toLocalRange`, but will translate range to expansion range.
+    std::pair<clang::FileID, LocalSourceRange> toLocalExpansionRange(clang::SourceRange range);
+
     Location toLocation(clang::SourceRange range) {
         auto [fid, localRange] = toLocalRange(range);
         return Location{
