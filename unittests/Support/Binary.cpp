@@ -95,40 +95,64 @@ TEST(Binary, Array) {
     }
 }
 
-TEST(Binary, Binarify) {
-    static_assert(binary::is_directly_binarizable_v<int>);
-    static_assert(std::same_as<binary::binarify_t<int>, int>);
+TEST(Binary, StringArray) {
+    static_assert(check_sections<std::vector<std::string>, std::string, char>);
 
+    std::vector<std::string> sv = {"1", "22", "333", "444"};
+    auto [buffer, proxy] = binary::serialize(sv);
+    EXPECT_EQ(sv.size(), proxy.size());
+
+    for(auto i = 0; i < sv.size(); i++) {
+        EXPECT_EQ(sv[i], proxy[i].as_string());
+    }
+
+    std::vector sv2 = binary::deserialize(proxy);
+    EXPECT_EQ(sv, sv2);
+}
+
+TEST(Binary, Struct) {
     struct Point {
         uint32_t x;
         uint32_t y;
     };
 
-    static_assert(binary::is_directly_binarizable_v<Point>);
-    static_assert(std::same_as<binary::binarify_t<Point>, Point>);
+    {
+        static_assert(binary::is_directly_binarizable_v<Point>);
+        static_assert(std::same_as<binary::binarify_t<Point>, Point>);
+        static_assert(check_sections<Point>);
 
-    struct Person {
-        std::string x;
-        uint32_t age;
-    };
-
-    static_assert(!binary::is_directly_binarizable_v<Person>);
-    static_assert(std::same_as<binary::binarify_t<Person>, std::tuple<binary::string, uint32_t>>);
+        Point p = {1, 2};
+        auto [buffer, proxy] = binary::serialize(p);
+        EXPECT_EQ(proxy->x, 1);
+        EXPECT_EQ(proxy->y, 2);
+        EXPECT_EQ(p, proxy.value());
+        auto p2 = binary::deserialize(proxy);
+        EXPECT_EQ(p, p2);
+    }
 
     struct Foo {
+        uint32_t age;
+        std::string name;
         std::vector<int> scores;
     };
 
-    static_assert(!binary::is_directly_binarizable_v<Foo>);
-    static_assert(std::same_as<binary::binarify_t<Foo>, std::tuple<binary::array<int>>>);
+    {
+        static_assert(!binary::is_directly_binarizable_v<Foo>);
+        static_assert(check_sections<Foo, char, int>);
 
-    struct Bar {
-        Foo foo;
+        Foo foo = {
+            0,
+            "123",
+            {1, 2, 3},
+        };
+
+        auto [buffer, proxy] = binary::serialize(foo);
+        EXPECT_EQ(proxy.get<"age">().value(), 0);
+        EXPECT_EQ(proxy.get<"name">().as_string(), "123");
+        EXPECT_EQ(proxy.get<"scores">().as_array().vec(), std::vector{1, 2, 3});
+        auto foo2 = binary::deserialize(proxy);
+        EXPECT_EQ(foo, foo2);
     };
-
-    static_assert(!binary::is_directly_binarizable_v<Bar>);
-    static_assert(
-        std::same_as<binary::binarify_t<Bar>, std::tuple<std::tuple<binary::array<int>>>>);
 }
 
 struct Point {
