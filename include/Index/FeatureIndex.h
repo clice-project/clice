@@ -15,23 +15,13 @@ namespace clice::index {
 
 class FeatureIndex {
 public:
-    FeatureIndex(char* base, std::size_t size, bool own = true) :
-        base(base), size(size), own(own) {}
+    FeatureIndex(char* base, std::size_t size) : base(base), size(size) {}
 
-    FeatureIndex(const FeatureIndex&) = delete;
+    /// The path of source file.
+    llvm::StringRef path();
 
-    FeatureIndex(FeatureIndex&& other) noexcept :
-        base(other.base), size(other.size), own(other.own) {
-        other.base = nullptr;
-        other.size = 0;
-        other.own = false;
-    }
-
-    ~FeatureIndex() {
-        if(own) {
-            std::free(base);
-        }
-    }
+    /// The content of source file.
+    llvm::StringRef content();
 
     std::vector<feature::SemanticToken> semanticTokens() const;
 
@@ -41,12 +31,11 @@ public:
 
     std::vector<feature::DocumentSymbol> documentSymbols() const;
 
+    static Shared<std::vector<char>> build(ASTInfo& AST);
+
 public:
     char* base;
     std::size_t size;
-    bool own;
 };
-
-Shared<FeatureIndex> indexFeature(ASTInfo& info);
 
 }  // namespace clice::index

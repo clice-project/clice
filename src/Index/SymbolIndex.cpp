@@ -1,9 +1,6 @@
 #include <numeric>
 
-#include "Index/Index.h"
-#include "Index/USR.h"
 #include "AST/Semantic.h"
-#include "AST/SourceCode.h"
 #include "Index/SymbolIndex.h"
 #include "Support/Binary.h"
 #include "Support/Compare.h"
@@ -12,7 +9,79 @@ namespace clice::index {
 
 namespace {
 
-struct SymbolIndexStorage : memory::SymbolIndex {
+namespace memory {
+
+struct Relation {
+    RelationKind kind;
+
+    /// The `data` array contains two fields whose meanings depend on the `kind`.
+    /// Each `RelationKind` specifies the interpretation of these fields as follows:
+    ///
+    /// - `Definition` and `Declaration`:
+    ///   - `data[0]`: The range of the name token.
+    ///   - `data[1]`: The range of the whole symbol.
+    ///
+    /// - `Reference` and `WeakReference`:
+    ///   - `data[0]`: The range of the reference.
+    ///   - `data[1]`: Empty (unused).
+    ///
+    /// - `Interface`, `Implementation`, `TypeDefinition`, `Base`, `Derived`,
+    ///   `Constructor`, and `Destructor`:
+    ///   - `data[0]`: The target symbol.
+    ///   - `data[1]`: Empty (unused).
+    ///
+    /// - `Caller` and `Callee`:
+    ///   - `data[0]`: The target symbol (e.g., the called function).
+    ///   - `data[1]`: The range of the call site.
+    ///
+    std::uint32_t data = -1;
+    std::uint32_t data1 = -1;
+};
+
+struct Symbol {
+    /// The symbol id.
+    SymbolID id;
+
+    /// The symbol kind.
+    SymbolKind kind;
+
+    /// The relations of this symbol.
+    std::vector<Relation> relations;
+};
+
+struct Occurrence {
+    /// The location(index) of this symbol occurrence.
+    std::uint32_t location = -1;
+
+    /// The referenced symbol(index) of the this symbol occurrence.
+    std::uint32_t symbol = -1;
+};
+
+struct SymbolIndex {
+    /// The path of source file.
+    std::string path;
+
+    /// The content of source file.
+    std::string content;
+
+    /// FIXME: add includes or module names?
+
+    /// All symbols in this file.
+    std::vector<Symbol> symbols;
+
+    /// All occurrences in this file.
+    std::vector<Occurrence> occurrences;
+
+    /// All ranges in this file.
+    std::vector<LocalSourceRange> ranges;
+};
+
+}  // namespace memory
+
+class SymbolIndexBuilder : public memory::SymbolIndex {
+public:
+    SymbolIndexBuilder(ASTInfo& AST) : AST(AST) {}
+
     std::uint32_t getLocation(LocalSourceRange range) {
         auto key = std::pair(range.begin, range.end);
         auto [iter, success] = locationCache.try_emplace(key, ranges.size());
@@ -22,20 +91,44 @@ struct SymbolIndexStorage : memory::SymbolIndex {
         return iter->second;
     }
 
-    std::uint32_t getSymbol(const void* symbol, uint64_t id, std::string name, SymbolKind kind) {
-        auto [iter, success] = symbolCache.try_emplace(symbol, symbols.size());
+    std::uint32_t getSymbol(const clang::NamedDecl* decl) {
+        auto [iter, success] = symbolCache.try_emplace(decl, symbols.size());
         if(success) {
             symbols.emplace_back(memory::Symbol{
-                .id = id,
-                .name = std::move(name),
-                .kind = kind,
+                .id = AST.getSymbolID(decl),
+                .kind = SymbolKind::from(decl),
+            });
+        }
+        return iter->second;
+    }
+
+    std::uint32_t getSymbol(const clang::MacroInfo* macro) {
+        auto [iter, success] = symbolCache.try_emplace(macro, symbols.size());
+        if(success) {
+            symbols.emplace_back(memory::Symbol{
+                .id = AST.getSymbolID(macro),
+                .kind = SymbolKind::Macro,
             });
         }
         return iter->second;
     }
 
     void addOccurrence(uint32_t location, uint32_t symbol) {
-        occurrences.emplace_back(memory::Occurrence{location, symbol});
+        occurrences.emplace_back(memory::Occurrence{
+            .location = location,
+            .symbol = symbol,
+        });
+    }
+
+    void addRelation(uint32_t symbol,
+                     RelationKind kind,
+                     uint32_t data,
+                     uint32_t data1 = std::numeric_limits<uint32_t>::max()) {
+        symbols[symbol].relations.emplace_back(memory::Relation{
+            .kind = kind,
+            .data = data,
+            .data1 = data1,
+        });
     }
 
     void sort() {
@@ -57,7 +150,7 @@ struct SymbolIndexStorage : memory::SymbolIndex {
 
             ranges::sort(views::zip(symbols, new2old), refl::less, [](const auto& element) {
                 auto& symbol = std::get<0>(element);
-                return std::tuple(symbol.id, symbol.name, symbol.kind);
+                return std::tuple(symbol.id, symbol.kind);
             });
 
             for(uint32_t i = 0; i < symbols.size(); ++i) {
@@ -94,26 +187,27 @@ struct SymbolIndexStorage : memory::SymbolIndex {
         auto range = ranges::unique(occurrences, refl::equal);
         occurrences.erase(range.begin(), range.end());
 
+        using enum RelationKind::Kind;
         /// Sort all relations and update the symbol and location references.
         for(auto& symbol: symbols) {
             for(auto& relation: symbol.relations) {
                 auto kind = relation.kind;
-                if(kind.is_one_of(RelationKind::Definition, RelationKind::Declaration)) {
-                    relation.data = {locationMap[relation.data]};
-                    relation.data1 = {locationMap[relation.data1]};
-                } else if(kind.is_one_of(RelationKind::Reference, RelationKind::WeakReference)) {
-                    relation.data = {locationMap[relation.data]};
-                } else if(kind.is_one_of(RelationKind::Interface,
-                                         RelationKind::Implementation,
-                                         RelationKind::TypeDefinition,
-                                         RelationKind::Base,
-                                         RelationKind::Derived,
-                                         RelationKind::Constructor,
-                                         RelationKind::Destructor)) {
-                    relation.data = {symbolMap[relation.data]};
-                } else if(kind.is_one_of(RelationKind::Caller, RelationKind::Callee)) {
-                    relation.data = {symbolMap[relation.data]};
-                    relation.data1 = {locationMap[relation.data1]};
+                if(kind.is_one_of(Definition, Declaration)) {
+                    relation.data = locationMap[relation.data];
+                    relation.data1 = locationMap[relation.data1];
+                } else if(kind.is_one_of(Reference, WeakReference)) {
+                    relation.data = locationMap[relation.data];
+                } else if(kind.is_one_of(Interface,
+                                         Implementation,
+                                         TypeDefinition,
+                                         Base,
+                                         Derived,
+                                         Constructor,
+                                         Destructor)) {
+                    relation.data = symbolMap[relation.data];
+                } else if(kind.is_one_of(Caller, Callee)) {
+                    relation.data = symbolMap[relation.data];
+                    relation.data1 = locationMap[relation.data1];
                 } else {
                     assert(false && "Invalid relation kind");
                 }
@@ -126,42 +220,23 @@ struct SymbolIndexStorage : memory::SymbolIndex {
         }
     }
 
+    memory::SymbolIndex dump() {
+        return std::move(static_cast<memory::SymbolIndex>(*this));
+    }
+
+private:
+    ASTInfo& AST;
     llvm::DenseMap<const void*, uint32_t> symbolCache;
     llvm::DenseMap<std::pair<uint32_t, uint32_t>, uint32_t> locationCache;
 };
 
 class SymbolIndexCollector : public SemanticVisitor<SymbolIndexCollector> {
 public:
-    SymbolIndexCollector(ASTInfo& info) : SemanticVisitor(info, false) {}
+    SymbolIndexCollector(ASTInfo& AST) : SemanticVisitor(AST, false) {}
 
-    /// Get the symbol id for the given decl.
-    uint64_t getSymbolID(const void* symbol, bool isMacro = false) {
-        auto iter = symbolIDs.find(symbol);
-        if(iter != symbolIDs.end()) {
-            return iter->second;
-        }
-
-        llvm::SmallString<128> USR;
-        if(isMacro) {
-            auto def = static_cast<const clang::MacroInfo*>(symbol);
-            auto name = getTokenSpelling(SM, def->getDefinitionLoc());
-            index::generateUSRForMacro(name, def->getDefinitionLoc(), SM, USR);
-        } else {
-            index::generateUSRForDecl(static_cast<const clang::Decl*>(symbol), USR);
-        }
-
-        assert(!USR.empty() && "Invalid USR");
-        auto id = llvm::xxh3_64bits(USR);
-        symbolIDs.try_emplace(symbol, id);
-        return id;
-    }
-
-    std::uint32_t getSymbol(SymbolIndexStorage& file, const clang::NamedDecl* decl) {
-        auto symbol = file.getSymbol(decl,
-                                     getSymbolID(decl),
-                                     decl->getNameAsString(),
-                                     SymbolKind::from(decl));
-        return symbol;
+    SymbolIndexBuilder& getBuilder(clang::FileID fid) {
+        auto [it, success] = builders.try_emplace(fid, AST);
+        return it->second;
     }
 
 public:
@@ -186,14 +261,11 @@ public:
         }
 
         /// Add the occurrence.
-        auto [fid, local] = AST.toLocalRange(location);
-        auto& index = indices[fid];
-        auto loc = index.getLocation(local);
-        auto symbol = index.getSymbol(decl,
-                                      getSymbolID(decl),
-                                      decl->getNameAsString(),
-                                      SymbolKind::from(decl));
-        index.addOccurrence(loc, symbol);
+        auto [fid, range] = AST.toLocalRange(location);
+        auto& builder = getBuilder(fid);
+        auto loc = builder.getLocation(range);
+        auto symbol = builder.getSymbol(decl);
+        builder.addOccurrence(loc, symbol);
     }
 
     void handleMacroOccurrence(const clang::MacroInfo* def,
@@ -204,65 +276,50 @@ public:
             return;
         }
 
-        auto begin = def->getDefinitionLoc();
-        auto end = def->getDefinitionEndLoc();
-        assert(begin.isFileID() && end.isFileID() && "Invalid location");
-
-        /// Get the macro name.
-        auto name = getTokenSpelling(SM, begin);
-
-        /// Add the occurrence.
-        auto [fid, local] = AST.toLocalRange(location);
-        auto& file = indices[fid];
-        auto loc = file.getLocation(local);
-        auto symbol = file.getSymbol(def, getSymbolID(def, true), name.str(), SymbolKind::Macro);
-        file.addOccurrence(loc, symbol);
+        /// Add macro occurrence.
+        auto [fid, range] = AST.toLocalRange(location);
+        auto& builder = getBuilder(fid);
+        auto loc = builder.getLocation(range);
+        auto symbol = builder.getSymbol(def);
+        builder.addOccurrence(loc, symbol);
 
         /// If the macro is a definition, set definition range for it.
-        memory::ValueRef data1 = {};
+        std::uint32_t definitionLoc = std::numeric_limits<std::uint32_t>::max();
+
         if(kind & RelationKind::Definition) {
+            auto begin = def->getDefinitionLoc();
+            auto end = def->getDefinitionEndLoc();
+            assert(begin.isFileID() && end.isFileID() && "Invalid location");
             auto [fid2, range] = AST.toLocalRange(clang::SourceRange(begin, end));
             assert(fid == fid2 && "Invalid macro definition location");
-            data1.offset = file.getLocation(range);
+            definitionLoc = builder.getLocation(range);
         }
 
-        auto& relations = file.symbols[symbol].relations;
-        relations.emplace_back(memory::Relation{
-            .kind = kind,
-            .data = {loc},
-            .data1 = data1,
-        });
+        builder.addRelation(symbol, kind, loc, definitionLoc);
     }
 
     void handleRelation(const clang::NamedDecl* decl,
                         RelationKind kind,
                         const clang::NamedDecl* target,
                         clang::SourceRange range) {
-        auto [begin, end] = range;
-
-        /// For relation, we always use expansion location.
-        begin = AST.getExpansionLoc(begin);
-        end = AST.getExpansionLoc(end);
-        assert(begin.isFileID() && end.isFileID() && "Invalid location");
-
-        auto [fid, relationRange] = AST.toLocalRange(clang::SourceRange(begin, end));
-        auto& file = indices[fid];
+        auto [fid, relationRange] = AST.toLocalExpansionRange(range);
+        auto& builder = getBuilder(fid);
 
         /// Calculate the data for the relation.
-        memory::ValueRef data[2] = {};
+        std::uint32_t data[2] = {
+            std::numeric_limits<std::uint32_t>::max(),
+            std::numeric_limits<std::uint32_t>::max(),
+        };
+
         using enum RelationKind::Kind;
 
         if(kind.is_one_of(Definition, Declaration)) {
-            auto [begin, end] = decl->getSourceRange();
-            begin = AST.getExpansionLoc(begin);
-            end = AST.getExpansionLoc(end);
-            auto [fid2, definitionRange] = AST.toLocalRange(clang::SourceRange(begin, end));
+            auto [fid2, definitionRange] = AST.toLocalExpansionRange(decl->getSourceRange());
             assert(fid == fid2 && "Invalid definition location");
-
-            data[0].offset = file.getLocation(relationRange);
-            data[1].offset = file.getLocation(definitionRange);
+            data[0] = builder.getLocation(relationRange);
+            data[1] = builder.getLocation(definitionRange);
         } else if(kind.is_one_of(Reference, WeakReference)) {
-            data[0].offset = file.getLocation(relationRange);
+            data[0] = builder.getLocation(relationRange);
         } else if(kind.is_one_of(Interface,
                                  Implementation,
                                  TypeDefinition,
@@ -270,38 +327,30 @@ public:
                                  Derived,
                                  Constructor,
                                  Destructor)) {
-            data[0].offset = getSymbol(file, normalize(target));
+            data[0] = builder.getSymbol(normalize(target));
         } else if(kind.is_one_of(Caller, Callee)) {
-            data[0].offset = getSymbol(file, normalize(target));
-            data[1].offset = file.getLocation(relationRange);
+            data[0] = builder.getSymbol(normalize(target));
+            data[1] = builder.getLocation(relationRange);
         } else {
             std::unreachable();
         }
 
         /// Add the relation.
-        auto symbol = getSymbol(file, normalize(decl));
-        file.symbols[symbol].relations.emplace_back(memory::Relation{
-            .kind = kind,
-            .data = data[0],
-            .data1 = data[1],
-        });
+        auto symbol = builder.getSymbol(normalize(decl));
+        builder.addRelation(symbol, kind, data[0], data[1]);
     }
 
-    llvm::DenseMap<clang::FileID, SymbolIndex> build() {
+    auto build() {
         run();
 
-        llvm::DenseMap<clang::FileID, SymbolIndex> result;
-        for(auto& [fid, index]: indices) {
-            index.sort();
-
-            if(index.path.empty()) {
-                index.path = AST.getFilePath(fid);
-            }
-
-            auto [buffer, size] = clice::binary::binarify(static_cast<memory::SymbolIndex>(index));
-            result.try_emplace(
-                fid,
-                SymbolIndex{static_cast<char*>(const_cast<void*>(buffer.base)), size, true});
+        llvm::DenseMap<clang::FileID, std::vector<char>> result;
+        for(auto& [fid, builder]: builders) {
+            builder.sort();
+            auto index = builder.dump();
+            index.path = AST.getFilePath(fid);
+            index.content = AST.getFileContent(fid);
+            auto [buffer, _] = binary::serialize(index);
+            result.try_emplace(fid, std::move(buffer));
         }
 
         return std::move(result);
@@ -309,14 +358,65 @@ public:
 
 private:
     llvm::DenseMap<const void*, uint64_t> symbolIDs;
-    llvm::DenseMap<clang::FileID, SymbolIndexStorage> indices;
+    llvm::DenseMap<clang::FileID, SymbolIndexBuilder> builders;
 };
 
 }  // namespace
 
-Shared<SymbolIndex> index(ASTInfo& info) {
-    SymbolIndexCollector collector(info);
-    return collector.build();
+RelationKind Relation::kind() const {
+    binary::Proxy<memory::Relation> proxy{base, data};
+    return proxy->kind;
+}
+
+LocalSourceRange Relation::range() const {
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    binary::Proxy<memory::Relation> proxy{base, data};
+    return index.get<"ranges">().as_array()[proxy->data];
+}
+
+LocalSourceRange Relation::definitionRange() const {
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    binary::Proxy<memory::Relation> proxy{base, data};
+    return index.get<"ranges">().as_array()[proxy->data1];
+}
+
+Symbol Relation::target() const {
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    binary::Proxy<memory::Relation> proxy{base, data};
+    return Symbol{base, &index.get<"symbols">().as_array()[proxy->data1]};
+}
+
+SymbolID Symbol::id() const {
+    binary::Proxy<memory::Symbol> proxy{base, data};
+    return binary::deserialize(proxy.get<"id">());
+}
+
+SymbolKind Symbol::kind() const {
+    binary::Proxy<memory::Symbol> proxy{base, data};
+    return proxy.get<"kind">();
+}
+
+LazyArray<Relation> Symbol::relations() const {
+    binary::Proxy<memory::Symbol> proxy{base, data};
+    auto relations = proxy.get<"relations">();
+    return LazyArray<Relation>(base,
+                               &proxy.get<"relations">().as_array()[0],
+                               relations.size(),
+                               sizeof(memory::Relation));
+}
+
+llvm::StringRef SymbolIndex::path() {
+    binary::Proxy<memory::SymbolIndex> index{data, data};
+    return index.get<"path">().as_string();
+}
+
+llvm::StringRef SymbolIndex::content() {
+    binary::Proxy<memory::SymbolIndex> index{data, data};
+    return index.get<"content">().as_string();
+}
+
+Shared<std::vector<char>> SymbolIndex::build(ASTInfo& AST) {
+    return SymbolIndexCollector(AST).build();
 }
 
 }  // namespace clice::index

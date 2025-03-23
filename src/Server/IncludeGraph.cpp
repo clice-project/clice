@@ -1,11 +1,9 @@
 #include <random>
 
-#include "Server/IncludeGraph.h"
-#include "Index/SymbolIndex.h"
-#include "Index/FeatureIndex.h"
-#include "Index/Shared2.h"
+#include "Index/Index.h"
 #include "Support/Compare.h"
 #include "Support/Logger.h"
+#include "Server/IncludeGraph.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/xxhash.h"
 
@@ -269,7 +267,7 @@ void IncludeGraph::addContexts(ASTInfo& AST,
 async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
                                           TranslationUnit* tu,
                                           llvm::DenseMap<clang::FileID, uint32_t>& files) {
-    auto indices = co_await async::submit([&info] { return index::Index2::build(info); });
+    auto indices = co_await async::submit([&info] { return index::Index::build(info); });
 
     auto& SM = info.srcMgr();
 
