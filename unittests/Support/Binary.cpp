@@ -10,11 +10,89 @@ constexpr inline bool check_sections =
     std::is_same_v<binary::layout_t<Object>, std::tuple<binary::Section<Ts>...>>;
 
 TEST(Binary, String) {
-    std::string s1 = "123";
     static_assert(check_sections<std::string, char>);
-    auto [buffer, proxy] = binary::serialize(s1);
-    std::string s2 = binary::deserialize(proxy);
-    EXPECT_EQ(s1, s2);
+
+    {
+        std::string s1 = "";
+        auto [buffer, proxy] = binary::serialize(s1);
+        EXPECT_EQ(s1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(s1[i], proxy[i].value());
+        }
+
+        EXPECT_EQ(s1, proxy.as_string());
+        std::string s2 = binary::deserialize(proxy);
+        EXPECT_EQ(s1, s2);
+    }
+
+    {
+        std::string s1 = "123";
+        auto [buffer, proxy] = binary::serialize(s1);
+        EXPECT_EQ(s1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(s1[i], proxy[i].value());
+        }
+
+        EXPECT_EQ(s1, proxy.as_string());
+        std::string s2 = binary::deserialize(proxy);
+        EXPECT_EQ(s1, s2);
+    }
+
+    {
+        std::string s1 = "11111111111111111111111111111111111111111111111111111111111111111";
+        auto [buffer, proxy] = binary::serialize(s1);
+        EXPECT_EQ(s1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(s1[i], proxy[i].value());
+        }
+
+        EXPECT_EQ(s1, proxy.as_string());
+        std::string s2 = binary::deserialize(proxy);
+        EXPECT_EQ(s1, s2);
+    }
+}
+
+TEST(Binary, Array) {
+    static_assert(check_sections<std::vector<int>, int>);
+
+    {
+        std::vector<int> vec1 = {};
+        auto [buffer, proxy] = binary::serialize(vec1);
+        EXPECT_EQ(vec1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(vec1[i], proxy[i].value());
+        }
+
+        EXPECT_EQ(vec1, proxy.as_array().vec());
+        std::vector vec2 = binary::deserialize(proxy);
+        EXPECT_EQ(vec1, vec2);
+    }
+
+    {
+        std::vector vec1 = {1, 2, 3};
+        auto [buffer, proxy] = binary::serialize(vec1);
+        EXPECT_EQ(vec1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(vec1[i], proxy[i].value());
+        }
+
+        EXPECT_EQ(vec1, proxy.as_array().vec());
+        std::vector vec2 = binary::deserialize(proxy);
+        EXPECT_EQ(vec1, vec2);
+    }
+
+    {
+        std::vector vec1 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+        auto [buffer, proxy] = binary::serialize(vec1);
+        EXPECT_EQ(vec1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(vec1[i], proxy[i].value());
+        }
+
+        EXPECT_EQ(vec1, proxy.as_array().vec());
+        std::vector vec2 = binary::deserialize(proxy);
+        EXPECT_EQ(vec1, vec2);
+    }
 }
 
 TEST(Binary, Binarify) {
