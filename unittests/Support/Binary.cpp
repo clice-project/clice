@@ -10,47 +10,104 @@ constexpr inline bool check_sections =
     std::is_same_v<binary::layout_t<Object>, std::tuple<binary::Section<Ts>...>>;
 
 TEST(Binary, String) {
-    std::string s1 = "123";
     static_assert(check_sections<std::string, char>);
-    auto [buffer, proxy] = binary::serialize(s1);
-    std::string s2 = binary::deserialize(proxy);
-    EXPECT_EQ(s1, s2);
+
+    {
+        std::string s1 = "";
+        auto [buffer, proxy] = binary::serialize(s1);
+        EXPECT_EQ(s1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(s1[i], proxy[i].value());
+        }
+
+        EXPECT_EQ(s1, proxy.as_string());
+        std::string s2 = binary::deserialize(proxy);
+        EXPECT_EQ(s1, s2);
+    }
+
+    {
+        std::string s1 = "123";
+        auto [buffer, proxy] = binary::serialize(s1);
+        EXPECT_EQ(s1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(s1[i], proxy[i].value());
+        }
+
+        EXPECT_EQ(s1, proxy.as_string());
+        std::string s2 = binary::deserialize(proxy);
+        EXPECT_EQ(s1, s2);
+    }
+
+    {
+        std::string s1 = "11111111111111111111111111111111111111111111111111111111111111111";
+        auto [buffer, proxy] = binary::serialize(s1);
+        EXPECT_EQ(s1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(s1[i], proxy[i].value());
+        }
+
+        EXPECT_EQ(s1, proxy.as_string());
+        std::string s2 = binary::deserialize(proxy);
+        EXPECT_EQ(s1, s2);
+    }
 }
 
-TEST(Binary, Binarify) {
-    static_assert(binary::is_directly_binarizable_v<int>);
-    static_assert(std::same_as<binary::binarify_t<int>, int>);
+TEST(Binary, Array) {
+    static_assert(check_sections<std::vector<int>, int>);
 
-    struct Point {
-        uint32_t x;
-        uint32_t y;
-    };
+    {
+        std::vector<int> vec1 = {};
+        auto [buffer, proxy] = binary::serialize(vec1);
+        EXPECT_EQ(vec1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(vec1[i], proxy[i].value());
+        }
 
-    static_assert(binary::is_directly_binarizable_v<Point>);
-    static_assert(std::same_as<binary::binarify_t<Point>, Point>);
+        EXPECT_EQ(vec1, proxy.as_array().vec());
+        std::vector vec2 = binary::deserialize(proxy);
+        EXPECT_EQ(vec1, vec2);
+    }
 
-    struct Person {
-        std::string x;
-        uint32_t age;
-    };
+    {
+        std::vector vec1 = {1, 2, 3};
+        auto [buffer, proxy] = binary::serialize(vec1);
+        EXPECT_EQ(vec1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(vec1[i], proxy[i].value());
+        }
 
-    static_assert(!binary::is_directly_binarizable_v<Person>);
-    static_assert(std::same_as<binary::binarify_t<Person>, std::tuple<binary::string, uint32_t>>);
+        EXPECT_EQ(vec1, proxy.as_array().vec());
+        std::vector vec2 = binary::deserialize(proxy);
+        EXPECT_EQ(vec1, vec2);
+    }
 
-    struct Foo {
-        std::vector<int> scores;
-    };
+    {
+        std::vector vec1 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+        auto [buffer, proxy] = binary::serialize(vec1);
+        EXPECT_EQ(vec1.size(), proxy.size());
+        for(auto i = 0; i < proxy.size(); i++) {
+            EXPECT_EQ(vec1[i], proxy[i].value());
+        }
 
-    static_assert(!binary::is_directly_binarizable_v<Foo>);
-    static_assert(std::same_as<binary::binarify_t<Foo>, std::tuple<binary::array<int>>>);
+        EXPECT_EQ(vec1, proxy.as_array().vec());
+        std::vector vec2 = binary::deserialize(proxy);
+        EXPECT_EQ(vec1, vec2);
+    }
+}
 
-    struct Bar {
-        Foo foo;
-    };
+TEST(Binary, StringArray) {
+    static_assert(check_sections<std::vector<std::string>, std::string, char>);
 
-    static_assert(!binary::is_directly_binarizable_v<Bar>);
-    static_assert(
-        std::same_as<binary::binarify_t<Bar>, std::tuple<std::tuple<binary::array<int>>>>);
+    std::vector<std::string> sv = {"1", "22", "333", "444"};
+    auto [buffer, proxy] = binary::serialize(sv);
+    EXPECT_EQ(sv.size(), proxy.size());
+
+    for(auto i = 0; i < sv.size(); i++) {
+        EXPECT_EQ(sv[i], proxy[i].as_string());
+    }
+
+    std::vector sv2 = binary::deserialize(proxy);
+    EXPECT_EQ(sv, sv2);
 }
 
 struct Point {
@@ -58,29 +115,66 @@ struct Point {
     uint32_t y;
 };
 
-TEST(Binary, Simple) {
-    using namespace clice::binary;
-    auto [buffer, proxy] = binary::serialize(Point{1, 2});
+TEST(Binary, Struct) {
+    {
+        static_assert(binary::is_directly_binarizable_v<Point>);
+        static_assert(std::same_as<binary::binarify_t<Point>, Point>);
+        static_assert(check_sections<Point>);
 
-    EXPECT_EQ(proxy.value().x, 1);
-    EXPECT_EQ(proxy.value().y, 2);
-}
+        Point p = {1, 2};
+        auto [buffer, proxy] = binary::serialize(p);
+        EXPECT_EQ(proxy->x, 1);
+        EXPECT_EQ(proxy->y, 2);
+        EXPECT_EQ(p, proxy.value());
+        auto p2 = binary::deserialize(proxy);
+        EXPECT_EQ(p, p2);
+    }
 
-struct Points {
-    std::vector<Point> points;
-};
-
-TEST(Binary, Nested) {
-    Points points{
-        {Point{1, 2}, Point{3, 4}}
+    struct Foo {
+        uint32_t age;
+        std::string name;
+        std::vector<int> scores;
     };
 
-    auto [buffer, proxy] = binary::serialize(points);
+    {
+        static_assert(!binary::is_directly_binarizable_v<Foo>);
+        static_assert(check_sections<Foo, char, int>);
 
-    auto points2 = proxy.get<"points">();
+        Foo foo = {
+            0,
+            "123",
+            {1, 2, 3},
+        };
 
-    EXPECT_EQ(points2[0].value(), Point{1, 2});
-    EXPECT_EQ(points2[1].value(), Point{3, 4});
+        auto [buffer, proxy] = binary::serialize(foo);
+        EXPECT_EQ(proxy.get<"age">().value(), 0);
+        EXPECT_EQ(proxy.get<"name">().as_string(), "123");
+        EXPECT_EQ(proxy.get<"scores">().as_array().vec(), std::vector{1, 2, 3});
+        auto foo2 = binary::deserialize(proxy);
+        EXPECT_EQ(foo, foo2);
+    };
+
+    struct Points {
+        std::vector<Point> points;
+    };
+
+    {
+        static_assert(!binary::is_directly_binarizable_v<Points>);
+        static_assert(check_sections<Points, Point>);
+
+        Points points{
+            {
+             Point{1, 2},
+             Point{3, 4},
+             },
+        };
+        auto [buffer, proxy] = binary::serialize(points);
+        auto points2 = proxy.get<"points">();
+        EXPECT_EQ(points2[0].value(), Point{1, 2});
+        EXPECT_EQ(points2[1].value(), Point{3, 4});
+        auto points3 = binary::deserialize(proxy);
+        EXPECT_EQ(points, points3);
+    }
 }
 
 struct Node {
@@ -91,18 +185,20 @@ struct Node {
 TEST(Binary, Recursively) {
     Node node = {
         1,
-        {
-          {3},
+        {{3},
           {4},
           {
-                5,
-                {
-                    {3},
-                    {4},
-                    {5},
-                },
-            }, },
+             5,
+             {
+                 {3},
+                 {4},
+                 {5},
+             },
+         }},
     };
+
+    static_assert(!binary::is_directly_binarizable_v<Node>);
+    static_assert(check_sections<Node, Node>);
 
     auto [buffer, proxy] = binary::serialize(node);
     auto node2 = binary::deserialize(proxy);
@@ -110,5 +206,6 @@ TEST(Binary, Recursively) {
 }
 
 }  // namespace
+
 }  // namespace clice::testing
 
