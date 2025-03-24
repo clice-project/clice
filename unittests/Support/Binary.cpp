@@ -110,12 +110,12 @@ TEST(Binary, StringArray) {
     EXPECT_EQ(sv, sv2);
 }
 
-TEST(Binary, Struct) {
-    struct Point {
-        uint32_t x;
-        uint32_t y;
-    };
+struct Point {
+    uint32_t x;
+    uint32_t y;
+};
 
+TEST(Binary, Struct) {
     {
         static_assert(binary::is_directly_binarizable_v<Point>);
         static_assert(std::same_as<binary::binarify_t<Point>, Point>);
@@ -153,36 +153,28 @@ TEST(Binary, Struct) {
         auto foo2 = binary::deserialize(proxy);
         EXPECT_EQ(foo, foo2);
     };
-}
 
-struct Point {
-    uint32_t x;
-    uint32_t y;
-};
-
-TEST(Binary, Simple) {
-    using namespace clice::binary;
-    auto [buffer, proxy] = binary::serialize(Point{1, 2});
-
-    EXPECT_EQ(proxy.value().x, 1);
-    EXPECT_EQ(proxy.value().y, 2);
-}
-
-struct Points {
-    std::vector<Point> points;
-};
-
-TEST(Binary, Nested) {
-    Points points{
-        {Point{1, 2}, Point{3, 4}}
+    struct Points {
+        std::vector<Point> points;
     };
 
-    auto [buffer, proxy] = binary::serialize(points);
+    {
+        static_assert(!binary::is_directly_binarizable_v<Points>);
+        static_assert(check_sections<Points, Point>);
 
-    auto points2 = proxy.get<"points">();
-
-    EXPECT_EQ(points2[0].value(), Point{1, 2});
-    EXPECT_EQ(points2[1].value(), Point{3, 4});
+        Points points{
+            {
+             Point{1, 2},
+             Point{3, 4},
+             },
+        };
+        auto [buffer, proxy] = binary::serialize(points);
+        auto points2 = proxy.get<"points">();
+        EXPECT_EQ(points2[0].value(), Point{1, 2});
+        EXPECT_EQ(points2[1].value(), Point{3, 4});
+        auto points3 = binary::deserialize(proxy);
+        EXPECT_EQ(points, points3);
+    }
 }
 
 struct Node {
@@ -193,18 +185,20 @@ struct Node {
 TEST(Binary, Recursively) {
     Node node = {
         1,
-        {
-          {3},
+        {{3},
           {4},
           {
-                5,
-                {
-                    {3},
-                    {4},
-                    {5},
-                },
-            }, },
+             5,
+             {
+                 {3},
+                 {4},
+                 {5},
+             },
+         }},
     };
+
+    static_assert(!binary::is_directly_binarizable_v<Node>);
+    static_assert(check_sections<Node, Node>);
 
     auto [buffer, proxy] = binary::serialize(node);
     auto node2 = binary::deserialize(proxy);
@@ -212,5 +206,6 @@ TEST(Binary, Recursively) {
 }
 
 }  // namespace
+
 }  // namespace clice::testing
 
