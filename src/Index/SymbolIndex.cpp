@@ -391,28 +391,101 @@ SymbolID Symbol::id() const {
     return binary::deserialize(proxy.get<"id">());
 }
 
+std::uint64_t Symbol::hash() const {
+    binary::Proxy<memory::Symbol> proxy{base, data};
+    return proxy.get<"id">().get<"hash">().value();
+}
+
+llvm::StringRef Symbol::name() const {
+    binary::Proxy<memory::Symbol> proxy{base, data};
+    return proxy.get<"id">().get<"name">().as_string();
+}
+
 SymbolKind Symbol::kind() const {
     binary::Proxy<memory::Symbol> proxy{base, data};
     return proxy.get<"kind">();
 }
 
-LazyArray<Relation> Symbol::relations() const {
-    binary::Proxy<memory::Symbol> proxy{base, data};
-    auto relations = proxy.get<"relations">();
-    return LazyArray<Relation>(base,
-                               &proxy.get<"relations">().as_array()[0],
-                               relations.size(),
-                               sizeof(memory::Relation));
+template <typename U, typename T>
+static LazyArray<U> getLazyArray(binary::Proxy<std::vector<T>> proxy) {
+    return LazyArray<U>{
+        proxy.base,
+        &proxy.as_array()[0],
+        proxy.size(),
+        sizeof(binary::binarify_t<T>),
+    };
 }
 
-llvm::StringRef SymbolIndex::path() {
+LazyArray<Relation> Symbol::relations() const {
+    binary::Proxy<memory::Symbol> symbol{base, data};
+    return getLazyArray<Relation>(symbol.get<"relations">());
+}
+
+LocalSourceRange Occurrence::range() const {
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    binary::Proxy<memory::Occurrence> occurrence{base, data};
+    return index.get<"ranges">().as_array()[occurrence->location];
+}
+
+Symbol Occurrence::symbol() const {
+    binary::Proxy<memory::SymbolIndex> index{base, base};
+    binary::Proxy<memory::Occurrence> occurrence{base, data};
+    return Symbol{
+        base,
+        &index.get<"symbols">().as_array()[occurrence->symbol],
+    };
+}
+
+llvm::StringRef SymbolIndex::path() const {
     binary::Proxy<memory::SymbolIndex> index{data, data};
     return index.get<"path">().as_string();
 }
 
-llvm::StringRef SymbolIndex::content() {
+llvm::StringRef SymbolIndex::content() const {
     binary::Proxy<memory::SymbolIndex> index{data, data};
     return index.get<"content">().as_string();
+}
+
+LazyArray<Symbol> SymbolIndex::symbols() const {
+    binary::Proxy<memory::SymbolIndex> index{data, data};
+    return getLazyArray<Symbol>(index.get<"symbols">());
+}
+
+LazyArray<Occurrence> SymbolIndex::occurrences() const {
+    binary::Proxy<memory::SymbolIndex> index{data, data};
+    return getLazyArray<Occurrence>(index.get<"occurrences">());
+}
+
+std::vector<Symbol> SymbolIndex::locateSymbol(uint32_t offset) const {
+    auto occurrences = this->occurrences();
+    auto iter = ranges::lower_bound(occurrences, offset, {}, [](const Occurrence& occurrence) {
+        return occurrence.range().end;
+    });
+
+    std::vector<Symbol> result;
+    while(iter != occurrences.end()) {
+        auto occurrence = *iter;
+        if(occurrence.range().begin > offset) {
+            break;
+        }
+        result.emplace_back(occurrence.symbol());
+        ++iter;
+    }
+    return result;
+}
+
+std::optional<Symbol> SymbolIndex::locateSymbol(const SymbolID& id) const {
+    auto symbols = this->symbols();
+    auto iter = ranges::lower_bound(symbols, id.hash, refl::less, [](const Symbol& symbol) {
+        return symbol.hash();
+    });
+
+    auto symbol = *iter;
+    if(symbol.hash() == id.hash && symbol.name() == id.name) {
+        return symbol;
+    }
+
+    return std::nullopt;
 }
 
 Shared<std::vector<char>> SymbolIndex::build(ASTInfo& AST) {

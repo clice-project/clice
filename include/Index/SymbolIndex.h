@@ -29,6 +29,12 @@ struct Symbol : Relative {
     /// Return the symbol id.
     SymbolID id() const;
 
+    /// Return the hash value of symbol id.
+    std::uint64_t hash() const;
+
+    /// Return the symbol name.
+    llvm::StringRef name() const;
+
     /// Return the symbol kind.
     SymbolKind kind() const;
 
@@ -36,21 +42,35 @@ struct Symbol : Relative {
     LazyArray<Relation> relations() const;
 };
 
+struct Occurrence : Relative {
+    /// The source range of occurrence.
+    LocalSourceRange range() const;
+
+    /// The target symbol of occurrence.
+    Symbol symbol() const;
+};
+
 class SymbolIndex {
 public:
     SymbolIndex(const char* data, std::uint32_t size) : data(data), size(size) {}
 
     /// The path of source file.
-    llvm::StringRef path();
+    llvm::StringRef path() const;
 
     /// The content of source file.
-    llvm::StringRef content();
+    llvm::StringRef content() const;
+
+    /// All symbols in the index.
+    LazyArray<Symbol> symbols() const;
+
+    /// All occurrences in the index.
+    LazyArray<Occurrence> occurrences() const;
 
     /// Locate the symbols with given offset.
-    std::vector<Symbol> locateSymbol(uint32_t offset);
+    std::vector<Symbol> locateSymbol(uint32_t offset) const;
 
     /// Locate the symbol with given symbol id.
-    Symbol locateSymbol(const SymbolID& id);
+    std::optional<Symbol> locateSymbol(const SymbolID& id) const;
 
     static Shared<std::vector<char>> build(ASTInfo& AST);
 
