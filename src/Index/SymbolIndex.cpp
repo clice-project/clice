@@ -476,7 +476,7 @@ std::vector<Symbol> SymbolIndex::locateSymbol(uint32_t offset) const {
 
 std::optional<Symbol> SymbolIndex::locateSymbol(const SymbolID& id) const {
     auto symbols = this->symbols();
-    auto iter = ranges::lower_bound(symbols, id.hash, refl::less, [](const Symbol& symbol) {
+    auto iter = ranges::lower_bound(symbols, id.hash, {}, [](const Symbol& symbol) {
         return symbol.hash();
     });
 
