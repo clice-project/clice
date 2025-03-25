@@ -36,6 +36,28 @@ struct RelationKind : refl::Enum<RelationKind, true, uint32_t> {
     };
 
     using Enum::Enum;
+
+    constexpr bool isDeclOrDef() {
+        return is_one_of(Declaration, Definition);
+    }
+
+    constexpr bool isReference() {
+        return is_one_of(Reference, WeakReference);
+    }
+
+    constexpr bool isBetweenSymbol() {
+        return is_one_of(Interface,
+                         Implementation,
+                         TypeDefinition,
+                         Base,
+                         Derived,
+                         Constructor,
+                         Destructor);
+    }
+
+    constexpr bool isCall() {
+        return is_one_of(Caller, Callee);
+    }
 };
 
 }  // namespace clice
