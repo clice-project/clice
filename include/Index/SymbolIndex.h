@@ -6,6 +6,7 @@
 #include "AST/SourceCode.h"
 #include "AST/SymbolKind.h"
 #include "AST/RelationKind.h"
+#include "Support/JSON.h"
 
 namespace clice::index {
 
@@ -19,7 +20,7 @@ struct Relation : Relative {
     LocalSourceRange range() const;
 
     /// Return the definition range.
-    LocalSourceRange definitionRange() const;
+    LocalSourceRange sourceRange() const;
 
     /// The the target symbol.
     Symbol target() const;
@@ -73,6 +74,8 @@ public:
     std::optional<Symbol> locateSymbol(const SymbolID& id) const;
 
     static Shared<std::vector<char>> build(ASTInfo& AST);
+
+    json::Value toJSON(bool line = true);
 
 private:
     const char* data;

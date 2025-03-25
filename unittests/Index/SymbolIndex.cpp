@@ -141,6 +141,22 @@ int main() {
     EXPECT_EQ(symbols[0].name(), "x");
 }
 
+TEST_F(SymbolIndex, JSON) {
+    llvm::StringRef code = R"(
+#include <stddef.h>
+)";
+    run(code);
+
+    for(auto& [fid, index]: indices) {
+        if(index.size() == 0) {
+            continue;
+        }
+
+        index::SymbolIndex sindex(index.data(), index.size());
+        auto json = sindex.toJSON();
+    }
+}
+
 }  // namespace
 
 }  // namespace clice::testing

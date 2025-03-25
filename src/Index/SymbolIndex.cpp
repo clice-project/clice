@@ -27,12 +27,12 @@ struct Relation {
     ///
     /// - `Interface`, `Implementation`, `TypeDefinition`, `Base`, `Derived`,
     ///   `Constructor`, and `Destructor`:
-    ///   - `data[0]`: The target symbol.
-    ///   - `data[1]`: Empty (unused).
+    ///   - `data[0]`: Empty (unused).
+    ///   - `data[1]`: The target symbol.
     ///
     /// - `Caller` and `Callee`:
-    ///   - `data[0]`: The target symbol (e.g., the called function).
-    ///   - `data[1]`: The range of the call site.
+    ///   - `data[0]`: The range of the call site.
+    ///   - `data[1]`: The target symbol (e.g., the called function).
     ///
     std::uint32_t data = -1;
     std::uint32_t data1 = -1;
@@ -192,22 +192,16 @@ public:
         for(auto& symbol: symbols) {
             for(auto& relation: symbol.relations) {
                 auto kind = relation.kind;
-                if(kind.is_one_of(Definition, Declaration)) {
+                if(kind.isDeclOrDef()) {
                     relation.data = locationMap[relation.data];
                     relation.data1 = locationMap[relation.data1];
-                } else if(kind.is_one_of(Reference, WeakReference)) {
+                } else if(kind.isReference()) {
                     relation.data = locationMap[relation.data];
-                } else if(kind.is_one_of(Interface,
-                                         Implementation,
-                                         TypeDefinition,
-                                         Base,
-                                         Derived,
-                                         Constructor,
-                                         Destructor)) {
-                    relation.data = symbolMap[relation.data];
-                } else if(kind.is_one_of(Caller, Callee)) {
-                    relation.data = symbolMap[relation.data];
-                    relation.data1 = locationMap[relation.data1];
+                } else if(kind.isBetweenSymbol()) {
+                    relation.data1 = symbolMap[relation.data1];
+                } else if(kind.isCall()) {
+                    relation.data = locationMap[relation.data];
+                    relation.data1 = symbolMap[relation.data1];
                 } else {
                     assert(false && "Invalid relation kind");
                 }
@@ -313,24 +307,18 @@ public:
 
         using enum RelationKind::Kind;
 
-        if(kind.is_one_of(Definition, Declaration)) {
+        if(kind.isDeclOrDef()) {
             auto [fid2, definitionRange] = AST.toLocalExpansionRange(decl->getSourceRange());
             assert(fid == fid2 && "Invalid definition location");
             data[0] = builder.getLocation(relationRange);
             data[1] = builder.getLocation(definitionRange);
-        } else if(kind.is_one_of(Reference, WeakReference)) {
+        } else if(kind.isReference()) {
             data[0] = builder.getLocation(relationRange);
-        } else if(kind.is_one_of(Interface,
-                                 Implementation,
-                                 TypeDefinition,
-                                 Base,
-                                 Derived,
-                                 Constructor,
-                                 Destructor)) {
-            data[0] = builder.getSymbol(normalize(target));
-        } else if(kind.is_one_of(Caller, Callee)) {
-            data[0] = builder.getSymbol(normalize(target));
-            data[1] = builder.getLocation(relationRange);
+        } else if(kind.isBetweenSymbol()) {
+            data[1] = builder.getSymbol(normalize(target));
+        } else if(kind.isCall()) {
+            data[0] = builder.getLocation(relationRange);
+            data[1] = builder.getSymbol(normalize(target));
         } else {
             std::unreachable();
         }
@@ -369,18 +357,21 @@ RelationKind Relation::kind() const {
 }
 
 LocalSourceRange Relation::range() const {
+    assert(!kind().isBetweenSymbol());
     binary::Proxy<memory::SymbolIndex> index{base, base};
     binary::Proxy<memory::Relation> proxy{base, data};
     return index.get<"ranges">().as_array()[proxy->data];
 }
 
-LocalSourceRange Relation::definitionRange() const {
+LocalSourceRange Relation::sourceRange() const {
+    assert(kind().isDeclOrDef() && "only declaration or definition has sourceRange range");
     binary::Proxy<memory::SymbolIndex> index{base, base};
     binary::Proxy<memory::Relation> proxy{base, data};
     return index.get<"ranges">().as_array()[proxy->data1];
 }
 
 Symbol Relation::target() const {
+    assert((kind().isBetweenSymbol() || kind().isCall()) && "only symbols has target");
     binary::Proxy<memory::SymbolIndex> index{base, base};
     binary::Proxy<memory::Relation> proxy{base, data};
     return Symbol{base, &index.get<"symbols">().as_array()[proxy->data1]};
@@ -490,6 +481,60 @@ std::optional<Symbol> SymbolIndex::locateSymbol(const SymbolID& id) const {
 
 Shared<std::vector<char>> SymbolIndex::build(ASTInfo& AST) {
     return SymbolIndexCollector(AST).build();
+}
+
+json::Value SymbolIndex::toJSON(bool line) {
+    json::Array symbols;
+    for(auto symbol: this->symbols()) {
+        json::Array relations;
+
+        for(auto relation: symbol.relations()) {
+            relations.push_back(json::Object{
+                {"kind", llvm::StringRef(relation.kind().name())},
+            });
+
+            using enum RelationKind::Kind;
+            auto kind = relation.kind();
+
+            if(kind.isDeclOrDef()) {
+                relations.back().getAsObject()->insert(
+                    {"definitionRange", json::serialize(relation.sourceRange())});
+            }
+
+            if(!kind.isBetweenSymbol()) {
+                relations.back().getAsObject()->insert(
+                    {"range", json::serialize(relation.range())});
+            } else {
+                relations.back().getAsObject()->insert(
+                    {"symbol", json::serialize(relation.target().id())});
+            }
+
+            if(kind.isCall()) {
+                relations.back().getAsObject()->insert(
+                    {"symbol", json::serialize(relation.target().id())});
+            }
+        }
+
+        symbols.push_back(json::Object{
+            {"hash",      symbol.hash()                        },
+            {"name",      symbol.name()                        },
+            {"kind",      llvm::StringRef(symbol.kind().name())},
+            {"relations", std::move(relations)                 },
+        });
+    }
+
+    json::Array occurrences;
+    for(auto occurrence: this->occurrences()) {
+        occurrences.push_back(json::Object{
+            {"range", json::serialize(occurrence.range())      },
+            {"id",    json::serialize(occurrence.symbol().id())}
+        });
+    }
+
+    return json::Object{
+        {"symbols",     std::move(symbols)    },
+        {"occurrences", std::move(occurrences)},
+    };
 }
 
 }  // namespace clice::index
