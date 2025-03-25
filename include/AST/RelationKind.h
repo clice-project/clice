@@ -56,7 +56,7 @@ struct RelationKind : refl::Enum<RelationKind, true, uint32_t> {
     }
 
     constexpr bool isCall() {
-        return is_one_of(Caller, Caller);
+        return is_one_of(Caller, Callee);
     }
 };
 
