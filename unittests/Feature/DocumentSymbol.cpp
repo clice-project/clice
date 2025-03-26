@@ -6,19 +6,15 @@ namespace clice::testing {
 
 namespace {
 
-struct DocumentSymbol : public ::testing::Test {
+struct DocumentSymbol : TestFixture {
 
 protected:
-    std::optional<Tester> tester;
-
     auto run(llvm::StringRef code) {
-        tester.emplace("main.cpp", code);
-        tester->run();
+        addMain("main.cpp", code);
+        Tester::compile();
+        EXPECT_TRUE(AST.has_value());
 
-        auto& info = tester->info;
-        EXPECT_TRUE(info.has_value());
-
-        return feature::documentSymbols(*info);
+        return feature::documentSymbols(*AST);
     }
 
     static void total_size(const std::vector<feature::DocumentSymbol>& result, size_t& size) {
@@ -223,9 +219,9 @@ int y = 2;
     Tester tx;
     tx.addFile(path::join(".", "header.h"), header);
     tx.addMain("main.cpp", main);
-    tx.run();
+    tx.compile();
 
-    auto& info = tx.info;
+    auto& info = tx.AST;
     EXPECT_TRUE(info.has_value());
 
     auto maps = feature::indexDocumentSymbols(*info);

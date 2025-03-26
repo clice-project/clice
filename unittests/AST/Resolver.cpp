@@ -5,54 +5,55 @@ namespace clice::testing {
 
 namespace {
 
-void run(llvm::StringRef code, std::source_location current = std::source_location::current()) {
-    Tester tester("main.cpp", code);
-    tester.run();
+struct InputFinder : clang::RecursiveASTVisitor<InputFinder> {
+    ASTInfo& info;
+    clang::QualType input;
+    clang::QualType expect;
 
-    struct Run : clang::RecursiveASTVisitor<Run> {
-        ASTInfo& info;
-        clang::QualType input;
-        clang::QualType expect;
+    using Base = clang::RecursiveASTVisitor<InputFinder>;
 
-        using Base = clang::RecursiveASTVisitor<Run>;
+    InputFinder(ASTInfo& info) : info(info) {}
 
-        Run(ASTInfo& info) : info(info) {}
-
-        bool TraverseDecl(clang::Decl* decl) {
-            if(decl && (llvm::isa<clang::TranslationUnitDecl>(decl) ||
-                        info.srcMgr().isInMainFile(decl->getLocation()))) {
-                return Base::TraverseDecl(decl);
-            }
-
-            return true;
+    bool TraverseDecl(clang::Decl* decl) {
+        if(decl && (llvm::isa<clang::TranslationUnitDecl>(decl) ||
+                    info.srcMgr().isInMainFile(decl->getLocation()))) {
+            return Base::TraverseDecl(decl);
         }
 
-        bool VisitTypedefNameDecl(const clang::TypedefNameDecl* decl) {
-            if(decl->getName() == "input") {
-                input = decl->getUnderlyingType();
-            }
+        return true;
+    }
 
-            if(decl->getName() == "expect") {
-                expect = decl->getUnderlyingType();
-            }
-
-            return true;
+    bool VisitTypedefNameDecl(const clang::TypedefNameDecl* decl) {
+        if(decl->getName() == "input") {
+            input = decl->getUnderlyingType();
         }
-    };
 
-    Run run{*tester.info};
-    run.TraverseAST(tester.info->context());
+        if(decl->getName() == "expect") {
+            expect = decl->getUnderlyingType();
+        }
 
-    auto input = tester.info->resolver().resolve(run.input);
-    auto expect = run.expect;
+        return true;
+    }
+};
 
-    EXPECT_EQ(input.isNull(), false);
-    EXPECT_EQ(expect.isNull(), false);
+struct TemplateResolver : TestFixture {
+    void run(llvm::StringRef code, LocationChain chain = LocationChain()) {
+        addMain("main.cpp", code);
+        compile();
 
-    EXPECT_EQ(input.getCanonicalType(), expect.getCanonicalType());
-}
+        InputFinder finder(*AST);
+        finder.TraverseAST(AST->context());
 
-TEST(TemplateResolver, TypeParameterType) {
+        auto input = AST->resolver().resolve(finder.input);
+        auto expect = finder.expect;
+
+        EXPECT_EQ(input.isNull(), false, chain);
+        EXPECT_EQ(expect.isNull(), false, chain);
+        EXPECT_EQ(input.getCanonicalType(), expect.getCanonicalType(), chain);
+    }
+};
+
+TEST_F(TemplateResolver, TypeParameterType) {
     run(R"cpp(
 template <typename T>
 struct A {
@@ -67,7 +68,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, SingleLevel) {
+TEST_F(TemplateResolver, SingleLevel) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -85,7 +86,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, SingleLevelNotDependent) {
+TEST_F(TemplateResolver, SingleLevelNotDependent) {
     run(R"cpp(
 template <typename T>
 struct A {
@@ -100,7 +101,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, MultiLevel) {
+TEST_F(TemplateResolver, MultiLevel) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -128,7 +129,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, MultiLevelNotDependent) {
+TEST_F(TemplateResolver, MultiLevelNotDependent) {
     run(R"cpp(
 template <typename T1>
 struct A {
@@ -153,7 +154,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, ArgumentDependent) {
+TEST_F(TemplateResolver, ArgumentDependent) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -176,7 +177,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, AliasArgument) {
+TEST_F(TemplateResolver, AliasArgument) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -200,7 +201,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, AliasDependent) {
+TEST_F(TemplateResolver, AliasDependent) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -224,7 +225,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, AliasTemplate) {
+TEST_F(TemplateResolver, AliasTemplate) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -248,7 +249,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, BaseDependent) {
+TEST_F(TemplateResolver, BaseDependent) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -269,7 +270,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, MultiNested) {
+TEST_F(TemplateResolver, MultiNested) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -288,7 +289,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, OuterDependentMemberClass) {
+TEST_F(TemplateResolver, OuterDependentMemberClass) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -312,7 +313,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, InnerDependentMemberClass) {
+TEST_F(TemplateResolver, InnerDependentMemberClass) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -330,7 +331,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, InnerDependentPartialMemberClass) {
+TEST_F(TemplateResolver, InnerDependentPartialMemberClass) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -351,7 +352,7 @@ struct test<T, T> {
 )cpp");
 }
 
-TEST(TemplateResolver, PartialSpecialization) {
+TEST_F(TemplateResolver, PartialSpecialization) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -375,7 +376,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, PartialDefaultArgument) {
+TEST_F(TemplateResolver, PartialDefaultArgument) {
     run(R"cpp(
 template <typename T, typename U = T>
 struct X {};
@@ -393,7 +394,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, DefaultArgument) {
+TEST_F(TemplateResolver, DefaultArgument) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -416,7 +417,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, PackExpansion) {
+TEST_F(TemplateResolver, PackExpansion) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -434,7 +435,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, BasePackExpansion) {
+TEST_F(TemplateResolver, BasePackExpansion) {
     run(R"cpp(
 template <typename... Ts>
 struct type_list {};
@@ -455,7 +456,7 @@ struct test {
 )cpp");
 }
 
-TEST(TemplateResolver, Standard) {
+TEST_F(TemplateResolver, Standard) {
     run(R"cpp(
 #include <vector>
 

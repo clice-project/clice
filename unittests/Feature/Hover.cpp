@@ -19,21 +19,14 @@ struct DeclCollector : public clang::RecursiveASTVisitor<DeclCollector> {
     }
 };
 
-struct Hover : public ::testing::Test {
-
-protected:
-    std::optional<Tester> tester;
-
+struct Hover : TestFixture {
     llvm::StringMap<const clang::Decl*> decls;
 
     void run(llvm::StringRef code, proto::Range range = {}) {
-        tester.emplace("main.cpp", code);
-        tester->run();
-
-        auto& info = tester->info;
-
+        addMain("main.cpp", code);
+        compile();
         DeclCollector collector;
-        collector.TraverseTranslationUnitDecl(info->tu());
+        collector.TraverseTranslationUnitDecl(AST->tu());
         decls = std::move(collector.decls);
     }
 };

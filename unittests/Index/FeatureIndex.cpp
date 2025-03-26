@@ -8,7 +8,7 @@ namespace {
 TEST(FeatureIndex, SemanticTokens) {
     llvm::StringRef content = "int x = 1;";
     Tester tester("main.cpp", content);
-    tester.run();
+    tester.compile();
 
     /// auto index = index(*tester.info);
 

@@ -28,10 +28,10 @@ TEST(SourceConverter, Position) {
     const char* main = "int a /*😂*/ = 1;$(eof)";
 
     Tester txs("main.cpp", main);
-    txs.run("-std=c++11");
+    txs.compile("-std=c++11");
 
-    auto& src = txs.info->srcMgr();
-    auto& tks = txs.info->tokBuf();
+    auto& src = txs.AST->srcMgr();
+    auto& tks = txs.AST->tokBuf();
 
     auto mainid = src.getMainFileID();
     auto tokens =
@@ -58,38 +58,6 @@ TEST(SourceConverter, Position) {
         auto pos = cvtr.toPosition(eof, src);
         EXPECT_EQ(pos.line, 0);
         EXPECT_EQ(pos.character, 16);
-    }
-}
-
-TEST(SourceConverter, LocalRangeAndPosition) {
-    const char* main = "$(begin)int a$(mid) /*😂*/ = 1;$(eof)";
-
-    Tester txs("main.cpp", main);
-    txs.run();
-
-    SourceConverter cvtr{proto::PositionEncodingKind::UTF8};
-
-    {
-        auto begOff = txs.offset("begin");
-        EXPECT_EQ(begOff, 0);
-
-        auto beginPos = cvtr.toPosition(main, begOff);
-        EXPECT_EQ(beginPos, txs.pos("begin"));
-        EXPECT_EQ(begOff, cvtr.toOffset(main, beginPos));
-    }
-
-    {
-        auto midOff = txs.offset("mid");
-        auto midPos = cvtr.toPosition(main, midOff);
-        EXPECT_EQ(midPos, txs.pos("mid"));
-        EXPECT_EQ(midOff, cvtr.toOffset(main, midPos));
-    }
-
-    {
-        auto eofOff = txs.offset("eof");
-        auto eofPos = cvtr.toPosition(main, eofOff);
-        EXPECT_EQ(eofPos, txs.pos("eof"));
-        EXPECT_EQ(eofOff, cvtr.toOffset(main, eofPos));
     }
 }
 

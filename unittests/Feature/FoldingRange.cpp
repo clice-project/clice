@@ -5,40 +5,25 @@ namespace clice::testing {
 
 namespace {
 
-struct FoldingRange : public ::testing::Test {
-    std::optional<Tester> tester;
+struct FoldingRange : TestFixture {
     std::vector<feature::FoldingRange> result;
 
     void run(llvm::StringRef source) {
-        tester.emplace("main.cpp", source);
-
-        tester->run();
-        auto& info = tester->info;
-
-        result = feature::foldingRange(*info);
-    }
-
-    index::Shared<std::vector<feature::FoldingRange>> runWithHeader(llvm::StringRef source,
-                                                                    llvm::StringRef header) {
-        tester.emplace("main.cpp", source);
-        tester->addFile(path::join(".", "header.h"), header);
-        tester->run();
-        auto& info = tester->info;
-        return feature::indexFoldingRange(*info);
+        addMain("main.cpp", source);
+        TestFixture::compile();
+        result = feature::foldingRange(*AST);
     }
 
     void EXPECT_RANGE(std::size_t index,
                       llvm::StringRef begin,
                       llvm::StringRef end,
                       feature::FoldingRangeKind kind,
-                      std::source_location current = std::source_location::current()) {
+                      LocationChain chain = LocationChain()) {
         auto& folding = result[index];
-
-        auto begOff = tester->offset(begin);
-        EXPECT_EQ(begOff, folding.range.begin, current);
-
-        auto endOff = tester->offset(end);
-        EXPECT_EQ(endOff, folding.range.end, current);
+        auto begOff = offset(begin);
+        EXPECT_EQ(begOff, folding.range.begin, chain);
+        auto endOff = offset(end);
+        EXPECT_EQ(endOff, folding.range.end, chain);
     }
 };
 

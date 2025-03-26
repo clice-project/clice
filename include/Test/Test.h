@@ -6,65 +6,99 @@
 #include "Support/Compare.h"
 #include "Support/FileSystem.h"
 #include "Annotation.h"
+#include "Test/LocationChain.h"
 
 namespace clice::testing {
 
-llvm::StringRef test_dir();
-
+#undef EXPECT_TRUE
+#undef EXPECT_FALSE
+#undef ASSERT_TRUE
+#undef ASSERT_FALSE
 #undef EXPECT_EQ
 #undef EXPECT_NE
+#undef ASSERT_EQ
+#undef ASSERT_NE
 
-inline void EXPECT_FAILURE(std::string msg,
-                           std::source_location current = std::source_location::current()) {
-    ::testing::internal::AssertHelper(::testing ::TestPartResult ::kNonFatalFailure,
-                                      current.file_name(),
-                                      current.line(),
-                                      msg.c_str()) = ::testing ::Message();
-}
+llvm::StringRef test_dir();
 
 template <typename LHS, typename RHS>
-inline void EXPECT_EQ(const LHS& lhs,
-                      const RHS& rhs,
-                      std::source_location current = std::source_location::current()) {
-    if(!refl::equal(lhs, rhs)) {
-        std::string left;
-        if constexpr(json::serializable<LHS>) {
-            llvm::raw_string_ostream(left) << json::serialize(lhs);
-        } else {
-            left = "cannot dump value";
-        }
+inline std::string diff(const LHS& lhs, const RHS& rhs) {
+    std::string left;
+    if constexpr(json::serializable<LHS>) {
+        llvm::raw_string_ostream(left) << json::serialize(lhs);
+    } else {
+        left = "cannot dump value";
+    }
 
-        std::string right;
-        if constexpr(json::serializable<RHS>) {
-            llvm::raw_string_ostream(right) << json::serialize(rhs);
-        } else {
-            right = "cannot dump value";
-        }
+    std::string right;
+    if constexpr(json::serializable<RHS>) {
+        llvm::raw_string_ostream(right) << json::serialize(rhs);
+    } else {
+        right = "cannot dump value";
+    }
 
-        EXPECT_FAILURE(std::format("left : {}\nright: {}\n", left, right), current);
+    return std::format("left : {}\nright: {}\n", left, right);
+}
+
+inline void EXPECT_FAILURE(std::string message, LocationChain chain = LocationChain()) {
+    chain.backtrace();
+    GTEST_MESSAGE_AT_("", 0, message.c_str(), ::testing::TestPartResult::kNonFatalFailure);
+}
+
+inline void ASSERT_FAILURE(std::string message, LocationChain chain = LocationChain()) {
+    chain.backtrace();
+    GTEST_MESSAGE_AT_("", 0, message.c_str(), ::testing::TestPartResult::kFatalFailure);
+}
+
+inline void EXPECT_TRUE(auto&& value, LocationChain chain = LocationChain()) {
+    if(!static_cast<bool>(value)) {
+        EXPECT_FAILURE("EXPECT true!", chain);
+    }
+}
+
+inline void EXPECT_FALSE(auto&& value, LocationChain chain = LocationChain()) {
+    if(static_cast<bool>(value)) {
+        EXPECT_FAILURE("EXPECT false!", chain);
+    }
+}
+
+inline void ASSERT_TRUE(auto&& value, LocationChain chain = LocationChain()) {
+    if(!static_cast<bool>(value)) {
+        ASSERT_FAILURE("ASSERT true!", chain);
+    }
+}
+
+inline void ASSERT_FALSE(auto&& value, LocationChain chain = LocationChain()) {
+    if(static_cast<bool>(value)) {
+        ASSERT_FAILURE("ASSERT false!", chain);
     }
 }
 
 template <typename LHS, typename RHS>
-inline void EXPECT_NE(const LHS& lhs,
-                      const RHS& rhs,
-                      std::source_location current = std::source_location::current()) {
+inline void EXPECT_EQ(const LHS& lhs, const RHS& rhs, LocationChain chain = LocationChain()) {
+    if(!refl::equal(lhs, rhs)) {
+        EXPECT_FAILURE(diff(lhs, rhs), chain);
+    }
+}
+
+template <typename LHS, typename RHS>
+inline void EXPECT_NE(const LHS& lhs, const RHS& rhs, LocationChain chain = LocationChain()) {
     if(refl::equal(lhs, rhs)) {
-        std::string expect;
-        if constexpr(requires { json::Serde<LHS>::serialize; }) {
-            llvm::raw_string_ostream(expect) << json::serialize(lhs);
-        } else {
-            expect = "cannot dump value";
-        }
+        EXPECT_FAILURE(diff(lhs, rhs), chain);
+    }
+}
 
-        std::string actual;
-        if constexpr(requires { json::Serde<LHS>::serialize; }) {
-            llvm::raw_string_ostream(actual) << json::serialize(rhs);
-        } else {
-            actual = "cannot dump value";
-        }
+template <typename LHS, typename RHS>
+inline void ASSERT_EQ(const LHS& lhs, const RHS& rhs, LocationChain chain = LocationChain()) {
+    if(!refl::equal(lhs, rhs)) {
+        ASSERT_FAILURE(diff(lhs, rhs), chain);
+    }
+}
 
-        EXPECT_FAILURE(std::format("expect: {}, actual: {}\n", expect, actual), current);
+template <typename LHS, typename RHS>
+inline void ASSERT_NE(const LHS& lhs, const RHS& rhs, LocationChain chain = LocationChain()) {
+    if(refl::equal(lhs, rhs)) {
+        ASSERT_FAILURE(diff(lhs, rhs), chain);
     }
 }
 
