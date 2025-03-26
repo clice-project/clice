@@ -5,12 +5,12 @@ namespace clice::testing {
 
 namespace {
 
-struct FoldingRange : Test {
+struct FoldingRange : TestFixture {
     std::vector<feature::FoldingRange> result;
 
     void run(llvm::StringRef source) {
         addMain("main.cpp", source);
-        Test::compile();
+        TestFixture::compile();
         result = feature::foldingRange(*info);
     }
 
@@ -18,7 +18,7 @@ struct FoldingRange : Test {
                                                                     llvm::StringRef header) {
         addMain("main.cpp", source);
         addFile(path::join(".", "header.h"), header);
-        Test::compile();
+        TestFixture::compile();
         return feature::indexFoldingRange(*info);
     }
 

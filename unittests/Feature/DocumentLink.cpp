@@ -5,7 +5,7 @@ namespace clice::testing {
 
 namespace {
 
-struct DocumentLink : Test {
+struct DocumentLink : TestFixture {
     index::Shared<feature::DocumentLinkResult> result;
 
     void run(llvm::StringRef code) {

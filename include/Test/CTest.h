@@ -109,7 +109,7 @@ public:
     }
 };
 
-struct Test : ::testing::Test, Tester {};
+struct TestFixture : ::testing::Test, Tester {};
 
 }  // namespace clice::testing
 

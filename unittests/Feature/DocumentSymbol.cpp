@@ -6,7 +6,7 @@ namespace clice::testing {
 
 namespace {
 
-struct DocumentSymbol : Test {
+struct DocumentSymbol : TestFixture {
 
 protected:
     auto run(llvm::StringRef code) {
