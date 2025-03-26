@@ -55,10 +55,6 @@ struct SelectionTester : public Tester {
 
     SelectionTester(llvm::StringRef file, llvm::StringRef content) : Tester(file, content) {}
 
-    std::uint32_t getOffsetAt(llvm::StringRef id) {
-        return cvtr.toOffset(params.content, locations.at(id));
-    }
-
     void expectPreorderSequence(const SelectionTree& tree,
                                 llvm::ArrayRef<clang::ASTNodeKind> kinds) {
         std::string buffer;
@@ -94,8 +90,8 @@ $(b1)int xxx$(b2)yyy$(e1) = 1$(e2);$(e3)
     std::vector<SelectionBuilder::OffsetPair> selects;
     for(int begin = 1; begin <= 2; begin++) {
         for(int end = 1; end <= 3; end++) {
-            uint32_t bp = tx.getOffsetAt(std::format("b{}", begin));
-            uint32_t ep = tx.getOffsetAt(std::format("e{}", end));
+            uint32_t bp = tx.offset(std::format("b{}", begin));
+            uint32_t ep = tx.offset(std::format("e{}", end));
             selects.push_back({bp, ep});
         }
     }
@@ -125,8 +121,8 @@ void f($(b1)int xxx$(b2)yyy$(e1) = 1$(e2)) {}
     std::vector<SelectionBuilder::OffsetPair> selects;
     for(int begin = 1; begin <= 2; begin++) {
         for(int end = 1; end <= 2; end++) {
-            uint32_t bp = tx.getOffsetAt(std::format("b{}", begin));
-            uint32_t ep = tx.getOffsetAt(std::format("e{}", end));
+            uint32_t bp = tx.offset(std::format("b{}", begin));
+            uint32_t ep = tx.offset(std::format("e{}", end));
             selects.push_back({bp, ep});
         }
     }
@@ -160,8 +156,8 @@ namespace test {
 
     auto& AST = tx.AST;
 
-    uint32_t begin = tx.getOffsetAt("stmt_begin");
-    uint32_t end = tx.getOffsetAt("stmt_end");
+    uint32_t begin = tx.offset("stmt_begin");
+    uint32_t end = tx.offset("stmt_end");
 
     auto tokens = AST->tokBuf().spelledTokens(AST->srcMgr().getMainFileID());
     auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, AST->srcMgr());
@@ -195,8 +191,8 @@ namespace test {
 
     auto& AST = tx.AST;
 
-    uint32_t begin = tx.getOffsetAt("multi_begin");
-    uint32_t end = tx.getOffsetAt("multi_end");
+    uint32_t begin = tx.offset("multi_begin");
+    uint32_t end = tx.offset("multi_end");
 
     auto tokens = AST->tokBuf().spelledTokens(AST->srcMgr().getMainFileID());
     auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, AST->srcMgr());
@@ -230,8 +226,8 @@ $(class_begin)class Test {
 
     auto& AST = tx.AST;
 
-    uint32_t begin = tx.getOffsetAt("class_begin");
-    uint32_t end = tx.getOffsetAt("class_end");
+    uint32_t begin = tx.offset("class_begin");
+    uint32_t end = tx.offset("class_end");
 
     auto tokens = AST->tokBuf().spelledTokens(AST->srcMgr().getMainFileID());
     auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, AST->srcMgr());
@@ -260,8 +256,8 @@ class Test {
 
     auto& AST = tx.AST;
 
-    uint32_t begin = tx.getOffsetAt("begin");
-    uint32_t end = tx.getOffsetAt("end");
+    uint32_t begin = tx.offset("begin");
+    uint32_t end = tx.offset("end");
 
     auto tokens = AST->tokBuf().spelledTokens(AST->srcMgr().getMainFileID());
     auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, AST->srcMgr());
@@ -290,8 +286,8 @@ void f(int& x){
     auto& AST = tx.AST;
 
     {
-        uint32_t begin = tx.getOffsetAt("begin1");
-        uint32_t end = tx.getOffsetAt("end1");
+        uint32_t begin = tx.offset("begin1");
+        uint32_t end = tx.offset("end1");
 
         auto tokens = AST->tokBuf().spelledTokens(AST->srcMgr().getMainFileID());
         auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, AST->srcMgr());
@@ -313,8 +309,8 @@ void f(int& x){
     }
 
     {
-        uint32_t begin = tx.getOffsetAt("begin2");
-        uint32_t end = tx.getOffsetAt("end2");
+        uint32_t begin = tx.offset("begin2");
+        uint32_t end = tx.offset("end2");
 
         auto tokens = AST->tokBuf().spelledTokens(AST->srcMgr().getMainFileID());
         auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, AST->srcMgr());
@@ -350,8 +346,8 @@ class Test {
         std::vector<SelectionBuilder::OffsetPair> b12_e123;
         for(int begin = 1; begin <= 2; begin++) {
             for(int end = 1; end <= 3; end++) {
-                uint32_t bp = tx.getOffsetAt(std::format("b{}", begin));
-                uint32_t ep = tx.getOffsetAt(std::format("e{}", end));
+                uint32_t bp = tx.offset(std::format("b{}", begin));
+                uint32_t ep = tx.offset(std::format("e{}", end));
                 b12_e123.push_back({bp, ep});
             }
         }
@@ -379,8 +375,8 @@ class Test {
         std::vector<SelectionBuilder::OffsetPair> b3_e123;
         for(int begin = 3; begin <= 3; begin++) {
             for(int end = 1; end <= 3; end++) {
-                uint32_t bp = tx.getOffsetAt(std::format("b{}", begin));
-                uint32_t ep = tx.getOffsetAt(std::format("e{}", end));
+                uint32_t bp = tx.offset(std::format("b{}", begin));
+                uint32_t ep = tx.offset(std::format("e{}", end));
                 b3_e123.push_back({bp, ep});
             }
         }

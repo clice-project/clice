@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Test.h"
+#include "Annotation.h"
 #include "Server/Protocol.h"
 #include "Compiler/Compilation.h"
 
@@ -12,10 +13,7 @@ struct Tester {
 
     /// Annoated locations.
     llvm::StringMap<std::uint32_t> offsets;
-    llvm::StringMap<proto::Position> locations;
     std::vector<std::string> sources;
-
-    proto::Position eof;
 
 public:
     Tester() = default;
@@ -31,11 +29,7 @@ public:
     }
 
     void addFile(llvm::StringRef name, llvm::StringRef content) {
-        params.remappedFiles.emplace_back(name, content);
-    }
-
-    proto::Position endOfFile() const {
-        return eof;
+        params.remappedFiles.emplace_back(name, annoate(content));
     }
 
     llvm::StringRef annoate(llvm::StringRef content) {
@@ -52,8 +46,6 @@ public:
             if(c == '@') {
                 i += 1;
                 auto key = content.substr(i).take_until([](char c) { return c == ' '; });
-                assert(!locations.contains(key) && "duplicate key");
-                locations.try_emplace(key, line, column);
                 offsets.try_emplace(key, offset);
                 continue;
             }
@@ -63,8 +55,6 @@ public:
                 i += 2;
                 auto key = content.substr(i).take_until([](char c) { return c == ')'; });
                 i += key.size() + 1;
-                assert(!locations.contains(key) && "duplicate key");
-                locations.try_emplace(key, line, column);
                 offsets.try_emplace(key, offset);
                 continue;
             }
@@ -82,26 +72,15 @@ public:
             source.push_back(c);
         }
 
-        eof.line = line;
-        eof.character = column;
         return source;
     }
 
-    Tester& compile(const char* standard = "-std=c++20") {
+    Tester& compile(llvm::StringRef standard = "-std=c++20") {
         params.command = std::format("clang++ {} {} -fms-extensions", standard, params.srcPath);
-
         auto info = clice::compile(params);
-        if(!info) {
-            llvm::errs() << "Failed to build AST\n";
-            std::abort();
-        }
-
+        ASSERT_TRUE(info);
         this->AST.emplace(std::move(*info));
         return *this;
-    }
-
-    proto::Position pos(llvm::StringRef key) const {
-        return locations.lookup(key);
     }
 
     std::uint32_t offset(llvm::StringRef key) const {

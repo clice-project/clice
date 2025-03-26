@@ -9,53 +9,48 @@ namespace clice::testing {
 
 namespace {
 
+struct USRInfo {
+    llvm::SmallString<128> USR;
+    uint32_t offset;
+    clang::Decl* decl;
+};
+
+struct GetUSRVisitor : public clang::RecursiveASTVisitor<GetUSRVisitor> {
+    bool VisitDecl(clang::Decl* decl) {
+        auto offset = [&]() -> std::optional<std::uint32_t> {
+            auto loc = decl->getLocation();
+            if(!loc.isValid())
+                return std::nullopt;
+
+            auto& SM = decl->getASTContext().getSourceManager();
+            auto [_, offset] = SM.getDecomposedLoc(loc);
+            return offset;
+        }();
+
+        auto USR = [&]() -> std::optional<llvm::SmallString<128>> {
+            llvm::SmallString<128> buffer;
+            if(!clice::index::generateUSRForDecl(decl, buffer)) {
+                return buffer;
+            }
+            return std::nullopt;
+        }();
+
+        if(offset.has_value() && USR.has_value()) {
+            USRs[*offset] = USRInfo{*USR, *offset, decl};
+            // log::info("USR: {} at {}:{}", USR->str(), pos->line, pos->character);
+        }
+
+        return true;
+    }
+
+    std::map<std::uint32_t, USRInfo> USRs;
+};
+
 class USRTester : public Tester {
     using Tester::Tester;
 
-    struct USRInfo {
-        llvm::SmallString<128> USR;
-        proto::Position pos;
-        clang::Decl* decl;
-    };
-
-    struct GetUSRVisitor : public clang::RecursiveASTVisitor<GetUSRVisitor> {
-        bool VisitDecl(clang::Decl* decl) {
-            auto pos = [&]() -> std::optional<proto::Position> {
-                auto loc = decl->getLocation();
-                if(!loc.isValid())
-                    return std::nullopt;
-
-                const auto& sm = decl->getASTContext().getSourceManager();
-                auto line = sm.getSpellingLineNumber(loc);
-                auto col = sm.getSpellingColumnNumber(loc);
-                assert(line > 0 && col > 0 &&
-                       "clang line and column are 1-based, should be greater than 0");
-                return {
-                    {line - 1, col - 1}
-                };
-            }();
-
-            auto USR = [&]() -> std::optional<llvm::SmallString<128>> {
-                llvm::SmallString<128> buffer;
-                if(!clice::index::generateUSRForDecl(decl, buffer)) {
-                    return buffer;
-                }
-                return std::nullopt;
-            }();
-
-            if(pos.has_value() && USR.has_value()) {
-                USRs[*pos] = USRInfo{*USR, *pos, decl};
-                // log::info("USR: {} at {}:{}", USR->str(), pos->line, pos->character);
-            }
-
-            return true;
-        }
-
-        std::map<proto::Position, USRInfo> USRs;
-    };
-
 public:
-    void run(const char* standard = "-std=c++20") {
+    void run(llvm::StringRef standard = "-std=c++20") {
         Tester::compile(standard);
 
         GetUSRVisitor visitor;
@@ -64,19 +59,18 @@ public:
     }
 
     llvm::StringRef lookupUSR(llvm::StringRef key) {
-        auto position = pos(key);
-        auto iter = USRs.find(position);
+        auto iter = USRs.find(offset(key));
         if(iter == USRs.end()) {
             log::fatal("USR not found for key: {}", key);
         }
         return iter->second.USR;
     }
 
-    std::map<proto::Position, USRInfo> USRs;
+    std::map<uint32_t, USRInfo> USRs;
 };
 
 TEST(Index, USRTemplateClassRequireClause) {
-    const char* content = R"cpp(
+    llvm::StringRef content = R"cpp(
 #include <concepts>
 template <typename T> struct A;
 
@@ -103,7 +97,7 @@ struct $(3)A<T> {};
 }
 
 TEST(Index, USRTemplateClassRequireClauseComplex) {
-    const char* content = R"cpp(
+    llvm::StringRef content = R"cpp(
 template <typename T> struct A;
 
 template <typename T> requires (__is_same(T, float))
@@ -138,7 +132,7 @@ struct $(13)A<T>;
 }
 
 TEST(Index, USRTemplateClassConceptConstraint) {
-    const char* content = R"cpp(
+    llvm::StringRef content = R"cpp(
 template<typename T>
 concept C = requires(T t) { true; };
 template<typename T, typename U>
@@ -161,12 +155,12 @@ struct $(2)A<T, U>;
 }
 
 TEST(Index, USRTemplateClassConceptConstraintPack) {
-    const char* content1 = R"cpp(
+    llvm::StringRef content1 = R"cpp(
 template<typename... Ts>
 struct $(1)A;
 )cpp";
 
-    const char* content2 = R"cpp(
+    llvm::StringRef content2 = R"cpp(
 template<typename T>
 concept C = requires(T t) { true; };
 template<C... Ts>
@@ -185,7 +179,7 @@ struct $(2)A;
 }
 
 TEST(Index, USRTemplateArgumentExpr) {
-    const char* content = R"cpp(
+    llvm::StringRef content = R"cpp(
 template <typename T, int N> struct C;
 
 template <int N> struct $(1)C<float, N>;
@@ -205,7 +199,7 @@ template <char c> struct $(3)C<float, c>;
 }
 
 TEST(Index, USRTemplateFunctionRequireClause) {
-    const char* content = R"cpp(
+    llvm::StringRef content = R"cpp(
 template<typename T>
 void $(1)func(T t) requires (sizeof(T) == 4) {};
 
@@ -223,12 +217,12 @@ void $(2)func(T t) requires (sizeof(T) == 8) {};
 }
 
 TEST(Index, USRTemplateVarConceptConstraint) {
-    const char* content1 = R"cpp(
+    llvm::StringRef content1 = R"cpp(
 template <typename T>
 constexpr T $(1)pi = 3.14;
 )cpp";
 
-    const char* content2 = R"cpp(
+    llvm::StringRef content2 = R"cpp(
 template <typename T>
 concept integral = requires (T t) { t + 1; };
 template <integral T>
@@ -247,7 +241,7 @@ constexpr T $(2)pi = 3;
 }
 
 TEST(Index, USRCTAD) {
-    const char* content = R"cpp(
+    llvm::StringRef content = R"cpp(
 template<typename T>
 struct array {};
 template<typename U, array arr>
@@ -263,7 +257,7 @@ struct $(1)L;
 }
 
 TEST(Index, USRTemplateParamObject) {
-    const char* content = R"cpp(
+    llvm::StringRef content = R"cpp(
 template<typename T> struct array {
   constexpr array(T x_) : x(x_) {}
   int x;
@@ -283,11 +277,11 @@ template<> struct $(2)L<{2}>;
 }
 
 TEST(Index, USRNTTPConstraint) {
-    const char* content1 = R"cpp(
+    llvm::StringRef content1 = R"cpp(
 template<auto N> struct $(1)M;
 )cpp";
 
-    const char* content2 = R"cpp(
+    llvm::StringRef content2 = R"cpp(
 template<typename T> concept C = requires {requires true;};
 template<C auto N> struct $(2)M;
 )cpp";
@@ -304,7 +298,7 @@ template<C auto N> struct $(2)M;
 }
 
 TEST(Index, USRDependentTemplateName) {
-    const char* content = R"cpp(
+    llvm::StringRef content = R"cpp(
 template <typename MetaFun>
 struct X {
     template <template <typename, typename> class Tmpl>
@@ -328,7 +322,7 @@ struct X {
 }
 
 TEST(Index, USRDeducingThis) {
-    const char* content = R"cpp(
+    llvm::StringRef content = R"cpp(
 class A {
 public:
     template <typename Self>
