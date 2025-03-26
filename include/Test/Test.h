@@ -14,6 +14,10 @@ llvm::StringRef test_dir();
 
 #undef EXPECT_EQ
 #undef EXPECT_NE
+#undef EXPECT_TRUE
+#undef EXPECT_FALSE
+#undef ASSERT_TRUE
+#undef ASSERT_FALSE
 
 inline void EXPECT_FAILURE(std::string message, LocationChain chain = LocationChain()) {
     chain.backtrace();
@@ -23,6 +27,30 @@ inline void EXPECT_FAILURE(std::string message, LocationChain chain = LocationCh
 inline void ASSERT_FAILURE(std::string message, LocationChain chain = LocationChain()) {
     chain.backtrace();
     GTEST_MESSAGE_AT_("", 0, message.c_str(), ::testing::TestPartResult::kFatalFailure);
+}
+
+inline void EXPECT_TRUE(auto&& value, LocationChain chain = LocationChain()) {
+    if(!static_cast<bool>(value)) {
+        EXPECT_FAILURE("EXPECT true!", chain);
+    }
+}
+
+inline void EXPECT_FALSE(auto&& value, LocationChain chain = LocationChain()) {
+    if(static_cast<bool>(value)) {
+        EXPECT_FAILURE("EXPECT false!", chain);
+    }
+}
+
+inline void ASSERT_TRUE(auto&& value, LocationChain chain = LocationChain()) {
+    if(!static_cast<bool>(value)) {
+        ASSERT_FAILURE("ASSERT true!", chain);
+    }
+}
+
+inline void ASSERT_FALSE(auto&& value, LocationChain chain = LocationChain()) {
+    if(static_cast<bool>(value)) {
+        ASSERT_FAILURE("ASSERT false!", chain);
+    }
 }
 
 template <typename LHS, typename RHS>
