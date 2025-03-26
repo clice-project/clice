@@ -14,14 +14,6 @@ struct FoldingRange : TestFixture {
         result = feature::foldingRange(*AST);
     }
 
-    index::Shared<std::vector<feature::FoldingRange>> runWithHeader(llvm::StringRef source,
-                                                                    llvm::StringRef header) {
-        addMain("main.cpp", source);
-        addFile(path::join(".", "header.h"), header);
-        TestFixture::compile();
-        return feature::indexFoldingRange(*AST);
-    }
-
     void EXPECT_RANGE(std::size_t index,
                       llvm::StringRef begin,
                       llvm::StringRef end,
