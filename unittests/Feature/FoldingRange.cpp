@@ -5,25 +5,20 @@ namespace clice::testing {
 
 namespace {
 
-struct FoldingRange : public ::testing::Test {
-    std::optional<Tester> tester;
+struct FoldingRange : Test {
     std::vector<feature::FoldingRange> result;
 
     void run(llvm::StringRef source) {
-        tester.emplace("main.cpp", source);
-
-        tester->run();
-        auto& info = tester->info;
-
+        addMain("main.cpp", source);
+        Test::run();
         result = feature::foldingRange(*info);
     }
 
     index::Shared<std::vector<feature::FoldingRange>> runWithHeader(llvm::StringRef source,
                                                                     llvm::StringRef header) {
-        tester.emplace("main.cpp", source);
-        tester->addFile(path::join(".", "header.h"), header);
-        tester->run();
-        auto& info = tester->info;
+        addMain("main.cpp", source);
+        addFile(path::join(".", "header.h"), header);
+        Test::run();
         return feature::indexFoldingRange(*info);
     }
 
@@ -33,11 +28,9 @@ struct FoldingRange : public ::testing::Test {
                       feature::FoldingRangeKind kind,
                       LocationChain chain = LocationChain()) {
         auto& folding = result[index];
-
-        auto begOff = tester->offset(begin);
+        auto begOff = offset(begin);
         EXPECT_EQ(begOff, folding.range.begin, chain);
-
-        auto endOff = tester->offset(end);
+        auto endOff = offset(end);
         EXPECT_EQ(endOff, folding.range.end, chain);
     }
 };

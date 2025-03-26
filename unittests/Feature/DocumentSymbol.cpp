@@ -6,16 +6,12 @@ namespace clice::testing {
 
 namespace {
 
-struct DocumentSymbol : public ::testing::Test {
+struct DocumentSymbol : Test {
 
 protected:
-    std::optional<Tester> tester;
-
     auto run(llvm::StringRef code) {
-        tester.emplace("main.cpp", code);
-        tester->run();
-
-        auto& info = tester->info;
+        addMain("main.cpp", code);
+        Tester::run();
         EXPECT_TRUE(info.has_value());
 
         return feature::documentSymbols(*info);

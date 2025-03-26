@@ -5,7 +5,7 @@ namespace clice::testing {
 
 namespace {
 
-struct SemanticTokens : ::testing::Test, Tester {
+struct SemanticTokens : Test {
     index::Shared<std::vector<feature::SemanticToken>> result;
 
     void run(llvm::StringRef code) {
