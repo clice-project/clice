@@ -41,11 +41,11 @@ struct TemplateResolver : TestFixture {
         addMain("main.cpp", code);
         compile();
 
-        InputFinder run{*info};
-        run.TraverseAST(info->context());
+        InputFinder finder(*AST);
+        finder.TraverseAST(AST->context());
 
-        auto input = info->resolver().resolve(run.input);
-        auto expect = run.expect;
+        auto input = AST->resolver().resolve(finder.input);
+        auto expect = finder.expect;
 
         EXPECT_EQ(input.isNull(), false, chain);
         EXPECT_EQ(expect.isNull(), false, chain);

@@ -10,10 +10,10 @@ struct SymbolIndex : ::testing::Test, Tester {
     void run(llvm::StringRef code) {
         addMain("main.cpp", code);
         Tester::compile();
-        indices = index::SymbolIndex::build(*info);
+        indices = index::SymbolIndex::build(*AST);
         index = {
-            indices[info->getInterestedFile()].data(),
-            static_cast<uint32_t>(indices[info->getInterestedFile()].size()),
+            indices[AST->getInterestedFile()].data(),
+            static_cast<uint32_t>(indices[AST->getInterestedFile()].size()),
         };
     }
 

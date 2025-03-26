@@ -12,9 +12,9 @@ protected:
     auto run(llvm::StringRef code) {
         addMain("main.cpp", code);
         Tester::compile();
-        EXPECT_TRUE(info.has_value());
+        EXPECT_TRUE(AST.has_value());
 
-        return feature::documentSymbols(*info);
+        return feature::documentSymbols(*AST);
     }
 
     static void total_size(const std::vector<feature::DocumentSymbol>& result, size_t& size) {
@@ -221,7 +221,7 @@ int y = 2;
     tx.addMain("main.cpp", main);
     tx.compile();
 
-    auto& info = tx.info;
+    auto& info = tx.AST;
     EXPECT_TRUE(info.has_value());
 
     auto maps = feature::indexDocumentSymbols(*info);

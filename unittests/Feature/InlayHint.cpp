@@ -28,7 +28,7 @@ protected:
              const config::InlayHintOption& option = LikeClangd) {
         tester.emplace("main.cpp", code);
         tester->compile();
-        auto& info = tester->info;
+        auto& info = tester->AST;
 
         proto::Range limit = range;
         if(limit.start.line == limit.end.line && limit.start.character == limit.end.character &&
@@ -471,7 +471,7 @@ namespace _2 {
     tx.addMain("main.cpp", source);
     tx.compile();
 
-    auto& info = tx.info;
+    auto& info = tx.AST;
     EXPECT_TRUE(info.has_value());
 
     auto maps = inlayHints(*info);

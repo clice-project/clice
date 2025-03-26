@@ -15,13 +15,13 @@ struct Directive : ::testing::Test, Tester {
 
     void run(const char* standard = "-std=c++20") {
         Tester::compile("-std=c++23");
-        SM = &info->srcMgr();
+        SM = &AST->srcMgr();
         auto fid = SM->getMainFileID();
-        includes = info->directives()[fid].includes;
-        hasIncludes = info->directives()[fid].hasIncludes;
-        conditions = info->directives()[fid].conditions;
-        macros = info->directives()[fid].macros;
-        pragmas = info->directives()[fid].pragmas;
+        includes = AST->directives()[fid].includes;
+        hasIncludes = AST->directives()[fid].hasIncludes;
+        conditions = AST->directives()[fid].conditions;
+        macros = AST->directives()[fid].macros;
+        pragmas = AST->directives()[fid].pragmas;
     }
 
     void EXPECT_INCLUDE(std::size_t index,
@@ -29,9 +29,9 @@ struct Directive : ::testing::Test, Tester {
                         llvm::StringRef path,
                         LocationChain chain = LocationChain()) {
         auto& include = includes[index];
-        auto [_, offset] = info->getDecomposedLoc(include.location);
+        auto [_, offset] = AST->getDecomposedLoc(include.location);
         EXPECT_EQ(offset, this->offset(position), chain);
-        EXPECT_EQ(include.skipped ? "" : info->getFilePath(include.fid), path, chain);
+        EXPECT_EQ(include.skipped ? "" : AST->getFilePath(include.fid), path, chain);
     }
 
     void EXPECT_HAS_INCLUDE(std::size_t index,
@@ -39,9 +39,9 @@ struct Directive : ::testing::Test, Tester {
                             llvm::StringRef path,
                             LocationChain chain = LocationChain()) {
         auto& hasInclude = hasIncludes[index];
-        auto [_, offset] = info->getDecomposedLoc(hasInclude.location);
+        auto [_, offset] = AST->getDecomposedLoc(hasInclude.location);
         EXPECT_EQ(offset, this->offset(position), chain);
-        EXPECT_EQ(hasInclude.fid.isValid() ? info->getFilePath(hasInclude.fid) : "", path, chain);
+        EXPECT_EQ(hasInclude.fid.isValid() ? AST->getFilePath(hasInclude.fid) : "", path, chain);
     }
 
     void EXPECT_CON(std::size_t index,
@@ -49,7 +49,7 @@ struct Directive : ::testing::Test, Tester {
                     llvm::StringRef position,
                     LocationChain chain = LocationChain()) {
         auto& condition = conditions[index];
-        auto [_, offset] = info->getDecomposedLoc(condition.loc);
+        auto [_, offset] = AST->getDecomposedLoc(condition.loc);
         EXPECT_EQ(condition.kind, kind, chain);
         EXPECT_EQ(offset, this->offset(position), chain);
     }
@@ -59,7 +59,7 @@ struct Directive : ::testing::Test, Tester {
                       llvm::StringRef position,
                       LocationChain chain = LocationChain()) {
         auto& macro = macros[index];
-        auto [_, offset] = info->getDecomposedLoc(macro.loc);
+        auto [_, offset] = AST->getDecomposedLoc(macro.loc);
         EXPECT_EQ(macro.kind, kind, chain);
         EXPECT_EQ(offset, this->offset(position), chain);
     }
@@ -70,7 +70,7 @@ struct Directive : ::testing::Test, Tester {
                        llvm::StringRef text,
                        LocationChain chain = LocationChain()) {
         auto& pragma = pragmas[index];
-        auto [_, offset] = info->getDecomposedLoc(pragma.loc);
+        auto [_, offset] = AST->getDecomposedLoc(pragma.loc);
         EXPECT_EQ(pragma.kind, kind, chain);
         EXPECT_EQ(pragma.stmt, text, chain);
         EXPECT_EQ(offset, this->offset(position), chain);

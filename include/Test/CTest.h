@@ -8,7 +8,7 @@ namespace clice::testing {
 
 struct Tester {
     CompilationParams params;
-    std::optional<ASTInfo> info;
+    std::optional<ASTInfo> AST;
 
     /// Annoated locations.
     llvm::StringMap<std::uint32_t> offsets;
@@ -96,7 +96,7 @@ public:
             std::abort();
         }
 
-        this->info.emplace(std::move(*info));
+        this->AST.emplace(std::move(*info));
         return *this;
     }
 

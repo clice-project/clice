@@ -30,7 +30,7 @@ protected:
         tester.emplace("main.cpp", code);
         tester->compile();
 
-        auto& info = tester->info;
+        auto& info = tester->AST;
 
         DeclCollector collector;
         collector.TraverseTranslationUnitDecl(info->tu());

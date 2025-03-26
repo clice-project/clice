@@ -59,7 +59,7 @@ public:
         Tester::compile(standard);
 
         GetUSRVisitor visitor;
-        visitor.TraverseDecl(info->tu());
+        visitor.TraverseDecl(AST->tu());
         USRs = std::move(visitor.USRs);
     }
 
