@@ -27,53 +27,53 @@ struct Directive : ::testing::Test, Tester {
     void EXPECT_INCLUDE(std::size_t index,
                         llvm::StringRef position,
                         llvm::StringRef path,
-                        std::source_location current = std::source_location::current()) {
+                        LocationChain chain = LocationChain()) {
         auto& include = includes[index];
         auto [_, offset] = info->getDecomposedLoc(include.location);
-        EXPECT_EQ(offset, this->offset(position), current);
-        EXPECT_EQ(include.skipped ? "" : info->getFilePath(include.fid), path, current);
+        EXPECT_EQ(offset, this->offset(position), chain);
+        EXPECT_EQ(include.skipped ? "" : info->getFilePath(include.fid), path, chain);
     }
 
     void EXPECT_HAS_INCLUDE(std::size_t index,
                             llvm::StringRef position,
                             llvm::StringRef path,
-                            std::source_location current = std::source_location::current()) {
+                            LocationChain chain = LocationChain()) {
         auto& hasInclude = hasIncludes[index];
         auto [_, offset] = info->getDecomposedLoc(hasInclude.location);
-        EXPECT_EQ(offset, this->offset(position), current);
-        EXPECT_EQ(hasInclude.fid.isValid() ? info->getFilePath(hasInclude.fid) : "", path, current);
+        EXPECT_EQ(offset, this->offset(position), chain);
+        EXPECT_EQ(hasInclude.fid.isValid() ? info->getFilePath(hasInclude.fid) : "", path, chain);
     }
 
     void EXPECT_CON(std::size_t index,
                     Condition::BranchKind kind,
                     llvm::StringRef position,
-                    std::source_location current = std::source_location::current()) {
+                    LocationChain chain = LocationChain()) {
         auto& condition = conditions[index];
         auto [_, offset] = info->getDecomposedLoc(condition.loc);
-        EXPECT_EQ(condition.kind, kind, current);
-        EXPECT_EQ(offset, this->offset(position), current);
+        EXPECT_EQ(condition.kind, kind, chain);
+        EXPECT_EQ(offset, this->offset(position), chain);
     }
 
     void EXPECT_MACRO(std::size_t index,
                       MacroRef::Kind kind,
                       llvm::StringRef position,
-                      std::source_location current = std::source_location::current()) {
+                      LocationChain chain = LocationChain()) {
         auto& macro = macros[index];
         auto [_, offset] = info->getDecomposedLoc(macro.loc);
-        EXPECT_EQ(macro.kind, kind, current);
-        EXPECT_EQ(offset, this->offset(position), current);
+        EXPECT_EQ(macro.kind, kind, chain);
+        EXPECT_EQ(offset, this->offset(position), chain);
     }
 
     void EXPECT_PRAGMA(std::size_t index,
                        Pragma::Kind kind,
                        llvm::StringRef position,
                        llvm::StringRef text,
-                       std::source_location current = std::source_location::current()) {
+                       LocationChain chain = LocationChain()) {
         auto& pragma = pragmas[index];
         auto [_, offset] = info->getDecomposedLoc(pragma.loc);
-        EXPECT_EQ(pragma.kind, kind, current);
-        EXPECT_EQ(pragma.stmt, text, current);
-        EXPECT_EQ(offset, this->offset(position), current);
+        EXPECT_EQ(pragma.kind, kind, chain);
+        EXPECT_EQ(pragma.stmt, text, chain);
+        EXPECT_EQ(offset, this->offset(position), chain);
     }
 };
 

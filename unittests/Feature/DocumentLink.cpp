@@ -18,11 +18,11 @@ struct DocumentLink : ::testing::Test, Tester {
                      llvm::StringRef begin,
                      llvm::StringRef end,
                      llvm::StringRef path,
-                     std::source_location current = std::source_location::current()) {
+                     LocationChain chain = LocationChain()) {
         auto& link = result[info->getInterestedFile()][index];
-        EXPECT_EQ(link.range.begin, offset(begin), current);
-        EXPECT_EQ(link.range.end, offset(end), current);
-        EXPECT_EQ(link.file, path, current);
+        EXPECT_EQ(link.range.begin, offset(begin), chain);
+        EXPECT_EQ(link.range.end, offset(end), chain);
+        EXPECT_EQ(link.file, path, chain);
     }
 
     void dump() {

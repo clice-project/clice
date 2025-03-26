@@ -17,43 +17,43 @@ struct SemanticTokens : ::testing::Test, Tester {
     void EXPECT_TOKEN(llvm::StringRef pos,
                       SymbolKind kind,
                       uint32_t length,
-                      std::source_location current = std::source_location::current()) {
+                      LocationChain chain = LocationChain()) {
         bool visited = false;
         auto offset = offsets[pos];
         auto& tokens = result[info->getInterestedFile()];
 
         for(auto& token: tokens) {
             if(token.range.begin == offset) {
-                EXPECT_EQ(token.kind, kind, current);
-                EXPECT_EQ(token.range.end - token.range.begin, length, current);
+                EXPECT_EQ(token.kind, kind, chain);
+                EXPECT_EQ(token.range.end - token.range.begin, length, chain);
                 visited = true;
                 break;
             }
         }
 
-        EXPECT_EQ(visited, true, current);
+        EXPECT_EQ(visited, true, chain);
     }
 
     void EXPECT_TOKEN(llvm::StringRef pos,
                       SymbolKind kind,
                       SymbolModifiers modifiers,
                       uint32_t length,
-                      std::source_location current = std::source_location::current()) {
+                      LocationChain chain = LocationChain()) {
         bool visited = false;
         auto offset = offsets[pos];
         auto& tokens = result[info->getInterestedFile()];
 
         for(auto& token: tokens) {
             if(token.range.begin == offset) {
-                EXPECT_EQ(token.kind, kind, current);
-                EXPECT_EQ(token.range.end - token.range.begin, length, current);
-                EXPECT_EQ(token.modifiers, modifiers, current);
+                EXPECT_EQ(token.kind, kind, chain);
+                EXPECT_EQ(token.range.end - token.range.begin, length, chain);
+                EXPECT_EQ(token.modifiers, modifiers, chain);
                 visited = true;
                 break;
             }
         }
 
-        EXPECT_EQ(visited, true, current);
+        EXPECT_EQ(visited, true, chain);
     }
 
     void dumpResult() {

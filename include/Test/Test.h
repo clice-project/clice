@@ -6,6 +6,7 @@
 #include "Support/Compare.h"
 #include "Support/FileSystem.h"
 #include "Annotation.h"
+#include "Test/LocationChain.h"
 
 namespace clice::testing {
 
@@ -14,18 +15,18 @@ llvm::StringRef test_dir();
 #undef EXPECT_EQ
 #undef EXPECT_NE
 
-inline void EXPECT_FAILURE(std::string msg,
-                           std::source_location current = std::source_location::current()) {
-    ::testing::internal::AssertHelper(::testing ::TestPartResult ::kNonFatalFailure,
-                                      current.file_name(),
-                                      current.line(),
-                                      msg.c_str()) = ::testing ::Message();
+inline void EXPECT_FAILURE(std::string message, LocationChain chain = LocationChain()) {
+    chain.backtrace();
+    GTEST_MESSAGE_AT_("", 0, message.c_str(), ::testing::TestPartResult::kNonFatalFailure);
+}
+
+inline void ASSERT_FAILURE(std::string message, LocationChain chain = LocationChain()) {
+    chain.backtrace();
+    GTEST_MESSAGE_AT_("", 0, message.c_str(), ::testing::TestPartResult::kFatalFailure);
 }
 
 template <typename LHS, typename RHS>
-inline void EXPECT_EQ(const LHS& lhs,
-                      const RHS& rhs,
-                      std::source_location current = std::source_location::current()) {
+inline void EXPECT_EQ(const LHS& lhs, const RHS& rhs, LocationChain chain = LocationChain()) {
     if(!refl::equal(lhs, rhs)) {
         std::string left;
         if constexpr(json::serializable<LHS>) {
@@ -41,14 +42,12 @@ inline void EXPECT_EQ(const LHS& lhs,
             right = "cannot dump value";
         }
 
-        EXPECT_FAILURE(std::format("left : {}\nright: {}\n", left, right), current);
+        EXPECT_FAILURE(std::format("left : {}\nright: {}\n", left, right), chain);
     }
 }
 
 template <typename LHS, typename RHS>
-inline void EXPECT_NE(const LHS& lhs,
-                      const RHS& rhs,
-                      std::source_location current = std::source_location::current()) {
+inline void EXPECT_NE(const LHS& lhs, const RHS& rhs, LocationChain chain = LocationChain()) {
     if(refl::equal(lhs, rhs)) {
         std::string expect;
         if constexpr(requires { json::Serde<LHS>::serialize; }) {
@@ -64,7 +63,7 @@ inline void EXPECT_NE(const LHS& lhs,
             actual = "cannot dump value";
         }
 
-        EXPECT_FAILURE(std::format("expect: {}, actual: {}\n", expect, actual), current);
+        EXPECT_FAILURE(std::format("expect: {}, actual: {}\n", expect, actual), chain);
     }
 }
 

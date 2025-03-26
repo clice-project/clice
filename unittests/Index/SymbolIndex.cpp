@@ -20,30 +20,30 @@ struct SymbolIndex : ::testing::Test, Tester {
     void EXPECT_OCCURENCE(int index,
                           llvm::StringRef pos,
                           llvm::StringRef name,
-                          std::source_location location = std::source_location::current()) {
+                          LocationChain chain = LocationChain()) {
         auto occurrence = this->index.occurrences()[index];
-        EXPECT_EQ(occurrence.range().begin, this->offset(pos), location);
-        EXPECT_EQ(occurrence.symbol().name(), name, location);
+        EXPECT_EQ(occurrence.range().begin, this->offset(pos), chain);
+        EXPECT_EQ(occurrence.symbol().name(), name, chain);
     }
 
     index::Symbol EXPECT_SYMBOL(llvm::StringRef name,
                                 SymbolKind kind,
-                                std::source_location location = std::source_location::current()) {
+                                LocationChain chain = LocationChain()) {
         for(auto symbol: index.symbols()) {
             if(symbol.name() == name) {
-                EXPECT_EQ(symbol.kind(), kind, location);
+                EXPECT_EQ(symbol.kind(), kind, chain);
                 return symbol;
             }
         }
 
-        EXPECT_FAILURE("can not find symbol", location);
+        EXPECT_FAILURE("can not find symbol", chain);
         std::unreachable();
     }
 
     void EXPECT_RELATION(llvm::StringRef name,
                          RelationKind kind,
                          llvm::StringRef pos,
-                         std::source_location location = std::source_location::current()) {
+                         LocationChain chain = LocationChain()) {
         bool foundSymbol = false;
         for(auto symbol: index.symbols()) {
             if(symbol.name() == name) {
@@ -57,12 +57,12 @@ struct SymbolIndex : ::testing::Test, Tester {
                     }
                 }
                 foundRelation = true;
-                EXPECT_EQ(foundRelation, true, location);
+                EXPECT_EQ(foundRelation, true, chain);
 
                 break;
             }
         }
-        EXPECT_EQ(foundSymbol, true, location);
+        EXPECT_EQ(foundSymbol, true, chain);
     }
 };
 

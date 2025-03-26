@@ -5,7 +5,7 @@ namespace clice::testing {
 
 namespace {
 
-void run(llvm::StringRef code, std::source_location current = std::source_location::current()) {
+void run(llvm::StringRef code, LocationChain chain = LocationChain()) {
     Tester tester("main.cpp", code);
     tester.run();
 
@@ -46,10 +46,10 @@ void run(llvm::StringRef code, std::source_location current = std::source_locati
     auto input = tester.info->resolver().resolve(run.input);
     auto expect = run.expect;
 
-    EXPECT_EQ(input.isNull(), false);
-    EXPECT_EQ(expect.isNull(), false);
+    EXPECT_EQ(input.isNull(), false, chain);
+    EXPECT_EQ(expect.isNull(), false, chain);
 
-    EXPECT_EQ(input.getCanonicalType(), expect.getCanonicalType());
+    EXPECT_EQ(input.getCanonicalType(), expect.getCanonicalType(), chain);
 }
 
 TEST(TemplateResolver, TypeParameterType) {

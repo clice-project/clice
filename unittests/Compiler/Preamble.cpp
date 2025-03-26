@@ -12,16 +12,16 @@ TEST(Preamble, ComputePreambleBound) {
 
     auto test = [](llvm::StringRef content,
                    std::vector<llvm::StringRef> marks,
-                   std::source_location current = std::source_location::current()) {
+                   LocationChain chain = LocationChain()) {
         Annotation annotation{content};
         auto bounds = computePreambleBounds(annotation.source());
 
         println("{}", dump(bounds));
 
-        EXPECT_EQ(bounds.size(), marks.size(), current);
+        EXPECT_EQ(bounds.size(), marks.size(), chain);
 
         for(std::uint32_t i = 0; i < bounds.size(); i++) {
-            EXPECT_EQ(bounds[i], annotation.offset(marks[i]), current);
+            EXPECT_EQ(bounds[i], annotation.offset(marks[i]), chain);
         }
     };
 

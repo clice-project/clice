@@ -31,14 +31,14 @@ struct FoldingRange : public ::testing::Test {
                       llvm::StringRef begin,
                       llvm::StringRef end,
                       feature::FoldingRangeKind kind,
-                      std::source_location current = std::source_location::current()) {
+                      LocationChain chain = LocationChain()) {
         auto& folding = result[index];
 
         auto begOff = tester->offset(begin);
-        EXPECT_EQ(begOff, folding.range.begin, current);
+        EXPECT_EQ(begOff, folding.range.begin, chain);
 
         auto endOff = tester->offset(end);
-        EXPECT_EQ(endOff, folding.range.end, current);
+        EXPECT_EQ(endOff, folding.range.end, chain);
     }
 };
 

@@ -17,7 +17,7 @@ struct IndexTester : Tester {
 
     IndexTester& GotoDefinition(llvm::StringRef cursor,
                                 llvm::StringRef target,
-                                std::source_location current = std::source_location::current()) {
+                                LocationChain chain = LocationChain()) {
         /// SourceConverter converter;
         ///  auto offset = converter.toOffset(sources[0], pos(cursor));
 
