@@ -9,7 +9,7 @@ struct SymbolIndex : ::testing::Test, Tester {
 
     void run(llvm::StringRef code) {
         addMain("main.cpp", code);
-        Tester::run();
+        Tester::compile();
         indices = index::SymbolIndex::build(*info);
         index = {
             indices[info->getInterestedFile()].data(),

@@ -27,7 +27,7 @@ protected:
              proto::Range range = {},
              const config::InlayHintOption& option = LikeClangd) {
         tester.emplace("main.cpp", code);
-        tester->run();
+        tester->compile();
         auto& info = tester->info;
 
         proto::Range limit = range;
@@ -469,7 +469,7 @@ namespace _2 {
     Tester tx;
     tx.addFile(path::join(".", "header.h"), header);
     tx.addMain("main.cpp", source);
-    tx.run();
+    tx.compile();
 
     auto& info = tx.info;
     EXPECT_TRUE(info.has_value());

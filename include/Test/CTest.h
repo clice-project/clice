@@ -87,10 +87,10 @@ public:
         return source;
     }
 
-    Tester& run(const char* standard = "-std=c++20") {
+    Tester& compile(const char* standard = "-std=c++20") {
         params.command = std::format("clang++ {} {} -fms-extensions", standard, params.srcPath);
 
-        auto info = compile(params);
+        auto info = clice::compile(params);
         if(!info) {
             llvm::errs() << "Failed to build AST\n";
             std::abort();

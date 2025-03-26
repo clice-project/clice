@@ -10,7 +10,7 @@ struct FoldingRange : Test {
 
     void run(llvm::StringRef source) {
         addMain("main.cpp", source);
-        Test::run();
+        Test::compile();
         result = feature::foldingRange(*info);
     }
 
@@ -18,7 +18,7 @@ struct FoldingRange : Test {
                                                                     llvm::StringRef header) {
         addMain("main.cpp", source);
         addFile(path::join(".", "header.h"), header);
-        Test::run();
+        Test::compile();
         return feature::indexFoldingRange(*info);
     }
 

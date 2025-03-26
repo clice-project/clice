@@ -28,7 +28,7 @@ TEST(SourceConverter, Position) {
     const char* main = "int a /*😂*/ = 1;$(eof)";
 
     Tester txs("main.cpp", main);
-    txs.run("-std=c++11");
+    txs.compile("-std=c++11");
 
     auto& src = txs.info->srcMgr();
     auto& tks = txs.info->tokBuf();
@@ -65,7 +65,7 @@ TEST(SourceConverter, LocalRangeAndPosition) {
     const char* main = "$(begin)int a$(mid) /*😂*/ = 1;$(eof)";
 
     Tester txs("main.cpp", main);
-    txs.run();
+    txs.compile();
 
     SourceConverter cvtr{proto::PositionEncodingKind::UTF8};
 

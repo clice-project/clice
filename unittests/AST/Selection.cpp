@@ -89,7 +89,7 @@ $(b1)int xxx$(b2)yyy$(e1) = 1$(e2);$(e3)
 )cpp";
 
     SelectionTester tx("main.cpp", code);
-    tx.run();
+    tx.compile();
 
     std::vector<SelectionBuilder::OffsetPair> selects;
     for(int begin = 1; begin <= 2; begin++) {
@@ -120,7 +120,7 @@ void f($(b1)int xxx$(b2)yyy$(e1) = 1$(e2)) {}
 )cpp";
 
     SelectionTester tx("main.cpp", code);
-    tx.run();
+    tx.compile();
 
     std::vector<SelectionBuilder::OffsetPair> selects;
     for(int begin = 1; begin <= 2; begin++) {
@@ -156,7 +156,7 @@ namespace test {
 )cpp";
 
     SelectionTester tx("main.cpp", code);
-    tx.run();
+    tx.compile();
 
     auto& info = tx.info;
 
@@ -191,7 +191,7 @@ namespace test {
 )cpp";
 
     SelectionTester tx("main.cpp", code);
-    tx.run();
+    tx.compile();
 
     auto& info = tx.info;
 
@@ -226,7 +226,7 @@ $(class_begin)class Test {
 )cpp";
 
     SelectionTester tx("main.cpp", code);
-    tx.run();
+    tx.compile();
 
     auto& info = tx.info;
 
@@ -256,7 +256,7 @@ class Test {
 )cpp";
 
     SelectionTester tx("main.cpp", code);
-    tx.run();
+    tx.compile();
 
     auto& info = tx.info;
 
@@ -285,7 +285,7 @@ void f(int& x){
 )cpp";
 
     SelectionTester tx("main.cpp", code);
-    tx.run();
+    tx.compile();
 
     auto& info = tx.info;
 
@@ -344,7 +344,7 @@ class Test {
 )cpp";
 
     SelectionTester tx("main.cpp", code);
-    tx.run();
+    tx.compile();
 
     {  // {b1, b2} X {e1, e2, e3}
         std::vector<SelectionBuilder::OffsetPair> b12_e123;

@@ -11,7 +11,7 @@ struct DocumentSymbol : Test {
 protected:
     auto run(llvm::StringRef code) {
         addMain("main.cpp", code);
-        Tester::run();
+        Tester::compile();
         EXPECT_TRUE(info.has_value());
 
         return feature::documentSymbols(*info);
@@ -219,7 +219,7 @@ int y = 2;
     Tester tx;
     tx.addFile(path::join(".", "header.h"), header);
     tx.addMain("main.cpp", main);
-    tx.run();
+    tx.compile();
 
     auto& info = tx.info;
     EXPECT_TRUE(info.has_value());

@@ -28,7 +28,7 @@ protected:
 
     void run(llvm::StringRef code, proto::Range range = {}) {
         tester.emplace("main.cpp", code);
-        tester->run();
+        tester->compile();
 
         auto& info = tester->info;
 

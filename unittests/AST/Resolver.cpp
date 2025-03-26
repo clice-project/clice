@@ -7,7 +7,7 @@ namespace {
 
 void run(llvm::StringRef code, LocationChain chain = LocationChain()) {
     Tester tester("main.cpp", code);
-    tester.run();
+    tester.compile();
 
     struct Run : clang::RecursiveASTVisitor<Run> {
         ASTInfo& info;

@@ -10,7 +10,7 @@ struct SemanticTokens : Test {
 
     void run(llvm::StringRef code) {
         addMain("main.cpp", code);
-        Tester::run();
+        Tester::compile();
         result = feature::indexSemanticTokens(*info);
     }
 

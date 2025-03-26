@@ -14,7 +14,7 @@ struct Directive : ::testing::Test, Tester {
     llvm::ArrayRef<Pragma> pragmas;
 
     void run(const char* standard = "-std=c++20") {
-        Tester::run("-std=c++23");
+        Tester::compile("-std=c++23");
         SM = &info->srcMgr();
         auto fid = SM->getMainFileID();
         includes = info->directives()[fid].includes;

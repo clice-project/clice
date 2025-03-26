@@ -56,7 +56,7 @@ class USRTester : public Tester {
 
 public:
     void run(const char* standard = "-std=c++20") {
-        Tester::run(standard);
+        Tester::compile(standard);
 
         GetUSRVisitor visitor;
         visitor.TraverseDecl(info->tu());
