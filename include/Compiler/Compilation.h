@@ -59,7 +59,8 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
 std::expected<ASTInfo, std::string> compile(CompilationParams& params);
 
 /// Run code completion at the given location.
-std::expected<ASTInfo, std::string> compile(CompilationParams& params, clang::CodeCompleteConsumer* consumer);
+std::expected<ASTInfo, std::string> compile(CompilationParams& params,
+                                            clang::CodeCompleteConsumer* consumer);
 
 /// Build PCH from given file path and content.
 std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& out);

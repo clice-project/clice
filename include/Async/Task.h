@@ -19,255 +19,297 @@ namespace clice::async {
 // To>
 // };
 
-template <typename T> class Task;
+template <typename T>
+class Task;
 
 struct promise_base {
-  enum Flags : uint8_t {
-    Empty = 0,
+    enum Flags : uint8_t {
+        Empty = 0,
 
-    /// The task is cancelled.
-    Cancelled = 1,
+        /// The task is cancelled.
+        Cancelled = 1,
 
-    /// The coroutine handle will be destroyed when the task is done or
-    /// cancelled.
-    Disposable = 1 << 1,
-  };
+        /// The coroutine handle will be destroyed when the task is done or
+        /// cancelled.
+        Disposable = 1 << 1,
+    };
 
-  /// The address of the actual coroutine handle and flags.
-  /// llvm::PointerIntPair can compose the flags and address
-  llvm::PointerIntPair<void *, 2, Flags> data;
+    /// The address of the actual coroutine handle and flags.
+    /// llvm::PointerIntPair can compose the flags and address
+    llvm::PointerIntPair<void*, 2, Flags> data;
 
-  /// The coroutine handle that is waiting for the task to complete.
-  /// If this is a top-level coroutine, it is empty.
-  promise_base *continuation = nullptr;
+    /// The coroutine handle that is waiting for the task to complete.
+    /// If this is a top-level coroutine, it is empty.
+    promise_base* continuation = nullptr;
 
-  promise_base *next = nullptr;
+    promise_base* next = nullptr;
 
-  std::source_location location;
+    std::source_location location;
 
-  template <typename Address> void set(Address &&address) {
-    data.setInt(Flags::Empty);
-    data.setPointer(address);
-  }
-
-  auto handle() const noexcept {
-    return std::coroutine_handle<>::from_address(data.getPointer());
-  }
-
-  void schedule();
-
-  bool done() const noexcept { return handle().done(); }
-
-  void destroy() { handle().destroy(); }
-
-  /// Cancel tasks recursively
-  void cancel() {
-    auto p = this;
-    while (p) {
-      p->data.setInt(Flags(data.getInt() | Flags::Cancelled));
-      p = p->next;
+    template <typename Address>
+    void set(Address&& address) {
+        data.setInt(Flags::Empty);
+        data.setPointer(address);
     }
-  }
 
-  bool cancelled() const noexcept { return data.getInt() & Flags::Cancelled; }
+    auto handle() const noexcept {
+        return std::coroutine_handle<>::from_address(data.getPointer());
+    }
 
-  void dispose() { data.setInt(Flags(data.getInt() | Flags::Disposable)); }
+    void schedule();
 
-  bool disposable() const noexcept { return data.getInt() & Flags::Disposable; }
+    bool done() const noexcept {
+        return handle().done();
+    }
 
-  std::coroutine_handle<> resume_handle() {
-    if (cancelled()) {
-      /// If the task is cancelled and disposable, destroy the coroutine handle.
-      auto p = this;
-      while (p && p->cancelled()) {
-        auto con = p->continuation;
-        if (p->disposable()) {
-          p->destroy();
+    void destroy() {
+        handle().destroy();
+    }
+
+    /// Cancel tasks recursively
+    void cancel() {
+        auto p = this;
+        while(p) {
+            p->data.setInt(Flags(data.getInt() | Flags::Cancelled));
+            p = p->next;
         }
-        p = con;
-      }
-      return std::noop_coroutine();
-    } else {
-      /// Otherwise, resume the coroutine handle.
-      return handle();
     }
-  }
 
-  void resume() { resume_handle().resume(); }
+    bool cancelled() const noexcept {
+        return data.getInt() & Flags::Cancelled;
+    }
+
+    void dispose() {
+        data.setInt(Flags(data.getInt() | Flags::Disposable));
+    }
+
+    bool disposable() const noexcept {
+        return data.getInt() & Flags::Disposable;
+    }
+
+    std::coroutine_handle<> resume_handle() {
+        if(cancelled()) {
+            /// If the task is cancelled and disposable, destroy the coroutine handle.
+            auto p = this;
+            while(p && p->cancelled()) {
+                auto con = p->continuation;
+                if(p->disposable()) {
+                    p->destroy();
+                }
+                p = con;
+            }
+            return std::noop_coroutine();
+        } else {
+            /// Otherwise, resume the coroutine handle.
+            return handle();
+        }
+    }
+
+    void resume() {
+        resume_handle().resume();
+    }
 };
 
 namespace awaiter {
 
 /// The awaiter for the final suspend point of `Task`.
 struct final {
-  promise_base *continuation;
+    promise_base* continuation;
 
-  bool await_ready() noexcept { return false; }
-
-  template <typename Promise>
-  std::coroutine_handle<>
-  await_suspend(std::coroutine_handle<Promise> current) noexcept {
-    std::coroutine_handle<> handle = std::noop_coroutine();
-
-    /// In the final suspend point, this coroutine is already done.
-    /// So try to resume the waiting coroutine if it exists.
-    if (continuation) {
-      continuation->next = nullptr;
-      handle = continuation->resume_handle();
+    bool await_ready() noexcept {
+        return false;
     }
 
-    if (current.promise().disposable()) {
-      /// If this task is disposable, destroy the coroutine handle.
-      current.destroy();
+    template <typename Promise>
+    std::coroutine_handle<> await_suspend(std::coroutine_handle<Promise> current) noexcept {
+        std::coroutine_handle<> handle = std::noop_coroutine();
+
+        /// In the final suspend point, this coroutine is already done.
+        /// So try to resume the waiting coroutine if it exists.
+        if(continuation) {
+            continuation->next = nullptr;
+            handle = continuation->resume_handle();
+        }
+
+        if(current.promise().disposable()) {
+            /// If this task is disposable, destroy the coroutine handle.
+            current.destroy();
+        }
+
+        return handle;
     }
 
-    return handle;
-  }
-
-  void await_resume() noexcept {}
+    void await_resume() noexcept {}
 };
 
 /// The awaiter for the `Task` type.
-template <typename T, typename P> struct task {
-  std::coroutine_handle<P> handle;
+template <typename T, typename P>
+struct task {
+    std::coroutine_handle<P> handle;
 
-  bool await_ready() noexcept { return false; }
-
-  template <typename Promise>
-  auto await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
-    /// Store the waiting coroutine in the promise for later scheduling.
-    /// It will be scheduled in the final suspend point.
-    assert(!handle.promise().continuation && "await_suspend: already waiting");
-    handle.promise().continuation = &waiting.promise();
-    waiting.promise().next = &handle.promise();
-
-    /// If this `Task` is awaited from another coroutine, we should schedule
-    /// the this task first.
-    return handle.promise().resume_handle();
-  }
-
-  T await_resume() noexcept {
-    if constexpr (!std::is_void_v<T>) {
-      assert(handle.promise().value.has_value() &&
-             "await_resume: value not set");
-      return std::move(*handle.promise().value);
+    bool await_ready() noexcept {
+        return false;
     }
-  }
+
+    template <typename Promise>
+    auto await_suspend(std::coroutine_handle<Promise> waiting) noexcept {
+        /// Store the waiting coroutine in the promise for later scheduling.
+        /// It will be scheduled in the final suspend point.
+        assert(!handle.promise().continuation && "await_suspend: already waiting");
+        handle.promise().continuation = &waiting.promise();
+        waiting.promise().next = &handle.promise();
+
+        /// If this `Task` is awaited from another coroutine, we should schedule
+        /// the this task first.
+        return handle.promise().resume_handle();
+    }
+
+    T await_resume() noexcept {
+        if constexpr(!std::is_void_v<T>) {
+            assert(handle.promise().value.has_value() && "await_resume: value not set");
+            return std::move(*handle.promise().value);
+        }
+    }
 };
 
-} // namespace awaiter
+}  // namespace awaiter
 
-template <typename T = void> class Task {
+template <typename T = void>
+class Task {
 public:
-  template <typename V> struct promise_result {
-    std::optional<V> value;
+    template <typename V>
+    struct promise_result {
+        std::optional<V> value;
 
-    template <typename U> void return_value(U &&val) noexcept {
-      assert(!value.has_value() && "return_value: value already set");
-      value.emplace(std::forward<U>(val));
-    }
-  };
-
-  template <> struct promise_result<void> {
-    void return_void() noexcept {}
-  };
-
-  struct promise_type : promise_base, promise_result<T> {
-    promise_type(
-        std::source_location location = std::source_location::current()) {
-
-      set(handle().address());
-      this->location = location;
+        template <typename U>
+        void return_value(U&& val) noexcept {
+            assert(!value.has_value() && "return_value: value already set");
+            value.emplace(std::forward<U>(val));
+        }
     };
 
-    auto get_return_object() { return Task<T>(handle()); }
+    template <>
+    struct promise_result<void> {
+        void return_void() noexcept {}
+    };
 
-    auto initial_suspend() { return std::suspend_always(); }
+    struct promise_type : promise_base, promise_result<T> {
+        promise_type(std::source_location location = std::source_location::current()) {
 
-    auto final_suspend() noexcept { return awaiter::final{continuation}; }
+            set(handle().address());
+            this->location = location;
+        };
 
-    void unhandled_exception() { std::abort(); }
+        auto get_return_object() {
+            return Task<T>(handle());
+        }
 
-    auto handle() {
-      return std::coroutine_handle<promise_type>::from_promise(*this);
-    }
-  };
+        auto initial_suspend() {
+            return std::suspend_always();
+        }
 
-  using coroutine_handle = std::coroutine_handle<promise_type>;
+        auto final_suspend() noexcept {
+            return awaiter::final{continuation};
+        }
 
-  using value_type = T;
+        void unhandled_exception() {
+            std::abort();
+        }
 
-public:
-  Task() = default;
+        auto handle() {
+            return std::coroutine_handle<promise_type>::from_promise(*this);
+        }
+    };
 
-  Task(coroutine_handle handle) : core(handle) {}
+    using coroutine_handle = std::coroutine_handle<promise_type>;
 
-  Task(const Task &) = delete;
-
-  Task(Task &&other) noexcept : core(other.core) { other.core = nullptr; }
-
-  Task &operator=(const Task &) = delete;
-
-  Task &operator=(Task &&other) noexcept {
-    if (core) {
-      core.destroy();
-    }
-    core = other.core;
-    other.core = nullptr;
-    return *this;
-  }
-
-  ~Task() {
-    if (core) {
-      core.destroy();
-    }
-  }
+    using value_type = T;
 
 public:
-  coroutine_handle handle() const noexcept { return core; }
+    Task() = default;
 
-  coroutine_handle release() noexcept {
-    auto handle = core;
-    core = nullptr;
-    return handle;
-  }
+    Task(coroutine_handle handle) : core(handle) {}
 
-  bool empty() const noexcept { return !core; }
+    Task(const Task&) = delete;
 
-  bool done() const noexcept { return core.done(); }
-
-  void schedule() { core.promise().schedule(); }
-
-  /// Cancel the task, the suspend point after the current one will be skipped.
-  void cancel() { core.promise().cancel(); }
-
-  /// Dispose the task, it will be destroyed when finished or cancelled.
-  void dispose() {
-    core.promise().dispose();
-    core = nullptr;
-  }
-
-  T result() {
-    if constexpr (!std::is_void_v<T>) {
-      return std::move(core.promise().value.value());
+    Task(Task&& other) noexcept : core(other.core) {
+        other.core = nullptr;
     }
-  }
 
-  auto operator co_await() const noexcept {
-    return awaiter::task<T, promise_type>{core};
-  }
+    Task& operator= (const Task&) = delete;
 
-  void stacktrace() {
-    promise_base *handle = core;
-    while (handle) {
-      println("{}:{}:{}", handle->location.file_name(), handle->location.line(),
-              handle->location.function_name());
-      handle = handle->continuation;
+    Task& operator= (Task&& other) noexcept {
+        if(core) {
+            core.destroy();
+        }
+        core = other.core;
+        other.core = nullptr;
+        return *this;
     }
-  }
+
+    ~Task() {
+        if(core) {
+            core.destroy();
+        }
+    }
+
+public:
+    coroutine_handle handle() const noexcept {
+        return core;
+    }
+
+    coroutine_handle release() noexcept {
+        auto handle = core;
+        core = nullptr;
+        return handle;
+    }
+
+    bool empty() const noexcept {
+        return !core;
+    }
+
+    bool done() const noexcept {
+        return core.done();
+    }
+
+    void schedule() {
+        core.promise().schedule();
+    }
+
+    /// Cancel the task, the suspend point after the current one will be skipped.
+    void cancel() {
+        core.promise().cancel();
+    }
+
+    /// Dispose the task, it will be destroyed when finished or cancelled.
+    void dispose() {
+        core.promise().dispose();
+        core = nullptr;
+    }
+
+    T result() {
+        if constexpr(!std::is_void_v<T>) {
+            return std::move(core.promise().value.value());
+        }
+    }
+
+    auto operator co_await() const noexcept {
+        return awaiter::task<T, promise_type>{core};
+    }
+
+    void stacktrace() {
+        promise_base* handle = core;
+        while(handle) {
+            println("{}:{}:{}",
+                    handle->location.file_name(),
+                    handle->location.line(),
+                    handle->location.function_name());
+            handle = handle->continuation;
+        }
+    }
 
 private:
-  coroutine_handle core;
+    coroutine_handle core;
 };
 
-} // namespace clice::async
+}  // namespace clice::async

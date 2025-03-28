@@ -73,8 +73,8 @@ template <ranges::input_range Range, typename Coroutine>
         { coroutine(value) } -> std::same_as<Task<bool>>;
     }
 Task<bool> gather(Range&& range,
-                    Coroutine&& coroutine,
-                    std::size_t concurrency = std::thread::hardware_concurrency()) {
+                  Coroutine&& coroutine,
+                  std::size_t concurrency = std::thread::hardware_concurrency()) {
     std::vector<Task<>> tasks;
     tasks.reserve(concurrency);
 

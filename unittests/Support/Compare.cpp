@@ -62,4 +62,4 @@ TEST(Support, Less) {
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing
