@@ -71,6 +71,7 @@ class Server {
 public:
   Server();
 
+  /// Main entry point of the server, determine whether it's a notification.
   async::Task<> onReceive(json::Value value);
 
   /// Handle requests, a request must have a response.

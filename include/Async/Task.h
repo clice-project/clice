@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <concepts>
 #include <coroutine>
 #include <cstdint>
 #include <cstdlib>
@@ -11,6 +12,12 @@
 #include "llvm/ADT/PointerIntPair.h"
 
 namespace clice::async {
+
+// template <typename T>
+// concept Promise = requires(T&& promise) {
+// {promise.get_return_object()} -> std::convertible_to<typename From, typename
+// To>
+// };
 
 template <typename T> class Task;
 
@@ -38,9 +45,9 @@ struct promise_base {
 
   std::source_location location;
 
-  template <typename Promise> void set(std::coroutine_handle<Promise> handle) {
+  template <typename Address> void set(Address &&address) {
     data.setInt(Flags::Empty);
-    data.setPointer(handle.address());
+    data.setPointer(address);
   }
 
   auto handle() const noexcept {
@@ -168,7 +175,8 @@ public:
   struct promise_type : promise_base, promise_result<T> {
     promise_type(
         std::source_location location = std::source_location::current()) {
-      set(handle());
+
+      set(handle().address());
       this->location = location;
     };
 
