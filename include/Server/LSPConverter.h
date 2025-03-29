@@ -6,7 +6,7 @@
 #include "Feature/InlayHint.h"
 #include "Feature/FoldingRange.h"
 #include "Feature/DocumentSymbol.h"
-#include "Feature/SemanticTokens.h"
+#include "Feature/SemanticToken.h"
 #include "Feature/DocumentLink.h"
 #include "Server/Protocol.h"
 

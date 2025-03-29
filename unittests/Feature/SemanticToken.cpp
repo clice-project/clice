@@ -1,12 +1,12 @@
 #include "Test/CTest.h"
-#include "Feature/SemanticTokens.h"
+#include "Feature/SemanticToken.h"
 
 namespace clice::testing {
 
 namespace {
 
-struct SemanticTokens : TestFixture {
-    index::Shared<std::vector<feature::SemanticToken>> result;
+struct SemanticToken : TestFixture {
+    index::Shared<feature::SemanticTokens> result;
 
     void run(llvm::StringRef code) {
         addMain("main.cpp", code);
@@ -67,7 +67,7 @@ struct SemanticTokens : TestFixture {
 using enum SymbolKind::Kind;
 using enum SymbolModifiers::Kind;
 
-TEST_F(SemanticTokens, Include) {
+TEST_F(SemanticToken, Include) {
     run(R"cpp(
 $(0)#include $(1)<stddef.h>
 $(2)#include $(3)"stddef.h"
@@ -85,7 +85,7 @@ $(4)# $(5)include $(6)"stddef.h"
     EXPECT_TOKEN("6", Header, 10);
 }
 
-TEST_F(SemanticTokens, Comment) {
+TEST_F(SemanticToken, Comment) {
     run(R"cpp(
 $(line)/// line comment
 int x = 1;
@@ -94,7 +94,7 @@ int x = 1;
     EXPECT_TOKEN("line", Comment, 16);
 }
 
-TEST_F(SemanticTokens, Keyword) {
+TEST_F(SemanticToken, Keyword) {
     run(R"cpp(
 $(int)int main() {
     $(return)return 0;
@@ -105,7 +105,7 @@ $(int)int main() {
     EXPECT_TOKEN("return", Keyword, 6);
 }
 
-TEST_F(SemanticTokens, Macro) {
+TEST_F(SemanticToken, Macro) {
     run(R"cpp(
 $(0)#define $(macro)FOO
 )cpp");
@@ -114,7 +114,7 @@ $(0)#define $(macro)FOO
     EXPECT_TOKEN("macro", Macro, 3);
 }
 
-TEST_F(SemanticTokens, FinalAndOverride) {
+TEST_F(SemanticToken, FinalAndOverride) {
     run(R"cpp(
 struct A $(0)final {};
 
@@ -136,7 +136,7 @@ struct D : C {
     EXPECT_TOKEN("2", Keyword, 5);
 }
 
-TEST_F(SemanticTokens, VarDecl) {
+TEST_F(SemanticToken, VarDecl) {
     run(R"cpp(
 extern int $(0)x;
 
@@ -172,7 +172,7 @@ int main() {
     EXPECT_TOKEN("7", Variable, SymbolModifiers(), 1);
 }
 
-TEST_F(SemanticTokens, FunctionDecl) {
+TEST_F(SemanticToken, FunctionDecl) {
     run(R"cpp(
 extern int $(0)foo();
 
@@ -195,7 +195,7 @@ int $(3)bar() {
     EXPECT_TOKEN("3", Function, SymbolModifiers(Definition, Templated), 3);
 }
 
-TEST_F(SemanticTokens, RecordDecl) {
+TEST_F(SemanticToken, RecordDecl) {
     run(R"cpp(
 class $(0)A;
 
