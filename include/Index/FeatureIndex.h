@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "Shared.h"
-#include "Feature/SemanticTokens.h"
+#include "Feature/SemanticToken.h"
 #include "Feature/FoldingRange.h"
 #include "Feature/DocumentLink.h"
 #include "Feature/DocumentSymbol.h"

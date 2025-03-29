@@ -33,7 +33,7 @@ using DocumentSymbols = std::vector<DocumentSymbol>;
 DocumentSymbols documentSymbols(ASTInfo& AST);
 
 /// Generate document symbols for all file in AST.
-index::Shared<DocumentSymbols> indexDocumentSymbols(ASTInfo& AST);
+index::Shared<DocumentSymbols> indexDocumentSymbol(ASTInfo& AST);
 
 }  // namespace clice::feature
 

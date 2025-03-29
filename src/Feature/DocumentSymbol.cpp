@@ -94,7 +94,7 @@ DocumentSymbols documentSymbols(ASTInfo& AST) {
     return std::move(frame.symbols);
 }
 
-index::Shared<DocumentSymbols> indexDocumentSymbols(ASTInfo& AST) {
+index::Shared<DocumentSymbols> indexDocumentSymbol(ASTInfo& AST) {
     DocumentSymbolCollector collector(AST, true);
     collector.TraverseDecl(AST.tu());
 

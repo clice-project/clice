@@ -18,11 +18,13 @@ struct SemanticToken {
     SymbolModifiers modifiers;
 };
 
+using SemanticTokens = std::vector<SemanticToken>;
+
 /// Generate semantic tokens for the interested file only.
-std::vector<SemanticToken> semanticTokens(ASTInfo& AST);
+SemanticTokens semanticTokens(ASTInfo& AST);
 
 /// Generate semantic tokens for all files.
-index::Shared<std::vector<SemanticToken>> indexSemanticTokens(ASTInfo& AST);
+index::Shared<SemanticTokens> indexSemanticToken(ASTInfo& AST);
 
 }  // namespace clice::feature
 

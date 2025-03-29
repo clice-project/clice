@@ -322,17 +322,17 @@ private:
 private:
     clang::SourceManager& SM;
     clang::syntax::TokenBuffer& TB;
-    std::vector<FoldingRange> result;
-    index::Shared<std::vector<FoldingRange>> indexResult;
+    FoldingRanges result;
+    index::Shared<FoldingRanges> indexResult;
 };
 
 }  // namespace
 
-std::vector<FoldingRange> foldingRange(ASTInfo& AST) {
+FoldingRanges foldingRanges(ASTInfo& AST) {
     return FoldingRangeCollector(AST, true).buildForFile(AST);
 }
 
-index::Shared<std::vector<FoldingRange>> indexFoldingRange(ASTInfo& AST) {
+index::Shared<FoldingRanges> indexFoldingRange(ASTInfo& AST) {
     return FoldingRangeCollector(AST, false).buildForIndex(AST);
 }  // namespace feature
 

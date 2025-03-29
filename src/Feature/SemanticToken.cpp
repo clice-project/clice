@@ -2,7 +2,7 @@
 #include "Index/Shared.h"
 #include "Support/Ranges.h"
 #include "Support/Compare.h"
-#include "Feature/SemanticTokens.h"
+#include "Feature/SemanticToken.h"
 
 namespace clice::feature {
 
@@ -10,9 +10,8 @@ namespace {
 
 class SemanticTokensCollector : public SemanticVisitor<SemanticTokensCollector> {
 public:
-    SemanticTokensCollector(ASTInfo& AST, bool interestedOnly) :
-        emitForIndex(!interestedOnly),
-        SemanticVisitor<SemanticTokensCollector>(AST, interestedOnly) {}
+    using Base = SemanticVisitor<SemanticTokensCollector>;
+    using Base::Base;
 
     void handleDeclOccurrence(const clang::NamedDecl* decl,
                               RelationKind kind,
@@ -84,12 +83,12 @@ public:
         return std::move(sharedResult);
     }
 
-private:
+public:
     void addToken(clang::FileID fid, const clang::Token& token, SymbolKind kind) {
         auto offset = token.getLocation().getRawEncoding() - fakeLoc.getRawEncoding();
         LocalSourceRange range{offset, offset + token.getLength()};
 
-        auto& tokens = emitForIndex ? sharedResult[fid] : result;
+        auto& tokens = interestedOnly ? result : sharedResult[fid];
         tokens.emplace_back(range, kind, SymbolModifiers());
     }
 
@@ -109,7 +108,7 @@ private:
         }
 
         auto [fid, range] = AST.toLocalRange(location);
-        auto& tokens = emitForIndex ? sharedResult[fid] : result;
+        auto& tokens = interestedOnly ? result : sharedResult[fid];
         tokens.emplace_back(range, kind, modifiers);
     }
 
@@ -229,11 +228,11 @@ private:
     }
 
     /// Merge tokens with same range and resolve kind conflict.
-    void merge(std::vector<SemanticToken>& tokens) {
+    void merge(SemanticTokens& tokens) {
         /// Sort tokens by range.
         std::ranges::sort(tokens, refl::less, [](const auto& token) { return token.range; });
 
-        std::vector<SemanticToken> merged;
+        SemanticTokens merged;
 
         for(auto& token: tokens) {
             if(merged.empty()) {
@@ -257,20 +256,34 @@ private:
         tokens = std::move(merged);
     }
 
-private:
-    bool emitForIndex;
-    std::vector<SemanticToken> result;
-    index::Shared<std::vector<SemanticToken>> sharedResult;
+public:
+    SemanticTokens result;
+    index::Shared<SemanticTokens> sharedResult;
 };
 
 }  // namespace
 
-std::vector<SemanticToken> semanticTokens(ASTInfo& AST) {
-    return SemanticTokensCollector(AST, true).buildForFile();
+SemanticTokens semanticTokens(ASTInfo& AST) {
+    SemanticTokensCollector collector(AST, true);
+    collector.highlight(AST.getInterestedFile());
+    collector.run();
+    collector.merge(collector.result);
+    return std::move(collector.result);
 }
 
-index::Shared<std::vector<SemanticToken>> indexSemanticTokens(ASTInfo& AST) {
-    return SemanticTokensCollector(AST, false).buildForIndex();
+index::Shared<SemanticTokens> indexSemanticToken(ASTInfo& AST) {
+    SemanticTokensCollector collector(AST, false);
+    for(auto fid: AST.files()) {
+        collector.highlight(fid);
+    }
+
+    collector.run();
+
+    for(auto& [fid, tokens]: collector.sharedResult) {
+        collector.merge(tokens);
+    }
+
+    return std::move(collector.sharedResult);
 }
 
 }  // namespace clice::feature
