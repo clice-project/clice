@@ -24,7 +24,7 @@ using SemanticTokens = std::vector<SemanticToken>;
 SemanticTokens semanticTokens(ASTInfo& AST);
 
 /// Generate semantic tokens for all files.
-index::Shared<SemanticTokens> indexSemanticTokens(ASTInfo& AST);
+index::Shared<SemanticTokens> indexSemanticToken(ASTInfo& AST);
 
 }  // namespace clice::feature
 

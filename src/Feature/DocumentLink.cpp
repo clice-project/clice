@@ -7,10 +7,10 @@ namespace clice::feature {
 
 namespace {}
 
-DocumentLinkResult documentLink(ASTInfo& AST);
+DocumentLinks documentLinks(ASTInfo& AST);
 
-index::Shared<DocumentLinkResult> indexDocumentLink(ASTInfo& AST) {
-    index::Shared<DocumentLinkResult> result;
+index::Shared<DocumentLinks> indexDocumentLink(ASTInfo& AST) {
+    index::Shared<DocumentLinks> result;
 
     for(auto& [fid, diretives]: AST.directives()) {
         for(auto& include: diretives.includes) {

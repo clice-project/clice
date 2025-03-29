@@ -11,7 +11,7 @@ struct SemanticToken : TestFixture {
     void run(llvm::StringRef code) {
         addMain("main.cpp", code);
         Tester::compile();
-        result = feature::indexSemanticTokens(*AST);
+        result = feature::indexSemanticToken(*AST);
     }
 
     void EXPECT_TOKEN(llvm::StringRef pos,

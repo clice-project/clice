@@ -271,7 +271,7 @@ SemanticTokens semanticTokens(ASTInfo& AST) {
     return std::move(collector.result);
 }
 
-index::Shared<SemanticTokens> indexSemanticTokens(ASTInfo& AST) {
+index::Shared<SemanticTokens> indexSemanticToken(ASTInfo& AST) {
     SemanticTokensCollector collector(AST, false);
     for(auto fid: AST.files()) {
         collector.highlight(fid);

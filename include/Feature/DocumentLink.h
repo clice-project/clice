@@ -15,13 +15,13 @@ struct DocumentLink {
     std::string file;
 };
 
-using DocumentLinkResult = std::vector<DocumentLink>;
+using DocumentLinks = std::vector<DocumentLink>;
 
 /// Generate document link for main file.
-DocumentLinkResult documentLink(ASTInfo& AST);
+DocumentLinks documentLinks(ASTInfo& AST);
 
 /// Generate document link for all source file.
-index::Shared<DocumentLinkResult> indexDocumentLink(ASTInfo& AST);
+index::Shared<DocumentLinks> indexDocumentLink(ASTInfo& AST);
 
 }  // namespace clice::feature
 

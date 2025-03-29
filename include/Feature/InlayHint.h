@@ -35,6 +35,6 @@ using InlayHints = std::vector<InlayHint>;
 
 InlayHints inlayHints(ASTInfo& AST, LocalSourceRange target);
 
-index::Shared<InlayHints> indexInlayHints(ASTInfo& AST);
+index::Shared<InlayHints> indexInlayHint(ASTInfo& AST);
 
 }  // namespace clice::feature
