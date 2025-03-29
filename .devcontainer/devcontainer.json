@@ -1,0 +1,19 @@
+{
+	"build": {
+		"dockerfile": "./Dockerfile",
+		"context": "."
+	},
+	"remoteUser": "devcontainer",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				// "llvm-vs-code-extensions.vscode-clangd",
+				// "eamodio.gitlens",
+				// "github.copilot"
+			]
+		}
+	},
+	"mounts": [
+		// "source=${localEnv:HOME}/.ssh,target=/home/devcontainer/.ssh,type=bind,consistency=cached"
+	]
+}
