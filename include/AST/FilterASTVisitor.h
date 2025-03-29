@@ -23,15 +23,14 @@ struct RAVFileter {
 /// AST nodes with an additional filtering mechanism.
 template <typename Derived>
 class FilteredASTVisitor : public clang::RecursiveASTVisitor<Derived>, public RAVFileter {
-protected:
+public:
     using Base = clang::RecursiveASTVisitor<Derived>;
 
     FilteredASTVisitor(ASTInfo& AST,
                        bool interestedOnly,
-                       std::optional<LocalSourceRange> targetRange) :
+                       std::optional<LocalSourceRange> targetRange = std::nullopt) :
         RAVFileter(AST, interestedOnly, targetRange) {}
 
-public:
 #define CHECK_DERIVED_IMPL(func)                                                                   \
     static_assert(std::same_as<decltype(&FilteredASTVisitor::func), decltype(&Derived::func)>,     \
                   "Derived class should not implement this method");
