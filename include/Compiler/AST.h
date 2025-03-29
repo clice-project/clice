@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Directive.h"
-#include "AST/SymbolID.h"
-#include "AST/SourceCode.h"
 #include "AST/Resolver.h"
+#include "AST/SourceCode.h"
+#include "AST/SymbolID.h"
+#include "Directive.h"
 
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
@@ -69,8 +69,8 @@ public:
         return instance->getASTContext().getTranslationUnitDecl();
     }
 
-    /// The interested file ID. For file without header context, it is the main file ID.
-    /// For file with header context, it is the file ID of header file.
+    /// The interested file ID. For file without header context, it is the main
+    /// file ID. For file with header context, it is the file ID of header file.
     clang::FileID getInterestedFile() const {
         return interested;
     }
@@ -119,9 +119,9 @@ public:
         return path == "<built-in>" || path == "<command line>" || path == "<scratch space>";
     }
 
-    /// Decompose a source range into file ID and local source range. The begin and end
-    /// of the input source range both should be `FileID`. If the range is cross multiple
-    /// files, we cut off the range at the end of the first file.
+    /// Decompose a source range into file ID and local source range. The begin
+    /// and end of the input source range both should be `FileID`. If the range is
+    /// cross multiple files, we cut off the range at the end of the first file.
     std::pair<clang::FileID, LocalSourceRange> toLocalRange(clang::SourceRange range);
 
     /// Same as `toLocalRange`, but will translate range to expansion range.
@@ -148,8 +148,8 @@ private:
     /// The frontend action used to build the AST.
     std::unique_ptr<clang::FrontendAction> action;
 
-    /// Compiler instance, responsible for performing the actual compilation and managing the
-    /// lifecycle of all objects during the compilation process.
+    /// Compiler instance, responsible for performing the actual compilation and
+    /// managing the lifecycle of all objects during the compilation process.
     std::unique_ptr<clang::CompilerInstance> instance;
 
     /// The template resolver used to resolve dependent name.

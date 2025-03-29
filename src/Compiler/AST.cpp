@@ -1,6 +1,6 @@
 #include "Compiler/AST.h"
-#include "Index/USR.h"
 #include "AST/Utility.h"
+#include "Index/USR.h"
 
 namespace clice {
 
@@ -22,8 +22,7 @@ const llvm::DenseSet<clang::FileID>& ASTInfo::files() {
 std::vector<std::string> ASTInfo::deps() {
     llvm::StringSet<> deps;
 
-    /// FIXME: consider `#embed` and `__has_embed`.
-
+    /// FIXME   consider `#embed` and `__has_embed`.
     for(auto& [fid, diretive]: directives()) {
         for(auto& include: diretive.includes) {
             if(!include.skipped) {

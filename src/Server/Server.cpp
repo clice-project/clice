@@ -1,5 +1,7 @@
-#include "Support/Logger.h"
 #include "Server/Server.h"
+#include "Support/Logger.h"
+#include "Support/Timer.h"
+#include "clang/Frontend/CompilerInstance.h"
 
 namespace clice {
 
@@ -13,10 +15,10 @@ async::Task<> Server::onReceive(json::Value value) {
 
     /// If the json object has an `id`, it's a request,
     /// which needs a response. Otherwise, it's a notification.
-    auto id = object->get("id");
+    const auto id = object->get("id");
 
     llvm::StringRef method;
-    if(auto result = object->getString("method")) {
+    if(const auto result = object->getString("method")) {
         method = *result;
     } else [[unlikely]] {
         log::warn("Invalid LSP message, method not found: {}", value);
@@ -29,21 +31,27 @@ async::Task<> Server::onReceive(json::Value value) {
     }
 
     json::Value params = json::Value(nullptr);
-    if(auto result = object->get("params")) {
+    if(const auto result = object->get("params")) {
         params = std::move(*result);
     }
 
     /// Handle request and notification separately.
-    /// TODO: Record the time of handling request and notification.
+
+    Timer<chrono::microseconds> timer;
+
     if(id) {
+        TimerRegion region(timer);
+
         log::info("Handling request: {}", method);
         auto result = co_await onRequest(method, std::move(params));
         co_await response(std::move(*id), std::move(result));
-        log::info("Handled request: {}", method);
+        log::info("Handled request: {}, took {}ms", method, timer.getWallTime());
     } else {
+        TimerRegion region(timer);
+
         log::info("Handling notification: {}", method);
         co_await onNotification(method, std::move(params));
-        log::info("Handled notification: {}", method);
+        log::info("Handled notification: {}, took {}ms", method, timer.getWallTime());
     }
 
     co_return;
@@ -51,7 +59,7 @@ async::Task<> Server::onReceive(json::Value value) {
 
 async::Task<json::Value> Server::onRequest(llvm::StringRef method, json::Value value) {
     if(method == "initialize") {
-        auto result = converter.initialize(std::move(value));
+        const auto result = converter.initialize(std::move(value));
         config::init(converter.workspace());
 
         /// FIXME: Use a better way to handle compile commands.

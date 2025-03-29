@@ -1,16 +1,23 @@
 #pragma once
 
 #include <cassert>
+#include <concepts>
+#include <coroutine>
 #include <cstdint>
 #include <cstdlib>
 #include <optional>
-#include <coroutine>
 #include <source_location>
 
 #include "Support/Format.h"
 #include "llvm/ADT/PointerIntPair.h"
 
 namespace clice::async {
+
+// template <typename T>
+// concept Promise = requires(T&& promise) {
+// {promise.get_return_object()} -> std::convertible_to<typename From, typename
+// To>
+// };
 
 template <typename T>
 class Task;
@@ -22,11 +29,13 @@ struct promise_base {
         /// The task is cancelled.
         Cancelled = 1,
 
-        /// The coroutine handle will be destroyed when the task is done or cancelled.
+        /// The coroutine handle will be destroyed when the task is done or
+        /// cancelled.
         Disposable = 1 << 1,
     };
 
     /// The address of the actual coroutine handle and flags.
+    /// llvm::PointerIntPair can compose the flags and address
     llvm::PointerIntPair<void*, 2, Flags> data;
 
     /// The coroutine handle that is waiting for the task to complete.
@@ -37,10 +46,10 @@ struct promise_base {
 
     std::source_location location;
 
-    template <typename Promise>
-    void set(std::coroutine_handle<Promise> handle) {
-        data.setInt(Empty);
-        data.setPointer(handle.address());
+    template <typename Address>
+    void set(Address&& address) {
+        data.setInt(Flags::Empty);
+        data.setPointer(address);
     }
 
     auto handle() const noexcept {
@@ -57,6 +66,7 @@ struct promise_base {
         handle().destroy();
     }
 
+    /// Cancel tasks recursively
     void cancel() {
         auto p = this;
         while(p) {
@@ -185,7 +195,8 @@ public:
 
     struct promise_type : promise_base, promise_result<T> {
         promise_type(std::source_location location = std::source_location::current()) {
-            set(handle());
+
+            set(handle().address());
             this->location = location;
         };
 

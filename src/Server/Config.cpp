@@ -78,7 +78,7 @@ std::expected<void, std::string> load(llvm::StringRef execute, llvm::StringRef f
     predefined["binary"] = execute;
     predefined["llvm_version"] = "20";
 
-    auto toml = toml::parse_file(filename);
+    const auto toml = toml::parse_file(filename);
     if(toml.failed()) {
         return std::unexpected<std::string>(toml.error().description());
     }
@@ -131,7 +131,7 @@ static void replace(Object& object) {
     }
 }
 
-void init(std::string_view workplace) {
+void init(const std::string_view workplace) {
     predefined["workspace"] = workplace;
 
     replace(config);

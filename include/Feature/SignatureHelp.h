@@ -13,7 +13,7 @@ namespace config {
 
 struct SignatureHelpOption {};
 
-} // namespace config
+}  // namespace config
 
 namespace feature {
 
@@ -21,9 +21,9 @@ struct SignatureHelpItem {};
 
 using SignatureHelpResult = std::vector<SignatureHelpItem>;
 
-SignatureHelpResult signatureHelp(CompilationParams &params,
-                                  const config::SignatureHelpOption &option);
+SignatureHelpResult signatureHelp(CompilationParams& params,
+                                  const config::SignatureHelpOption& option);
 
-} // namespace feature
+}  // namespace feature
 
-} // namespace clice
+}  // namespace clice

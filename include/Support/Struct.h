@@ -15,7 +15,7 @@ struct Any {
     consteval Any(std::size_t);
 
     template <typename T>
-    consteval operator T () const;
+    consteval operator T() const;
 };
 
 template <typename T, std::size_t N>

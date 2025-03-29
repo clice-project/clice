@@ -154,4 +154,4 @@ export module B;
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing

@@ -16,8 +16,9 @@ net::Callback callback = {};
 uv_stream_t* writer = {};
 
 void on_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
-    /// This function is called synchronously before `on_read`. See the implementation of
-    /// `uv__read` in libuv/src/unix/stream.c. So it is safe to use a static buffer here.
+    /// This function is called synchronously before `on_read`. See the
+    /// implementation of `uv__read` in libuv/src/unix/stream.c. So it is safe to
+    /// use a static buffer here.
     static llvm::SmallString<65536> buffer;
     buffer.resize_for_overwrite(suggested_size);
     buf->base = buffer.data();
@@ -30,7 +31,7 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
         uv_read_stop(stream);
         uv_close(uv_cast<uv_handle_t>(*stream), nullptr);
         /// FIXME: Figure out why the writer is already closed.
-        ///uv_close(uv_cast<uv_handle_t>(*writer), nullptr);
+        /// uv_close(uv_cast<uv_handle_t>(*writer), nullptr);
         return;
     }
 
@@ -39,8 +40,8 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
         log::fatal("An error occurred while reading: {0}", uv_strerror(nread));
     }
 
-    /// We have at most one connection and use default event loop. So there is no data race
-    /// risk. It is safe to use a static buffer here.
+    /// We have at most one connection and use default event loop. So there is no
+    /// data race risk. It is safe to use a static buffer here.
     static llvm::SmallString<4096> buffer;
     buffer.insert(buffer.end(), buf->base, buf->base + nread);
 
@@ -49,7 +50,7 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     std::size_t length = 0;
     if(message.consume_front("Content-Length: ") && !message.consumeInteger(10, length) &&
        message.consume_front("\r\n\r\n") && message.size() >= length) {
-        auto result = message.substr(0, length);
+        const auto result = message.substr(0, length);
 
         if(auto input = llvm::json::parse(result)) {
             /// If the message is valid, we can process it.

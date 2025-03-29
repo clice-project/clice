@@ -1,13 +1,13 @@
 #pragma once
 
-#include <vector>
 #include <cstdint>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
+#include <vector>
 
 #include "Enum.h"
-#include "Struct.h"
 #include "Format.h"
+#include "Struct.h"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
@@ -230,7 +230,7 @@ struct fixed_string : std::array<char, N + 1> {
         return N;
     }
 
-    constexpr operator std::string_view () const {
+    constexpr operator std::string_view() const {
         return {this->data(), N};
     }
 };
@@ -296,7 +296,7 @@ struct Proxy {
         return &value();
     }
 
-    operator const underlying_type& () const {
+    operator const underlying_type&() const {
         return value();
     }
 };

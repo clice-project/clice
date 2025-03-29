@@ -17,7 +17,7 @@ struct fs : async::awaiter::uv<fs<Derived, Ret>, uv_fs_t, Ret> {
         if(this->request.result < 0) {
             this->error = this->request.result;
         }
-        
+
         uv_fs_req_cleanup(&this->request);
     }
 
