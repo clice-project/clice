@@ -1,5 +1,4 @@
 #include "Test/CTest.h"
-#include "Server/SourceConverter.h"
 #include "Feature/DocumentSymbol.h"
 
 namespace clice::testing {

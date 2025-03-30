@@ -1,5 +1,4 @@
 #include "Test/Test.h"
-#include "Server/SourceConverter.h"
 #include "Compiler/Preamble.h"
 #include "Compiler/Compilation.h"
 

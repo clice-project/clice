@@ -1,5 +1,4 @@
 #include "src/AST/Selection.cpp"
-#include "Server/SourceConverter.h"
 
 #include "Test/CTest.h"
 
@@ -50,9 +49,6 @@ void debug(const SelectionTree& tree) {
 }
 
 struct SelectionTester : public Tester {
-
-    const SourceConverter cvtr = SourceConverter(proto::PositionEncodingKind::UTF8);
-
     SelectionTester(llvm::StringRef file, llvm::StringRef content) : Tester(file, content) {}
 
     void expectPreorderSequence(const SelectionTree& tree,
