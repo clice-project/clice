@@ -1,5 +1,4 @@
 #include "Test/CTest.h"
-#include "Server/SourceConverter.h"
 #include "Feature/DocumentSymbol.h"
 
 namespace clice::testing {
@@ -224,7 +223,7 @@ int y = 2;
     auto& info = tx.AST;
     EXPECT_TRUE(info.has_value());
 
-    auto maps = feature::indexDocumentSymbols(*info);
+    auto maps = feature::indexDocumentSymbol(*info);
     for(auto& [fileID, result]: maps) {
         if(fileID == info->srcMgr().getMainFileID()) {
             EXPECT_EQ(total_size(result), 2);

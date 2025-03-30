@@ -3,7 +3,6 @@
 #include "Config.h"
 #include "Protocol.h"
 #include "Async/Async.h"
-#include "Server/SourceConverter.h"
 #include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
 #include "Support/JSON.h"
@@ -153,7 +152,6 @@ protected:
     llvm::StringMap<TranslationUnit*> tus;
     std::vector<std::string> pathPool;
     llvm::StringMap<std::uint32_t> pathIndices;
-    SourceConverter SC;
 };
 
 }  // namespace clice

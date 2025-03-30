@@ -1,5 +1,5 @@
 #include "Server/LSPConverter.h"
-#include "Server/SourceConverter.h"
+#include "Support/FileSystem.h"
 
 namespace clice {
 
@@ -238,7 +238,7 @@ proto::InitializeResult LSPConverter::initialize(json::Value value) {
 
 llvm::StringRef LSPConverter::workspace() {
     if(workspacePath.empty()) {
-        workspacePath = SourceConverter::toPath(params.workspaceFolders[0].uri);
+        workspacePath = fs::toPath(params.workspaceFolders[0].uri);
     }
     return workspacePath;
 }
@@ -361,45 +361,10 @@ std::vector<proto::DocumentLink>
             converter.toPosition(link.range.begin),
             converter.toPosition(link.range.end),
         };
-        result.emplace_back(range, SourceConverter::toURI(link.file));
+        result.emplace_back(range, fs::toURI(link.file));
     }
 
     return result;
-}
-
-LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
-                                           llvm::ArrayRef<feature::SemanticToken> tokens) {
-    auto file = co_await async::fs::read(path.str());
-    if(!file) {
-        co_return json::Value(nullptr);
-    }
-    llvm::StringRef content = *file;
-    co_return json::serialize(transform(content, tokens));
-}
-
-LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
-                                           llvm::ArrayRef<feature::FoldingRange> foldings) {
-    auto file = co_await async::fs::read(path.str());
-    if(!file) {
-        co_return json::Value(nullptr);
-    }
-    llvm::StringRef content = *file;
-    co_return json::serialize(transform(content, foldings));
-}
-
-LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
-                                           llvm::ArrayRef<feature::DocumentLink> links) {
-    auto file = co_await async::fs::read(path.str());
-    if(!file) {
-        co_return json::Value(nullptr);
-    }
-    llvm::StringRef content = *file;
-    co_return json::serialize(transform(content, links));
-}
-
-LSPConverter::Result LSPConverter::convert(const feature::Hover& hover) {
-    /// FIXME: Implement hover information render here.
-    co_return json::Value("");
 }
 
 }  // namespace clice

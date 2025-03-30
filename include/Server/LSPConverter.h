@@ -6,7 +6,7 @@
 #include "Feature/InlayHint.h"
 #include "Feature/FoldingRange.h"
 #include "Feature/DocumentSymbol.h"
-#include "Feature/SemanticTokens.h"
+#include "Feature/SemanticToken.h"
 #include "Feature/DocumentLink.h"
 #include "Server/Protocol.h"
 
@@ -31,6 +31,9 @@ public:
     llvm::StringRef workspace();
 
 public:
+    /// Convert a position into an offset relative to the beginning of the file.
+    uint32_t convert(llvm::StringRef content, proto::Position position);
+
     proto::SemanticTokens transform(llvm::StringRef content,
                                     llvm::ArrayRef<feature::SemanticToken> tokens);
 
@@ -39,14 +42,6 @@ public:
 
     std::vector<proto::DocumentLink> transform(llvm::StringRef content,
                                                llvm::ArrayRef<feature::DocumentLink> links);
-
-    Result convert(llvm::StringRef path, llvm::ArrayRef<feature::SemanticToken> tokens);
-
-    Result convert(llvm::StringRef path, llvm::ArrayRef<feature::FoldingRange> foldings);
-
-    Result convert(llvm::StringRef path, llvm::ArrayRef<feature::DocumentLink> links);
-
-    Result convert(const feature::Hover& hover);
 
 private:
     proto::InitializeParams params;

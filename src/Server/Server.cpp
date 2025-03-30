@@ -78,19 +78,39 @@ async::Task<json::Value> Server::onRequest(llvm::StringRef method, json::Value v
 async::Task<json::Value> Server::onTextDocument(llvm::StringRef method, json::Value value) {
     if(method == "semanticTokens/full") {
         auto params2 = json::deserialize<proto::SemanticTokensParams>(value);
-        auto path = SourceConverter::toPath(params2.textDocument.uri);
-        auto tokens = co_await indexer.semanticTokens(path);
-        co_return co_await converter.convert(path, tokens);
+        auto path = fs::toPath(params2.textDocument.uri);
+
+        std::string buffer;
+        if(auto index = co_await indexer.getFeatureIndex(buffer, path)) {
+            co_return json::serialize(
+                converter.transform(index->content(), index->semanticTokens()));
+        } else {
+            co_return json::Value(nullptr);
+        }
+
     } else if(method == "foldingRange") {
         auto params2 = json::deserialize<proto::FoldingRangeParams>(value);
-        auto path = SourceConverter::toPath(params2.textDocument.uri);
-        auto foldings = co_await indexer.foldingRanges(path);
-        co_return co_await converter.convert(path, foldings);
+        auto path = fs::toPath(params2.textDocument.uri);
+
+        std::string buffer;
+        if(auto index = co_await indexer.getFeatureIndex(buffer, path)) {
+            co_return json::serialize(
+                converter.transform(index->content(), index->foldingRanges()));
+        } else {
+            co_return json::Value(nullptr);
+        }
+
     } else if(method == "documentLink") {
         auto params2 = json::deserialize<proto::DocumentLinkParams>(value);
-        auto path = SourceConverter::toPath(params2.textDocument.uri);
-        auto links = co_await indexer.documentLinks(path);
-        co_return co_await converter.convert(path, links);
+        auto path = fs::toPath(params2.textDocument.uri);
+
+        std::string buffer;
+        if(auto index = co_await indexer.getFeatureIndex(buffer, path)) {
+            co_return json::serialize(
+                converter.transform(index->content(), index->documentLinks()));
+        } else {
+            co_return json::Value(nullptr);
+        }
     }
 
     co_return json::Value(nullptr);
@@ -99,16 +119,16 @@ async::Task<json::Value> Server::onTextDocument(llvm::StringRef method, json::Va
 async::Task<json::Value> Server::onContext(llvm::StringRef method, json::Value value) {
     if(method == "current") {
         auto param2 = json::deserialize<proto::TextDocumentParams>(value);
-        auto path = SourceConverter::toPath(param2.textDocument.uri);
+        auto path = fs::toPath(param2.textDocument.uri);
         auto result = indexer.currentContext(path);
         co_return result ? json::serialize(*result) : json::Value(nullptr);
     } else if(method == "switch") {
         auto params = json::deserialize<proto::HeaderContextSwitchParams>(value);
-        auto header = SourceConverter::toPath(params.header);
+        auto header = fs::toPath(params.header);
         indexer.switchContext(header, params.context);
     } else if(method == "all") {
         auto param2 = json::deserialize<proto::TextDocumentParams>(value);
-        auto path = SourceConverter::toPath(param2.textDocument.uri);
+        auto path = fs::toPath(param2.textDocument.uri);
         auto result = indexer.allContexts(path);
         co_return json::serialize(result);
     } else if(method == "resolve") {

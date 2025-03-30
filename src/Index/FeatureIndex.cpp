@@ -14,13 +14,13 @@ struct FeatureIndex {
     std::string content;
 
     /// The index of semantic tokens.
-    std::vector<feature::SemanticToken> tokens;
+    feature::SemanticTokens tokens;
 
     /// The index of folding ranges.
-    std::vector<feature::FoldingRange> foldings;
+    feature::FoldingRanges foldings;
 
     /// The index of document links.
-    std::vector<feature::DocumentLink> links;
+    feature::DocumentLinks links;
 
     /// The index of document symbols.
     feature::DocumentSymbols symbols;
@@ -38,22 +38,22 @@ llvm::StringRef FeatureIndex::content() {
     return index.get<"content">().as_string();
 }
 
-std::vector<feature::SemanticToken> FeatureIndex::semanticTokens() const {
+feature::SemanticTokens FeatureIndex::semanticTokens() const {
     binary::Proxy<memory::FeatureIndex> index{base, base};
     return binary::deserialize(index.get<"tokens">());
 }
 
-std::vector<feature::FoldingRange> FeatureIndex::foldingRanges() const {
+feature::FoldingRanges FeatureIndex::foldingRanges() const {
     binary::Proxy<memory::FeatureIndex> index{base, base};
     return binary::deserialize(index.get<"foldings">());
 }
 
-std::vector<feature::DocumentLink> FeatureIndex::documentLinks() const {
+feature::DocumentLinks FeatureIndex::documentLinks() const {
     binary::Proxy<memory::FeatureIndex> index{base, base};
     return binary::deserialize(index.get<"links">());
 }
 
-std::vector<feature::DocumentSymbol> FeatureIndex::documentSymbols() const {
+feature::DocumentSymbols FeatureIndex::documentSymbols() const {
     binary::Proxy<memory::FeatureIndex> index{base, base};
     return binary::deserialize(index.get<"symbols">());
 }
@@ -61,7 +61,7 @@ std::vector<feature::DocumentSymbol> FeatureIndex::documentSymbols() const {
 Shared<std::vector<char>> FeatureIndex::build(ASTInfo& AST) {
     Shared<memory::FeatureIndex> indices;
 
-    for(auto&& [fid, result]: feature::indexSemanticTokens(AST)) {
+    for(auto&& [fid, result]: feature::indexSemanticToken(AST)) {
         indices[fid].tokens = std::move(result);
     }
 
@@ -73,7 +73,7 @@ Shared<std::vector<char>> FeatureIndex::build(ASTInfo& AST) {
         indices[fid].links = std::move(result);
     }
 
-    for(auto&& [fid, result]: feature::indexDocumentSymbols(AST)) {
+    for(auto&& [fid, result]: feature::indexDocumentSymbol(AST)) {
         indices[fid].symbols = std::move(result);
     }
 
