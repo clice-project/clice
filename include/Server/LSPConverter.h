@@ -31,6 +31,9 @@ public:
     llvm::StringRef workspace();
 
 public:
+    /// Convert a position into an offset relative to the beginning of the file.
+    uint32_t convert(llvm::StringRef content, proto::Position position);
+
     proto::SemanticTokens transform(llvm::StringRef content,
                                     llvm::ArrayRef<feature::SemanticToken> tokens);
 

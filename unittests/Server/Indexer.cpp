@@ -25,7 +25,7 @@ TEST(Indexer, Basic) {
     auto kind =
         RelationKind(RelationKind::Reference, RelationKind::Definition, RelationKind::Declaration);
     proto::ReferenceParams params;
-    params.textDocument = {.uri = SourceConverter::toURI(foo)};
+    params.textDocument = {.uri = fs::toURI(foo)};
     params.position = {2, 5};
 
     // auto lookup = indexer.lookup(params, kind);

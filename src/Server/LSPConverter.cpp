@@ -1,5 +1,5 @@
 #include "Server/LSPConverter.h"
-#include "Server/SourceConverter.h"
+#include "Support/FileSystem.h"
 
 namespace clice {
 
@@ -238,7 +238,7 @@ proto::InitializeResult LSPConverter::initialize(json::Value value) {
 
 llvm::StringRef LSPConverter::workspace() {
     if(workspacePath.empty()) {
-        workspacePath = SourceConverter::toPath(params.workspaceFolders[0].uri);
+        workspacePath = fs::toPath(params.workspaceFolders[0].uri);
     }
     return workspacePath;
 }
@@ -361,7 +361,7 @@ std::vector<proto::DocumentLink>
             converter.toPosition(link.range.begin),
             converter.toPosition(link.range.end),
         };
-        result.emplace_back(range, SourceConverter::toURI(link.file));
+        result.emplace_back(range, fs::toURI(link.file));
     }
 
     return result;
