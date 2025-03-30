@@ -367,39 +367,4 @@ std::vector<proto::DocumentLink>
     return result;
 }
 
-LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
-                                           llvm::ArrayRef<feature::SemanticToken> tokens) {
-    auto file = co_await async::fs::read(path.str());
-    if(!file) {
-        co_return json::Value(nullptr);
-    }
-    llvm::StringRef content = *file;
-    co_return json::serialize(transform(content, tokens));
-}
-
-LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
-                                           llvm::ArrayRef<feature::FoldingRange> foldings) {
-    auto file = co_await async::fs::read(path.str());
-    if(!file) {
-        co_return json::Value(nullptr);
-    }
-    llvm::StringRef content = *file;
-    co_return json::serialize(transform(content, foldings));
-}
-
-LSPConverter::Result LSPConverter::convert(llvm::StringRef path,
-                                           llvm::ArrayRef<feature::DocumentLink> links) {
-    auto file = co_await async::fs::read(path.str());
-    if(!file) {
-        co_return json::Value(nullptr);
-    }
-    llvm::StringRef content = *file;
-    co_return json::serialize(transform(content, links));
-}
-
-LSPConverter::Result LSPConverter::convert(const feature::Hover& hover) {
-    /// FIXME: Implement hover information render here.
-    co_return json::Value("");
-}
-
 }  // namespace clice

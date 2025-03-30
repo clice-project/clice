@@ -38,22 +38,22 @@ llvm::StringRef FeatureIndex::content() {
     return index.get<"content">().as_string();
 }
 
-std::vector<feature::SemanticToken> FeatureIndex::semanticTokens() const {
+feature::SemanticTokens FeatureIndex::semanticTokens() const {
     binary::Proxy<memory::FeatureIndex> index{base, base};
     return binary::deserialize(index.get<"tokens">());
 }
 
-std::vector<feature::FoldingRange> FeatureIndex::foldingRanges() const {
+feature::FoldingRanges FeatureIndex::foldingRanges() const {
     binary::Proxy<memory::FeatureIndex> index{base, base};
     return binary::deserialize(index.get<"foldings">());
 }
 
-std::vector<feature::DocumentLink> FeatureIndex::documentLinks() const {
+feature::DocumentLinks FeatureIndex::documentLinks() const {
     binary::Proxy<memory::FeatureIndex> index{base, base};
     return binary::deserialize(index.get<"links">());
 }
 
-std::vector<feature::DocumentSymbol> FeatureIndex::documentSymbols() const {
+feature::DocumentSymbols FeatureIndex::documentSymbols() const {
     binary::Proxy<memory::FeatureIndex> index{base, base};
     return binary::deserialize(index.get<"symbols">());
 }

@@ -40,14 +40,6 @@ public:
     std::vector<proto::DocumentLink> transform(llvm::StringRef content,
                                                llvm::ArrayRef<feature::DocumentLink> links);
 
-    Result convert(llvm::StringRef path, llvm::ArrayRef<feature::SemanticToken> tokens);
-
-    Result convert(llvm::StringRef path, llvm::ArrayRef<feature::FoldingRange> foldings);
-
-    Result convert(llvm::StringRef path, llvm::ArrayRef<feature::DocumentLink> links);
-
-    Result convert(const feature::Hover& hover);
-
 private:
     proto::InitializeParams params;
     std::string workspacePath;

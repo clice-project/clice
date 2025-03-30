@@ -23,13 +23,13 @@ public:
     /// The content of source file.
     llvm::StringRef content();
 
-    std::vector<feature::SemanticToken> semanticTokens() const;
+    feature::SemanticTokens semanticTokens() const;
 
-    std::vector<feature::FoldingRange> foldingRanges() const;
+    feature::FoldingRanges foldingRanges() const;
 
-    std::vector<feature::DocumentLink> documentLinks() const;
+    feature::DocumentLinks documentLinks() const;
 
-    std::vector<feature::DocumentSymbol> documentSymbols() const;
+    feature::DocumentSymbols documentSymbols() const;
 
     static Shared<std::vector<char>> build(ASTInfo& AST);
 
