@@ -174,10 +174,11 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params,
                                             clang::CodeCompleteConsumer* consumer) {
     auto instance = impl::createInstance(params);
 
+    auto& [file, line, column] = params.completion;
     /// Set options to run code completion.
-    instance->getFrontendOpts().CodeCompletionAt.FileName = params.srcPath.str();
-    instance->getFrontendOpts().CodeCompletionAt.Line = params.line;
-    instance->getFrontendOpts().CodeCompletionAt.Column = params.column;
+    instance->getFrontendOpts().CodeCompletionAt.FileName = std::move(file);
+    instance->getFrontendOpts().CodeCompletionAt.Line = line;
+    instance->getFrontendOpts().CodeCompletionAt.Column = column;
     instance->setCodeCompletionConsumer(consumer);
 
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());

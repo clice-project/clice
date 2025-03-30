@@ -38,9 +38,7 @@ struct CompilationParams {
     llvm::StringMap<std::string> pcms;
 
     /// Code completion file:line:column.
-    llvm::StringRef file = "";
-    uint32_t line = 0;
-    uint32_t column = 0;
+    std::tuple<std::string, std::uint32_t, std::uint32_t> completion;
 };
 
 namespace impl {
@@ -58,13 +56,14 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
 /// their reusability and update in time.
 std::expected<ASTInfo, std::string> compile(CompilationParams& params);
 
-/// Run code completion at the given location.
-std::expected<ASTInfo, std::string> compile(CompilationParams& params, clang::CodeCompleteConsumer* consumer);
-
 /// Build PCH from given file path and content.
 std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& out);
 
 /// Build PCM from given file path and content.
 std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCMInfo& out);
+
+/// Run code completion at the given location.
+std::expected<ASTInfo, std::string> compile(CompilationParams& params,
+                                            clang::CodeCompleteConsumer* consumer);
 
 }  // namespace clice
