@@ -18,7 +18,7 @@ int main() {
     params.content = code;
     params.srcPath = "main.cpp";
     params.command = "clang++ -std=c++20 main.cpp";
-    params.file = "main.cpp";
+    params.completion = {"main.cpp", 5, 6};
 
     config::CodeCompletionOption options = {};
     auto result = feature::codeCompletion(params, options);

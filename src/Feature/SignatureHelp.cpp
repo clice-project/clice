@@ -22,21 +22,27 @@ public:
         for(auto& candidate: range) {
             switch(candidate.getKind()) {
                 case clang::CodeCompleteConsumer::OverloadCandidate::CK_Function: {
+                    candidate.getFunction()->dump();
                     break;
                 }
                 case clang::CodeCompleteConsumer::OverloadCandidate::CK_FunctionTemplate: {
+                    candidate.getFunctionTemplate()->dump();
                     break;
                 }
                 case clang::CodeCompleteConsumer::OverloadCandidate::CK_FunctionType: {
+                    candidate.getFunctionType()->dump();
                     break;
                 }
                 case clang::CodeCompleteConsumer::OverloadCandidate::CK_FunctionProtoTypeLoc: {
+                    candidate.getFunctionProtoTypeLoc().dump();
                     break;
                 }
                 case clang::CodeCompleteConsumer::OverloadCandidate::CK_Template: {
+                    candidate.getTemplate()->dump();
                     break;
                 }
                 case clang::CodeCompleteConsumer::OverloadCandidate::CK_Aggregate: {
+                    candidate.getAggregate()->dump();
                     break;
                 }
             }
@@ -60,16 +66,10 @@ private:
 
 std::vector<SignatureHelpItem> signatureHelp(CompilationParams& params,
                                              const config::SignatureHelpOption& option) {
-    // std::vector<SignatureHelpItem> completions;
-    // auto consumer = new SignatureHelpCollector({});
-    //
-    // if(auto info = compile(params, consumer)) {
-    //    for(auto& item: completions) {}
-    //    return completions;
-    //} else {
-    //    std::abort();
-    //}
-    return std::vector<SignatureHelpItem>{};
+    std::vector<SignatureHelpItem> items;
+    auto consumer = new SignatureHelpCollector({});
+    if(auto info = compile(params, consumer)) {}
+    return items;
 }
 
 }  // namespace clice::feature
