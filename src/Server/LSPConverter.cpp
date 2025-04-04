@@ -65,7 +65,7 @@ bool iterateCodepoints(llvm::StringRef content, const Callback& callback) {
 
 /// Convert a proto::Position to a file offset in the content with the specified encoding kind.
 std::uint32_t toOffset(llvm::StringRef content,
-                       proto::PositionEncodingKind kind,
+                       PositionEncodingKind kind,
                        proto::Position position) {
     std::uint32_t offset = 0;
     for(auto i = 0; i < position.line; i++) {
@@ -80,13 +80,13 @@ std::uint32_t toOffset(llvm::StringRef content,
     content = content.take_until([](char c) { return c == '\n'; });
     assert(position.character <= content.size() && "Character value is out of range");
 
-    if(kind == proto::PositionEncodingKind::UTF8) {
+    if(kind == PositionEncodingKind::UTF8) {
         offset += position.character;
         return offset;
     }
 
-    if(kind == proto::PositionEncodingKind::UTF16) {
-        iterateCodepoints(content, [&](size_t utf8Length, size_t utf16Length) {
+    if(kind == PositionEncodingKind::UTF16) {
+        iterateCodepoints(content, [&](std::uint32_t utf8Length, std::uint32_t utf16Length) {
             assert(position.character >= utf16Length && "Character value is out of range");
             position.character -= utf16Length;
             offset += utf8Length;
@@ -95,8 +95,8 @@ std::uint32_t toOffset(llvm::StringRef content,
         return offset;
     }
 
-    if(kind == proto::PositionEncodingKind::UTF32) {
-        iterateCodepoints(content, [&](size_t utf8Length, size_t) {
+    if(kind == PositionEncodingKind::UTF32) {
+        iterateCodepoints(content, [&](std::uint32_t utf8Length, std::uint32_t) {
             assert(position.character >= 1 && "Character value is out of range");
             position.character -= 1;
             offset += utf8Length;
@@ -109,12 +109,12 @@ std::uint32_t toOffset(llvm::StringRef content,
 }
 
 /// Remeasure the length (character count) of the content with the specified encoding kind.
-std::uint32_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kind) {
-    if(kind == proto::PositionEncodingKind::UTF8) {
+std::uint32_t remeasure(llvm::StringRef content, PositionEncodingKind kind) {
+    if(kind == PositionEncodingKind::UTF8) {
         return content.size();
     }
 
-    if(kind == proto::PositionEncodingKind::UTF16) {
+    if(kind == PositionEncodingKind::UTF16) {
         std::uint32_t length = 0;
         iterateCodepoints(content, [&](std::uint32_t, std::uint32_t utf16Length) {
             length += utf16Length;
@@ -123,7 +123,7 @@ std::uint32_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kin
         return length;
     }
 
-    if(kind == proto::PositionEncodingKind::UTF32) {
+    if(kind == PositionEncodingKind::UTF32) {
         std::uint32_t length = 0;
         iterateCodepoints(content, [&](std::uint32_t, std::uint32_t) {
             length += 1;
@@ -137,7 +137,7 @@ std::uint32_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kin
 
 class PositionConverter {
 public:
-    PositionConverter(llvm::StringRef content, proto::PositionEncodingKind encoding) :
+    PositionConverter(llvm::StringRef content, PositionEncodingKind encoding) :
         content(content), encoding(encoding) {}
 
     /// Convert a offset to a proto::Position with given encoding.
@@ -214,7 +214,7 @@ private:
     llvm::DenseMap<std::uint32_t, proto::Position> cache;
 
     llvm::StringRef content;
-    proto::PositionEncodingKind encoding;
+    PositionEncodingKind encoding;
 };
 
 }  // namespace
@@ -367,6 +367,60 @@ json::Value LSPConverter::convert(llvm::StringRef content,
 
 namespace proto {
 
+/// A set of predefined position encoding kinds.
+struct PositionEncodingKind : refl::Enum<PositionEncodingKind, false, std::string_view> {
+    using Enum::Enum;
+
+    constexpr inline static std::string_view UTF8 = "utf-8";
+    constexpr inline static std::string_view UTF16 = "utf-16";
+    constexpr inline static std::string_view UTF32 = "utf-32";
+
+    constexpr inline static std::array All = {UTF8, UTF16, UTF32};
+};
+
+struct ClientCapabilities {
+    /// General client capabilities.
+    struct {
+        /// The position encodings supported by the client. Client and server
+        /// have to agree on the same position encoding to ensure that offsets
+        /// (e.g. character position in a line) are interpreted the same on both
+        /// side.
+        ///
+        /// To keep the protocol backwards compatible the following applies: if
+        /// the value 'utf-16' is missing from the array of position encodings
+        /// servers can assume that the client supports UTF-16. UTF-16 is
+        /// therefore a mandatory encoding.
+        ///
+        /// If omitted it defaults to ['utf-16'].
+        ///
+        /// Implementation considerations: since the conversion from one encoding
+        /// into another requires the content of the file / line the conversion
+        /// is best done where the file is read which is usually on the server
+        /// side.
+        std::vector<PositionEncodingKind> positionEncodings = {PositionEncodingKind::UTF16};
+    } general;
+};
+
+struct InitializeParams {
+    /// Information about the client.
+    struct {
+        /// The name of the client as defined by the client.
+        std::string name;
+
+        /// The client's version as defined by the client.
+        std::string version;
+    } clientInfo;
+
+    /// The capabilities provided by the client (editor or tool).
+    ClientCapabilities capabilities;
+
+    /// The workspace folders configured in the client when the server starts.
+    /// This property is only available if the client supports workspace folders.
+    /// It can be `null` if the client supports workspace folders but none are
+    /// configured.
+    std::vector<WorkspaceFolder> workspaceFolders;
+};
+
 /// Server Capability.
 struct ServerCapabilities {
     /// The position encoding the server picked from the encodings offered
@@ -437,7 +491,7 @@ struct InitializeResult {
 }  // namespace proto
 
 json::Value LSPConverter::initialize(json::Value value) {
-    params = json::deserialize<proto::InitializeParams>(value);
+    /// params = json::deserialize<proto::InitializeParams>(value);
 
     proto::InitializeResult result = {};
     result.serverInfo.name = "clice";
@@ -451,13 +505,6 @@ json::Value LSPConverter::initialize(json::Value value) {
     // }
 
     return json::serialize(result);
-}
-
-llvm::StringRef LSPConverter::workspace() {
-    if(workspacePath.empty()) {
-        workspacePath = fs::toPath(params.workspaceFolders[0].uri);
-    }
-    return workspacePath;
 }
 
 }  // namespace clice

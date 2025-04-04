@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "Protocol.h"
 #include "Async/Async.h"
+#include "AST/SourceCode.h"
 #include "Feature/Hover.h"
 #include "Feature/InlayHint.h"
 #include "Feature/FoldingRange.h"
@@ -14,23 +15,24 @@ namespace clice {
 
 struct InitializeParams;
 
+enum class PositionEncodingKind : std::uint8_t {
+    UTF8 = 0,
+    UTF16,
+    UTF32,
+};
+
 /// Responsible for converting between LSP and internal types.
 class LSPConverter {
 public:
-    using Result = async::Task<json::Value>;
-
     json::Value initialize(json::Value value);
 
-    auto encoding() {
-        return params.capabilities.general.positionEncodings[0];
+    PositionEncodingKind encoding() {
+        return kind;
     }
 
-    auto& capabilities() {
-        return params.capabilities;
+    llvm::StringRef workspace() {
+        return workspacePath;
     }
-
-    /// The path of the workspace.
-    llvm::StringRef workspace();
 
 public:
     /// Convert a position into an offset relative to the beginning of the file.
@@ -48,7 +50,7 @@ public:
     json::Value convert(llvm::StringRef content, const feature::SemanticTokens& tokens);
 
 private:
-    proto::InitializeParams params;
+    PositionEncodingKind kind;
     std::string workspacePath;
 };
 
