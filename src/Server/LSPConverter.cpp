@@ -196,7 +196,7 @@ public:
         }
     }
 
-    proto::Position toPosition2(uint32_t offset) {
+    proto::Position lookup(uint32_t offset) {
         auto it = cache.find(offset);
         assert(it != cache.end() && "Offset is not cached");
         return it->second;
@@ -219,46 +219,19 @@ private:
 
 }  // namespace
 
-proto::InitializeResult LSPConverter::initialize(json::Value value) {
-    params = json::deserialize<proto::InitializeParams>(value);
-
-    proto::InitializeResult result = {};
-    result.serverInfo.name = "clice";
-    result.serverInfo.version = "0.0.1";
-
-    auto& semantictokens = result.capabilities.semanticTokensProvider;
-    for(auto& name: SymbolKind::all()) {
-        std::string type{name};
-        type[0] = std::tolower(type[0]);
-        semantictokens.legend.tokenTypes.emplace_back(std::move(type));
-    }
-
-    return result;
-}
-
-llvm::StringRef LSPConverter::workspace() {
-    if(workspacePath.empty()) {
-        workspacePath = fs::toPath(params.workspaceFolders[0].uri);
-    }
-    return workspacePath;
-}
-
-proto::SemanticTokens LSPConverter::transform(llvm::StringRef content,
-                                              llvm::ArrayRef<feature::SemanticToken> tokens) {
-    proto::SemanticTokens result;
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::SemanticTokens& tokens) {
+    std::vector<std::uint32_t> groups;
 
     auto addGroup = [&](uint32_t line,
                         uint32_t character,
                         uint32_t length,
                         SymbolKind kind,
                         SymbolModifiers modifiers) {
-        result.data.emplace_back(line);
-        result.data.emplace_back(character);
-        result.data.emplace_back(length);
-        result.data.emplace_back(kind.value());
-
-        /// FIXME:
-        result.data.emplace_back(0);
+        groups.emplace_back(line);
+        groups.emplace_back(character);
+        groups.emplace_back(length);
+        groups.emplace_back(kind.value());
+        groups.emplace_back(0);
     };
 
     PositionConverter converter(content, encoding());
@@ -321,50 +294,170 @@ proto::SemanticTokens LSPConverter::transform(llvm::StringRef content,
         lastChar = beginChar;
     }
 
-    return result;
+    return json::Object{
+        /// The actual tokens.
+        {"data", json::serialize(groups)},
+    };
 }
 
-std::vector<proto::FoldingRange>
-    LSPConverter::transform(llvm::StringRef content,
-                            llvm::ArrayRef<feature::FoldingRange> foldings) {
-    std::vector<proto::FoldingRange> result;
-
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::FoldingRanges& foldings) {
     PositionConverter converter(content, encoding());
     converter.toPositions(foldings, [](auto&& folding) { return folding.range; });
 
+    json::Array result;
     for(auto&& folding: foldings) {
         auto [beginOffset, endOffset] = folding.range;
-        auto [beginLine, beginChar] = converter.toPosition2(beginOffset);
-        auto [endLine, endChar] = converter.toPosition2(endOffset);
+        auto [beginLine, beginChar] = converter.lookup(beginOffset);
+        auto [endLine, endChar] = converter.lookup(endOffset);
 
-        result.emplace_back(proto::FoldingRange{
-            .startLine = beginLine,
-            .startCharacter = beginChar,
-            .endLine = endLine,
-            /// FIXME: Figure out how to handle end character.
-            .endCharacter = endChar - 1,
-            .kind = proto::FoldingRangeKind::Region,
-            .collapsedText = folding.text,
-        });
+        auto object = json::Object{
+            {"startLine",      beginLine},
+            {"startCharacter", beginChar},
+            {"endLine",        endLine  },
+            {"kind",           "region" },
+        };
+
+        result.push_back(std::move(object));
     }
-
     return result;
 }
 
-std::vector<proto::DocumentLink>
-    LSPConverter::transform(llvm::StringRef content, llvm::ArrayRef<feature::DocumentLink> links) {
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::DocumentLinks& links) {
     PositionConverter converter(content, encoding());
 
-    std::vector<proto::DocumentLink> result;
+    json::Array result;
     for(auto& link: links) {
         proto::Range range{
             converter.toPosition(link.range.begin),
             converter.toPosition(link.range.end),
         };
-        result.emplace_back(range, fs::toURI(link.file));
+
+        auto object = json::Object{
+            /// The range of document link.
+            {"range",  json::serialize(range)},
+            /// Target file URI.
+            {"target", fs::toURI(link.file)  },
+        };
+
+        result.emplace_back(std::move(object));
     }
 
     return result;
+}
+
+json::Value LSPConverter::convert(llvm::StringRef content,
+                                  const feature::DocumentSymbols& symbols) {
+    PositionConverter converter(content, encoding());
+
+    struct DocumentSymbol {
+        std::string name;
+        std::string detail;
+        SymbolKind kind;
+        proto::Range range;
+        proto::Range selectionRange;
+        std::vector<DocumentSymbol> children;
+    };
+
+    json::Array result;
+
+    /// TODO: Implementation.
+
+    return result;
+}
+
+namespace proto {
+
+/// Server Capability.
+struct ServerCapabilities {
+    /// The position encoding the server picked from the encodings offered
+    /// by the client via the client capability `general.positionEncodings`.
+    ///
+    /// If the client didn't provide any position encodings the only valid
+    /// value that a server can return is 'utf-16'.
+    ///
+    /// If omitted it defaults to 'utf-16'.
+    PositionEncodingKind positionEncoding = PositionEncodingKind::UTF16;
+
+    /// Defines how text documents are synced. Is either a detailed structure
+    /// defining each notification or for backwards compatibility the
+    /// TextDocumentSyncKind number. If omitted it defaults to
+    /// `TextDocumentSyncKind.None`.
+    /// TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::None;
+
+    /// The server provides go to declaration support.
+    bool declarationProvider = true;
+
+    /// The server provides goto definition support.
+    bool definitionProvider = true;
+
+    /// The server provides goto type definition support.
+    bool typeDefinitionProvider = true;
+
+    /// The server provides goto implementation support.
+    bool implementationProvider = true;
+
+    /// The server provides find references support.
+    bool referencesProvider = true;
+
+    /// The server provides call hierarchy support.
+    bool callHierarchyProvider = true;
+
+    /// The server provides type hierarchy support.
+    bool typeHierarchyProvider = true;
+
+    /// The server provides semantic tokens support.
+    /// SemanticTokensOptions semanticTokensProvider;
+
+    struct DocumentLinkOptions {
+        /// Document links have a resolve provider as well.
+        bool resolveProvider = false;
+    };
+
+    /// The server provides document link support.
+    DocumentLinkOptions documentLinkProvider;
+
+    /// The server provides folding provider support.
+    bool foldingRangeProvider = true;
+};
+
+struct InitializeResult {
+    /// The capabilities the language server provides.
+    ServerCapabilities capabilities;
+
+    /// Information about the server.
+    struct {
+        /// The name of the server as defined by the server.
+        std::string name;
+
+        /// The server's version as defined by the server.
+        std::string version;
+    } serverInfo;
+};
+
+}  // namespace proto
+
+json::Value LSPConverter::initialize(json::Value value) {
+    params = json::deserialize<proto::InitializeParams>(value);
+
+    proto::InitializeResult result = {};
+    result.serverInfo.name = "clice";
+    result.serverInfo.version = "0.0.1";
+
+    // auto& semantictokens = result.capabilities.semanticTokensProvider;
+    // for(auto& name: SymbolKind::all()) {
+    //     std::string type{name};
+    //     type[0] = std::tolower(type[0]);
+    //     semantictokens.legend.tokenTypes.emplace_back(std::move(type));
+    // }
+
+    return json::serialize(result);
+}
+
+llvm::StringRef LSPConverter::workspace() {
+    if(workspacePath.empty()) {
+        workspacePath = fs::toPath(params.workspaceFolders[0].uri);
+    }
+    return workspacePath;
 }
 
 }  // namespace clice

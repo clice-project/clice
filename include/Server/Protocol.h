@@ -46,15 +46,9 @@ struct Position {
     /// The meaning of this offset is determined by the negotiated
     /// `PositionEncodingKind`.
     uinteger character;
+
+    constexpr friend bool operator== (const Position&, const Position&) = default;
 };
-
-constexpr bool operator== (const proto::Position& lhs, const proto::Position rhs) {
-    return lhs.character == rhs.character && lhs.line == rhs.line;
-}
-
-constexpr auto operator<=> (const proto::Position& lhs, const proto::Position rhs) {
-    return std::tie(lhs.line, lhs.character) <=> std::tie(rhs.line, rhs.character);
-}
 
 struct Range {
     /// The range's start position.
@@ -62,6 +56,8 @@ struct Range {
 
     /// The range's end position.
     Position end;
+
+    constexpr friend bool operator== (const Range&, const Range&) = default;
 };
 
 struct Location {
@@ -78,23 +74,6 @@ struct TextEdit {
     // The string to be inserted. For delete operations use an
     // empty string.
     string newText;
-};
-
-struct TextDocumentSyncKind : refl::Enum<TextDocumentSyncKind, false, std::uint8_t> {
-    using Enum::Enum;
-
-    enum Kind : std::uint8_t {
-        /// Documents should not be synced at all.
-        None = 0,
-
-        /// Documents are synced by always sending the full content of the document.
-        Full = 1,
-
-        /// Documents are synced by sending the full content on open. After that
-        /// only
-        /// incremental updates to the document are sent.
-        Incremental = 2,
-    };
 };
 
 struct TextDocumentItem {
@@ -117,48 +96,6 @@ struct TextDocumentIdentifier {
     DocumentUri uri;
 };
 
-struct VersionedTextDocumentIdentifier {
-    /// The text document's URI.
-    DocumentUri uri;
-    /// The version number of this document.
-    ///
-    /// The version number of a document will increase after each change,
-    /// including undo/redo. The number doesn't need to be consecutive.
-    integer version;
-};
-
-/// An event describing a change to a text document. If only a text is provided
-/// it is considered to be the full content of the document.
-struct TextDocumentContentChangeEvent {
-    /// The range of the document that changed.
-    Range range;
-
-    /// The new text for the provided range.
-    string text;
-};
-
-struct DidChangeTextDocumentParams {
-    /// The document that did change. The version number points
-    /// to the version after all provided content changes have
-    /// been applied.
-    VersionedTextDocumentIdentifier textDocument;
-
-    /// The actual content changes. The content changes describe single state
-    /// changes to the document. So if there are two content changes c1 (at
-    /// array index 0) and c2 (at array index 1) for a document in state S then
-    /// c1 moves the document from S to S' and c2 from S' to S''. So c1 is
-    /// computed on the state S and c2 is computed on the state S'.
-    ///
-    /// To mirror the content of a document using change events use the following
-    /// approach:
-    ///  - start with the same initial content
-    ///  - apply the 'textDocument/didChange' notifications in the order you
-    ///  receive them.
-    ///  - apply the `TextDocumentContentChangeEvent`s in a single notification
-    ///  in the order you receive them.
-    std::vector<TextDocumentContentChangeEvent> contentChanges;
-};
-
 struct TextDocumentPositionParams {
     /// The text document.
     TextDocumentIdentifier textDocument;
@@ -166,39 +103,6 @@ struct TextDocumentPositionParams {
     /// The position inside the text document.
     Position position;
 };
-
-using MarkupKind = string;
-
-struct MarkupContent {
-    /// The type of the Markup.
-    MarkupKind kind = "markdown";
-
-    /// The content itself.
-    string value;
-};
-
-struct DidOpenTextDocumentParams {
-    /// The document that was opened.
-    TextDocumentItem textDocument;
-};
-
-struct DidSaveTextDocumentParams {
-    /// The document that was saved.
-    TextDocumentIdentifier textDocument;
-
-    /// Optional the content when saved. Depends on the includeText value
-    /// when the save notifcation was requested.
-    string text;
-};
-
-struct DidCloseTextDocumentParams {
-    /// The document that was closed.
-    TextDocumentIdentifier textDocument;
-};
-
-}  // namespace clice::proto
-
-namespace clice::proto {
 
 struct WorkspaceFolder {
     /// The associated URI for this workspace folder.
@@ -208,8 +112,6 @@ struct WorkspaceFolder {
     /// in the user interface.
     std::string name;
 };
-
-struct DidChangeWatchedFilesParams {};
 
 struct ClientCapabilities {
     /// General client capabilities.
@@ -254,151 +156,6 @@ struct InitializeParams {
     std::vector<WorkspaceFolder> workspaceFolders;
 };
 
-struct SemanticTokensOptions {
-    /// The legend used by the server.
-    struct SemanticTokensLegend {
-        /// The token types a server uses.
-        std::vector<std::string> tokenTypes;
-
-        /// The token modifiers a server uses.
-        std::vector<std::string> tokenModifiers;
-    } legend;
-
-    /// Server supports providing semantic tokens for a specific range
-    /// of a document.
-    bool range = false;
-
-    /// Server supports providing semantic tokens for a full document.
-    bool full = true;
-};
-
-struct SemanticTokens {
-    /// The actual tokens.
-    std::vector<std::uint32_t> data;
-};
-
-/// A set of predefined range kinds.
-enum class FoldingRangeKind {
-    /// Folding range for a comment.
-    Comment,
-
-    /// Folding range for imports or includes.
-    Imports,
-
-    /// Folding range for a region.
-    Region,
-};
-
-struct DocumentLink {
-    Range range;
-    URI target;
-};
-
-/// Represents a folding range. To be valid, start and end line must be bigger
-/// than zero and smaller than the number of lines in the document. Clients
-/// are free to ignore invalid ranges.
-struct FoldingRange {
-    /// The zero-based start line of the range to fold. The folded area starts
-    /// after the line's last character. To be valid, the end must be zero or
-    /// larger and smaller than the number of lines in the document.
-    uint32_t startLine;
-
-    /// The zero-based character offset from where the folded range starts. If
-    /// not defined, defaults to the length of the start line.
-    std::optional<uint32_t> startCharacter;
-
-    /// The zero-based end line of the range to fold. The folded area ends with
-    /// the line's last character. To be valid, the end must be zero or larger
-    /// and smaller than the number of lines in the document.
-    uint32_t endLine;
-
-    /// The zero-based character offset before the folded range ends. If not
-    /// defined, defaults to the length of the end line.
-    std::optional<uint32_t> endCharacter;
-
-    /// Describes the kind of the folding range such as `comment` or `region`.
-    /// The kind is used to categorize folding ranges and used by commands like
-    /// 'Fold all comments'. See [FoldingRangeKind](#FoldingRangeKind) for an
-    /// enumeration of standardized kinds.
-    FoldingRangeKind kind;
-
-    /// The text that the client should show when the specified range is
-    /// collapsed. If not defined or not supported by the client, a default
-    /// will be chosen by the client.
-    ///
-    /// @since 3.17.0 - proposed
-    std::optional<std::string> collapsedText;
-};
-
-/// Server Capability.
-struct ServerCapabilities {
-    /// The position encoding the server picked from the encodings offered
-    /// by the client via the client capability `general.positionEncodings`.
-    ///
-    /// If the client didn't provide any position encodings the only valid
-    /// value that a server can return is 'utf-16'.
-    ///
-    /// If omitted it defaults to 'utf-16'.
-    PositionEncodingKind positionEncoding = PositionEncodingKind::UTF16;
-
-    /// Defines how text documents are synced. Is either a detailed structure
-    /// defining each notification or for backwards compatibility the
-    /// TextDocumentSyncKind number. If omitted it defaults to
-    /// `TextDocumentSyncKind.None`.
-    TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::None;
-
-    /// The server provides go to declaration support.
-    bool declarationProvider = true;
-
-    /// The server provides goto definition support.
-    bool definitionProvider = true;
-
-    /// The server provides goto type definition support.
-    bool typeDefinitionProvider = true;
-
-    /// The server provides goto implementation support.
-    bool implementationProvider = true;
-
-    /// The server provides find references support.
-    bool referencesProvider = true;
-
-    /// The server provides call hierarchy support.
-    bool callHierarchyProvider = true;
-
-    /// The server provides type hierarchy support.
-    bool typeHierarchyProvider = true;
-
-    /// The server provides semantic tokens support.
-    SemanticTokensOptions semanticTokensProvider;
-
-    struct DocumentLinkOptions {
-        /// Document links have a resolve provider as well.
-        bool resolveProvider = false;
-    };
-
-    /// The server provides document link support.
-    DocumentLinkOptions documentLinkProvider;
-
-    /// The server provides folding provider support.
-    bool foldingRangeProvider = true;
-};
-
-struct InitializeResult {
-    /// The capabilities the language server provides.
-    ServerCapabilities capabilities;
-
-    /// Information about the server.
-    struct {
-        /// The name of the server as defined by the server.
-        std::string name;
-
-        /// The server's version as defined by the server.
-        std::string version;
-    } serverInfo;
-};
-
-struct InitializedParams {};
-
 }  // namespace clice::proto
 
 namespace clice::proto {
@@ -406,32 +163,6 @@ namespace clice::proto {
 struct TextDocumentParams {
     /// The text document.
     TextDocumentIdentifier textDocument;
-};
-
-enum class SemanticTokenTypes {
-    Namespace,
-    Type,
-    Class,
-    Enum,
-    Interface,
-    Struct,
-    TypeParameter,
-    Parameter,
-    Variable,
-    Property,
-    EnumMember,
-    Event,
-    Function,
-    Method,
-    Macro,
-    Keyword,
-    Modifier,
-    Comment,
-    String,
-    Number,
-    Regexp,
-    Operator,
-    Decorator
 };
 
 using SemanticTokensParams = TextDocumentParams;
@@ -443,15 +174,6 @@ using DocumentLinkParams = TextDocumentParams;
 using DocumentSymbolParams = TextDocumentParams;
 
 enum class SymbolKind {};
-
-struct DocumentSymbol {
-    std::string name;
-    std::string detail;
-    SymbolKind kind;
-    Range range;
-    Range selectionRange;
-    std::vector<DocumentSymbol> children;
-};
 
 struct HeaderContext {
     /// The path of context file.

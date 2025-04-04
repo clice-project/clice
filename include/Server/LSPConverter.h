@@ -1,23 +1,25 @@
 #pragma once
 
 #include "Config.h"
+#include "Protocol.h"
 #include "Async/Async.h"
 #include "Feature/Hover.h"
 #include "Feature/InlayHint.h"
 #include "Feature/FoldingRange.h"
+#include "Feature/DocumentLink.h"
 #include "Feature/DocumentSymbol.h"
 #include "Feature/SemanticToken.h"
-#include "Feature/DocumentLink.h"
-#include "Server/Protocol.h"
 
 namespace clice {
+
+struct InitializeParams;
 
 /// Responsible for converting between LSP and internal types.
 class LSPConverter {
 public:
     using Result = async::Task<json::Value>;
 
-    proto::InitializeResult initialize(json::Value value);
+    json::Value initialize(json::Value value);
 
     auto encoding() {
         return params.capabilities.general.positionEncodings[0];
@@ -32,16 +34,18 @@ public:
 
 public:
     /// Convert a position into an offset relative to the beginning of the file.
-    uint32_t convert(llvm::StringRef content, proto::Position position);
+    std::uint32_t convert(llvm::StringRef content, proto::Position position);
 
-    proto::SemanticTokens transform(llvm::StringRef content,
-                                    llvm::ArrayRef<feature::SemanticToken> tokens);
+    /// Convert `TextDocumentParams` to file path.
+    std::string convert(proto::TextDocumentParams params);
 
-    std::vector<proto::FoldingRange> transform(llvm::StringRef content,
-                                               llvm::ArrayRef<feature::FoldingRange> foldings);
+    json::Value convert(llvm::StringRef content, const feature::FoldingRanges& foldings);
 
-    std::vector<proto::DocumentLink> transform(llvm::StringRef content,
-                                               llvm::ArrayRef<feature::DocumentLink> links);
+    json::Value convert(llvm::StringRef content, const feature::DocumentLinks& links);
+
+    json::Value convert(llvm::StringRef content, const feature::DocumentSymbols& symbols);
+
+    json::Value convert(llvm::StringRef content, const feature::SemanticTokens& tokens);
 
 private:
     proto::InitializeParams params;

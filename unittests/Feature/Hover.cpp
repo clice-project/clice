@@ -22,7 +22,7 @@ struct DeclCollector : public clang::RecursiveASTVisitor<DeclCollector> {
 struct Hover : TestFixture {
     llvm::StringMap<const clang::Decl*> decls;
 
-    void run(llvm::StringRef code, proto::Range range = {}) {
+    void run(llvm::StringRef code, LocalSourceRange range = {}) {
         addMain("main.cpp", code);
         compile();
         DeclCollector collector;

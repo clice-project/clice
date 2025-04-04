@@ -88,6 +88,9 @@ public:
     /// Handle notifications, a notification doesn't require response.
     async::Task<> onNotification(llvm::StringRef method, json::Value value);
 
+    /// Handle notifications `context/
+    async::Task<> onFileOperation(llvm::StringRef method, json::Value value);
+
 private:
     /// Send a request to the client.
     async::Task<> request(llvm::StringRef method, json::Value params);
@@ -106,7 +109,6 @@ private:
                                    json::Value registerOptions);
 
 private:
-    async::Task<> initialize(json::Value value);
 
 public:
     std::uint32_t id = 0;
