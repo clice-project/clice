@@ -3,7 +3,6 @@
 #include "Config.h"
 #include "Protocol.h"
 #include "Async/Async.h"
-#include "AST/SourceCode.h"
 #include "Feature/Hover.h"
 #include "Feature/InlayHint.h"
 #include "Feature/FoldingRange.h"
