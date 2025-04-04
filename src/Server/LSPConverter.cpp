@@ -219,6 +219,79 @@ private:
 
 }  // namespace
 
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::Hover& hover) {
+    return json::Value(nullptr);
+}
+
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::InlayHints& hints) {
+    return json::Value(nullptr);
+}
+
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::FoldingRanges& foldings) {
+    PositionConverter converter(content, encoding());
+    converter.toPositions(foldings, [](auto&& folding) { return folding.range; });
+
+    json::Array result;
+    for(auto&& folding: foldings) {
+        auto [beginOffset, endOffset] = folding.range;
+        auto [beginLine, beginChar] = converter.lookup(beginOffset);
+        auto [endLine, endChar] = converter.lookup(endOffset);
+
+        auto object = json::Object{
+            {"startLine",      beginLine},
+            {"startCharacter", beginChar},
+            {"endLine",        endLine  },
+            {"kind",           "region" },
+        };
+
+        result.push_back(std::move(object));
+    }
+    return result;
+}
+
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::DocumentLinks& links) {
+    PositionConverter converter(content, encoding());
+
+    json::Array result;
+    for(auto& link: links) {
+        proto::Range range{
+            converter.toPosition(link.range.begin),
+            converter.toPosition(link.range.end),
+        };
+
+        auto object = json::Object{
+            /// The range of document link.
+            {"range",  json::serialize(range)},
+            /// Target file URI.
+            {"target", fs::toURI(link.file)  },
+        };
+
+        result.emplace_back(std::move(object));
+    }
+
+    return result;
+}
+
+json::Value LSPConverter::convert(llvm::StringRef content,
+                                  const feature::DocumentSymbols& symbols) {
+    PositionConverter converter(content, encoding());
+
+    struct DocumentSymbol {
+        std::string name;
+        std::string detail;
+        SymbolKind kind;
+        proto::Range range;
+        proto::Range selectionRange;
+        std::vector<DocumentSymbol> children;
+    };
+
+    json::Array result;
+
+    /// TODO: Implementation.
+
+    return result;
+}
+
 json::Value LSPConverter::convert(llvm::StringRef content, const feature::SemanticTokens& tokens) {
     std::vector<std::uint32_t> groups;
 
@@ -298,71 +371,6 @@ json::Value LSPConverter::convert(llvm::StringRef content, const feature::Semant
         /// The actual tokens.
         {"data", json::serialize(groups)},
     };
-}
-
-json::Value LSPConverter::convert(llvm::StringRef content, const feature::FoldingRanges& foldings) {
-    PositionConverter converter(content, encoding());
-    converter.toPositions(foldings, [](auto&& folding) { return folding.range; });
-
-    json::Array result;
-    for(auto&& folding: foldings) {
-        auto [beginOffset, endOffset] = folding.range;
-        auto [beginLine, beginChar] = converter.lookup(beginOffset);
-        auto [endLine, endChar] = converter.lookup(endOffset);
-
-        auto object = json::Object{
-            {"startLine",      beginLine},
-            {"startCharacter", beginChar},
-            {"endLine",        endLine  },
-            {"kind",           "region" },
-        };
-
-        result.push_back(std::move(object));
-    }
-    return result;
-}
-
-json::Value LSPConverter::convert(llvm::StringRef content, const feature::DocumentLinks& links) {
-    PositionConverter converter(content, encoding());
-
-    json::Array result;
-    for(auto& link: links) {
-        proto::Range range{
-            converter.toPosition(link.range.begin),
-            converter.toPosition(link.range.end),
-        };
-
-        auto object = json::Object{
-            /// The range of document link.
-            {"range",  json::serialize(range)},
-            /// Target file URI.
-            {"target", fs::toURI(link.file)  },
-        };
-
-        result.emplace_back(std::move(object));
-    }
-
-    return result;
-}
-
-json::Value LSPConverter::convert(llvm::StringRef content,
-                                  const feature::DocumentSymbols& symbols) {
-    PositionConverter converter(content, encoding());
-
-    struct DocumentSymbol {
-        std::string name;
-        std::string detail;
-        SymbolKind kind;
-        proto::Range range;
-        proto::Range selectionRange;
-        std::vector<DocumentSymbol> children;
-    };
-
-    json::Array result;
-
-    /// TODO: Implementation.
-
-    return result;
 }
 
 namespace proto {

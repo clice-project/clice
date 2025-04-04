@@ -40,6 +40,10 @@ public:
     /// Convert `TextDocumentParams` to file path.
     std::string convert(proto::TextDocumentParams params);
 
+    json::Value convert(llvm::StringRef content, const feature::Hover& hover);
+
+    json::Value convert(llvm::StringRef content, const feature::InlayHints& hints);
+
     json::Value convert(llvm::StringRef content, const feature::FoldingRanges& foldings);
 
     json::Value convert(llvm::StringRef content, const feature::DocumentLinks& links);
