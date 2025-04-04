@@ -25,8 +25,6 @@ using DocumentUri = std::string;
 
 using URI = std::string;
 
-struct None {};
-
 struct Position {
     /// Line position in a document (zero-based).
     uinteger line;
@@ -110,14 +108,6 @@ struct TextDocumentParams {
     /// The text document.
     TextDocumentIdentifier textDocument;
 };
-
-using SemanticTokensParams = TextDocumentParams;
-
-using FoldingRangeParams = TextDocumentParams;
-
-using DocumentLinkParams = TextDocumentParams;
-
-using DocumentSymbolParams = TextDocumentParams;
 
 enum class SymbolKind {};
 

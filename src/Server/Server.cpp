@@ -76,8 +76,13 @@ async::Task<json::Value> Server::onRequest(llvm::StringRef method, json::Value v
 }
 
 async::Task<json::Value> Server::onTextDocument(llvm::StringRef method, json::Value value) {
+    using SemanticTokensParams = proto::TextDocumentParams;
+    using FoldingRangeParams = proto::TextDocumentParams;
+    using DocumentLinkParams = proto::TextDocumentParams;
+    using DocumentSymbolParams = proto::TextDocumentParams;
+
     if(method == "semanticTokens/full") {
-        auto params2 = json::deserialize<proto::SemanticTokensParams>(value);
+        auto params2 = json::deserialize<SemanticTokensParams>(value);
         auto path = fs::toPath(params2.textDocument.uri);
 
         std::string buffer;
@@ -88,7 +93,7 @@ async::Task<json::Value> Server::onTextDocument(llvm::StringRef method, json::Va
         }
 
     } else if(method == "foldingRange") {
-        auto params2 = json::deserialize<proto::FoldingRangeParams>(value);
+        auto params2 = json::deserialize<FoldingRangeParams>(value);
         auto path = fs::toPath(params2.textDocument.uri);
 
         std::string buffer;
@@ -99,7 +104,7 @@ async::Task<json::Value> Server::onTextDocument(llvm::StringRef method, json::Va
         }
 
     } else if(method == "documentLink") {
-        auto params2 = json::deserialize<proto::DocumentLinkParams>(value);
+        auto params2 = json::deserialize<DocumentLinkParams>(value);
         auto path = fs::toPath(params2.textDocument.uri);
 
         std::string buffer;
