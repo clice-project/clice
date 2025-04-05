@@ -35,8 +35,8 @@ public:
     /// Convert a position into an offset relative to the beginning of the file.
     std::uint32_t convert(llvm::StringRef content, proto::Position position);
 
-    /// Convert `TextDocumentParams` to file path.
-    std::string convert(proto::TextDocumentParams params);
+    /// Convert URI to file path with path mapping.
+    std::string convert(llvm::StringRef URI);
 
     json::Value convert(llvm::StringRef content, const feature::Hover& hover);
 

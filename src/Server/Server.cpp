@@ -116,6 +116,15 @@ async::Task<json::Value> Server::onInitialize(json::Value value) {
 }
 
 async::Task<> Server::onDidOpen(json::Value value) {
+    struct DidOpenTextDocumentParams {
+        proto::TextDocumentItem textDocument;
+    };
+
+    auto params = json::deserialize<DidOpenTextDocumentParams>(value);
+    auto path = converter.convert(params.textDocument.uri);
+
+    /// Build PCH for file.
+    scheduler.build(path, params.textDocument.text);
     co_return;
 }
 

@@ -219,6 +219,10 @@ private:
 
 }  // namespace
 
+std::string LSPConverter::convert(llvm::StringRef URI) {
+    return fs::toPath(URI);
+}
+
 json::Value LSPConverter::convert(llvm::StringRef content, const feature::Hover& hover) {
     return json::Value(nullptr);
 }

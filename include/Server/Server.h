@@ -3,8 +3,8 @@
 #include "Config.h"
 #include "Indexer.h"
 #include "Protocol.h"
+#include "Scheduler.h"
 #include "LSPConverter.h"
-
 #include "Async/Async.h"
 #include "Compiler/Command.h"
 
@@ -47,6 +47,7 @@ private:
 private:
     std::uint32_t id = 0;
     Indexer indexer;
+    Scheduler scheduler;
     LSPConverter converter;
     CompilationDatabase database;
 
