@@ -3,162 +3,6 @@
 
 namespace clice {
 
-Server::Server() : indexer(database, config::index) {}
-
-async::Task<> Server::onReceive(json::Value value) {
-    auto object = value.getAsObject();
-    if(!object) [[unlikely]] {
-        log::fatal("Invalid LSP message, not an object: {}", value);
-    }
-
-    /// If the json object has an `id`, it's a request,
-    /// which needs a response. Otherwise, it's a notification.
-    auto id = object->get("id");
-
-    llvm::StringRef method;
-    if(auto result = object->getString("method")) {
-        method = *result;
-    } else [[unlikely]] {
-        log::warn("Invalid LSP message, method not found: {}", value);
-        if(id) {
-            co_await response(std::move(*id),
-                              proto::ErrorCodes::InvalidRequest,
-                              "Method not found");
-        }
-        co_return;
-    }
-
-    json::Value params = json::Value(nullptr);
-    if(auto result = object->get("params")) {
-        params = std::move(*result);
-    }
-
-    /// Handle request and notification separately.
-    /// TODO: Record the time of handling request and notification.
-    if(id) {
-        log::info("Handling request: {}", method);
-        auto result = co_await onRequest(method, std::move(params));
-        co_await response(std::move(*id), std::move(result));
-        log::info("Handled request: {}", method);
-    } else {
-        log::info("Handling notification: {}", method);
-        co_await onNotification(method, std::move(params));
-        log::info("Handled notification: {}", method);
-    }
-
-    co_return;
-}
-
-async::Task<json::Value> Server::onRequest(llvm::StringRef method, json::Value value) {
-    if(method == "initialize") {
-        auto result = converter.initialize(std::move(value));
-        config::init(converter.workspace());
-
-        /// FIXME: Use a better way to handle compile commands.
-        for(auto&& dir: config::server.compile_commands_dirs) {
-            database.updateCommands(dir + "/compile_commands.json");
-        }
-
-        indexer.load();
-
-        co_return json::serialize(result);
-    } else if(method == "shutdown") {
-        indexer.save();
-    } else if(method.consume_front("textDocument/")) {
-        co_return co_await onTextDocument(method, std::move(value));
-    } else if(method.consume_front("context/")) {
-        co_return co_await onContext(method, std::move(value));
-    } else if(method.consume_front("index/")) {
-        co_return co_await onIndex(method, std::move(value));
-    }
-
-    co_return json::Value(nullptr);
-}
-
-async::Task<json::Value> Server::onTextDocument(llvm::StringRef method, json::Value value) {
-    using SemanticTokensParams = proto::TextDocumentParams;
-    using FoldingRangeParams = proto::TextDocumentParams;
-    using DocumentLinkParams = proto::TextDocumentParams;
-    using DocumentSymbolParams = proto::TextDocumentParams;
-
-    if(method == "semanticTokens/full") {
-        auto params2 = json::deserialize<SemanticTokensParams>(value);
-        auto path = fs::toPath(params2.textDocument.uri);
-
-        std::string buffer;
-        if(auto index = co_await indexer.getFeatureIndex(buffer, path)) {
-            co_return converter.convert(index->content(), index->semanticTokens());
-        } else {
-            co_return json::Value(nullptr);
-        }
-
-    } else if(method == "foldingRange") {
-        auto params2 = json::deserialize<FoldingRangeParams>(value);
-        auto path = fs::toPath(params2.textDocument.uri);
-
-        std::string buffer;
-        if(auto index = co_await indexer.getFeatureIndex(buffer, path)) {
-            co_return converter.convert(index->content(), index->foldingRanges());
-        } else {
-            co_return json::Value(nullptr);
-        }
-
-    } else if(method == "documentLink") {
-        auto params2 = json::deserialize<DocumentLinkParams>(value);
-        auto path = fs::toPath(params2.textDocument.uri);
-
-        std::string buffer;
-        if(auto index = co_await indexer.getFeatureIndex(buffer, path)) {
-            co_return converter.convert(index->content(), index->documentLinks());
-        } else {
-            co_return json::Value(nullptr);
-        }
-    }
-
-    co_return json::Value(nullptr);
-}
-
-async::Task<json::Value> Server::onContext(llvm::StringRef method, json::Value value) {
-    if(method == "current") {
-        auto param2 = json::deserialize<proto::TextDocumentParams>(value);
-        auto path = fs::toPath(param2.textDocument.uri);
-        auto result = indexer.currentContext(path);
-        co_return result ? json::serialize(*result) : json::Value(nullptr);
-    } else if(method == "switch") {
-        auto params = json::deserialize<proto::HeaderContextSwitchParams>(value);
-        auto header = fs::toPath(params.header);
-        indexer.switchContext(header, params.context);
-    } else if(method == "all") {
-        auto param2 = json::deserialize<proto::TextDocumentParams>(value);
-        auto path = fs::toPath(param2.textDocument.uri);
-        auto result = indexer.allContexts(path);
-        co_return json::serialize(result);
-    } else if(method == "resolve") {
-        co_return json::serialize(
-            indexer.resolveContext(json::deserialize<proto::HeaderContext>(value)));
-    }
-
-    co_return json::Value(nullptr);
-}
-
-async::Task<json::Value> Server::onIndex(llvm::StringRef method, json::Value value) {
-    co_return json::Value(nullptr);
-}
-
-async::Task<> Server::onNotification(llvm::StringRef method, json::Value value) {
-    if(method.consume_front("textDocument/")) {
-        /// co_await onFileOperation(method, std::move(value));
-    }
-
-    if(method.consume_front("index/")) {
-        if(method == "all") {
-            indexer.indexAll();
-        }
-    }
-
-    co_return;
-}
-
 async::Task<> Server::request(llvm::StringRef method, json::Value params) {
     co_await async::net::write(json::Object{
         {"jsonrpc", "2.0"            },
@@ -209,6 +53,82 @@ async::Task<> Server::registerCapacity(llvm::StringRef id,
                               {"registerOptions", std::move(registerOptions)},
                           }}},
     });
+}
+
+Server::Server() : indexer(database, config::index) {
+    onRequests.try_emplace("initialize", &Server::onInitialize);
+    onNotifications.try_emplace("textDocument/didOpen", &Server::onDidOpen);
+    onNotifications.try_emplace("textDocument/didChange", &Server::onDidChange);
+    onNotifications.try_emplace("textDocument/didSave", &Server::onDidSave);
+    onNotifications.try_emplace("textDocument/didClose", &Server::onDidClose);
+}
+
+async::Task<> Server::onReceive(json::Value value) {
+    auto object = value.getAsObject();
+    if(!object) [[unlikely]] {
+        log::fatal("Invalid LSP message, not an object: {}", value);
+    }
+
+    /// If the json object has an `id`, it's a request,
+    /// which needs a response. Otherwise, it's a notification.
+    auto id = object->get("id");
+
+    llvm::StringRef method;
+    if(auto result = object->getString("method")) {
+        method = *result;
+    } else [[unlikely]] {
+        log::warn("Invalid LSP message, method not found: {}", value);
+        if(id) {
+            co_await response(std::move(*id),
+                              proto::ErrorCodes::InvalidRequest,
+                              "Method not found");
+        }
+        co_return;
+    }
+
+    json::Value params = json::Value(nullptr);
+    if(auto result = object->get("params")) {
+        params = std::move(*result);
+    }
+
+    /// Handle request and notification separately.
+    /// TODO: Record the time of handling request and notification.
+    if(id) {
+        log::info("Handling request: {}", method);
+        if(auto iter = onRequests.find(method); iter != onRequests.end()) {
+            auto result = co_await (this->*(iter->second))(std::move(params));
+            co_await response(std::move(*id), std::move(result));
+        }
+        log::info("Handled request: {}", method);
+    } else {
+        log::info("Handling notification: {}", method);
+        if(auto iter = onNotifications.find(method); iter != onNotifications.end()) {
+            co_await (this->*(iter->second))(std::move(params));
+        }
+        log::info("Handled notification: {}", method);
+    }
+
+    co_return;
+}
+
+async::Task<json::Value> Server::onInitialize(json::Value value) {
+    co_return converter.initialize(std::move(value));
+}
+
+async::Task<> Server::onDidOpen(json::Value value) {
+    co_return;
+}
+
+async::Task<> Server::onDidChange(json::Value value) {
+    co_return;
+}
+
+async::Task<> Server::onDidSave(json::Value value) {
+    co_return;
+}
+
+async::Task<> Server::onDidClose(json::Value value) {
+    co_return;
 }
 
 }  // namespace clice
