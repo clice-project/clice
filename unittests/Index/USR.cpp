@@ -1,4 +1,3 @@
-#include "Server/Protocol.h"
 #include "Support/Logger.h"
 #include "Test/CTest.h"
 #include "Index/USR.h"

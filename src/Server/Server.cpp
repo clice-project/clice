@@ -76,38 +76,40 @@ async::Task<json::Value> Server::onRequest(llvm::StringRef method, json::Value v
 }
 
 async::Task<json::Value> Server::onTextDocument(llvm::StringRef method, json::Value value) {
+    using SemanticTokensParams = proto::TextDocumentParams;
+    using FoldingRangeParams = proto::TextDocumentParams;
+    using DocumentLinkParams = proto::TextDocumentParams;
+    using DocumentSymbolParams = proto::TextDocumentParams;
+
     if(method == "semanticTokens/full") {
-        auto params2 = json::deserialize<proto::SemanticTokensParams>(value);
+        auto params2 = json::deserialize<SemanticTokensParams>(value);
         auto path = fs::toPath(params2.textDocument.uri);
 
         std::string buffer;
         if(auto index = co_await indexer.getFeatureIndex(buffer, path)) {
-            co_return json::serialize(
-                converter.transform(index->content(), index->semanticTokens()));
+            co_return converter.convert(index->content(), index->semanticTokens());
         } else {
             co_return json::Value(nullptr);
         }
 
     } else if(method == "foldingRange") {
-        auto params2 = json::deserialize<proto::FoldingRangeParams>(value);
+        auto params2 = json::deserialize<FoldingRangeParams>(value);
         auto path = fs::toPath(params2.textDocument.uri);
 
         std::string buffer;
         if(auto index = co_await indexer.getFeatureIndex(buffer, path)) {
-            co_return json::serialize(
-                converter.transform(index->content(), index->foldingRanges()));
+            co_return converter.convert(index->content(), index->foldingRanges());
         } else {
             co_return json::Value(nullptr);
         }
 
     } else if(method == "documentLink") {
-        auto params2 = json::deserialize<proto::DocumentLinkParams>(value);
+        auto params2 = json::deserialize<DocumentLinkParams>(value);
         auto path = fs::toPath(params2.textDocument.uri);
 
         std::string buffer;
         if(auto index = co_await indexer.getFeatureIndex(buffer, path)) {
-            co_return json::serialize(
-                converter.transform(index->content(), index->documentLinks()));
+            co_return converter.convert(index->content(), index->documentLinks());
         } else {
             co_return json::Value(nullptr);
         }
@@ -144,6 +146,10 @@ async::Task<json::Value> Server::onIndex(llvm::StringRef method, json::Value val
 }
 
 async::Task<> Server::onNotification(llvm::StringRef method, json::Value value) {
+    if(method.consume_front("textDocument/")) {
+        /// co_await onFileOperation(method, std::move(value));
+    }
+
     if(method.consume_front("index/")) {
         if(method == "all") {
             indexer.indexAll();

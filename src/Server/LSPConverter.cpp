@@ -65,7 +65,7 @@ bool iterateCodepoints(llvm::StringRef content, const Callback& callback) {
 
 /// Convert a proto::Position to a file offset in the content with the specified encoding kind.
 std::uint32_t toOffset(llvm::StringRef content,
-                       proto::PositionEncodingKind kind,
+                       PositionEncodingKind kind,
                        proto::Position position) {
     std::uint32_t offset = 0;
     for(auto i = 0; i < position.line; i++) {
@@ -80,13 +80,13 @@ std::uint32_t toOffset(llvm::StringRef content,
     content = content.take_until([](char c) { return c == '\n'; });
     assert(position.character <= content.size() && "Character value is out of range");
 
-    if(kind == proto::PositionEncodingKind::UTF8) {
+    if(kind == PositionEncodingKind::UTF8) {
         offset += position.character;
         return offset;
     }
 
-    if(kind == proto::PositionEncodingKind::UTF16) {
-        iterateCodepoints(content, [&](size_t utf8Length, size_t utf16Length) {
+    if(kind == PositionEncodingKind::UTF16) {
+        iterateCodepoints(content, [&](std::uint32_t utf8Length, std::uint32_t utf16Length) {
             assert(position.character >= utf16Length && "Character value is out of range");
             position.character -= utf16Length;
             offset += utf8Length;
@@ -95,8 +95,8 @@ std::uint32_t toOffset(llvm::StringRef content,
         return offset;
     }
 
-    if(kind == proto::PositionEncodingKind::UTF32) {
-        iterateCodepoints(content, [&](size_t utf8Length, size_t) {
+    if(kind == PositionEncodingKind::UTF32) {
+        iterateCodepoints(content, [&](std::uint32_t utf8Length, std::uint32_t) {
             assert(position.character >= 1 && "Character value is out of range");
             position.character -= 1;
             offset += utf8Length;
@@ -109,12 +109,12 @@ std::uint32_t toOffset(llvm::StringRef content,
 }
 
 /// Remeasure the length (character count) of the content with the specified encoding kind.
-std::uint32_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kind) {
-    if(kind == proto::PositionEncodingKind::UTF8) {
+std::uint32_t remeasure(llvm::StringRef content, PositionEncodingKind kind) {
+    if(kind == PositionEncodingKind::UTF8) {
         return content.size();
     }
 
-    if(kind == proto::PositionEncodingKind::UTF16) {
+    if(kind == PositionEncodingKind::UTF16) {
         std::uint32_t length = 0;
         iterateCodepoints(content, [&](std::uint32_t, std::uint32_t utf16Length) {
             length += utf16Length;
@@ -123,7 +123,7 @@ std::uint32_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kin
         return length;
     }
 
-    if(kind == proto::PositionEncodingKind::UTF32) {
+    if(kind == PositionEncodingKind::UTF32) {
         std::uint32_t length = 0;
         iterateCodepoints(content, [&](std::uint32_t, std::uint32_t) {
             length += 1;
@@ -137,7 +137,7 @@ std::uint32_t remeasure(llvm::StringRef content, proto::PositionEncodingKind kin
 
 class PositionConverter {
 public:
-    PositionConverter(llvm::StringRef content, proto::PositionEncodingKind encoding) :
+    PositionConverter(llvm::StringRef content, PositionEncodingKind encoding) :
         content(content), encoding(encoding) {}
 
     /// Convert a offset to a proto::Position with given encoding.
@@ -196,7 +196,7 @@ public:
         }
     }
 
-    proto::Position toPosition2(uint32_t offset) {
+    proto::Position lookup(uint32_t offset) {
         auto it = cache.find(offset);
         assert(it != cache.end() && "Offset is not cached");
         return it->second;
@@ -214,51 +214,97 @@ private:
     llvm::DenseMap<std::uint32_t, proto::Position> cache;
 
     llvm::StringRef content;
-    proto::PositionEncodingKind encoding;
+    PositionEncodingKind encoding;
 };
 
 }  // namespace
 
-proto::InitializeResult LSPConverter::initialize(json::Value value) {
-    params = json::deserialize<proto::InitializeParams>(value);
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::Hover& hover) {
+    return json::Value(nullptr);
+}
 
-    proto::InitializeResult result = {};
-    result.serverInfo.name = "clice";
-    result.serverInfo.version = "0.0.1";
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::InlayHints& hints) {
+    return json::Value(nullptr);
+}
 
-    auto& semantictokens = result.capabilities.semanticTokensProvider;
-    for(auto& name: SymbolKind::all()) {
-        std::string type{name};
-        type[0] = std::tolower(type[0]);
-        semantictokens.legend.tokenTypes.emplace_back(std::move(type));
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::FoldingRanges& foldings) {
+    PositionConverter converter(content, encoding());
+    converter.toPositions(foldings, [](auto&& folding) { return folding.range; });
+
+    json::Array result;
+    for(auto&& folding: foldings) {
+        auto [beginOffset, endOffset] = folding.range;
+        auto [beginLine, beginChar] = converter.lookup(beginOffset);
+        auto [endLine, endChar] = converter.lookup(endOffset);
+
+        auto object = json::Object{
+            {"startLine",      beginLine},
+            {"startCharacter", beginChar},
+            {"endLine",        endLine  },
+            {"kind",           "region" },
+        };
+
+        result.push_back(std::move(object));
+    }
+    return result;
+}
+
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::DocumentLinks& links) {
+    PositionConverter converter(content, encoding());
+
+    json::Array result;
+    for(auto& link: links) {
+        proto::Range range{
+            converter.toPosition(link.range.begin),
+            converter.toPosition(link.range.end),
+        };
+
+        auto object = json::Object{
+            /// The range of document link.
+            {"range",  json::serialize(range)},
+            /// Target file URI.
+            {"target", fs::toURI(link.file)  },
+        };
+
+        result.emplace_back(std::move(object));
     }
 
     return result;
 }
 
-llvm::StringRef LSPConverter::workspace() {
-    if(workspacePath.empty()) {
-        workspacePath = fs::toPath(params.workspaceFolders[0].uri);
-    }
-    return workspacePath;
+json::Value LSPConverter::convert(llvm::StringRef content,
+                                  const feature::DocumentSymbols& symbols) {
+    PositionConverter converter(content, encoding());
+
+    struct DocumentSymbol {
+        std::string name;
+        std::string detail;
+        SymbolKind kind;
+        proto::Range range;
+        proto::Range selectionRange;
+        std::vector<DocumentSymbol> children;
+    };
+
+    json::Array result;
+
+    /// TODO: Implementation.
+
+    return result;
 }
 
-proto::SemanticTokens LSPConverter::transform(llvm::StringRef content,
-                                              llvm::ArrayRef<feature::SemanticToken> tokens) {
-    proto::SemanticTokens result;
+json::Value LSPConverter::convert(llvm::StringRef content, const feature::SemanticTokens& tokens) {
+    std::vector<std::uint32_t> groups;
 
     auto addGroup = [&](uint32_t line,
                         uint32_t character,
                         uint32_t length,
                         SymbolKind kind,
                         SymbolModifiers modifiers) {
-        result.data.emplace_back(line);
-        result.data.emplace_back(character);
-        result.data.emplace_back(length);
-        result.data.emplace_back(kind.value());
-
-        /// FIXME:
-        result.data.emplace_back(0);
+        groups.emplace_back(line);
+        groups.emplace_back(character);
+        groups.emplace_back(length);
+        groups.emplace_back(kind.value());
+        groups.emplace_back(0);
     };
 
     PositionConverter converter(content, encoding());
@@ -321,50 +367,99 @@ proto::SemanticTokens LSPConverter::transform(llvm::StringRef content,
         lastChar = beginChar;
     }
 
-    return result;
+    return json::Object{
+        /// The actual tokens.
+        {"data", json::serialize(groups)},
+    };
 }
 
-std::vector<proto::FoldingRange>
-    LSPConverter::transform(llvm::StringRef content,
-                            llvm::ArrayRef<feature::FoldingRange> foldings) {
-    std::vector<proto::FoldingRange> result;
+namespace proto {
 
-    PositionConverter converter(content, encoding());
-    converter.toPositions(foldings, [](auto&& folding) { return folding.range; });
+struct InitializeParams {
+    struct ClientInfo {
+        std::string name;
+        std::string version;
+    } clientInfo;
 
-    for(auto&& folding: foldings) {
-        auto [beginOffset, endOffset] = folding.range;
-        auto [beginLine, beginChar] = converter.toPosition2(beginOffset);
-        auto [endLine, endChar] = converter.toPosition2(endOffset);
+    struct ClientCapabilities {
+        struct General {
+            std::vector<std::string> positionEncodings;
+        } general;
+    } capabilities;
 
-        result.emplace_back(proto::FoldingRange{
-            .startLine = beginLine,
-            .startCharacter = beginChar,
-            .endLine = endLine,
-            /// FIXME: Figure out how to handle end character.
-            .endCharacter = endChar - 1,
-            .kind = proto::FoldingRangeKind::Region,
-            .collapsedText = folding.text,
-        });
+    std::vector<WorkspaceFolder> workspaceFolders;
+};
+
+struct InitializeResult {
+    struct ServerInfo {
+        std::string name;
+        std::string version;
+    } serverInfo;
+
+    struct ServerCapabilities {
+        std::string positionEncoding;
+        TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::Incremental;
+
+        bool declarationProvider = true;
+        bool definitionProvider = true;
+        bool typeDefinitionProvider = true;
+        bool implementationProvider = true;
+        bool callHierarchyProvider = true;
+        bool typeHierarchyProvider = true;
+
+        bool hoverProvider = true;
+        ResolveProvider inlayHintProvider = {true};
+        bool foldingRangeProvider = true;
+        ResolveProvider documentLinkProvider = {false};
+        bool documentSymbolProvider = true;
+        SemanticTokenOptions semanticTokensProvider;
+
+        /// TODO:
+        /// completionProvider
+        /// signatureHelpProvider
+        /// codeLensProvider
+        /// codeActionProvider
+        /// documentFormattingProvider
+        /// documentRangeFormattingProvider
+        /// renameProvider
+        /// diagnosticProvider
+    } capabilities;
+};
+
+}  // namespace proto
+
+json::Value LSPConverter::initialize(json::Value value) {
+    auto params = json::deserialize<proto::InitializeParams>(value);
+
+    auto& encodings = params.capabilities.general.positionEncodings;
+    /// Select the first one encoding if any.
+    if(encodings.empty()) {
+        kind = PositionEncodingKind::UTF16;
+    } else if(encodings[0] == "utf-8") {
+        kind = PositionEncodingKind::UTF8;
+    } else if(encodings[0] == "utf-16") {
+        kind = PositionEncodingKind::UTF16;
+    } else if(encodings[0] == "utf-32") {
+        kind = PositionEncodingKind::UTF32;
     }
 
-    return result;
-}
+    workspacePath = fs::toPath(params.workspaceFolders[0].uri);
 
-std::vector<proto::DocumentLink>
-    LSPConverter::transform(llvm::StringRef content, llvm::ArrayRef<feature::DocumentLink> links) {
-    PositionConverter converter(content, encoding());
+    proto::InitializeResult result{
+        .serverInfo = {"clice", "0.0.1"},
+        .capabilities = {
+                       .positionEncoding = encodings.empty() ? "utf-16" : encodings[0],
+                       }
+    };
 
-    std::vector<proto::DocumentLink> result;
-    for(auto& link: links) {
-        proto::Range range{
-            converter.toPosition(link.range.begin),
-            converter.toPosition(link.range.end),
-        };
-        result.emplace_back(range, fs::toURI(link.file));
+    auto& semanticTokensProvider = result.capabilities.semanticTokensProvider;
+    for(auto name: SymbolKind::all()) {
+        std::string type{name};
+        type[0] = std::tolower(type[0]);
+        semanticTokensProvider.legend.tokenTypes.emplace_back(std::move(type));
     }
 
-    return result;
+    return json::serialize(result);
 }
 
 }  // namespace clice

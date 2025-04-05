@@ -1,50 +1,57 @@
 #pragma once
 
 #include "Config.h"
+#include "Protocol.h"
 #include "Async/Async.h"
 #include "Feature/Hover.h"
 #include "Feature/InlayHint.h"
 #include "Feature/FoldingRange.h"
+#include "Feature/DocumentLink.h"
 #include "Feature/DocumentSymbol.h"
 #include "Feature/SemanticToken.h"
-#include "Feature/DocumentLink.h"
-#include "Server/Protocol.h"
 
 namespace clice {
+
+enum class PositionEncodingKind : std::uint8_t {
+    UTF8 = 0,
+    UTF16,
+    UTF32,
+};
 
 /// Responsible for converting between LSP and internal types.
 class LSPConverter {
 public:
-    using Result = async::Task<json::Value>;
+    json::Value initialize(json::Value value);
 
-    proto::InitializeResult initialize(json::Value value);
-
-    auto encoding() {
-        return params.capabilities.general.positionEncodings[0];
+    PositionEncodingKind encoding() {
+        return kind;
     }
 
-    auto& capabilities() {
-        return params.capabilities;
+    llvm::StringRef workspace() {
+        return workspacePath;
     }
-
-    /// The path of the workspace.
-    llvm::StringRef workspace();
 
 public:
     /// Convert a position into an offset relative to the beginning of the file.
-    uint32_t convert(llvm::StringRef content, proto::Position position);
+    std::uint32_t convert(llvm::StringRef content, proto::Position position);
 
-    proto::SemanticTokens transform(llvm::StringRef content,
-                                    llvm::ArrayRef<feature::SemanticToken> tokens);
+    /// Convert `TextDocumentParams` to file path.
+    std::string convert(proto::TextDocumentParams params);
 
-    std::vector<proto::FoldingRange> transform(llvm::StringRef content,
-                                               llvm::ArrayRef<feature::FoldingRange> foldings);
+    json::Value convert(llvm::StringRef content, const feature::Hover& hover);
 
-    std::vector<proto::DocumentLink> transform(llvm::StringRef content,
-                                               llvm::ArrayRef<feature::DocumentLink> links);
+    json::Value convert(llvm::StringRef content, const feature::InlayHints& hints);
+
+    json::Value convert(llvm::StringRef content, const feature::FoldingRanges& foldings);
+
+    json::Value convert(llvm::StringRef content, const feature::DocumentLinks& links);
+
+    json::Value convert(llvm::StringRef content, const feature::DocumentSymbols& symbols);
+
+    json::Value convert(llvm::StringRef content, const feature::SemanticTokens& tokens);
 
 private:
-    proto::InitializeParams params;
+    PositionEncodingKind kind;
     std::string workspacePath;
 };
 
