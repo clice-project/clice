@@ -12,8 +12,6 @@
 
 namespace clice {
 
-struct InitializeParams;
-
 enum class PositionEncodingKind : std::uint8_t {
     UTF8 = 0,
     UTF16,

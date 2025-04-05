@@ -91,6 +91,12 @@ struct TextDocumentPositionParams {
     Position position;
 };
 
+enum class TextDocumentSyncKind {
+    None = 0,
+    Full = 1,
+    Incremental = 2,
+};
+
 struct WorkspaceFolder {
     /// The associated URI for this workspace folder.
     URI uri;
@@ -159,6 +165,19 @@ struct TextDocumentParams {
 };
 
 enum class SymbolKind {};
+
+struct ResolveProvider {
+    bool resolveProvider;
+};
+
+struct SemanticTokenOptions {
+    struct {
+        std::vector<std::string> tokenTypes;
+        std::vector<std::string> tokenModifiers;
+    } legend;
+
+    bool full = true;
+};
 
 struct HeaderContext {
     /// The path of context file.

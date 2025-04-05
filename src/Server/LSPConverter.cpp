@@ -375,142 +375,89 @@ json::Value LSPConverter::convert(llvm::StringRef content, const feature::Semant
 
 namespace proto {
 
-/// A set of predefined position encoding kinds.
-struct PositionEncodingKind : refl::Enum<PositionEncodingKind, false, std::string_view> {
-    using Enum::Enum;
-
-    constexpr inline static std::string_view UTF8 = "utf-8";
-    constexpr inline static std::string_view UTF16 = "utf-16";
-    constexpr inline static std::string_view UTF32 = "utf-32";
-
-    constexpr inline static std::array All = {UTF8, UTF16, UTF32};
-};
-
-struct ClientCapabilities {
-    /// General client capabilities.
-    struct {
-        /// The position encodings supported by the client. Client and server
-        /// have to agree on the same position encoding to ensure that offsets
-        /// (e.g. character position in a line) are interpreted the same on both
-        /// side.
-        ///
-        /// To keep the protocol backwards compatible the following applies: if
-        /// the value 'utf-16' is missing from the array of position encodings
-        /// servers can assume that the client supports UTF-16. UTF-16 is
-        /// therefore a mandatory encoding.
-        ///
-        /// If omitted it defaults to ['utf-16'].
-        ///
-        /// Implementation considerations: since the conversion from one encoding
-        /// into another requires the content of the file / line the conversion
-        /// is best done where the file is read which is usually on the server
-        /// side.
-        std::vector<PositionEncodingKind> positionEncodings = {PositionEncodingKind::UTF16};
-    } general;
-};
-
 struct InitializeParams {
-    /// Information about the client.
-    struct {
-        /// The name of the client as defined by the client.
+    struct ClientInfo {
         std::string name;
-
-        /// The client's version as defined by the client.
         std::string version;
     } clientInfo;
 
-    /// The capabilities provided by the client (editor or tool).
-    ClientCapabilities capabilities;
+    struct ClientCapabilities {
+        struct General {
+            std::vector<std::string> positionEncodings;
+        } general;
+    } capabilities;
 
-    /// The workspace folders configured in the client when the server starts.
-    /// This property is only available if the client supports workspace folders.
-    /// It can be `null` if the client supports workspace folders but none are
-    /// configured.
     std::vector<WorkspaceFolder> workspaceFolders;
 };
 
-/// Server Capability.
-struct ServerCapabilities {
-    /// The position encoding the server picked from the encodings offered
-    /// by the client via the client capability `general.positionEncodings`.
-    ///
-    /// If the client didn't provide any position encodings the only valid
-    /// value that a server can return is 'utf-16'.
-    ///
-    /// If omitted it defaults to 'utf-16'.
-    PositionEncodingKind positionEncoding = PositionEncodingKind::UTF16;
-
-    /// Defines how text documents are synced. Is either a detailed structure
-    /// defining each notification or for backwards compatibility the
-    /// TextDocumentSyncKind number. If omitted it defaults to
-    /// `TextDocumentSyncKind.None`.
-    /// TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::None;
-
-    /// The server provides go to declaration support.
-    bool declarationProvider = true;
-
-    /// The server provides goto definition support.
-    bool definitionProvider = true;
-
-    /// The server provides goto type definition support.
-    bool typeDefinitionProvider = true;
-
-    /// The server provides goto implementation support.
-    bool implementationProvider = true;
-
-    /// The server provides find references support.
-    bool referencesProvider = true;
-
-    /// The server provides call hierarchy support.
-    bool callHierarchyProvider = true;
-
-    /// The server provides type hierarchy support.
-    bool typeHierarchyProvider = true;
-
-    /// The server provides semantic tokens support.
-    /// SemanticTokensOptions semanticTokensProvider;
-
-    struct DocumentLinkOptions {
-        /// Document links have a resolve provider as well.
-        bool resolveProvider = false;
-    };
-
-    /// The server provides document link support.
-    DocumentLinkOptions documentLinkProvider;
-
-    /// The server provides folding provider support.
-    bool foldingRangeProvider = true;
-};
-
 struct InitializeResult {
-    /// The capabilities the language server provides.
-    ServerCapabilities capabilities;
-
-    /// Information about the server.
-    struct {
-        /// The name of the server as defined by the server.
+    struct ServerInfo {
         std::string name;
-
-        /// The server's version as defined by the server.
         std::string version;
     } serverInfo;
+
+    struct ServerCapabilities {
+        std::string positionEncoding;
+        TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::Incremental;
+
+        bool declarationProvider = true;
+        bool definitionProvider = true;
+        bool typeDefinitionProvider = true;
+        bool implementationProvider = true;
+        bool callHierarchyProvider = true;
+        bool typeHierarchyProvider = true;
+
+        bool hoverProvider = true;
+        ResolveProvider inlayHintProvider = {true};
+        bool foldingRangeProvider = true;
+        ResolveProvider documentLinkProvider = {false};
+        bool documentSymbolProvider = true;
+        SemanticTokenOptions semanticTokensProvider;
+
+        /// TODO:
+        /// completionProvider
+        /// signatureHelpProvider
+        /// codeLensProvider
+        /// codeActionProvider
+        /// documentFormattingProvider
+        /// documentRangeFormattingProvider
+        /// renameProvider
+        /// diagnosticProvider
+    } capabilities;
 };
 
 }  // namespace proto
 
 json::Value LSPConverter::initialize(json::Value value) {
-    /// params = json::deserialize<proto::InitializeParams>(value);
+    auto params = json::deserialize<proto::InitializeParams>(value);
 
-    proto::InitializeResult result = {};
-    result.serverInfo.name = "clice";
-    result.serverInfo.version = "0.0.1";
+    auto& encodings = params.capabilities.general.positionEncodings;
+    /// Select the first one encoding if any.
+    if(encodings.empty()) {
+        kind = PositionEncodingKind::UTF16;
+    } else if(encodings[0] == "utf-8") {
+        kind = PositionEncodingKind::UTF8;
+    } else if(encodings[0] == "utf-16") {
+        kind = PositionEncodingKind::UTF16;
+    } else if(encodings[0] == "utf-32") {
+        kind = PositionEncodingKind::UTF32;
+    }
 
-    // auto& semantictokens = result.capabilities.semanticTokensProvider;
-    // for(auto& name: SymbolKind::all()) {
-    //     std::string type{name};
-    //     type[0] = std::tolower(type[0]);
-    //     semantictokens.legend.tokenTypes.emplace_back(std::move(type));
-    // }
+    workspacePath = fs::toPath(params.workspaceFolders[0].uri);
+
+    proto::InitializeResult result{
+        .serverInfo = {"clice", "0.0.1"},
+        .capabilities = {
+                       .positionEncoding = encodings.empty() ? "utf-16" : encodings[0],
+                       }
+    };
+
+    auto& semanticTokensProvider = result.capabilities.semanticTokensProvider;
+    for(auto name: SymbolKind::all()) {
+        std::string type{name};
+        type[0] = std::tolower(type[0]);
+        semanticTokensProvider.legend.tokenTypes.emplace_back(std::move(type));
+    }
 
     return json::serialize(result);
 }
