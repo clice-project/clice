@@ -68,6 +68,7 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
     for(auto& [file, buffer]: params.buffers) {
         instance->getPreprocessorOpts().addRemappedFile(file, buffer.release());
     }
+    params.buffers.clear();
 
     if(!instance->createTarget()) {
         std::abort();
