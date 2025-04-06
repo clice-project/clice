@@ -62,6 +62,7 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
         params.srcPath = path;
         params.command = scheduler.database.getCommand(path);
         params.content = content;
+        params.bound = bound;
         params.outPath = path::join(config::index.dir, path::filename(path) + ".pch");
 
         PCHInfo info;
@@ -80,7 +81,7 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
         /// Resume waiters on this event.
         openFile.PCHBuiltEvent.set();
 
-        log::warn("Building PCH successfully for {}", path);
+        log::info("Building PCH successfully for {}", path);
     };
 
     openFile = &openFiles[path];

@@ -55,7 +55,7 @@ async::Task<> Server::registerCapacity(llvm::StringRef id,
     });
 }
 
-Server::Server() : indexer(database, config::index) {
+Server::Server() : indexer(database, config::index), scheduler(database) {
     onRequests.try_emplace("initialize", &Server::onInitialize);
     onNotifications.try_emplace("textDocument/didOpen", &Server::onDidOpen);
     onNotifications.try_emplace("textDocument/didChange", &Server::onDidChange);
@@ -112,7 +112,14 @@ async::Task<> Server::onReceive(json::Value value) {
 }
 
 async::Task<json::Value> Server::onInitialize(json::Value value) {
-    co_return converter.initialize(std::move(value));
+    auto result = converter.initialize(std::move(value));
+    config::init(converter.workspace());
+
+    for(auto& dir: config::server.compile_commands_dirs) {
+        database.updateCommands(dir + "/compile_commands.json");
+    }
+
+    co_return result;
 }
 
 async::Task<> Server::onDidOpen(json::Value value) {
@@ -122,9 +129,7 @@ async::Task<> Server::onDidOpen(json::Value value) {
 
     auto params = json::deserialize<DidOpenTextDocumentParams>(value);
     auto path = converter.convert(params.textDocument.uri);
-
-    /// Build PCH for file.
-    /// auto AST = co_await scheduler.build(path, params.textDocument.text);
+    scheduler.addDocument(std::move(path), std::move(params.textDocument.text));
     co_return;
 }
 

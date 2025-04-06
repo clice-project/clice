@@ -34,6 +34,8 @@ struct OpenFile {
 
 class Scheduler {
 public:
+    Scheduler(CompilationDatabase& database) : database(database) {}
+
     /// Add or update a document.
     void addDocument(std::string path, std::string content);
 
@@ -58,7 +60,7 @@ private:
                                                             std::uint32_t column);
 
 private:
-    CompilationDatabase database;
+    CompilationDatabase& database;
 
     /// The task that runs in the thread pool. The number of tasks is fixed,
     /// and we won't attempt to expand the vector, so the references are
