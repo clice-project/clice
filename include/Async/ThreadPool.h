@@ -46,9 +46,15 @@ struct thread_pool : value<Ret>, uv<thread_pool<Work, Ret>, uv_work_t, Ret, int>
 
 }  // namespace awaiter
 
-template <typename Work, typename Ret = decltype(std::declval<Work>()())>
-auto submit(Work&& work) {
-    return awaiter::thread_pool<std::remove_cvref_t<Work>, Ret>{{}, {}, std::forward<Work>(work)};
+template <typename Work, typename Ret = std::invoke_result_t<Work>>
+async::Task<Ret> submit(Work&& work) {
+    using W = std::remove_cvref_t<Work>;
+    auto result = co_await awaiter::thread_pool<W, Ret>{{}, {}, std::forward<Work>(work)};
+    if(!result) {
+        /// Thread pool task should never fails.
+        std::abort();
+    }
+    co_return std::move(*result);
 }
 
 }  // namespace clice::async

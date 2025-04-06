@@ -127,9 +127,9 @@ async::Task<> IncludeGraph::index(llvm::StringRef file, CompilationDatabase& dat
     llvm::DenseMap<clang::FileID, uint32_t> files;
 
     /// Otherwise, we need to update all header contexts.
-    addContexts(**info, tu, files);
+    addContexts(*info, tu, files);
 
-    co_await updateIndices(**info, tu, files);
+    co_await updateIndices(*info, tu, files);
 }
 
 std::string IncludeGraph::getIndexPath(llvm::StringRef file) {
@@ -271,7 +271,7 @@ async::Task<> IncludeGraph::updateIndices(ASTInfo& info,
 
     auto& SM = info.srcMgr();
 
-    for(auto& [fid, index]: *indices) {
+    for(auto& [fid, index]: indices) {
         if(fid == SM.getMainFileID()) {
             if(tu->indexPath.empty()) {
                 tu->indexPath = getIndexPath(tu->srcPath);
