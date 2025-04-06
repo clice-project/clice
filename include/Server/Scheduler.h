@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Async/Async.h"
+#include "Compiler/AST.h"
 #include "Compiler/Module.h"
 #include "Compiler/Command.h"
 #include "Compiler/Preamble.h"
@@ -9,14 +10,40 @@
 
 namespace clice {
 
+struct OpenFile {
+    /// The file version, every edition will increase it.
+    std::uint32_t version = 0;
+
+    /// The file content.
+    std::string content;
+
+    /// We build PCH for every opened file.
+    std::optional<PCHInfo> PCH;
+    async::Task<> PCHBuild;
+    async::Event PCHBuiltEvent;
+
+    /// For each opened file, we would like to build an AST for it.
+    std::shared_ptr<ASTInfo> AST;
+    async::Task<> ASTBuild;
+    async::Event ASTBuiltEvent;
+
+    /// For header with context, it may have multiple ASTs, use
+    /// an chain to store them.
+    std::unique_ptr<OpenFile> next;
+};
+
 class Scheduler {
 public:
-    /// Build the given source file with given content. If there is not
-    /// preamble for it, build the preamble first.
-    async::Task<ASTInfo> build(llvm::StringRef file, llvm::StringRef content);
+    void addDocument(std::string file, std::string content);
 
-    /// Build the given source directly without preamble.
-    async::Task<ASTInfo> build(llvm::StringRef file);
+    void closeDocument(std::string file);
+
+private:
+    async::Task<bool> checkPCHUpdate(llvm::StringRef file, llvm::StringRef preamble);
+
+    async::Task<> buildPCH(std::string file, std::string preamble);
+
+    async::Task<> buildAST(std::string file, std::string content);
 
     async::Task<feature::CodeCompletionResult> codeCompletion(llvm::StringRef file,
                                                               llvm::StringRef content,
@@ -29,30 +56,14 @@ public:
                                                             std::uint32_t column);
 
 private:
-    enum class TaskKind : std::uint8_t {
-        Preprocess,
-        BuildPCM,
-        BuildPCH,
-        Completion,
-        BuildAST,
-        ConsumeAST,
-        BackgroundIndex,
-    };
-
-    struct Task {
-        TaskKind kind;
-        async::Task<> handle;
-    };
-
     CompilationDatabase database;
 
-    std::vector<Task> tasks;
+    /// The task that runs in the thread pool. The number of tasks is fixed,
+    /// and we won't attempt to expand the vector, so the references are
+    /// guaranteed to remain valid.
+    std::vector<async::Task<>> running;
 
-    /// All built PCHs.
-    llvm::StringMap<PCHInfo> PCHs;
-
-    /// All built PCMs.
-    llvm::StringMap<PCMInfo> PCMs;
+    llvm::StringMap<OpenFile> files;
 };
 
 }  // namespace clice

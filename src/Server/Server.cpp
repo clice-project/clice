@@ -124,7 +124,7 @@ async::Task<> Server::onDidOpen(json::Value value) {
     auto path = converter.convert(params.textDocument.uri);
 
     /// Build PCH for file.
-    scheduler.build(path, params.textDocument.text);
+    /// auto AST = co_await scheduler.build(path, params.textDocument.text);
     co_return;
 }
 
