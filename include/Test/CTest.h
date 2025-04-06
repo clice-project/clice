@@ -29,7 +29,7 @@ public:
     }
 
     void addFile(llvm::StringRef name, llvm::StringRef content) {
-        params.remappedFiles.emplace_back(name, annoate(content));
+        params.addRemappedFile(name, annoate(content));
     }
 
     llvm::StringRef annoate(llvm::StringRef content) {

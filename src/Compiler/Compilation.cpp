@@ -56,6 +56,7 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
 
     assert(!instance->getPreprocessorOpts().RetainRemappedFileBuffers &&
            "RetainRemappedFileBuffers should be false");
+
     if(!params.content.empty()) {
         instance->getPreprocessorOpts().addRemappedFile(
             params.srcPath,
@@ -63,10 +64,9 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
                 .release());
     }
 
-    for(auto& [file, content]: params.remappedFiles) {
-        instance->getPreprocessorOpts().addRemappedFile(
-            file,
-            llvm::MemoryBuffer::getMemBufferCopy(content, file).release());
+    /// Add all remapped file.
+    for(auto& [file, buffer]: params.buffers) {
+        instance->getPreprocessorOpts().addRemappedFile(file, buffer.release());
     }
 
     if(!instance->createTarget()) {

@@ -15,7 +15,7 @@ PCMInfo buildPCM(llvm::StringRef file, llvm::StringRef code) {
     params.srcPath = file;
     params.outPath = outPath;
     params.command = "clang++ -std=c++20 -x c++ " + file.str();
-    params.remappedFiles.emplace_back("./test.h", "export int foo2();");
+    params.addRemappedFile("./test.h", "export int foo2();");
 
     PCMInfo pcm;
     if(!compile(params, pcm)) {
@@ -31,7 +31,7 @@ ModuleInfo scan(llvm::StringRef content) {
     params.content = content;
     params.srcPath = "main.ixx";
     params.command = "clang++ -std=c++20 -x c++ main.ixx";
-    params.remappedFiles.emplace_back("./test.h", "export module A");
+    params.addRemappedFile("./test.h", "export module A");
     auto info = scanModule(params);
     if(!info) {
         llvm::errs() << "Failed to scan module\n";
@@ -154,4 +154,4 @@ export module B;
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing

@@ -73,7 +73,7 @@ int x = foo();
     params.bound = computePreambleBound(content);
 
     llvm::SmallString<128> path;
-    params.remappedFiles.emplace_back(deps[0], test);
+    params.addRemappedFile(deps[0], test);
 
     /// Build PCH.
     PCHInfo out;
@@ -189,7 +189,7 @@ export int x = foo();
     params.bound = computePreambleBound(content);
 
     llvm::SmallString<128> path;
-    params.remappedFiles.emplace_back(deps[0], test);
+    params.addRemappedFile(deps[0], test);
 
     /// Build PCH.
     PCHInfo out;
