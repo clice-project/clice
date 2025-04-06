@@ -34,12 +34,14 @@ struct OpenFile {
 
 class Scheduler {
 public:
-    void addDocument(std::string file, std::string content);
+    /// Add or update a document.
+    void addDocument(std::string path, std::string content);
 
-    void closeDocument(std::string file);
+    /// Close a document.
+    void closeDocument(std::string path);
 
 private:
-    async::Task<bool> checkPCHUpdate(llvm::StringRef file, llvm::StringRef preamble);
+    async::Task<bool> isPCHOutdated(llvm::StringRef file, llvm::StringRef preamble);
 
     async::Task<> buildPCH(std::string file, std::string preamble);
 
@@ -63,7 +65,7 @@ private:
     /// guaranteed to remain valid.
     std::vector<async::Task<>> running;
 
-    llvm::StringMap<OpenFile> files;
+    llvm::StringMap<OpenFile> openFiles;
 };
 
 }  // namespace clice
