@@ -1,13 +1,18 @@
 #include "Server/Config.h"
 #include "Server/Scheduler.h"
+#include "Server/LSPConverter.h"
 #include "Support/Logger.h"
 #include "Support/FileSystem.h"
+#include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
 
 namespace clice {
 
 void Scheduler::addDocument(std::string path, std::string content) {
-    auto& task = openFiles[path].ASTBuild;
+    auto& openFile = openFiles[path];
+    openFile.content = content;
+
+    auto& task = openFile.ASTBuild;
 
     /// If there is already an AST build task, cancel it.
     if(!task.empty()) {
@@ -18,6 +23,19 @@ void Scheduler::addDocument(std::string path, std::string content) {
     /// Create and schedule a new task.
     task = buildAST(std::move(path), std::move(content));
     task.schedule();
+}
+
+async::Task<json::Value> Scheduler::semanticToken(std::string path) {
+    auto openFile = &openFiles[path];
+    auto guard = co_await openFile->ASTBuiltLock.try_lock();
+
+    openFile = &openFiles[path];
+    auto content = openFile->content;
+    auto AST = openFile->AST;
+
+    auto tokens = co_await async::submit([&] { return feature::semanticTokens(*AST); });
+
+    co_return converter.convert(content, tokens);
 }
 
 async::Task<bool> Scheduler::isPCHOutdated(llvm::StringRef path, llvm::StringRef preamble) {
@@ -125,12 +143,15 @@ async::Task<> Scheduler::buildAST(std::string path, std::string content) {
     }
 
     auto& file = openFiles[path];
+
+    /// Try get the lock, the waiter on the lock will be resumed when
+    /// guard is destroyed.
+    auto guard = co_await file.ASTBuiltLock.try_lock();
+
     /// Update built AST info.
     file.AST = std::make_shared<ASTInfo>(std::move(*info));
     /// Dispose the task so that it will destroyed when task complete.
     file.ASTBuild.dispose();
-    /// Resume waiters on this event.
-    file.ASTBuiltEvent.set();
 
     log::info("Building AST successfully for {}", path);
 }

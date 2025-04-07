@@ -3,12 +3,14 @@
 #include "Async/Async.h"
 #include "Compiler/AST.h"
 #include "Compiler/Module.h"
-#include "Compiler/Command.h"
 #include "Compiler/Preamble.h"
 #include "Feature/CodeCompletion.h"
 #include "Feature/SignatureHelp.h"
 
 namespace clice {
+
+class LSPConverter;
+class CompilationDatabase;
 
 struct OpenFile {
     /// The file version, every edition will increase it.
@@ -25,7 +27,7 @@ struct OpenFile {
     /// For each opened file, we would like to build an AST for it.
     std::shared_ptr<ASTInfo> AST;
     async::Task<> ASTBuild;
-    async::Event ASTBuiltEvent;
+    async::Lock ASTBuiltLock;
 
     /// For header with context, it may have multiple ASTs, use
     /// an chain to store them.
@@ -34,13 +36,17 @@ struct OpenFile {
 
 class Scheduler {
 public:
-    Scheduler(CompilationDatabase& database) : database(database) {}
+    Scheduler(LSPConverter& converter, CompilationDatabase& database) :
+        converter(converter), database(database) {}
 
     /// Add or update a document.
     void addDocument(std::string path, std::string content);
 
     /// Close a document.
     void closeDocument(std::string path);
+
+    /// Get the specific AST of given file.
+    async::Task<json::Value> semanticToken(std::string path);
 
 private:
     async::Task<bool> isPCHOutdated(llvm::StringRef file, llvm::StringRef preamble);
@@ -60,6 +66,7 @@ private:
                                                             std::uint32_t column);
 
 private:
+    LSPConverter& converter;
     CompilationDatabase& database;
 
     /// The task that runs in the thread pool. The number of tasks is fixed,

@@ -402,7 +402,7 @@ struct InitializeResult {
 
     struct ServerCapabilities {
         std::string positionEncoding;
-        TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::Incremental;
+        TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::Full;
 
         bool declarationProvider = true;
         bool definitionProvider = true;

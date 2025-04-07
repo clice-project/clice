@@ -83,6 +83,13 @@ struct TextDocumentIdentifier {
     DocumentUri uri;
 };
 
+struct VersionedTextDocumentIdentifier {
+    /// The text document's URI.
+    DocumentUri uri;
+
+    std::uint32_t version;
+};
+
 struct TextDocumentPositionParams {
     /// The text document.
     TextDocumentIdentifier textDocument;

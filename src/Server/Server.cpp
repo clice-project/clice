@@ -55,8 +55,9 @@ async::Task<> Server::registerCapacity(llvm::StringRef id,
     });
 }
 
-Server::Server() : indexer(database, config::index), scheduler(database) {
+Server::Server() : indexer(database, config::index), scheduler(converter, database) {
     onRequests.try_emplace("initialize", &Server::onInitialize);
+    onRequests.try_emplace("textDocument/semanticTokens/full", &Server::onSemanticToken);
     onNotifications.try_emplace("textDocument/didOpen", &Server::onDidOpen);
     onNotifications.try_emplace("textDocument/didChange", &Server::onDidChange);
     onNotifications.try_emplace("textDocument/didSave", &Server::onDidSave);
@@ -134,6 +135,20 @@ async::Task<> Server::onDidOpen(json::Value value) {
 }
 
 async::Task<> Server::onDidChange(json::Value value) {
+    struct DidChangeTextDocumentParams {
+        proto::VersionedTextDocumentIdentifier textDocument;
+
+        struct TextDocumentContentChangeEvent {
+            std::string text;
+        };
+
+        std::vector<TextDocumentContentChangeEvent> contentChanges;
+    };
+
+    auto params = json::deserialize<DidChangeTextDocumentParams>(value);
+    auto path = converter.convert(params.textDocument.uri);
+    scheduler.addDocument(std::move(path), std::move(params.contentChanges[0].text));
+
     co_return;
 }
 
@@ -143,6 +158,16 @@ async::Task<> Server::onDidSave(json::Value value) {
 
 async::Task<> Server::onDidClose(json::Value value) {
     co_return;
+}
+
+async::Task<json::Value> Server::onSemanticToken(json::Value value) {
+    struct SemanticTokensParams {
+        proto::TextDocumentIdentifier textDocument;
+    };
+
+    auto params = json::deserialize<SemanticTokensParams>(value);
+    auto path = converter.convert(params.textDocument.uri);
+    co_return co_await scheduler.semanticToken(std::move(path));
 }
 
 }  // namespace clice
