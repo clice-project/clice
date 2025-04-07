@@ -32,11 +32,13 @@ public:
     }
 
 public:
+    /// Convert URI to file path with path mapping.
+    std::string convert(llvm::StringRef URI);
+
     /// Convert a position into an offset relative to the beginning of the file.
     std::uint32_t convert(llvm::StringRef content, proto::Position position);
 
-    /// Convert URI to file path with path mapping.
-    std::string convert(llvm::StringRef URI);
+    proto::Position convert(llvm::StringRef content, std::uint32_t offset);
 
     json::Value convert(llvm::StringRef content, const feature::Hover& hover);
 

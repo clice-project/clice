@@ -170,4 +170,14 @@ async::Task<json::Value> Server::onSemanticToken(json::Value value) {
     co_return co_await scheduler.semanticToken(std::move(path));
 }
 
+async::Task<json::Value> Server::onCodeCompletion(json::Value value) {
+    using CompletionParams = proto::TextDocumentPositionParams;
+    auto params = json::deserialize<CompletionParams>(value);
+
+    auto path = converter.convert(params.textDocument.uri);
+    auto content = scheduler.getDocumentContent(path);
+    auto offset = converter.convert(content, params.position);
+    co_return co_await scheduler.completion(std::move(path), offset);
+}
+
 }  // namespace clice

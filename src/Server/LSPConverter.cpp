@@ -219,6 +219,15 @@ private:
 
 }  // namespace
 
+std::uint32_t LSPConverter::convert(llvm::StringRef content, proto::Position position) {
+    return toOffset(content, encoding(), position);
+}
+
+proto::Position LSPConverter::convert(llvm::StringRef content, std::uint32_t offset) {
+    PositionConverter converter(content, encoding());
+    return converter.toPosition(offset);
+}
+
 std::string LSPConverter::convert(llvm::StringRef URI) {
     return fs::toPath(URI);
 }

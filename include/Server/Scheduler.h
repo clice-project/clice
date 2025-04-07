@@ -4,8 +4,6 @@
 #include "Compiler/AST.h"
 #include "Compiler/Module.h"
 #include "Compiler/Preamble.h"
-#include "Feature/CodeCompletion.h"
-#include "Feature/SignatureHelp.h"
 
 namespace clice {
 
@@ -45,8 +43,12 @@ public:
     /// Close a document.
     void closeDocument(std::string path);
 
+    llvm::StringRef getDocumentContent(llvm::StringRef path);
+
     /// Get the specific AST of given file.
     async::Task<json::Value> semanticToken(std::string path);
+
+    async::Task<json::Value> completion(std::string path, std::uint32_t offset);
 
 private:
     async::Task<bool> isPCHOutdated(llvm::StringRef file, llvm::StringRef preamble);
@@ -54,16 +56,6 @@ private:
     async::Task<> buildPCH(std::string file, std::string preamble);
 
     async::Task<> buildAST(std::string file, std::string content);
-
-    async::Task<feature::CodeCompletionResult> codeCompletion(llvm::StringRef file,
-                                                              llvm::StringRef content,
-                                                              std::uint32_t line,
-                                                              std::uint32_t column);
-
-    async::Task<feature::SignatureHelpResult> signatureHelp(llvm::StringRef file,
-                                                            llvm::StringRef content,
-                                                            std::uint32_t line,
-                                                            std::uint32_t column);
 
 private:
     LSPConverter& converter;

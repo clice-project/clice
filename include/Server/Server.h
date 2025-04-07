@@ -46,6 +46,8 @@ private:
 
     async::Task<json::Value> onSemanticToken(json::Value value);
 
+    async::Task<json::Value> onCodeCompletion(json::Value value);
+
 private:
     std::uint32_t id = 0;
     Indexer indexer;

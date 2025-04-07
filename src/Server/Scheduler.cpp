@@ -25,6 +25,10 @@ void Scheduler::addDocument(std::string path, std::string content) {
     task.schedule();
 }
 
+llvm::StringRef Scheduler::getDocumentContent(llvm::StringRef path) {
+    return openFiles[path].content;
+}
+
 async::Task<json::Value> Scheduler::semanticToken(std::string path) {
     auto openFile = &openFiles[path];
     auto guard = co_await openFile->ASTBuiltLock.try_lock();
@@ -36,6 +40,19 @@ async::Task<json::Value> Scheduler::semanticToken(std::string path) {
     auto tokens = co_await async::submit([&] { return feature::semanticTokens(*AST); });
 
     co_return converter.convert(content, tokens);
+}
+
+async::Task<json::Value> Scheduler::completion(std::string path, std::uint32_t offset) {
+    /// Wait for PCH building.
+    auto& openFile = openFiles[path];
+    if(!openFile.PCHBuild.empty()) {
+        co_await openFile.PCHBuiltEvent;
+    }
+
+    /// Set compilation params ... .
+    CompilationParams params;
+
+    /// async::submit([&] { return feature::codeCompletion(params, {}); });
 }
 
 async::Task<bool> Scheduler::isPCHOutdated(llvm::StringRef path, llvm::StringRef preamble) {
@@ -154,22 +171,6 @@ async::Task<> Scheduler::buildAST(std::string path, std::string content) {
     file.ASTBuild.dispose();
 
     log::info("Building AST successfully for {}", path);
-}
-
-async::Task<feature::CodeCompletionResult> Scheduler::codeCompletion(llvm::StringRef path,
-                                                                     llvm::StringRef content,
-                                                                     std::uint32_t line,
-                                                                     std::uint32_t column) {
-    /// Wait for PCH building.
-    auto& openFile = openFiles[path];
-    if(!openFile.PCHBuild.empty()) {
-        co_await openFile.PCHBuiltEvent;
-    }
-
-    /// Set compilation params ... .
-    CompilationParams params;
-
-    co_return co_await async::submit([&] { return feature::codeCompletion(params, {}); });
 }
 
 }  // namespace clice
