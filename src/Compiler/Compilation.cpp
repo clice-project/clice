@@ -175,7 +175,30 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params,
                                             clang::CodeCompleteConsumer* consumer) {
     auto instance = impl::createInstance(params);
 
-    auto& [file, line, column] = params.completion;
+    auto& [file, offset] = params.completion;
+
+    /// The location of clang is 1-1 based.
+    std::uint32_t line = 1;
+    std::uint32_t column = 1;
+
+    llvm::StringRef content;
+    if(file == params.srcPath) {
+        content = params.content;
+    } else {
+        auto it = params.buffers.find(file);
+        assert(it != params.buffers.end() && "completion must occur in remapped file.");
+        content = it->second->getBuffer();
+    }
+
+    for(auto c: content.substr(0, offset)) {
+        if(c == '\n') {
+            line += 1;
+            column = 1;
+            continue;
+        }
+        column += 1;
+    }
+
     /// Set options to run code completion.
     instance->getFrontendOpts().CodeCompletionAt.FileName = std::move(file);
     instance->getFrontendOpts().CodeCompletionAt.Line = line;

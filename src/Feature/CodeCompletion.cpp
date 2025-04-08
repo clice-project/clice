@@ -1,3 +1,4 @@
+#include "AST/Utility.h"
 #include "AST/SymbolKind.h"
 #include "Compiler/Compilation.h"
 #include "Feature/CodeCompletion.h"
@@ -16,9 +17,9 @@ struct CompletionPrefix {
     // If there is none, begin() == end() == name.begin().
     llvm::StringRef qualifier;
 
-    static CompletionPrefix from(llvm::StringRef content, std::size_t offset) {
+    static CompletionPrefix from(llvm::StringRef content, std::uint32_t offset) {
         assert(offset <= content.size());
-        CompletionPrefix result;
+        CompletionPrefix prefix;
 
         llvm::StringRef rest = content.take_front(offset);
 
@@ -28,7 +29,7 @@ struct CompletionPrefix {
             rest = rest.drop_back();
         }
 
-        result.name = content.slice(rest.size(), offset);
+        prefix.name = content.slice(rest.size(), offset);
 
         // Consume qualifiers.
         while(rest.consume_back("::") && !rest.ends_with(":")) {
@@ -38,65 +39,93 @@ struct CompletionPrefix {
             }
         }
 
-        result.qualifier = content.slice(rest.size(), result.name.begin() - content.begin());
-        return result;
+        prefix.qualifier = content.slice(rest.size(), prefix.name.begin() - content.begin());
+        return prefix;
     }
 };
 
 class CodeCompletionCollector final : public clang::CodeCompleteConsumer {
 public:
-    CodeCompletionCollector(std::vector<CodeCompletionItem>& completions) :
-        clang::CodeCompleteConsumer({}), completions(completions),
-        allocator(new clang::GlobalCodeCompletionAllocator()), info(allocator) {}
+    CodeCompletionCollector(std::uint32_t offset) :
+        clang::CodeCompleteConsumer({}), offset(offset),
+        info(std::make_shared<clang::GlobalCodeCompletionAllocator>()) {}
+
+    CompletionItem processCandidate(clang::CodeCompletionResult& candidate) {
+        CompletionItem item;
+
+        switch(candidate.Kind) {
+            case clang::CodeCompletionResult::RK_Keyword: {
+                item.label = candidate.Keyword;
+                item.kind = CompletionItemKind::Keyword;
+                break;
+            }
+            case clang::CodeCompletionResult::RK_Pattern: {
+                item.label = candidate.Pattern->getAsString();
+                item.kind = CompletionItemKind::Snippet;
+                break;
+            }
+            case clang::CodeCompletionResult::RK_Macro: {
+                item.label = candidate.Macro->getName();
+                item.kind = CompletionItemKind::Unit;
+                break;
+            }
+            case clang::CodeCompletionResult::RK_Declaration: {
+                auto decl = candidate.Declaration;
+                item.label = getDeclName(decl);
+                item.kind = CompletionItemKind::Function;
+                break;
+            }
+        }
+
+        item.deprecated = false;
+        item.edit.text = item.label;
+        item.edit.range = {
+            offset,
+            static_cast<uint32_t>(offset + item.label.size()),
+        };
+
+        return item;
+    }
 
     void ProcessCodeCompleteResults(clang::Sema& sema,
                                     clang::CodeCompletionContext context,
                                     clang::CodeCompletionResult* candidates,
                                     unsigned count) final {
         for(auto& candidate: llvm::make_range(candidates, candidates + count)) {
-            switch(candidate.Kind) {
-                case clang::CodeCompletionResult::RK_Declaration: {
-                    break;
-                }
-                case clang::CodeCompletionResult::RK_Keyword: {
-                    break;
-                }
-                case clang::CodeCompletionResult::RK_Macro: {
-                    break;
-                }
-                case clang::CodeCompletionResult::RK_Pattern: {
-                    break;
-                }
-            }
-
-            println("{}", refl::enum_name(candidate.Kind));
+            completions.emplace_back(processCandidate(candidate));
         }
     }
 
     clang::CodeCompletionAllocator& getAllocator() final {
-        return *allocator;
+        return info.getAllocator();
     }
 
     clang::CodeCompletionTUInfo& getCodeCompletionTUInfo() final {
         return info;
     }
 
+    auto dump() {
+        return std::move(completions);
+    }
+
 private:
-    std::shared_ptr<clang::GlobalCodeCompletionAllocator> allocator;
+    std::uint32_t offset;
     clang::CodeCompletionTUInfo info;
-    std::vector<CodeCompletionItem>& completions;
+    std::vector<CompletionItem> completions;
 };
 
 }  // namespace
 
-std::vector<CodeCompletionItem> codeCompletion(CompilationParams& params,
-                                               const config::CodeCompletionOption& option) {
-    std::vector<CodeCompletionItem> completions;
-    auto consumer = new CodeCompletionCollector(completions);
+std::vector<CompletionItem> codeCompletion(CompilationParams& params,
+                                           const config::CodeCompletionOption& option) {
+    auto& [file, offset] = params.completion;
+    auto consumer = new CodeCompletionCollector(offset);
     if(auto info = compile(params, consumer)) {
-        for(auto& item: completions) {}
+        return consumer->dump();
+        /// TODO: Handle error here.
+    } else {
+        return {};
     }
-    return completions;
 }
 
 }  // namespace clice::feature

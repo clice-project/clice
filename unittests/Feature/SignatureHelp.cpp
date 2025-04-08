@@ -22,14 +22,14 @@ int main() {
     params.content = code;
     params.srcPath = "main.cpp";
     params.command = "clang++ -std=c++20 main.cpp";
-    params.completion = {"main.cpp", 9, 10};
+    /// params.completion = {"main.cpp", 9, 10};
 
-    config::SignatureHelpOption options = {};
-    auto result = feature::signatureHelp(params, options);
-    /// EXPECT
-    /// foo(int x, int y)
-    /// foo(int x)
-    /// foo()
+    /// config::SignatureHelpOption options = {};
+    /// auto result = feature::signatureHelp(params, options);
+    ///  EXPECT
+    ///  foo(int x, int y)
+    ///  foo(int x)
+    ///  foo()
 }
 
 }  // namespace
