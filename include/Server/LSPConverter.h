@@ -9,6 +9,8 @@
 #include "Feature/DocumentLink.h"
 #include "Feature/DocumentSymbol.h"
 #include "Feature/SemanticToken.h"
+#include "Feature/CodeCompletion.h"
+#include "Feature/SignatureHelp.h"
 
 namespace clice {
 
@@ -51,6 +53,8 @@ public:
     json::Value convert(llvm::StringRef content, const feature::DocumentSymbols& symbols);
 
     json::Value convert(llvm::StringRef content, const feature::SemanticTokens& tokens);
+
+    json::Value convert(llvm::StringRef content, const std::vector<feature::CompletionItem>& items);
 
 private:
     PositionEncodingKind kind;

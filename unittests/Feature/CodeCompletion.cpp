@@ -7,10 +7,16 @@ namespace {
 
 TEST(Feature, CodeCompletion) {
     llvm::StringRef code = R"cpp(
+#include <iostream>
+#include <string>
+#include <vector>
+#include <map>
+///#include <>
 int foo = 2;
 
 int main() {
-    f$(pos)oo = 2;
+    foo = 2;
+    std::vec$(pos)tor
 }
 )cpp";
 
@@ -23,9 +29,9 @@ int main() {
 
     config::CodeCompletionOption options = {};
     auto result = feature::codeCompletion(params, options);
-    for(auto& item: result) {
-        println("kind {} label {}", item.label, refl::enum_name(item.kind));
-    }
+    // for(auto& item: result) {
+    //     println("kind {} label {}", item.label, refl::enum_name(item.kind));
+    // }
 }
 
 }  // namespace

@@ -44,15 +44,26 @@ async::Task<json::Value> Scheduler::semanticToken(std::string path) {
 
 async::Task<json::Value> Scheduler::completion(std::string path, std::uint32_t offset) {
     /// Wait for PCH building.
-    auto& openFile = openFiles[path];
-    if(!openFile.PCHBuild.empty()) {
-        co_await openFile.PCHBuiltEvent;
+    auto openFile = &openFiles[path];
+    if(!openFile->PCHBuild.empty()) {
+        co_await openFile->PCHBuiltEvent;
     }
+
+    openFile = &openFiles[path];
+    auto& PCH = openFile->PCH;
 
     /// Set compilation params ... .
     CompilationParams params;
+    params.command = database.getCommand(path);
+    params.srcPath = path;
+    params.content = openFile->content;
+    params.pch = {PCH->path, PCH->preamble.size()};
+    params.completion = {path, offset};
 
-    /// async::submit([&] { return feature::codeCompletion(params, {}); });
+    auto result = co_await async::submit([&] { return feature::codeCompletion(params, {}); });
+
+    openFile = &openFiles[path];
+    co_return converter.convert(openFile->content, result);
 }
 
 async::Task<bool> Scheduler::isPCHOutdated(llvm::StringRef path, llvm::StringRef preamble) {

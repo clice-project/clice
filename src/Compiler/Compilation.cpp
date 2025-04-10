@@ -227,7 +227,6 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& 
         out.preamble = params.content.substr(0, *params.bound);
         out.command = params.command.str();
         out.deps = info->deps();
-
         return std::move(*info);
     } else {
         return std::unexpected(info.error());

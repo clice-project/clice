@@ -2,6 +2,7 @@
 #include "AST/SymbolKind.h"
 #include "Compiler/Compilation.h"
 #include "Feature/CodeCompletion.h"
+#include "clang/Sema/Sema.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
 
 namespace clice::feature {
@@ -79,18 +80,46 @@ public:
 
         item.deprecated = false;
         item.edit.text = item.label;
-        item.edit.range = {
-            offset,
-            static_cast<uint32_t>(offset + item.label.size()),
-        };
+        item.edit.range = editRange;
 
         return item;
+    }
+
+    void initCompletionInfo(clang::Sema& sema) {
+        if(init) {
+            return;
+        }
+
+        auto& PP = sema.getPreprocessor();
+        auto& SM = sema.getSourceManager();
+        auto loc = PP.getCodeCompletionLoc();
+        auto content = SM.getBufferData(SM.getFileID(loc));
+
+        editRange = {offset, offset};
+
+        /// FIXME: consume the prefix of completion prefix, because we may complete
+        /// full qualified name.
+        assert(editRange.begin > 0);
+
+        while(clang::isAsciiIdentifierContinue(content[editRange.begin - 1])) {
+            editRange.begin -= 1;
+        }
+
+        if(editRange.end < content.size()) {
+            while(clang::isAsciiIdentifierContinue(content[editRange.end])) {
+                editRange.end += 1;
+            }
+        }
+
+        init = true;
     }
 
     void ProcessCodeCompleteResults(clang::Sema& sema,
                                     clang::CodeCompletionContext context,
                                     clang::CodeCompletionResult* candidates,
                                     unsigned count) final {
+        initCompletionInfo(sema);
+
         for(auto& candidate: llvm::make_range(candidates, candidates + count)) {
             completions.emplace_back(processCandidate(candidate));
         }
@@ -109,7 +138,22 @@ public:
     }
 
 private:
+    clang::ASTContext* Ctx;
+    bool init = false;
+    /// TODO:
+    /// 1. 计算 token 边界，思考该怎么计算比较合适
+    /// 比如 std::vec^ 选择 vector => std::vector
+    /// 比如 vec 选择 std::vector => std::vector
+    /// 不仅要考虑前缀，也要考虑 token 后缀的替换
+    /// 之后记得试一下 clion 里面对 prefix 和 suffix 的处理
+    ///
+    /// 2. 如果发现用户的光标正在补全头文件，则可以把该行头文件之
+    /// 前的代码全 substr 掉，然后再在结果上加几行或者 offset，这样
+    /// 可以大大优化补全头文件的速度，毕竟头文件补全只和编译命令有关
+    /// 由于 #include 后面可能跟着宏，所以确保出现 <> 或者 "" 再进行这种
+    /// 优化
     std::uint32_t offset;
+    LocalSourceRange editRange;
     clang::CodeCompletionTUInfo info;
     std::vector<CompletionItem> completions;
 };

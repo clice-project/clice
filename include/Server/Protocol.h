@@ -186,6 +186,11 @@ struct SemanticTokenOptions {
     bool full = true;
 };
 
+struct CompletionOptions {
+    std::vector<llvm::StringRef> triggerCharacters = {".", "<", ">", ":", "\"", "/", "*"};
+    bool resolveProvider = false;
+};
+
 struct HeaderContext {
     /// The path of context file.
     std::string file;

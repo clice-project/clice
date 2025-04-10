@@ -58,6 +58,7 @@ async::Task<> Server::registerCapacity(llvm::StringRef id,
 Server::Server() : indexer(database, config::index), scheduler(converter, database) {
     onRequests.try_emplace("initialize", &Server::onInitialize);
     onRequests.try_emplace("textDocument/semanticTokens/full", &Server::onSemanticToken);
+    onRequests.try_emplace("textDocument/completion", &Server::onCodeCompletion);
     onNotifications.try_emplace("textDocument/didOpen", &Server::onDidOpen);
     onNotifications.try_emplace("textDocument/didChange", &Server::onDidChange);
     onNotifications.try_emplace("textDocument/didSave", &Server::onDidSave);
