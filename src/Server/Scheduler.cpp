@@ -126,6 +126,7 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
         openFile.PCHBuild.dispose();
         /// Resume waiters on this event.
         openFile.PCHBuiltEvent.set();
+        openFile.PCHBuiltEvent.clear();
 
         log::info("Building PCH successfully for {}", path);
     };
