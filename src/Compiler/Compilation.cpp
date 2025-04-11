@@ -56,6 +56,7 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
 
     assert(!instance->getPreprocessorOpts().RetainRemappedFileBuffers &&
            "RetainRemappedFileBuffers should be false");
+
     if(!params.content.empty()) {
         instance->getPreprocessorOpts().addRemappedFile(
             params.srcPath,
@@ -63,11 +64,11 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
                 .release());
     }
 
-    for(auto& [file, content]: params.remappedFiles) {
-        instance->getPreprocessorOpts().addRemappedFile(
-            file,
-            llvm::MemoryBuffer::getMemBufferCopy(content, file).release());
+    /// Add all remapped file.
+    for(auto& [file, buffer]: params.buffers) {
+        instance->getPreprocessorOpts().addRemappedFile(file, buffer.release());
     }
+    params.buffers.clear();
 
     if(!instance->createTarget()) {
         std::abort();
@@ -174,7 +175,30 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params,
                                             clang::CodeCompleteConsumer* consumer) {
     auto instance = impl::createInstance(params);
 
-    auto& [file, line, column] = params.completion;
+    auto& [file, offset] = params.completion;
+
+    /// The location of clang is 1-1 based.
+    std::uint32_t line = 1;
+    std::uint32_t column = 1;
+
+    llvm::StringRef content;
+    if(file == params.srcPath) {
+        content = params.content;
+    } else {
+        auto it = params.buffers.find(file);
+        assert(it != params.buffers.end() && "completion must occur in remapped file.");
+        content = it->second->getBuffer();
+    }
+
+    for(auto c: content.substr(0, offset)) {
+        if(c == '\n') {
+            line += 1;
+            column = 1;
+            continue;
+        }
+        column += 1;
+    }
+
     /// Set options to run code completion.
     instance->getFrontendOpts().CodeCompletionAt.FileName = std::move(file);
     instance->getFrontendOpts().CodeCompletionAt.Line = line;
@@ -203,7 +227,6 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& 
         out.preamble = params.content.substr(0, *params.bound);
         out.command = params.command.str();
         out.deps = info->deps();
-
         return std::move(*info);
     } else {
         return std::unexpected(info.error());

@@ -13,6 +13,9 @@ class ASTInfo;
 struct CompilationParams;
 
 struct PCHInfo {
+    /// The building time.
+    std::int64_t mtime;
+
     /// The path of the output PCH file.
     std::string path;
 

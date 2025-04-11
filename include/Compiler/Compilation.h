@@ -28,17 +28,21 @@ struct CompilationParams {
 
     llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 
-    /// Remapped files. Currently, this is only used for testing.
-    llvm::SmallVector<std::pair<std::string, std::string>> remappedFiles;
-
     /// Information about reuse PCH.
     std::pair<std::string, uint32_t> pch;
 
     /// Information about reuse PCM(name, path).
     llvm::StringMap<std::string> pcms;
 
-    /// Code completion file:line:column.
-    std::tuple<std::string, std::uint32_t, std::uint32_t> completion;
+    /// Code completion file:offset.
+    std::tuple<std::string, std::uint32_t> completion;
+
+    /// The memory buffers for all remapped file.
+    llvm::StringMap<std::unique_ptr<llvm::MemoryBuffer>> buffers;
+
+    void addRemappedFile(llvm::StringRef path, llvm::StringRef content) {
+        buffers.try_emplace(path, llvm::MemoryBuffer::getMemBufferCopy(content));
+    }
 };
 
 namespace impl {

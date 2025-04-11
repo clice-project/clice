@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 
+#include "AST/SourceCode.h"
 #include "llvm/ADT/StringRef.h"
 
 namespace clice {
@@ -17,9 +18,56 @@ struct CodeCompletionOption {};
 
 namespace feature {
 
-struct CodeCompletionItem {};
+enum class CompletionItemKind {
+    None = 0,
+    Text,
+    Method,
+    Function,
+    Constructor,
+    Field,
+    Variable,
+    Class,
+    Interface,
+    Module,
+    Property,
+    Unit,
+    Value,
+    Enum,
+    Keyword,
+    Snippet,
+    Color,
+    File,
+    Reference,
+    Folder,
+    EnumMember,
+    Constant,
+    Struct,
+    Event,
+    Operator,
+    TypeParameter
+};
 
-using CodeCompletionResult = std::vector<CodeCompletionItem>;
+struct CompletionItem {
+    /// The label displayed when user select the item.
+    std::string label;
+
+    std::string detail;
+
+    /// TODO:
+    /// std::string sortText;
+
+    CompletionItemKind kind;
+
+    bool deprecated;
+
+    struct Edit {
+        std::string text;
+
+        LocalSourceRange range;
+    } edit;
+};
+
+using CodeCompletionResult = std::vector<CompletionItem>;
 
 CodeCompletionResult codeCompletion(CompilationParams& params,
                                     const config::CodeCompletionOption& option);

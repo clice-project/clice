@@ -202,6 +202,16 @@ public:
         return it->second;
     }
 
+    proto::Range lookup(LocalSourceRange range) {
+        auto it = cache.find(range.begin);
+        assert(it != cache.end() && "Offset is not cached");
+        auto begin = it->second;
+        it = cache.find(range.end);
+        assert(it != cache.end() && "Offset is not cached");
+        auto end = it->second;
+        return proto::Range{begin, end};
+    }
+
 private:
     std::uint32_t line = 0;
     /// The offset of the last line end.
@@ -218,6 +228,19 @@ private:
 };
 
 }  // namespace
+
+std::uint32_t LSPConverter::convert(llvm::StringRef content, proto::Position position) {
+    return toOffset(content, encoding(), position);
+}
+
+proto::Position LSPConverter::convert(llvm::StringRef content, std::uint32_t offset) {
+    PositionConverter converter(content, encoding());
+    return converter.toPosition(offset);
+}
+
+std::string LSPConverter::convert(llvm::StringRef URI) {
+    return fs::toPath(URI);
+}
 
 json::Value LSPConverter::convert(llvm::StringRef content, const feature::Hover& hover) {
     return json::Value(nullptr);
@@ -373,6 +396,27 @@ json::Value LSPConverter::convert(llvm::StringRef content, const feature::Semant
     };
 }
 
+json::Value LSPConverter::convert(llvm::StringRef content,
+                                  const std::vector<feature::CompletionItem>& items) {
+    PositionConverter converter(content, encoding());
+    converter.toPositions(items, [](auto& item) { return item.edit.range; });
+
+    json::Array result;
+    for(auto& item: items) {
+        json::Object object{
+            {"label",    item.label                 },
+            {"kind",     static_cast<int>(item.kind)},
+            {"textEdit",
+             json::Object{
+                 {"newText", item.edit.text},
+                 {"range", json::serialize(converter.lookup(item.edit.range))},
+             }                                      },
+        };
+        result.emplace_back(std::move(object));
+    }
+    return result;
+}
+
 namespace proto {
 
 struct InitializeParams {
@@ -398,7 +442,7 @@ struct InitializeResult {
 
     struct ServerCapabilities {
         std::string positionEncoding;
-        TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::Incremental;
+        TextDocumentSyncKind textDocumentSync = TextDocumentSyncKind::Full;
 
         bool declarationProvider = true;
         bool definitionProvider = true;
@@ -415,7 +459,7 @@ struct InitializeResult {
         SemanticTokenOptions semanticTokensProvider;
 
         /// TODO:
-        /// completionProvider
+        CompletionOptions completionProvider;
         /// signatureHelpProvider
         /// codeLensProvider
         /// codeActionProvider

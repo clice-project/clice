@@ -9,6 +9,8 @@
 #include "Feature/DocumentLink.h"
 #include "Feature/DocumentSymbol.h"
 #include "Feature/SemanticToken.h"
+#include "Feature/CodeCompletion.h"
+#include "Feature/SignatureHelp.h"
 
 namespace clice {
 
@@ -32,11 +34,13 @@ public:
     }
 
 public:
+    /// Convert URI to file path with path mapping.
+    std::string convert(llvm::StringRef URI);
+
     /// Convert a position into an offset relative to the beginning of the file.
     std::uint32_t convert(llvm::StringRef content, proto::Position position);
 
-    /// Convert `TextDocumentParams` to file path.
-    std::string convert(proto::TextDocumentParams params);
+    proto::Position convert(llvm::StringRef content, std::uint32_t offset);
 
     json::Value convert(llvm::StringRef content, const feature::Hover& hover);
 
@@ -49,6 +53,8 @@ public:
     json::Value convert(llvm::StringRef content, const feature::DocumentSymbols& symbols);
 
     json::Value convert(llvm::StringRef content, const feature::SemanticTokens& tokens);
+
+    json::Value convert(llvm::StringRef content, const std::vector<feature::CompletionItem>& items);
 
 private:
     PositionEncodingKind kind;

@@ -147,7 +147,7 @@ std::string dump(const Object& object) {
         result += is_sequence ? "]" : "}";
         return result;
     } else if constexpr(std::is_enum_v<Object>) {
-        return std::format("{}", refl::enum_name(object));
+        return std::format("\"{}\"", refl::enum_name(object));
     } else if constexpr(refl::reflectable_enum<Object>) {
         return std::format("\"{}\"", object);
     } else if constexpr(refl::reflectable_struct<Object>) {
@@ -168,9 +168,10 @@ std::string dump(const Object& object) {
 
 template <typename Object>
 std::string pretty_dump(const Object& object, std::size_t indent = 2) {
-    auto repr = dump(object);
+    std::string repr = dump(object);
     auto json = json::parse(repr);
     if(!json) {
+        println("{} {}", json.takeError(), repr);
         std::abort();
     }
     llvm::SmallString<128> buffer = {std::format("{{0:{}}}", indent)};
