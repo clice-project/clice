@@ -102,7 +102,7 @@ Readonly means the file is not editable, and LSP requests such as code actions o
 | ---------------- | -------- | -------- |
 | `[rules].header` | `string` | `"auto"` |
 
-Controls how header files are treated. Value could be one of `"auto"`, `"always"` and `"never"`.
+Controls how files are treated. Value could be one of `"auto"`, `"always"` and `"never"`.
 
 - `"auto"`: Attempts to infer the header context first. If no header context is found, the file will be treated as a normal source file.
 - `"always"`: Always treats the file as a header file. If no header context is found, errors will be reported.

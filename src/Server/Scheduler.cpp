@@ -109,6 +109,17 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
         params.command = scheduler.database.getCommand(path);
         params.content = content;
         params.bound = bound;
+
+        /// Make sure out dictionary exists.
+        llvm::StringRef dir = config::index.dir;
+        if(!fs::exists(dir)) {
+            auto error = fs::create_directories(dir);
+            if(error) {
+                log::warn("Build PCH fails, cannot create output dictionary, because {}.", error);
+                co_return;
+            }
+        }
+
         params.outPath = path::join(config::index.dir, path::filename(path) + ".pch");
 
         PCHInfo info;

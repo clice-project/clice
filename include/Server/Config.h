@@ -16,36 +16,64 @@ std::expected<void, std::string> load(llvm::StringRef execute, llvm::StringRef f
 void init(std::string_view workplace);
 
 struct ServerOptions {
-    std::vector<std::string> compile_commands_dirs;
+    /// The dictionary of all compile commands.
+    std::vector<std::string> compile_commands_dirs = {
+        "${workspace}/build",
+    };
 };
 
 struct CacheOptions {
-    std::string dir;
+    /// Directory for storing index files.
+    std::string dir = "${workspace}/.clice/index";
     uint32_t limit = 0;
 };
 
 struct IndexOptions {
-    std::string dir;
+    /// Directory for storing PCH and PCM.
+    std::string dir = "${workspace}/.clice/cache";
+
     bool implicitInstantiation = true;
 };
 
 struct Rule {
-    std::string pattern;
+    /// The glob pattern used to match file.
+    std::vector<std::string> patterns;
+
+    /// The commands to append to the original command list.
     std::vector<std::string> append;
+
+    /// The commands to remove from the original command list.
     std::vector<std::string> remove;
+
+    /// Whether this file is readonly.
     std::string readonly;
+
+    /// Whether this file is treated as header.
     std::string header;
+
+    /// The explicit header context of this file.
     std::vector<std::string> context;
 };
 
+/// The server version.
 extern llvm::StringRef version;
+
 extern llvm::StringRef binary;
+
 extern llvm::StringRef llvm_version;
+
 extern llvm::StringRef workspace;
 
+/// The server option instance.
 extern const ServerOptions& server;
+
+/// The cache option instance.
 extern const CacheOptions& cache;
+
+/// The index option instance.
 extern const IndexOptions& index;
+
+/// The rule instances.
 extern llvm::ArrayRef<Rule> rules;
 
 };  // namespace clice::config
