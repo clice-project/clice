@@ -148,7 +148,6 @@ int main() {
     params.command = "clang++ -std=c++20 main.cpp";
     params.content = content;
     params.outPath = path::join(".", "header2.pch");
-    params.bound.reset();
 
     {
         auto AST = compile(params);
