@@ -27,7 +27,7 @@ struct Contextual {
     /// - Highest bit (bit 31) marks the context as dependent or not.
     ContextType context_mask = 0;
 
-    void set(bool is_dependent) {
+    void setDependent(bool is_dependent) {
         constexpr std::uint32_t mask = 1u << 31;
         is_dependent ? (context_mask |= mask) : (context_mask &= ~mask);
     }
@@ -39,13 +39,17 @@ struct Contextual {
         return context_mask & mask;
     };
 
+    void addContext(std::uint32_t context_id) {
+        context_mask |= (ContextType(1) << context_id);
+    }
+
+    void set(std::uint32_t offset) {
+        context_mask |= offset;
+    }
+
     ContextType value() {
         constexpr std::uint32_t mask = 1u << (8 * sizeof(ContextType) - 1);
         return context_mask & ~mask;
-    }
-
-    void addContext(std::uint32_t context_id) {
-        context_mask |= (ContextType(1) << context_id);
     }
 };
 

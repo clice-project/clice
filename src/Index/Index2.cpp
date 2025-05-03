@@ -200,17 +200,17 @@ void SymbolIndex::merge(this SymbolIndex& self, SymbolIndex& other) {
         }
 
         if(ids.size() == 1) {
+            /// If we already have the same context, use it.
             self.contexts[new_context_ref].context_id = ids[0];
+
+            /// The new context id could be reused for next time.
+            self.erased_context_ids.emplace_back(new_context_id);
         } else if(ids.size() > 1) {
             assert(false && "unexpected error occurs when indexes");
         }
 
         return;
     }
-
-    /// new header context.
-    self.contexts[new_context_ref].context_id = new_context_id;
-    self.max_context_id += 1;
 }
 
 void SymbolIndex::remove(SymbolIndex& other) {
@@ -260,10 +260,22 @@ void SymbolIndex::addOccurrence(LocalSourceRange range,
                                 std::int64_t target_symbol,
                                 bool isDependent) {
     assert(contexts.size() == 1 && "please use merge for multiple contexts");
+    assert(contexts[0].context_id == 0);
+
     auto& targets = occurrences[range];
     Occurrence occurrence;
-    occurrence.set(isDependent);
     occurrence.target_symbol = target_symbol;
+    occurrence.setDependent(isDependent);
+
+    if(isDependent) {
+        occurrence.addContext(0);
+        element_context_id_ref_counts[0] += 1;
+    } else {
+        occurrence.set(independent_context_refs.size());
+        independent_context_refs.emplace_back();
+        independent_context_refs.back().insert(0);
+    }
+
     assert(!targets.contains(occurrence));
     targets.insert(occurrence);
 }

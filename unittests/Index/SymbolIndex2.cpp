@@ -69,7 +69,43 @@ TEST(SymbolIndex2, AddRemoveContext) {
     }
 
     EXPECT_EQ(index.file_count(), 4);
+}
 
+TEST(SymbolIndex2, SymbolInsert) {
+    SymbolIndex index;
+    index.addContext("test.h", 1);
+
+    index.addOccurrence({1, 2}, 1);
+}
+
+TEST(SymbolIndex2, Merge) {
+    SymbolIndex index;
+    index.addContext("test.h", 1);
+
+    index.addOccurrence({1, 2}, 1);
+
+    SymbolIndex index2;
+    index2.addContext("test2.h", 1);
+
+    index2.addOccurrence({1, 2}, 1);
+
+    index.merge(index2);
+
+    EXPECT_EQ(index.header_context_count(), 2);
+    EXPECT_EQ(index.unique_context_count(), 1);
+    EXPECT_EQ(index.file_count(), 2);
+
+
+    SymbolIndex index3;
+    index.addContext("test3.h", 1);
+
+    index.addOccurrence({1, 2}, 2);
+
+    index.merge(index3);
+
+    EXPECT_EQ(index.header_context_count(), 3);
+    EXPECT_EQ(index.unique_context_count(), 2);
+    EXPECT_EQ(index.file_count(), 3);
 }
 
 }  // namespace
