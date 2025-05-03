@@ -97,9 +97,9 @@ TEST(SymbolIndex2, Merge) {
 
 
     SymbolIndex index3;
-    index.addContext("test3.h", 1);
+    index3.addContext("test3.h", 1);
 
-    index.addOccurrence({1, 2}, 2);
+    index3.addOccurrence({1, 2}, 2);
 
     index.merge(index3);
 
