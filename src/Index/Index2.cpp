@@ -245,6 +245,7 @@ void SymbolIndex::update(SymbolIndex& index) {
 }
 
 Symbol& SymbolIndex::getSymbol(std::int64_t symbol_id) {
+    assert(contexts.size() == 1 && "please use merge for multiple contexts");
     if(auto it = symbols.find(symbol_id); it != symbols.end()) {
         return it->second;
     }
@@ -255,10 +256,16 @@ Symbol& SymbolIndex::getSymbol(std::int64_t symbol_id) {
     return it->second;
 }
 
-void SymbolIndex::addOccurrence(LocalSourceRange range, std::int64_t target_symbol) {
+void SymbolIndex::addOccurrence(LocalSourceRange range,
+                                std::int64_t target_symbol,
+                                bool isDependent) {
+    assert(contexts.size() == 1 && "please use merge for multiple contexts");
     auto& targets = occurrences[range];
-    assert(!targets.contains(Occurrence{.target_symbol = target_symbol}));
-    targets.insert(Occurrence{.target_symbol = target_symbol});
+    Occurrence occurrence;
+    occurrence.set(isDependent);
+    occurrence.target_symbol = target_symbol;
+    assert(!targets.contains(occurrence));
+    targets.insert(occurrence);
 }
 
 }  // namespace memory2

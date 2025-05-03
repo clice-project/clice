@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <bitset>
 #include <vector>
 #include <variant>
 
@@ -21,20 +22,25 @@ namespace clice::index::memory2 {
 struct Contextual {
     using ContextType = std::uint32_t;
 
-    constexpr inline static auto mask = ContextType(1) << (8 * sizeof(ContextType) - 1);
-
     /// Bitmask encoding:
     /// - Lower bits [0..30) store the context value.
     /// - Highest bit (bit 31) marks the context as dependent or not.
     ContextType context_mask = 0;
 
+    void set(bool is_dependent) {
+        constexpr std::uint32_t mask = 1u << 31;
+        is_dependent ? (context_mask |= mask) : (context_mask &= ~mask);
+    }
+
     /// Whether this element affects the same context judgement.
     /// i.e. headers that has different elements as different contexts.
     bool isDependent() const {
+        constexpr std::uint32_t mask = 1u << (8 * sizeof(ContextType) - 1);
         return context_mask & mask;
     };
 
     ContextType value() {
+        constexpr std::uint32_t mask = 1u << (8 * sizeof(ContextType) - 1);
         return context_mask & ~mask;
     }
 
@@ -42,6 +48,8 @@ struct Contextual {
         context_mask |= (ContextType(1) << context_id);
     }
 };
+
+static_assert(std::is_trivially_copyable_v<std::bitset<32>>);
 
 struct HeaderContext {
     /// The include offset of this header context.
@@ -97,7 +105,7 @@ public:
 
     Symbol& getSymbol(std::int64_t symbol_id);
 
-    void addOccurrence(LocalSourceRange range, std::int64_t target_symbol);
+    void addOccurrence(LocalSourceRange range, std::int64_t target_symbol, bool isDependent = true);
 
     std::uint32_t unique_context_count() {
         return max_context_id - erased_context_ids.size();
