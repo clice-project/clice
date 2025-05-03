@@ -345,7 +345,6 @@ public:
     }
 
 private:
-    llvm::DenseMap<const void*, uint64_t> symbolIDs;
     llvm::DenseMap<clang::FileID, SymbolIndexBuilder> builders;
 };
 
