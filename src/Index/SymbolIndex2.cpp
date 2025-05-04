@@ -1,10 +1,25 @@
 #include "Index/Index2.h"
 #include "AST/Semantic.h"
+#include "Support/Format.h"
 
 namespace clice::index::memory2 {
 
 class SymbolIndexBuilder : public SemanticVisitor<SymbolIndexBuilder> {
 public:
+    using SemanticVisitor::SemanticVisitor;
+
+    SymbolIndex& getIndex(clang::FileID fid) {
+        if(auto it = indices.find(fid); it != indices.end()) {
+            return *it->second;
+        }
+
+        auto [it, _] = indices.try_emplace(fid, new SymbolIndex());
+        auto& index = *it->second;
+        /// Fix me build include graph here.
+        index.addContext(AST.getFilePath(fid), 0);
+        return index;
+    }
+
     void handleDeclOccurrence(const clang::NamedDecl* decl,
                               RelationKind kind,
                               clang::SourceLocation location) {
@@ -26,10 +41,11 @@ public:
         }
 
         auto [fid, range] = AST.toLocalRange(location);
-        auto& index = indices[fid];
+        auto& index = getIndex(fid);
         auto symbol_id = AST.getSymbolID(decl);
-        /// auto symbol = index.getSymbol(symbol_id);
-        /// index.addOccurrence(range, symbol);
+        auto& symbol = index.getSymbol(symbol_id.hash);
+        symbol.kind = SymbolKind::from(decl);
+        index.addOccurrence(range, symbol_id.hash);
     }
 
     void handleMacroOccurrence(const clang::MacroInfo* def,
@@ -41,31 +57,73 @@ public:
         }
 
         auto [fid, range] = AST.toLocalRange(location);
-        auto& index = indices[fid];
+        auto& index = getIndex(fid);
         auto symbol_id = AST.getSymbolID(def);
-        /// auto symbol = index.getSymbol(symbol_id);
-        /// index.addOccurrence(range, symbol);
-
-        /// If the macro is a definition, set definition range for it.
-        std::uint32_t definitionLoc = std::numeric_limits<std::uint32_t>::max();
+        auto& symbol = index.getSymbol(symbol_id.hash);
+        index.addOccurrence(range, symbol_id.hash);
 
         if(kind & RelationKind::Definition) {
             auto begin = def->getDefinitionLoc();
             auto end = def->getDefinitionEndLoc();
             assert(begin.isFileID() && end.isFileID() && "Invalid location");
-            auto [fid2, range] = AST.toLocalRange(clang::SourceRange(begin, end));
+            auto [fid2, definition_range] = AST.toLocalRange(clang::SourceRange(begin, end));
             assert(fid == fid2 && "Invalid macro definition location");
             /// definitionLoc = builder.getLocation(range);
+
+            index.addRelation(symbol,
+                              Relation{
+                                  .kind = RelationKind::Definition,
+                                  .range = range,
+                                  .definition_range = definition_range,
+                              });
         }
     }
 
     void handleRelation(const clang::NamedDecl* decl,
                         RelationKind kind,
                         const clang::NamedDecl* target,
-                        clang::SourceRange range) {}
+                        clang::SourceRange range) {
+        auto [fid, relationRange] = AST.toLocalExpansionRange(range);
+
+        Relation relation{.kind = kind};
+
+        if(kind.isDeclOrDef()) {
+            auto [fid2, definitionRange] = AST.toLocalExpansionRange(decl->getSourceRange());
+            assert(fid == fid2 && "Invalid definition location");
+            relation.range = relationRange;
+            relation.definition_range = definitionRange;
+        } else if(kind.isReference()) {
+            relation.range = relationRange;
+            relation.target_symbol = 0;
+        } else if(kind.isBetweenSymbol()) {
+            auto symbol_id = AST.getSymbolID(normalize(target));
+            relation.target_symbol = symbol_id.hash;
+        } else if(kind.isCall()) {
+            auto symbol_id = AST.getSymbolID(normalize(target));
+            relation.range = relationRange;
+            relation.target_symbol = symbol_id.hash;
+        } else {
+            std::unreachable();
+        }
+
+        auto& index = getIndex(fid);
+        auto symbol_id = AST.getSymbolID(normalize(decl));
+        auto& symbol = index.getSymbol(symbol_id.hash);
+        index.addRelation(symbol, relation);
+    }
+
+    auto build() {
+        run();
+
+        return std::move(indices);
+    }
 
 private:
-    llvm::DenseMap<clang::FileID, SymbolIndex> indices;
+    llvm::DenseMap<clang::FileID, std::unique_ptr<SymbolIndex>> indices;
 };
+
+index::Shared<std::unique_ptr<SymbolIndex>> SymbolIndex::build(ASTInfo& AST) {
+    return SymbolIndexBuilder(AST, false).build();
+}
 
 }  // namespace clice::index::memory2

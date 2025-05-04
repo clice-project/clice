@@ -6,6 +6,7 @@
 #include <variant>
 
 #include "Contextual.h"
+#include "Shared.h"
 #include "AST/SymbolID.h"
 #include "AST/SymbolKind.h"
 #include "AST/RelationKind.h"
@@ -53,8 +54,6 @@ struct Contextual {
     }
 };
 
-static_assert(std::is_trivially_copyable_v<std::bitset<32>>);
-
 struct HeaderContext {
     /// The include offset of this header context.
     std::uint32_t include;
@@ -99,6 +98,8 @@ public:
     std::tuple<std::uint32_t, std::uint32_t> addContext(llvm::StringRef path,
                                                         std::uint32_t include);
 
+    static index::Shared<std::unique_ptr<SymbolIndex>> build(ASTInfo& AST);
+
     void remove(llvm::StringRef path);
 
     void merge(this SymbolIndex& self, SymbolIndex& index);
@@ -108,6 +109,8 @@ public:
     void update(SymbolIndex& index);
 
     Symbol& getSymbol(std::int64_t symbol_id);
+
+    void addRelation(Symbol& symbol, Relation relation, bool isDependent = true);
 
     void addOccurrence(LocalSourceRange range, std::int64_t target_symbol, bool isDependent = true);
 
@@ -182,11 +185,11 @@ struct llvm::DenseMapInfo<clice::LocalSourceRange> {
     using Range = clice::LocalSourceRange;
 
     inline static Range getEmptyKey() {
-        return Range{std::uint32_t(-1), std::uint32_t(-1)};
+        return Range{std::uint32_t(-1), std::uint32_t(0)};
     }
 
     inline static Range getTombstoneKey() {
-        return Range{std::uint32_t(-2), std::uint32_t(-2)};
+        return Range{std::uint32_t(0), std::uint32_t(-1)};
     }
 
     static unsigned getHashValue(const Range& range) {
@@ -227,7 +230,7 @@ struct llvm::DenseMapInfo<clice::index::memory2::Relation> {
     inline static Relation getEmptyKey() {
         return Relation{
             .kind = clice::RelationKind(),
-            .range = clice::LocalSourceRange{},
+            .range = clice::LocalSourceRange{std::uint32_t(-1), std::uint32_t(0)},
             .target_symbol = 0,
         };
     }
@@ -235,7 +238,7 @@ struct llvm::DenseMapInfo<clice::index::memory2::Relation> {
     inline static Relation getTombstoneKey() {
         return Relation{
             .kind = clice::RelationKind(),
-            .range = clice::LocalSourceRange{},
+            .range = clice::LocalSourceRange{std::uint32_t(0), std::uint32_t(-1)},
             .target_symbol = 0,
         };
     }
@@ -248,7 +251,7 @@ struct llvm::DenseMapInfo<clice::index::memory2::Relation> {
     }
 
     static bool isEqual(const Relation& lhs, const Relation& rhs) {
-        return lhs.kind == rhs.kind && lhs.range == rhs.range && lhs.target_symbol &&
-               rhs.target_symbol;
+        return lhs.kind == rhs.kind && lhs.range == rhs.range &&
+               lhs.target_symbol == rhs.target_symbol;
     }
 };

@@ -1,4 +1,4 @@
-#include "Test/Test.h"
+#include "Test/CTest.h"
 #include "Index/Index2.h"
 
 namespace clice::testing {
@@ -95,7 +95,6 @@ TEST(SymbolIndex2, Merge) {
     EXPECT_EQ(index.unique_context_count(), 1);
     EXPECT_EQ(index.file_count(), 2);
 
-
     SymbolIndex index3;
     index3.addContext("test3.h", 1);
 
@@ -106,6 +105,19 @@ TEST(SymbolIndex2, Merge) {
     EXPECT_EQ(index.header_context_count(), 3);
     EXPECT_EQ(index.unique_context_count(), 2);
     EXPECT_EQ(index.file_count(), 3);
+}
+
+TEST(SymbolIndex2, Build) {
+    llvm::StringRef context = R"(
+#include <iostream>
+)";
+
+    Tester tester;
+    tester.addMain("main.cpp", context);
+    tester.compile();
+
+    auto& AST = *tester.AST;
+    auto indices = SymbolIndex::build(AST);
 }
 
 }  // namespace

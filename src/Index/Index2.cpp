@@ -256,6 +256,24 @@ Symbol& SymbolIndex::getSymbol(std::int64_t symbol_id) {
     return it->second;
 }
 
+void SymbolIndex::addRelation(Symbol& symbol, Relation relation, bool isDependent) {
+    assert(contexts.size() == 1 && "please use merge for multiple contexts");
+    assert(contexts[0].context_id == 0);
+
+    relation.setDependent(isDependent);
+
+    if(isDependent) {
+        relation.addContext(0);
+        element_context_id_ref_counts[0] += 1;
+    } else {
+        relation.set(independent_context_refs.size());
+        independent_context_refs.emplace_back();
+        independent_context_refs.back().insert(0);
+    }
+
+    symbol.relations.insert(relation);
+}
+
 void SymbolIndex::addOccurrence(LocalSourceRange range,
                                 std::int64_t target_symbol,
                                 bool isDependent) {
@@ -276,7 +294,6 @@ void SymbolIndex::addOccurrence(LocalSourceRange range,
         independent_context_refs.back().insert(0);
     }
 
-    assert(!targets.contains(occurrence));
     targets.insert(occurrence);
 }
 
