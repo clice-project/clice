@@ -1,12 +1,15 @@
-#include "Index/Index2.h"
 #include "AST/Semantic.h"
+#include "Index/Index2.h"
+#include "Index/IncludeGraph.h"
 #include "Support/Format.h"
 
 namespace clice::index::memory2 {
 
 class SymbolIndexBuilder : public SemanticVisitor<SymbolIndexBuilder> {
 public:
-    using SemanticVisitor::SemanticVisitor;
+    SymbolIndexBuilder(ASTInfo& AST) :
+        SemanticVisitor(AST, false), graph(IncludeGraph::from(AST)),
+        context_path(AST.getFilePath(SM.getMainFileID())) {}
 
     SymbolIndex& getIndex(clang::FileID fid) {
         if(auto it = indices.find(fid); it != indices.end()) {
@@ -16,7 +19,7 @@ public:
         auto [it, _] = indices.try_emplace(fid, new SymbolIndex());
         auto& index = *it->second;
         /// Fix me build include graph here.
-        index.addContext(AST.getFilePath(fid), 0);
+        index.addContext(context_path, graph.getInclude(fid));
         return index;
     }
 
@@ -60,6 +63,8 @@ public:
         auto& index = getIndex(fid);
         auto symbol_id = AST.getSymbolID(def);
         auto& symbol = index.getSymbol(symbol_id.hash);
+        symbol.kind = SymbolKind::Macro;
+        symbol.name = getTokenSpelling(SM, def->getDefinitionLoc());
         index.addOccurrence(range, symbol_id.hash);
 
         if(kind & RelationKind::Definition) {
@@ -75,6 +80,13 @@ public:
                                   .kind = RelationKind::Definition,
                                   .range = range,
                                   .definition_range = definition_range,
+                              });
+        } else {
+            index.addRelation(symbol,
+                              Relation{
+                                  .kind = RelationKind::Reference,
+                                  .range = range,
+                                  .target_symbol = 0,
                               });
         }
     }
@@ -119,11 +131,13 @@ public:
     }
 
 private:
+    IncludeGraph graph;
+    std::string context_path;
     llvm::DenseMap<clang::FileID, std::unique_ptr<SymbolIndex>> indices;
 };
 
 index::Shared<std::unique_ptr<SymbolIndex>> SymbolIndex::build(ASTInfo& AST) {
-    return SymbolIndexBuilder(AST, false).build();
+    return SymbolIndexBuilder(AST).build();
 }
 
 }  // namespace clice::index::memory2

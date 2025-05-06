@@ -12,6 +12,7 @@ std::tuple<std::uint32_t, std::uint32_t> SymbolIndex::addContext(llvm::StringRef
         context_id = erased_context_ids.front();
         erased_context_ids.pop_front();
         header_context_id_ref_counts[context_id] += 1;
+        element_context_id_ref_counts[context_id] = 0;
     } else {
         /// Create new context id.
         context_id = max_context_id;
@@ -169,6 +170,8 @@ void SymbolIndex::merge(this SymbolIndex& self, SymbolIndex& other) {
                 flag &= ctx.value();
             } else {
                 needResolve = false;
+                ctx.context_mask = 0;
+                ctx.setDependent(true);
             }
 
             ctx.addContext(new_context_id);
@@ -205,6 +208,18 @@ void SymbolIndex::merge(this SymbolIndex& self, SymbolIndex& other) {
 
             /// The new context id could be reused for next time.
             self.erased_context_ids.emplace_back(new_context_id);
+
+            for(auto& [_, symbol]: self.symbols) {
+                for(auto& relation: symbol.relations) {
+                    relation.removeContext(new_context_id);
+                }
+            }
+
+            for(auto& [_, os]: self.occurrences) {
+                for(auto& occurrence: os) {
+                    occurrence.removeContext(new_context_id);
+                }
+            }
         } else if(ids.size() > 1) {
             assert(false && "unexpected error occurs when indexes");
         }
@@ -244,7 +259,7 @@ void SymbolIndex::update(SymbolIndex& index) {
     merge(index);
 }
 
-Symbol& SymbolIndex::getSymbol(std::int64_t symbol_id) {
+Symbol& SymbolIndex::getSymbol(std::uint64_t symbol_id) {
     assert(contexts.size() == 1 && "please use merge for multiple contexts");
     if(auto it = symbols.find(symbol_id); it != symbols.end()) {
         return it->second;

@@ -44,6 +44,10 @@ struct Contextual {
         context_mask |= (ContextType(1) << context_id);
     }
 
+    void removeContext(std::uint32_t context_id) {
+        context_mask &= ~(ContextType(1) << context_id);
+    }
+
     void set(std::uint32_t offset) {
         context_mask |= offset;
     }
@@ -75,7 +79,7 @@ struct Relation : Contextual {
 };
 
 struct Symbol {
-    std::int64_t id;
+    std::uint64_t id;
 
     SymbolKind kind;
 
@@ -85,12 +89,14 @@ struct Symbol {
     /// Whether the symbol is a function local symbol.
     bool is_function_local = false;
 
+    std::string name;
+
     llvm::DenseSet<Relation> relations;
 };
 
 struct Occurrence : Contextual {
     /// Ref symbol.
-    std::int64_t target_symbol;
+    std::uint64_t target_symbol;
 };
 
 class SymbolIndex {
@@ -108,7 +114,7 @@ public:
 
     void update(SymbolIndex& index);
 
-    Symbol& getSymbol(std::int64_t symbol_id);
+    Symbol& getSymbol(std::uint64_t symbol_id);
 
     void addRelation(Symbol& symbol, Relation relation, bool isDependent = true);
 
@@ -167,7 +173,7 @@ public:
     llvm::StringMap<llvm::SmallVector<std::uint32_t, 2>> contexts_table;
 
     /// Map from symbol ID to its stored Symbol object.
-    llvm::DenseMap<std::int64_t, Symbol> symbols;
+    llvm::DenseMap<std::uint64_t, Symbol> symbols;
 
     /// Map from source range to the set of symbol occurrences at that range.
     llvm::DenseMap<LocalSourceRange, llvm::DenseSet<Occurrence>> occurrences;
@@ -204,7 +210,7 @@ struct llvm::DenseMapInfo<clice::LocalSourceRange> {
 template <>
 struct llvm::DenseMapInfo<clice::index::memory2::Occurrence> {
     using Occurrence = clice::index::memory2::Occurrence;
-    using Base = llvm::DenseMapInfo<std::int64_t>;
+    using Base = llvm::DenseMapInfo<std::uint64_t>;
 
     inline static Occurrence getEmptyKey() {
         return Occurrence{.target_symbol = Base::getEmptyKey()};

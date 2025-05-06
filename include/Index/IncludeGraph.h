@@ -42,15 +42,10 @@ struct IncludeGraph {
         return paths[path_ref];
     }
 
-    IncludeLocation getInclude(std::uint32_t include) const {
-        assert(include < locations.size());
-        return locations[include];
-    }
-
-    IncludeLocation getInclude(clang::FileID fid) const {
+    std::uint32_t getInclude(clang::FileID fid) {
         auto it = file_table.find(fid);
         assert(it != file_table.end());
-        return locations[it->second];
+        return it->second;
     }
 };
 
