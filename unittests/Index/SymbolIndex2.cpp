@@ -192,7 +192,7 @@ TEST(SymbolIndex2, Build) {
     std::optional<SymbolIndex> base = {};
 
     llvm::StringRef path =
-        "/home/ykiko/C++/llvm-project/build-debug-install/lib/clang/21/include/stddef.h";
+        "/home/ykiko/C++/llvm-project/build-debug-install/lib/clang/20/include/stddef.h";
 
     for(auto& [fid, index]: indices) {
         if(AST.getFilePath(fid) == path) {
