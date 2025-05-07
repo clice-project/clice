@@ -300,32 +300,28 @@ constexpr inline bool is_optional_v<std::optional<T>> = true;
 template <refl::reflectable_struct T>
 struct Serde<T> {
     template <typename... Serdes>
-    static json::Value serialize(const T& t, Serdes&&... serdes) {
+    static json::Value serialize(const T& t) {
         json::Object object;
         refl::foreach(t, [&]<typename Field>(std::string_view name, const Field& field) {
             if constexpr(is_optional_v<Field>) {
                 if(field) {
-                    object.try_emplace(llvm::StringRef(name),
-                                       json::serialize(*field, std::forward<Serdes>(serdes)...));
+                    object.try_emplace(llvm::StringRef(name), json::serialize(*field));
                 }
             } else {
-                object.try_emplace(llvm::StringRef(name),
-                                   json::serialize(field, std::forward<Serdes>(serdes)...));
+                object.try_emplace(llvm::StringRef(name), json::serialize(field));
             }
         });
         return object;
     }
 
     template <typename... Serdes>
-    static T deserialize(const json::Value& value, Serdes&&... serdes) {
+    static T deserialize(const json::Value& value) {
         T t = {};
         if constexpr(!std::is_empty_v<T>) {
             assert(value.kind() == json::Value::Object && "Expect an object");
             refl::foreach(t, [&](std::string_view name, auto&& member) {
                 if(auto v = value.getAsObject()->get(llvm::StringRef(name))) {
-                    member = json::deserialize<std::remove_cvref_t<decltype(member)>>(
-                        *v,
-                        std::forward<Serdes>(serdes)...);
+                    member = json::deserialize<std::remove_cvref_t<decltype(member)>>(*v);
                 }
             });
         }

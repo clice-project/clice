@@ -56,10 +56,10 @@ llvm::StringRef ASTInfo::getFilePath(clang::FileID fid) {
     auto entry = SM.getFileEntryRefForID(fid);
     assert(entry && "Invalid file entry");
 
-    auto name = entry->getName();
     llvm::SmallString<128> path;
 
     /// Try to get the real path of the file.
+    auto name = entry->getName();
     if(auto error = llvm::sys::fs::real_path(name, path)) {
         /// If failed, use the virtual path.
         path = name;
@@ -72,7 +72,7 @@ llvm::StringRef ASTInfo::getFilePath(clang::FileID fid) {
     memcpy(data, path.data(), size);
     data[size] = '\0';
 
-    auto [it, inserted] = pathCache.try_emplace(fid, data, size);
+    auto [it, inserted] = pathCache.try_emplace(fid, llvm::StringRef(data, size));
     assert(inserted && "File path already exists");
     return it->second;
 }
@@ -131,7 +131,7 @@ index::SymbolID ASTInfo::getSymbolID(const clang::NamedDecl* decl) {
 }
 
 index::SymbolID ASTInfo::getSymbolID(const clang::MacroInfo* macro) {
-    uint64_t hash;
+    std::uint64_t hash;
     auto name = getTokenSpelling(SM, macro->getDefinitionLoc());
     auto iter = symbolHashCache.find(macro);
     if(iter != symbolHashCache.end()) {
