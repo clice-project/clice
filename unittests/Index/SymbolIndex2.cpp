@@ -189,10 +189,10 @@ TEST(SymbolIndex2, Build) {
     auto& AST = *tester.AST;
     auto indices = SymbolIndex::build(AST);
 
-    std::optional<SymbolIndex> base = {};
+    std::optional<SymbolIndex> base = SymbolIndex();
 
     llvm::StringRef path =
-        "/home/ykiko/C++/llvm-project/build-debug-install/lib/clang/20/include/stddef.h";
+        "/home/ykiko/C++/llvm-project/build-debug-install/lib/clang/21/include/stddef.h";
 
     for(auto& [fid, index]: indices) {
         if(AST.getFilePath(fid) == path) {
