@@ -198,7 +198,7 @@ TEST(SymbolIndex2, Build) {
         if(AST.getFilePath(fid) == path) {
             println("{} ---------------------------------------------", index->contexts[0].include);
 
-            dump(*index);
+            /// dump(*index);
 
             if(!base) {
                 base = *std::move(index);
@@ -221,7 +221,7 @@ TEST(SymbolIndex2, Build) {
             base->header_context_count(),
             base->unique_context_count());
 
-    dump(*base);
+    /// dump(*base);
 
     for(auto& context: base->contexts) {
         println("include: {}, context id: {}", context.include, context.context_id);
