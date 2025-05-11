@@ -200,15 +200,15 @@ std::expected<GlobPattern::SubGlobPattern, std::string>
     GlobPattern::SubGlobPattern::create(llvm::StringRef S) {
     using namespace llvm;
     SubGlobPattern Pat;
-    llvm::SmallVector<GlobSegement, 0> GlobSegements;
-    GlobSegement* CurrentGS = &GlobSegements.emplace_back();
+    llvm::SmallVector<GlobSegment, 0> GlobSegments;
+    GlobSegment* CurrentGS = &GlobSegments.emplace_back();
     CurrentGS->Start = 0;
     Pat.Pat.assign(S.begin(), S.end());
     // Parse brackets.
     size_t E = S.size();
     for(size_t I = 0; I < E; ++I) {
         if(!CurrentGS) {
-            CurrentGS = &GlobSegements.emplace_back();
+            CurrentGS = &GlobSegments.emplace_back();
             CurrentGS->Start = I;
         }
         if(S[I] == '[') {
@@ -264,7 +264,7 @@ std::expected<GlobPattern::SubGlobPattern, std::string>
         CurrentGS = nullptr;
     }
 
-    std::swap(Pat.GlobSegements, GlobSegements);
+    std::swap(Pat.GlobSegments, GlobSegments);
     return Pat;
 }
 
@@ -302,7 +302,7 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef Str) const {
 
     // Initialize
     P = SegStart = Pat.data();
-    SegEnd = P + GlobSegements[0].End;
+    SegEnd = P + GlobSegments[0].End;
 
     const char *const SEnd = S + Str.size(), *const SStart = S, *const PStart = P,
                       *const PEnd = P + Pat.size();
@@ -317,7 +317,7 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef Str) const {
     };
 
     llvm::SmallVector<BacktraceStat, 6> BacktraceStack;
-    const size_t SegNum = GlobSegements.size();
+    const size_t SegNum = GlobSegments.size();
 
     while(CurrentGlobSeg < SegNum) {
 
@@ -339,8 +339,8 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef Str) const {
                             if(*P == '/') {
                                 if(CurrentGlobSeg + 1 != SegNum) {
                                     ++CurrentGlobSeg;
-                                    SegStart = PStart + GlobSegements[CurrentGlobSeg].Start;
-                                    SegEnd = PStart + GlobSegements[CurrentGlobSeg].End;
+                                    SegStart = PStart + GlobSegments[CurrentGlobSeg].Start;
+                                    SegEnd = PStart + GlobSegments[CurrentGlobSeg].End;
                                 } else {
                                     return true;
                                 }
@@ -350,14 +350,14 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef Str) const {
 
                         if(P == SegEnd) {
                             if(CurrentGlobSeg + 1 != SegNum) {
-                                // '**' at segement end
+                                // '**' at segment end
                                 ++CurrentGlobSeg;
                                 while(S != SEnd && *S == '/') {
                                     ++S;
                                 }
-                                P = PStart + GlobSegements[CurrentGlobSeg].Start;
+                                P = PStart + GlobSegments[CurrentGlobSeg].Start;
                                 SegStart = P;
-                                SegEnd = PStart + GlobSegements[CurrentGlobSeg].End;
+                                SegEnd = PStart + GlobSegments[CurrentGlobSeg].End;
                             } else {
                                 return true;
                             }
@@ -388,9 +388,9 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef Str) const {
                                 return true;
                             }
                             ++CurrentGlobSeg;
-                            P = PStart + GlobSegements[CurrentGlobSeg].Start;
+                            P = PStart + GlobSegments[CurrentGlobSeg].Start;
                             SegStart = P;
-                            SegEnd = PStart + GlobSegements[CurrentGlobSeg].End;
+                            SegEnd = PStart + GlobSegments[CurrentGlobSeg].End;
                         }
                         BacktraceStack.push_back({.B = B,
                                                   .GlobSeg = CurrentGlobSeg,
@@ -462,10 +462,10 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef Str) const {
                     break;
             }
         } else {
-            // P comes to a segement end
+            // P comes to a segment end
             if(SegEnd != PEnd) {
                 if(WildMode) {
-                    // Step to next segement
+                    // Step to next segment
                     ++CurrentGlobSeg;
                     while(S != SEnd && *S != '/') {
                         ++S;
@@ -474,9 +474,9 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef Str) const {
                         ++S;
                     }
                     if(CurrentGlobSeg < SegNum) {
-                        P = PStart + GlobSegements[CurrentGlobSeg].Start;
+                        P = PStart + GlobSegments[CurrentGlobSeg].Start;
                         SegStart = P;
-                        SegEnd = PStart + GlobSegements[CurrentGlobSeg].End;
+                        SegEnd = PStart + GlobSegments[CurrentGlobSeg].End;
                         continue;
                     } else {
                         return S == SEnd;
@@ -489,11 +489,11 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef Str) const {
                             ++S;
                         }
 
-                        // Step to next segement
+                        // Step to next segment
                         ++CurrentGlobSeg;
-                        P = PStart + GlobSegements[CurrentGlobSeg].Start;
+                        P = PStart + GlobSegments[CurrentGlobSeg].Start;
                         SegStart = P;
-                        SegEnd = PStart + GlobSegements[CurrentGlobSeg].End;
+                        SegEnd = PStart + GlobSegments[CurrentGlobSeg].End;
                         continue;
                     } else {
                         return false;

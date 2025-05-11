@@ -24,7 +24,7 @@ namespace clice {
 ///   (e.g., `example.[!0-9]` to match on `example.a`, `example.b`,
 ///   but not `example.0`)
 ///
-///   Note: Use only `/` for path segement seperator
+///   Note: Use only `/` for path segment seperator
 class GlobPattern {
 public:
     /// \param Pat the pattern to match against
@@ -88,24 +88,24 @@ private:
 
         llvm::SmallVector<Bracket, 0> Brackets;
 
-        // GlobSegement devide patterm into segements by '/'
+        // GlobSegment devide patterm into segments by '/'
         // SubPattern:
         // **include/aaa/bbb/test[0-9].cc
         // ^~~~~~~~~^~~~^~~~^~~~~~~~~~~~~^
         //     1      2   3        4
-        // Devided into 4 segements
+        // Devided into 4 segments
         //
         // SubPattern:
         // **/include/aaa/bbb/test[0-9].h
         // ^~^~~~~~~~^~~~^~~~^~~~~~~~~~~~^
         //  1    2     3   4       5
-        //  Devided into 5 segements
-        struct GlobSegement {
+        //  Devided into 5 segments
+        struct GlobSegment {
             size_t Start;
             size_t End;
         };
 
-        llvm::SmallVector<GlobSegement, 6> GlobSegements;
+        llvm::SmallVector<GlobSegment, 6> GlobSegments;
 
         llvm::SmallVector<char, 0> Pat;
     };
