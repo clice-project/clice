@@ -168,14 +168,14 @@ std::expected<GlobPattern, std::string>
     size_t prefix_size = s.find_first_of("?*[{\\");
     pat.prefix_at_seg_end = false;
     if(prefix_size == std::string::npos) {
-        pat.prefix = s.substr(0, prefix_size);
+        pat.prefix = s.substr(0, prefix_size).str();
         return pat;
     }
     if(prefix_size != 0 && s[prefix_size - 1] == '/') {
         pat.prefix_at_seg_end = true;
         --prefix_size;
     }
-    pat.prefix = s.substr(0, prefix_size);
+    pat.prefix = s.substr(0, prefix_size).str();
     size_t s_size = s.size();
     while(prefix_size < s_size && s[prefix_size] == '/') {
         ++prefix_size;

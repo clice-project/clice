@@ -55,7 +55,7 @@ public:
 
 private:
     /// GlobPattern is seperated into `Prefix + SubGlobPattern`
-    llvm::StringRef prefix;
+    std::string prefix;
 
     /// if prefix contains full path:
     ///
