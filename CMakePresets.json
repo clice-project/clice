@@ -7,11 +7,8 @@
     },
     "configurePresets": [
         {
-            "name": "config-base",
+            "name": "base",
             "hidden": true,
-            "displayName": "base Configuration",
-            "description": "Default build using Ninja generator",
-            "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
             "toolchainFile": "${sourceDir}/cmake/toolchain.cmake",
             "cacheVariables": {
@@ -21,19 +18,49 @@
             }
         },
         {
+            "name": "ninja-base",
+            "hidden": true,
+            "inherits": "base",
+            "generator": "Ninja"
+        },
+        {
+            "name": "mingw-base",
+            "hidden": true,
+            "inherits": "base",
+            "generator": "MinGW Makefiles"
+        },
+        {
             "name": "release",
-            "displayName": "Config Release",
-            "description": "Sets release build type",
-            "inherits": "config-base",
+            "displayName": "Release (Ninja)",
+            "description": "Release build with Ninja",
+            "inherits": "ninja-base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
         },
         {
             "name": "debug",
-            "displayName": "Config Debug",
-            "description": "Sets debug build type",
-            "inherits": "config-base",
+            "displayName": "Debug (Ninja)",
+            "description": "Debug build with Ninja",
+            "inherits": "ninja-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "release-mingw",
+            "displayName": "Release (MinGW)",
+            "description": "Release build with MinGW",
+            "inherits": "mingw-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "debug-mingw",
+            "displayName": "Debug (MinGW)",
+            "description": "Debug build with MinGW",
+            "inherits": "mingw-base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
             }
@@ -47,6 +74,14 @@
         {
             "name": "debug",
             "configurePreset": "debug"
+        },
+        {
+            "name": "release-mingw",
+            "configurePreset": "release-mingw"
+        },
+        {
+            "name": "debug-mingw",
+            "configurePreset": "debug-mingw"
         }
     ]
 }

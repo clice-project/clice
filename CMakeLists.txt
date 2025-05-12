@@ -11,7 +11,7 @@ endif()
 
 set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
 
-if(WIN32)
+if(WIN32 AND NOT MINGW)
     # https://github.com/llvm/llvm-project/issues/86250
     add_definitions(-DCLANG_BUILD_STATIC)
 else()
@@ -39,7 +39,7 @@ if(CLICE_DEV)
     )
     FetchContent_MakeAvailable(tomlplusplus libuv)
 
-    if(WIN32)
+    if(WIN32 AND NOT MINGW)
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
     endif()
 else()
@@ -58,8 +58,13 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -O3 -Wno-deprecated-declarations")
     if(WIN32)
-        set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_LINKER_FLAGS} -fuse-ld=lld-link")
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld-link")
+        if (MINGW)
+            set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_LINKER_FLAGS} -fuse-ld=lld")
+            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld")
+        else()
+            set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_LINKER_FLAGS} -fuse-ld=lld-link")
+            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld-link")
+        endif()
     else()
         set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_LINKER_FLAGS} -fuse-ld=lld")
         set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld")
@@ -89,7 +94,7 @@ add_library(clice-core "${CLICE_BUILD_TYPE}" "${CLICE_SOURCES}")
 target_include_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/include")
 target_link_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/lib")
 
-if(NOT WIN32)
+if(NOT WIN32 OR MINGW)
     target_link_libraries(clice-core PUBLIC
         LLVMSupport
         LLVMFrontendOpenMP
