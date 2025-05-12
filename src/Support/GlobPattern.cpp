@@ -8,8 +8,7 @@ namespace clice {
 // For example, "a-cf-hz" is expanded to "abcfghz".
 static std::expected<llvm::BitVector, std::string> expand(llvm::StringRef s,
                                                           llvm::StringRef original) {
-    using namespace llvm;
-    BitVector bv{256, false};
+    llvm::BitVector bv{256, false};
 
     for(size_t i = 0, e = s.size(); i < e; ++i) {
         switch(s[i]) {
@@ -64,9 +63,7 @@ static std::expected<llvm::BitVector, std::string> expand(llvm::StringRef s,
 // into.
 static std::expected<llvm::SmallVector<std::string, 1>, std::string>
     parseBraceExpansions(llvm::StringRef s, std::optional<size_t> max_subpattern_num) {
-    using namespace llvm;
-
-    SmallVector<std::string> subpatterns = {s.str()};
+    llvm::SmallVector<std::string> subpatterns = {s.str()};
     if(!max_subpattern_num || !s.contains('{')) {
         return std::move(subpatterns);
     }
@@ -74,10 +71,10 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
     struct BraceExpansion {
         size_t start;
         size_t length;
-        SmallVector<StringRef, 2> terms;
+        llvm::SmallVector<llvm::StringRef, 2> terms;
     };
 
-    SmallVector<BraceExpansion, 0> brace_expansions;
+    llvm::SmallVector<BraceExpansion, 0> brace_expansions;
 
     BraceExpansion* current_be = nullptr;
     size_t term_begin = 0;
@@ -147,10 +144,10 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
     }
 
     for(auto& be: reverse(brace_expansions)) {
-        SmallVector<std::string> OrigSubPatterns;
+        llvm::SmallVector<std::string> OrigSubPatterns;
         std::swap(subpatterns, OrigSubPatterns);
-        for(StringRef Term: be.terms) {
-            for(StringRef Orig: OrigSubPatterns) {
+        for(llvm::StringRef Term: be.terms) {
+            for(llvm::StringRef Orig: OrigSubPatterns) {
                 subpatterns.emplace_back(Orig).replace(be.start, be.length, Term);
             }
         }
@@ -161,8 +158,6 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
 
 std::expected<GlobPattern, std::string>
     GlobPattern::create(llvm::StringRef s, std::optional<size_t> max_subpattern_num) {
-    using namespace llvm;
-
     // Store the prefix that does not contain any metacharacter.
     GlobPattern pat;
     size_t prefix_size = s.find_first_of("?*[{\\");
@@ -182,7 +177,7 @@ std::expected<GlobPattern, std::string>
     }
     s = s.substr(prefix_size);
 
-    SmallVector<std::string, 1> sub_pats;
+    llvm::SmallVector<std::string, 1> sub_pats;
     if(auto res = parseBraceExpansions(s, max_subpattern_num); res.has_value()) {
         sub_pats = res.value();
     } else {
@@ -202,7 +197,6 @@ std::expected<GlobPattern, std::string>
 
 std::expected<GlobPattern::SubGlobPattern, std::string>
     GlobPattern::SubGlobPattern::create(llvm::StringRef s) {
-    using namespace llvm;
     SubGlobPattern pat;
     llvm::SmallVector<GlobSegment, 0> glob_segments;
     GlobSegment* current_gs = &glob_segments.emplace_back();
@@ -235,7 +229,7 @@ std::expected<GlobPattern::SubGlobPattern, std::string>
             if(j == e) {
                 return std::unexpected{"Invalid glob pattern, unmatched '['"};
             }
-            StringRef chars = s.substr(i, j - i);
+            llvm::StringRef chars = s.substr(i, j - i);
             bool invert = s[i] == '^' || s[i] == '!';
             auto bv = invert ? expand(chars.substr(1), s) : expand(chars, s);
             if(!bv.has_value()) {
