@@ -528,7 +528,7 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
         seg_start = state.seg_start;
         seg_end = state.seg_end;
 
-        if(!wild_mode && s >= state.seg_end) {
+        if(!wild_mode && (s == s_end || *s == '/')) {
             backtrace_stack.pop_back();
             continue;
         }
