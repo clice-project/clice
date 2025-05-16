@@ -1,3 +1,4 @@
+#include <print>
 #include <format>
 
 #include "Support/GlobPattern.h"
@@ -13,7 +14,8 @@ static std::expected<llvm::BitVector, std::string> expand(llvm::StringRef s,
     for(size_t i = 0, e = s.size(); i < e; ++i) {
         switch(s[i]) {
             case '\\': {
-                if(++i == e) {
+                ++i;
+                if(i == e) {
                     return std::unexpected{"Invalid expansions: stary `\\`"};
                 }
                 if(s[i] != '/') {
@@ -31,7 +33,8 @@ static std::expected<llvm::BitVector, std::string> expand(llvm::StringRef s,
                 char c_end = s[i + 1];
                 ++i;
                 if(c_end == '\\') {
-                    if(s[++i] == e) {
+                    ++i;
+                    if(s[i] == e) {
                         return std::unexpected{"Invalid expansions: stary `\\`"};
                     }
                     c_end = s[i];
@@ -85,13 +88,14 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
                 ++i;
             }
             while(i != e && s[i] != ']') {
-                if(s[i++] == '\\') {
+                if(s[i] == '\\') {
                     if(i == e) {
                         return std::unexpected{
                             "Invalid glob pattern, unmatched '[', with stray " "'\\' inside"};
                     }
                     ++i;
                 }
+                ++i;
             }
             if(i == e) {
                 return std::unexpected{"Invalid glob pattern, unmatched '['"};
@@ -120,7 +124,8 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
             current_be->length = i - current_be->start + 1;
             current_be = nullptr;
         } else if(s[i] == '\\') {
-            if(++i == e) {
+            ++i;
+            if(i == e) {
                 return std::unexpected{"Invalid glob pattern, stray '\\'"};
             }
         }
@@ -144,11 +149,11 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
     }
 
     for(auto& be: reverse(brace_expansions)) {
-        llvm::SmallVector<std::string> OrigSubPatterns;
-        std::swap(subpatterns, OrigSubPatterns);
-        for(llvm::StringRef Term: be.terms) {
-            for(llvm::StringRef Orig: OrigSubPatterns) {
-                subpatterns.emplace_back(Orig).replace(be.start, be.length, Term);
+        llvm::SmallVector<std::string> orig_sub_patterns;
+        std::swap(subpatterns, orig_sub_patterns);
+        for(llvm::StringRef term: be.terms) {
+            for(llvm::StringRef Orig: orig_sub_patterns) {
+                subpatterns.emplace_back(Orig).replace(be.start, be.length, term);
             }
         }
     }
@@ -161,9 +166,17 @@ std::expected<GlobPattern, std::string>
     // Store the prefix that does not contain any metacharacter.
     GlobPattern pat;
     size_t prefix_size = s.find_first_of("?*[{\\");
-    pat.prefix_at_seg_end = false;
     if(prefix_size == std::string::npos) {
         pat.prefix = s.substr(0, prefix_size).str();
+        // check if there is multiple `/` in prefix
+        size_t last_slash = 0;
+        size_t size = pat.prefix.size();
+        for(size_t i = 0; i < size; ++i) {
+            if(s[i] == '/' && i - last_slash == 1) {
+                return std::unexpected{"Multiple `/` is not allowed"};
+            }
+            last_slash = i;
+        }
         return pat;
     }
     if(prefix_size != 0 && s[prefix_size - 1] == '/') {
@@ -171,11 +184,16 @@ std::expected<GlobPattern, std::string>
         --prefix_size;
     }
     pat.prefix = s.substr(0, prefix_size).str();
-    size_t s_size = s.size();
-    while(prefix_size < s_size && s[prefix_size] == '/') {
-        ++prefix_size;
+    // check if there is multiple `/` in prefix
+    size_t last_slash = 0;
+    size_t size = pat.prefix.size();
+    for(size_t i = 0; i < size; ++i) {
+        if(s[i] == '/' && i - last_slash == 1) {
+            return std::unexpected{"Multiple `/` is not allowed"};
+        }
+        last_slash = i;
     }
-    s = s.substr(prefix_size);
+    s = s.substr(pat.prefix_at_seg_end ? prefix_size + 1 : prefix_size);
 
     llvm::SmallVector<std::string, 1> sub_pats;
     if(auto res = parseBraceExpansions(s, max_subpattern_num); res.has_value()) {
@@ -245,15 +263,16 @@ std::expected<GlobPattern::SubGlobPattern, std::string>
                 return std::unexpected{"Invalid glob pattern, stray '\\'"};
             }
         } else if(s[i] == '/') {
-            while(i != e && s[i] == '/') {
-                ++i;
+            if(i - current_gs->start == 1) {
+                return std::unexpected{"Multiple `/` is not allowed"};
             }
-            if(i == e) {
-                break;
-            }
-            --i;
             current_gs->end = i;
             current_gs = nullptr;
+        } else if(s[i] == '*') {
+            // check if there is multiple `*`
+            if(i + 1 < e - 1 && s[i + 1] == '*' && s[i + 2] == '*') {
+                return std::unexpected{"Multiple `*` is not allowed"};
+            }
         }
     }
 
@@ -267,8 +286,9 @@ std::expected<GlobPattern::SubGlobPattern, std::string>
 }
 
 bool GlobPattern::match(llvm::StringRef str) {
-    if(!str.consume_front(prefix))
+    if(!str.consume_front(prefix)) {
         return false;
+    }
 
     if(str.empty()) {
         if(sub_globs.empty()) {

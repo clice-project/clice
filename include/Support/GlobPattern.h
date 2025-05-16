@@ -66,7 +66,7 @@ private:
     /// xxx/yyy*.c
     /// ~~~~~~^
     ///
-    bool prefix_at_seg_end;
+    bool prefix_at_seg_end = false;
 
     /// SubGlobPattern:
     /// Pattern `foo.{c,cpp,cppm}`

@@ -14,6 +14,18 @@ namespace clice::testing {
     assert(Res##NAME.has_value());                                                                 \
     auto NAME = Res##NAME.value();
 
+
+TEST(GlobPattern, PattermSema) {
+    auto Pat1 = clice::GlobPattern::create("**/****.{c,cc}", 100);
+    EXPECT_EQ(Pat1.has_value(), false);
+
+    auto Pat2 = clice::GlobPattern::create("/foo/bar/baz////aaa.{c,cc}", 100);
+    EXPECT_EQ(Pat2.has_value(), false);
+
+    auto Pat3 = clice::GlobPattern::create("/foo/bar/baz/**////*.{c,cc}", 100);
+    EXPECT_EQ(Pat3.has_value(), false);
+}
+
 TEST(GlobPattern, Simple) {
     PATDEF(Pat1, "node_modules")
     EXPECT_EQ(Pat1.match("node_modules"), true);
@@ -469,4 +481,4 @@ TEST(GlobPattern, WildGlob) {
     EXPECT_EQ(Pat26.match("something/folder/foo.js"), false);
 }
 
-}  // namespace clice::testing
+ }  // namespace clice::testing
