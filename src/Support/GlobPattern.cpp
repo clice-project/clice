@@ -68,7 +68,7 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
     parseBraceExpansions(llvm::StringRef s, std::optional<size_t> max_subpattern_num) {
     llvm::SmallVector<std::string> subpatterns = {s.str()};
     if(!max_subpattern_num || !s.contains('{')) {
-        return std::move(subpatterns);
+        return subpatterns;
     }
 
     struct BraceExpansion {
@@ -158,7 +158,7 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
         }
     }
 
-    return std::move(subpatterns);
+    return subpatterns;
 }
 
 std::expected<GlobPattern, std::string>
@@ -228,18 +228,23 @@ std::expected<GlobPattern::SubGlobPattern, std::string>
             current_gs->start = i;
         }
         if(s[i] == '[') {
-            // ']' is allowed as the first character of a character class. '[]'
-            // is invalid. So, just skip the first character.
             ++i;
             size_t j = i;
             if(s[j] == ']') {
+                // ']' is allowed as the first character of a character class. '[]'
+                // is invalid. So, just skip the first character.
                 ++j;
             }
             while(j != e && s[j] != ']') {
-                if(s[j++] == '\\') {
+                // Check if there is invalid escape char
+                ++j;
+                if(s[j - 1] == '\\') {
                     if(j == e) {
+                        // Reach here in such case:
+                        // [a-zA-Z\]
+                        // ~~~~~~~~^
                         return std::unexpected{
-                            "invalid glob pattern, unmatched '[' with stray '\\' inside"};
+                            "Invalid glob pattern, unmatched '[' with stray '\\' inside"};
                     }
                     ++j;
                 }
@@ -290,16 +295,15 @@ bool GlobPattern::match(llvm::StringRef str) {
         return false;
     }
 
-    if(str.empty()) {
-        if(sub_globs.empty()) {
-            return true;
-        }
-    } else if(prefix_at_seg_end) {
-        if(str[0] == '/') {
-            str = str.substr(1);
-        } else {
+    if(str.empty() && sub_globs.empty()) {
+        return true;
+    }
+
+    if(!str.empty() && prefix_at_seg_end) {
+        if(str[0] != '/') {
             return false;
         }
+        str = str.substr(1);
     }
 
     for(auto& Glob: sub_globs) {
@@ -349,9 +353,7 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
         }
 
         if(p != seg_end) {
-
             switch(*p) {
-
                 case '*': {
                     if(p + 1 != p_end && *(p + 1) == '*') {
                         // Met '**'
@@ -360,29 +362,27 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                         // Consume extra '*'
                         while(p != p_end && (*p == '*' || *p == '/')) {
                             if(*p == '/') {
-                                if(current_glob_seg + 1 != seg_num) {
-                                    ++current_glob_seg;
-                                    seg_start = p_start + glob_segments[current_glob_seg].start;
-                                    seg_end = p_start + glob_segments[current_glob_seg].end;
-                                } else {
+                                if(current_glob_seg + 1 == seg_num) {
                                     return true;
                                 }
+                                ++current_glob_seg;
+                                seg_start = p_start + glob_segments[current_glob_seg].start;
+                                seg_end = p_start + glob_segments[current_glob_seg].end;
                             }
                             ++p;
                         }
                         if(p == seg_end) {
-                            if(current_glob_seg + 1 != seg_num) {
-                                // '**' at segment end
-                                ++current_glob_seg;
-                                while(s != s_end && *s == '/') {
-                                    ++s;
-                                }
-                                p = p_start + glob_segments[current_glob_seg].start;
-                                seg_start = p;
-                                seg_end = p_start + glob_segments[current_glob_seg].end;
-                            } else {
+                            if(current_glob_seg + 1 == seg_num) {
                                 return true;
                             }
+                            // '**' at segment end
+                            ++current_glob_seg;
+                            while(s != s_end && *s == '/') {
+                                ++s;
+                            }
+                            p = p_start + glob_segments[current_glob_seg].start;
+                            seg_start = p;
+                            seg_end = p_start + glob_segments[current_glob_seg].end;
                         }
                         backtrace_stack.push_back({.b = b,
                                                    .glob_seg = current_glob_seg,
@@ -427,16 +427,16 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                 case '?': {
                     if(p + 1 != seg_end && *(p + 1) == '*') {
                         // Handle '?*'
-                        unsigned Offset = *s == '\\' ? 2 : 1;
+                        unsigned offset = *s == '\\' ? 2 : 1;
                         p += 2;
                         backtrace_stack.push_back({.b = b,
                                                    .glob_seg = current_glob_seg,
                                                    .wild_mode = wild_mode,
                                                    .p = p - 2,
-                                                   .s = s + Offset,
+                                                   .s = s + offset,
                                                    .seg_end = seg_end,
                                                    .seg_start = seg_start});
-                        s += Offset;
+                        s += offset;
                         continue;
                     }
                     if(s != s_end && *s != '/') {
@@ -499,30 +499,28 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                     if(s != s_end && *s == '/') {
                         ++s;
                     }
-                    if(current_glob_seg < seg_num) {
-                        p = p_start + glob_segments[current_glob_seg].start;
-                        seg_start = p;
-                        seg_end = p_start + glob_segments[current_glob_seg].end;
-                        continue;
-                    } else {
+                    if(current_glob_seg >= seg_num) {
                         return s == s_end;
                     }
+                    p = p_start + glob_segments[current_glob_seg].start;
+                    seg_start = p;
+                    seg_end = p_start + glob_segments[current_glob_seg].end;
+                    continue;
                 } else {
-                    if(*seg_end == *s) {
-                        // *S and *SegEnd should be '/'
-                        // Escape repeat '/'
-                        while(s != s_end && *s == '/') {
-                            ++s;
-                        }
-                        // Step to next segment
-                        ++current_glob_seg;
-                        p = p_start + glob_segments[current_glob_seg].start;
-                        seg_start = p;
-                        seg_end = p_start + glob_segments[current_glob_seg].end;
-                        continue;
-                    } else {
+                    if(*seg_end != *s) {
                         return false;
                     }
+                    // *S and *SegEnd should be '/'
+                    // Escape repeat '/'
+                    while(s != s_end && *s == '/') {
+                        ++s;
+                    }
+                    // Step to next segment
+                    ++current_glob_seg;
+                    p = p_start + glob_segments[current_glob_seg].start;
+                    seg_start = p;
+                    seg_end = p_start + glob_segments[current_glob_seg].end;
+                    continue;
                 }
             }
         }
