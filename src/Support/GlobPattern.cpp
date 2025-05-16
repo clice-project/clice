@@ -315,9 +315,18 @@ bool GlobPattern::match(llvm::StringRef str) {
 }
 
 bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
-    // P: Current position in the pattern
-    // S: Current position in the String
-    // B: Current processed bracket num
+    // p: Current position in the pattern
+    // s: Current position in the String
+    // b: Current processed bracket num
+    // s_start: String start
+    // s_end: String end
+    // p_start: Pattern start
+    // p_end: Pattern end
+    // seg_start: Position of the start of current segment
+    // s_end: Position of the end of current segment
+    // b: Current matched bracket
+    // current_glob_seg: Index of glob patterns
+    // wild_mode: Whether wildcards are allowed to cross segments
     const char* s = str.data();
     const char* const s_start = s;
     const char* const s_end = s + str.size();
@@ -372,10 +381,13 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                             ++p;
                         }
                         if(p == seg_end) {
+                            // '**' at segment end
                             if(current_glob_seg + 1 == seg_num) {
+                                // '**' at pattern end
                                 return true;
                             }
-                            // '**' at segment end
+
+                            // Goto next segment
                             ++current_glob_seg;
                             while(s != s_end && *s == '/') {
                                 ++s;
@@ -453,7 +465,8 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                             // Segment start dismatch
                             break;
                         }
-                        p = pat.data() + brackets[b++].next_offset;
+                        p = pat.data() + brackets[b].next_offset;
+                        ++b;
                         ++s;
                         continue;
                     }
@@ -540,6 +553,7 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
         seg_start = state.seg_start;
         seg_end = state.seg_end;
 
+        // In non-WildMode, pop back invalid stat in the stack
         if(!wild_mode && (s == s_end || *s == '/')) {
             backtrace_stack.pop_back();
             continue;
