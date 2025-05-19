@@ -33,7 +33,7 @@ std::tuple<std::uint32_t, std::uint32_t> SymbolIndex::addContext(llvm::StringRef
     }
 
     contexts[context_ref].include = include;
-    contexts[context_ref].context_id = context_id;
+    contexts[context_ref].canonical_context_id = context_id;
 
     /// Update the context table.
     auto it = contexts_table.find(path);
@@ -62,12 +62,12 @@ void SymbolIndex::remove(llvm::StringRef path) {
     for(auto context_ref: it->second) {
         erased_context_refs.emplace_back(context_ref);
         auto& context = contexts[context_ref];
-        auto& ref_counts = header_context_id_ref_counts[context.context_id];
+        auto& ref_counts = header_context_id_ref_counts[context.canonical_context_id];
         assert(ref_counts > 0 && "unexpected error");
         ref_counts -= 1;
         if(ref_counts == 0) {
-            erased_context_ids.emplace_back(context.context_id);
-            element_context_id_ref_counts[context.context_id] = 0;
+            erased_context_ids.emplace_back(context.canonical_context_id);
+            element_context_id_ref_counts[context.canonical_context_id] = 0;
         }
 
         buffer.emplace_back(context_ref);
@@ -204,7 +204,7 @@ void SymbolIndex::merge(this SymbolIndex& self, SymbolIndex& other) {
 
         if(ids.size() == 1) {
             /// If we already have the same context, use it.
-            self.contexts[new_context_ref].context_id = ids[0];
+            self.contexts[new_context_ref].canonical_context_id = ids[0];
 
             /// The new context id could be reused for next time.
             self.erased_context_ids.emplace_back(new_context_id);
@@ -236,7 +236,7 @@ void SymbolIndex::remove(SymbolIndex& other) {
     if(it != contexts_table.end()) {
         for(auto context_ref: it->second) {
             /// If this is the only ref of context id, remove the symbol id.
-            auto context_id = contexts[context_ref].context_id;
+            auto context_id = contexts[context_ref].canonical_context_id;
             auto& ref_counts = header_context_id_ref_counts[context_ref];
             assert(ref_counts > 0);
             ref_counts -= 1;
@@ -273,7 +273,7 @@ Symbol& SymbolIndex::getSymbol(std::uint64_t symbol_id) {
 
 void SymbolIndex::addRelation(Symbol& symbol, Relation relation, bool isDependent) {
     assert(contexts.size() == 1 && "please use merge for multiple contexts");
-    assert(contexts[0].context_id == 0);
+    assert(contexts[0].canonical_context_id == 0);
 
     relation.setDependent(isDependent);
 
@@ -293,7 +293,7 @@ void SymbolIndex::addOccurrence(LocalSourceRange range,
                                 std::int64_t target_symbol,
                                 bool isDependent) {
     assert(contexts.size() == 1 && "please use merge for multiple contexts");
-    assert(contexts[0].context_id == 0);
+    assert(contexts[0].canonical_context_id == 0);
 
     auto& targets = occurrences[range];
     Occurrence occurrence;

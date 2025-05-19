@@ -125,7 +125,7 @@ TEST(SymbolIndex2, Merge) {
 
 void dump(SymbolIndex& index) {
     for(auto& context: index.contexts) {
-        println("include: {}, context id: {}", context.include, context.context_id);
+        println("include: {}, context id: {}", context.include, context.canonical_context_id);
     }
 
     for(auto& [symbol_id, symbol]: index.symbols) {
@@ -224,7 +224,7 @@ TEST(SymbolIndex2, Build) {
     /// dump(*base);
 
     for(auto& context: base->contexts) {
-        println("include: {}, context id: {}", context.include, context.context_id);
+        println("include: {}, context id: {}", context.include, context.canonical_context_id);
     }
 }
 

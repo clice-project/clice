@@ -5,7 +5,7 @@
 #include <vector>
 #include <variant>
 
-#include "Contextual.h"
+#include "Contexts.h"
 #include "Shared.h"
 #include "AST/SymbolID.h"
 #include "AST/SymbolKind.h"
@@ -13,6 +13,7 @@
 #include "AST/SourceCode.h"
 #include "Support/Hash.h"
 
+#include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SmallVector.h"
@@ -63,7 +64,7 @@ struct HeaderContext {
     std::uint32_t include;
 
     /// The context id of this header context.
-    std::uint32_t context_id;
+    std::uint32_t canonical_context_id;
 };
 
 struct Relation : Contextual {
@@ -97,6 +98,88 @@ struct Symbol {
 struct Occurrence : Contextual {
     /// Ref symbol.
     std::uint64_t target_symbol;
+};
+
+/// The core class used for managing the contexts.
+struct ContextManager {
+    /// All distinct HeaderContext instances.
+    std::vector<HeaderContext> header_contexts;
+
+    /// Erased header context ids for late reusing.
+    std::vector<std::uint32_t> erased_header_context_ids;
+
+    /// A map between source file path and its header contexts.
+    /// Note that it is possible that the file includes the header multiple
+    /// times and thus has multiple header contexts.
+    llvm::StringMap<llvm::SmallVector<std::uint32_t, 4>> context_table;
+
+    /// Multiple distinct header contexts can result in identical AST and LSP responses.
+    /// This situation frequently occurs with self-contained header files. To address this,
+    /// we introduce the concept of a canonical header context. Given M header contexts,
+    /// they ultimately resolve into N unique canonical header contexts, where M >= N. Each of
+    /// these canonical contexts possesses a distinct semantic interpretation. By leveraging
+    /// canonical header contexts, we not only avoid storing redundant indexing data, thereby
+    /// saving disk space, but also enable rapid switching among different contextual views.
+    std::uint32_t max_canonical_context_id = 0;
+
+    /// The reference count of for each canonical context.
+    /// [canonical context id -> count]
+    std::vector<std::uint32_t> canonical_context_header_ref_counts;
+
+    /// We don't perform immediate modification when removes header context,
+    /// Store the erased context ids for reusing. So the true canonical context
+    /// count is `max_canonical_context_id - canonical_context_erased_ids.size()`.
+    std::vector<std::uint32_t> canonical_context_erased_ids;
+
+    /// The states of all context-dependent elements, each bit in u32 represents
+    /// whether this element occurs in corresponding id's canonical context.
+    /// [element id -> canonical context mask]
+    std::vector<llvm::BitVector> dependent_element_states;
+
+    /// The The reference count of canonical context by elements, this is useful
+    /// to determine whether two context are same when merges.
+    /// [canonical context id -> count]
+    std::vector<std::uint32_t> canonical_context_element_ref_counts;
+
+    /// The states of all context-independent elements, it directly store the
+    /// context id of the context rather than canonical context id.
+    /// [element id -> header context ids]
+    std::vector<llvm::DenseSet<std::uint32_t>> independent_element_states;
+
+    void remove(llvm::StringRef file) {
+        auto it = context_table.find(file);
+        if(it == context_table.end()) {
+            return;
+        }
+
+        llvm::SmallVector<std::uint32_t> new_erased_canonical_context_id;
+
+        for(auto& header_context_id: it->second) {
+            erased_header_context_ids.emplace_back(header_context_id);
+            auto& header_context = header_contexts[header_context_id];
+
+            auto& ref_count =
+                canonical_context_header_ref_counts[header_context.canonical_context_id];
+            assert(ref_count > 0);
+            ref_count -= 1;
+            if(ref_count == 0) {
+                canonical_context_erased_ids.emplace_back(header_context.canonical_context_id);
+                new_erased_canonical_context_id.emplace_back(header_context.canonical_context_id);
+            }
+        }
+
+        if(new_erased_canonical_context_id.empty()) {
+            return;
+        }
+
+        llvm::BitVector erased_flag;
+        erased_flag.set();
+        for(auto& n: new_erased_canonical_context_id) {
+            erased_flag.reset(n);
+        }
+
+        for(auto& state: dependent_element_states) {}
+    }
 };
 
 class SymbolIndex {
