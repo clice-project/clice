@@ -2,12 +2,15 @@
 
 #include <expected>
 #include <string>
+#include <bitset>
 
-#include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 
 namespace clice {
+
+using GlobCharSet = std::bitset<256>;
 
 /// This class implements a glob pattern matcher to parse patterns to
 /// watch relative to the base path.
@@ -83,7 +86,7 @@ private:
 
         struct Bracket {
             size_t next_offset;
-            llvm::BitVector bytes;
+            GlobCharSet bytes;
         };
 
         llvm::SmallVector<Bracket, 0> brackets;

@@ -1,4 +1,3 @@
-#include <print>
 #include <format>
 
 #include "Support/GlobPattern.h"
@@ -7,9 +6,8 @@ namespace clice {
 
 // Expands character ranges and returns a bitmap.
 // For example, "a-cf-hz" is expanded to "abcfghz".
-static std::expected<llvm::BitVector, std::string> expand(llvm::StringRef s,
-                                                          llvm::StringRef original) {
-    llvm::BitVector bv{256, false};
+static std::expected<GlobCharSet, std::string> expand(llvm::StringRef s, llvm::StringRef original) {
+    GlobCharSet bv{false};
 
     for(size_t i = 0, e = s.size(); i < e; ++i) {
         switch(s[i]) {
@@ -19,14 +17,14 @@ static std::expected<llvm::BitVector, std::string> expand(llvm::StringRef s,
                     return std::unexpected{"Invalid expansions: stary `\\`"};
                 }
                 if(s[i] != '/') {
-                    bv[(uint8_t)s[i]] = true;
+                    bv.set(s[i], true);
                 }
                 break;
             }
 
             case '-': {
                 if(i == 0 || i + 1 == e) {
-                    bv['-'] = true;
+                    bv.set('-', true);
                     break;
                 }
                 char c_begin = s[i - 1];
@@ -45,7 +43,7 @@ static std::expected<llvm::BitVector, std::string> expand(llvm::StringRef s,
                 }
                 for(char c = c_begin; c <= c_end; ++c) {
                     if(c != '/') {
-                        bv[c] = true;
+                        bv.set(c, true);
                     }
                 }
                 break;
@@ -53,7 +51,7 @@ static std::expected<llvm::BitVector, std::string> expand(llvm::StringRef s,
 
             default: {
                 if(s[i] != '/') {
-                    bv[(uint8_t)s[i]] = true;
+                    bv.set(s[i], true);
                 }
             }
         }
@@ -152,8 +150,8 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
         llvm::SmallVector<std::string> orig_sub_patterns;
         std::swap(subpatterns, orig_sub_patterns);
         for(llvm::StringRef term: be.terms) {
-            for(llvm::StringRef Orig: orig_sub_patterns) {
-                subpatterns.emplace_back(Orig).replace(be.start, be.length, term);
+            for(llvm::StringRef orig: orig_sub_patterns) {
+                subpatterns.emplace_back(orig).replace(be.start, be.length, term);
             }
         }
     }
@@ -353,6 +351,17 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
     llvm::SmallVector<BacktraceStat, 6> backtrace_stack;
     const size_t seg_num = glob_segments.size();
 
+    auto save_stat =
+        [&backtrace_stack, &b, &current_glob_seg, &wild_mode, &p, &s, &seg_end, &seg_start]() {
+            backtrace_stack.push_back({.b = b,
+                                       .glob_seg = current_glob_seg,
+                                       .wild_mode = wild_mode,
+                                       .p = p,
+                                       .s = s,
+                                       .seg_end = seg_end,
+                                       .seg_start = seg_start});
+        };
+
     while(current_glob_seg < seg_num) {
 
         if(s == s_end) {
@@ -396,13 +405,7 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                             seg_start = p;
                             seg_end = p_start + glob_segments[current_glob_seg].end;
                         }
-                        backtrace_stack.push_back({.b = b,
-                                                   .glob_seg = current_glob_seg,
-                                                   .wild_mode = wild_mode,
-                                                   .p = p,
-                                                   .s = s,
-                                                   .seg_end = seg_end,
-                                                   .seg_start = seg_start});
+                        save_stat();
                     } else {
                         // Met '*'
                         ++p;
@@ -425,13 +428,7 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                             seg_start = p;
                             seg_end = p_start + glob_segments[current_glob_seg].end;
                         }
-                        backtrace_stack.push_back({.b = b,
-                                                   .glob_seg = current_glob_seg,
-                                                   .wild_mode = wild_mode,
-                                                   .p = p,
-                                                   .s = s,
-                                                   .seg_end = seg_end,
-                                                   .seg_start = seg_start});
+                        save_stat();
                     }
                     continue;
                 }
@@ -440,15 +437,9 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                     if(p + 1 != seg_end && *(p + 1) == '*') {
                         // Handle '?*'
                         unsigned offset = *s == '\\' ? 2 : 1;
-                        p += 2;
-                        backtrace_stack.push_back({.b = b,
-                                                   .glob_seg = current_glob_seg,
-                                                   .wild_mode = wild_mode,
-                                                   .p = p - 2,
-                                                   .s = s + offset,
-                                                   .seg_end = seg_end,
-                                                   .seg_start = seg_start});
                         s += offset;
+                        save_stat();
+                        p += 2;
                         continue;
                     }
                     if(s != s_end && *s != '/') {
