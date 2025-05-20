@@ -132,7 +132,7 @@ inline std::string toPath(llvm::StringRef uri) {
     } else {
         std::abort();
     }
-#elif defined(__unix__)
+#elif defined(__unix__) || defined(__APPLE__)
     if(cloned.starts_with("file://")) {
         cloned = cloned.drop_front(7);
     } else {
