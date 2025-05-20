@@ -1,266 +1,156 @@
 #include "Index/Index2.h"
+#include "Support/Ranges.h"
 
 namespace clice::index {
 
 namespace memory2 {
 
-std::tuple<std::uint32_t, std::uint32_t> SymbolIndex::addContext(llvm::StringRef path,
-                                                                 std::uint32_t include) {
-    std::uint32_t context_id;
-    if(!erased_context_ids.empty()) {
-        /// Reuse erased context id.
-        context_id = erased_context_ids.front();
-        erased_context_ids.pop_front();
-        header_context_id_ref_counts[context_id] += 1;
-        element_context_id_ref_counts[context_id] = 0;
-    } else {
-        /// Create new context id.
-        context_id = max_context_id;
-        header_context_id_ref_counts.emplace_back(1);
-        element_context_id_ref_counts.emplace_back(0);
-        max_context_id += 1;
-    }
+/// Merge all elements from other into self. And update_context is invoked every time
+/// when a element is inserted. The second argument is inserted `Contextual` in the
+/// other, the first element is inserted element in the self, empty if the element
+/// is new to self.
+static void merge_elements(SymbolIndex& self, SymbolIndex& other, auto& update_context) {
+    /// Merge symbols from other into self.
+    for(auto& [symbol_id, symbol]: other.symbols) {
+        auto [it, success] = self.symbols.try_emplace(symbol_id, std::move(symbol));
+        auto& self_symbol = it->second;
 
-    std::uint32_t context_ref;
-    if(!erased_context_refs.empty()) {
-        /// Reuse erased context.
-        context_ref = erased_context_refs.front();
-        erased_context_refs.pop_front();
-    } else {
-        /// Create new context.
-        context_ref = contexts.size();
-        contexts.emplace_back();
-    }
-
-    contexts[context_ref].include = include;
-    contexts[context_ref].canonical_context_id = context_id;
-
-    /// Update the context table.
-    auto it = contexts_table.find(path);
-    if(it != contexts_table.end()) {
-        for(auto& context_ref: it->second) {
-            assert(contexts[context_ref].include != include &&
-                   "cannot add an existed context, remove first");
+        if(success) [[unlikely]] {
+            /// If insert successfully, this is a new symbol and it means
+            /// we need update all context states of this symbol.
+            for(auto& relation: self_symbol.relations) {
+                update_context(relation, Contextual(relation), true);
+            }
+            continue;
         }
 
-        it->second.emplace_back(context_ref);
-    } else {
-        contexts_table[path].emplace_back(context_ref);
-    }
-
-    return std::tuple{context_id, context_ref};
-}
-
-void SymbolIndex::remove(llvm::StringRef path) {
-    auto it = contexts_table.find(path);
-    if(it == contexts_table.end()) {
-        return;
-    }
-
-    llvm::SmallVector<std::uint32_t> buffer;
-
-    for(auto context_ref: it->second) {
-        erased_context_refs.emplace_back(context_ref);
-        auto& context = contexts[context_ref];
-        auto& ref_counts = header_context_id_ref_counts[context.canonical_context_id];
-        assert(ref_counts > 0 && "unexpected error");
-        ref_counts -= 1;
-        if(ref_counts == 0) {
-            erased_context_ids.emplace_back(context.canonical_context_id);
-            element_context_id_ref_counts[context.canonical_context_id] = 0;
-        }
-
-        buffer.emplace_back(context_ref);
-    }
-
-    /// Remove all refs of these header contexts.
-    for(auto& refs: independent_context_refs) {
-        for(auto& context_ref: buffer) {
-            refs.erase(context_ref);
+        /// If self already has this symbol, try to merge all relations.
+        for(auto& relation: symbol.relations) {
+            auto [it, success] = self_symbol.relations.insert(relation);
+            update_context(*it, Contextual(relation), success);
         }
     }
 
-    contexts_table.erase(it);
-}
+    for(auto& [range, occurrence_group]: other.occurrences) {
+        auto [it, success] = self.occurrences.try_emplace(range, std::move(occurrence_group));
+        auto& self_occurrence_group = it->second;
 
-static void mergeElements(auto& update_context, SymbolIndex& self, SymbolIndex& other) {
-    /// Merge symbols.
-    for(auto& [symbol_id, new_symbol]: other.symbols) {
-        auto it = self.symbols.find(symbol_id);
-        if(it != self.symbols.end()) {
-            /// If we already the symbol, try to merge the two symbol.
-            auto& symbol = it->second;
+        if(success) [[unlikely]] {
+            /// Insert successfully.
+            for(auto& occurrence: self_occurrence_group) {
+                update_context(occurrence, Contextual(occurrence), true);
+            }
+            continue;
+        }
 
-            /// Merge all the relations.
-            for(auto& new_relation: new_symbol.relations) {
-                auto it = symbol.relations.find(new_relation);
-                if(it != symbol.relations.end()) {
-                    /// If the relation is found, up the relation context.
-                    update_context(*it, false);
-                    continue;
+        for(auto& occurrence: occurrence_group) {
+            auto i = 0;
+
+            /// In most of cases, there is only one element in the group.
+            /// So don't worry about the performance.
+            for(auto& self_occurrence: self_occurrence_group) {
+                if(occurrence.target_symbol == self_occurrence.target_symbol) {
+                    break;
                 }
-
-                /// If not such relation, update its context and insert.
-                update_context(new_relation, true);
-                symbol.relations.insert(new_relation);
-            }
-        } else {
-            /// set context ...
-            for(auto& new_relation: new_symbol.relations) {
-                update_context(new_relation, true);
+                i += 1;
             }
 
-            /// If there isn't corresponding symbol, add it.
-            self.symbols[symbol_id] = std::move(new_symbol);
-        }
-    }
-
-    /// Merge occurrences.
-    for(auto& [range, new_occurrences]: other.occurrences) {
-        auto it = self.occurrences.find(range);
-        if(it != self.occurrences.end()) {
-            auto& occurrences = it->second;
-
-            for(auto& new_occurrence: new_occurrences) {
-                auto it = occurrences.find(new_occurrence);
-                if(it != occurrences.end()) {
-                    update_context(*it, false);
-                    continue;
-                }
-
-                update_context(new_occurrence, true);
-                occurrences.insert(new_occurrence);
+            if(i != self_occurrence_group.size()) {
+                update_context(self_occurrence_group[i], Contextual(occurrence), false);
+            } else {
+                /// If not found insert new occurrence.
+                auto& o = self_occurrence_group.emplace_back(occurrence);
+                update_context(o, Contextual(occurrence), true);
             }
-        } else {
-            /// set context ...
-            for(auto& new_occurrence: new_occurrences) {
-                update_context(new_occurrence, true);
-            }
-
-            /// If there isn't corresponding symbol, add it.
-            self.occurrences.try_emplace(range, std::move(new_occurrences));
         }
     }
 }
 
-void SymbolIndex::merge(this SymbolIndex& self, SymbolIndex& other) {
-    assert(other.contexts_table.size() == 1);
-    auto& [path, context_refs] = *other.contexts_table.begin();
-    assert(context_refs.size() == 1);
-    auto& new_context = other.contexts[context_refs[0]];
-    auto [new_context_id, new_context_ref] = self.addContext(path, new_context.include);
+void SymbolIndex::quick_merge(this SymbolIndex& self, SymbolIndex& other) {
+    assert(other.is_single_header_context() &&
+           "quick merge could be only used for the index with single header context");
 
-    /// Whether we can make sure this new index introduces
-    /// a new header context, if so we don't need two traverse
-    /// the inde twice.
-    bool needResolve = true;
+    /// We could make sure the other has only one header context.
+    std::uint32_t new_hctx_id = self.alloc_hctx_id();
 
-    std::bitset<32> flag;
-    for(auto i = 0; i < self.max_context_id; i++) {
-        flag.set(i);
-    }
+    Bitmap flag = self.erased_flag();
+    bool is_new_cctx = false;
+    std::uint32_t new_cctx_id = -1;
 
-    for(auto erased_id: self.erased_context_ids) {
-        flag.reset(erased_id);
-    }
+    llvm::SmallVector<std::uint32_t> visited_elem_ids;
 
-    auto update_context = [&](Contextual& ctx, bool is_new) {
-        if(ctx.isDependent()) {
-            if(!is_new && needResolve) {
-                flag &= ctx.value();
-            } else {
-                needResolve = false;
-                ctx.context_mask = 0;
-                ctx.setDependent(true);
+    auto update_context = [&](Contextual& self_elem, Contextual other_elem, bool is_new) {
+        std::uint32_t new_elem_id;
+
+        if(is_new) {
+            /// If this a new element, it means that the other index must introduce
+            /// a new canonical context id, we don't need to do following calculation.
+            is_new_cctx = true;
+
+            if(new_cctx_id == -1) {
+                new_cctx_id = self.alloc_cctx_id();
             }
 
-            ctx.addContext(new_context_id);
-            self.element_context_id_ref_counts[new_context_id] += 1;
-        } else {
-            if(is_new) {
-                ctx.context_mask = self.independent_context_refs.size();
-                self.independent_context_refs.emplace_back();
-                self.independent_context_refs.back().insert(new_context_ref);
+            if(other_elem.is_dependent()) {
+                new_elem_id = self.alloc_dependent_elem_id();
+                self.dependent_elem_states[new_elem_id].set(new_cctx_id);
             } else {
-                auto offset = ctx.value();
-                self.independent_context_refs[offset].insert(new_context_ref);
+                new_elem_id = self.alloc_independent_elem_id();
+                self.independent_elem_states[new_elem_id].insert(new_hctx_id);
+            }
+
+            other_elem.set(new_elem_id);
+            self_elem = other_elem;
+        } else {
+            if(self_elem.is_dependent()) {
+                if(is_new_cctx) {
+                    /// If this element is not new, but we already make sure the context is new
+                    /// add its context.
+                    self.dependent_elem_states[self_elem.offset()].set(new_cctx_id);
+                } else {
+                    /// If this element is not new and we still cannot make sure whether this is
+                    /// new canonical context.
+                    flag &= self.dependent_elem_states[self_elem.offset()];
+                    visited_elem_ids.emplace_back(self_elem.offset());
+                    if(flag.none()) {
+                        is_new_cctx = true;
+                    }
+                }
+            } else {
+                self.independent_elem_states[self_elem.offset()].insert(new_hctx_id);
             }
         }
     };
 
-    /// Merge all elements.
-    mergeElements(update_context, self, other);
+    /// Merge all elements from other into self and calculate the bitmap state.
+    merge_elements(self, other, update_context);
 
-    /// If we make sure the new index introduces a new context, directly return.
-    if(needResolve && flag.any()) {
-        llvm::SmallVector<std::uint32_t> ids;
+    if(!is_new_cctx) {
+        assert(new_cctx_id == -1 && flag.any());
+        for(auto i = 0; i < self.max_cctx_id; i++) {
+            if(!flag.test(i)) {
+                continue;
+            }
 
-        for(auto i = 0; i < self.max_context_id; i++) {
-            auto& ref_counts = self.element_context_id_ref_counts;
-            if(i != new_context_id && flag.test(i) && ref_counts[i] == ref_counts[new_context_id]) {
-                ids.emplace_back(i);
+            if(self.cctx_element_refs[i] == other.cctx_element_refs.front()) {
+                new_cctx_id = i;
+                break;
             }
         }
 
-        if(ids.size() == 1) {
-            /// If we already have the same context, use it.
-            self.contexts[new_context_ref].canonical_context_id = ids[0];
+        new_cctx_id = self.alloc_cctx_id();
+    }
 
-            /// The new context id could be reused for next time.
-            self.erased_context_ids.emplace_back(new_context_id);
-
-            for(auto& [_, symbol]: self.symbols) {
-                for(auto& relation: symbol.relations) {
-                    relation.removeContext(new_context_id);
-                }
-            }
-
-            for(auto& [_, os]: self.occurrences) {
-                for(auto& occurrence: os) {
-                    occurrence.removeContext(new_context_id);
-                }
-            }
-        } else if(ids.size() > 1) {
-            assert(false && "unexpected error occurs when indexes");
-        }
-
-        return;
+    /// In the end we set all visited element ids.
+    for(auto id: visited_elem_ids) {
+        self.dependent_elem_states[id].set(new_hctx_id);
     }
 }
 
-void SymbolIndex::remove(SymbolIndex& other) {
-    assert(other.contexts_table.size() == 1);
-    auto& [path, _] = *other.contexts_table.begin();
-
-    auto it = contexts_table.find(path);
-    if(it != contexts_table.end()) {
-        for(auto context_ref: it->second) {
-            /// If this is the only ref of context id, remove the symbol id.
-            auto context_id = contexts[context_ref].canonical_context_id;
-            auto& ref_counts = header_context_id_ref_counts[context_ref];
-            assert(ref_counts > 0);
-            ref_counts -= 1;
-            if(ref_counts == 0) {
-                erased_context_ids.push_back(context_id);
-            }
-
-            /// Remove all refs of this context refs.
-            for(auto& refs: independent_context_refs) {
-                refs.erase(context_ref);
-            }
-            erased_context_refs.push_back(context_ref);
-        }
-    }
-}
-
-void SymbolIndex::update(SymbolIndex& index) {
-    assert(index.contexts.size() == 1);
-    remove(index);
-    merge(index);
-}
+void SymbolIndex::merge(this SymbolIndex& self, SymbolIndex& other) {}
 
 Symbol& SymbolIndex::getSymbol(std::uint64_t symbol_id) {
-    assert(contexts.size() == 1 && "please use merge for multiple contexts");
+    assert(canonical_context_count() == 1 && "please use merge for multiple contexts");
     if(auto it = symbols.find(symbol_id); it != symbols.end()) {
         return it->second;
     }
@@ -272,18 +162,18 @@ Symbol& SymbolIndex::getSymbol(std::uint64_t symbol_id) {
 }
 
 void SymbolIndex::addRelation(Symbol& symbol, Relation relation, bool isDependent) {
-    assert(contexts.size() == 1 && "please use merge for multiple contexts");
-    assert(contexts[0].canonical_context_id == 0);
+    // assert(contexts.size() == 1 && "please use merge for multiple contexts");
+    // assert(contexts[0].canonical_context_id == 0);
 
-    relation.setDependent(isDependent);
+    /// relation.setDependent(isDependent);
 
     if(isDependent) {
-        relation.addContext(0);
-        element_context_id_ref_counts[0] += 1;
+        /// relation.addContext(0);
+        /// element_context_id_ref_counts[0] += 1;
     } else {
-        relation.set(independent_context_refs.size());
-        independent_context_refs.emplace_back();
-        independent_context_refs.back().insert(0);
+        /// relation.set(independent_context_refs.size());
+        /// independent_context_refs.emplace_back();
+        /// independent_context_refs.back().insert(0);
     }
 
     symbol.relations.insert(relation);
@@ -292,24 +182,24 @@ void SymbolIndex::addRelation(Symbol& symbol, Relation relation, bool isDependen
 void SymbolIndex::addOccurrence(LocalSourceRange range,
                                 std::int64_t target_symbol,
                                 bool isDependent) {
-    assert(contexts.size() == 1 && "please use merge for multiple contexts");
-    assert(contexts[0].canonical_context_id == 0);
-
-    auto& targets = occurrences[range];
-    Occurrence occurrence;
-    occurrence.target_symbol = target_symbol;
-    occurrence.setDependent(isDependent);
-
-    if(isDependent) {
-        occurrence.addContext(0);
-        element_context_id_ref_counts[0] += 1;
-    } else {
-        occurrence.set(independent_context_refs.size());
-        independent_context_refs.emplace_back();
-        independent_context_refs.back().insert(0);
-    }
-
-    targets.insert(occurrence);
+    // assert(contexts.size() == 1 && "please use merge for multiple contexts");
+    // assert(contexts[0].canonical_context_id == 0);
+    //
+    // auto& targets = occurrences[range];
+    // Occurrence occurrence;
+    // occurrence.target_symbol = target_symbol;
+    // occurrence.setDependent(isDependent);
+    //
+    // if(isDependent) {
+    //     occurrence.addContext(0);
+    //     element_context_id_ref_counts[0] += 1;
+    // } else {
+    //     occurrence.set(independent_context_refs.size());
+    //     independent_context_refs.emplace_back();
+    //     independent_context_refs.back().insert(0);
+    // }
+    //
+    // targets.insert(occurrence);
 }
 
 }  // namespace memory2

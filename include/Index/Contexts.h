@@ -11,18 +11,39 @@
 
 namespace clice::index {
 
+using ElementID = std::uint32_t;
+
+struct Contextual {
+    ElementID element_id;
+
+    bool is_dependent() {
+        return true;
+    }
+
+    void set(std::uint32_t offset) {}
+
+    std::uint32_t offset() {}
+};
+
 /// A header context could be represented by file:include.
 /// In the following context, hctx means "header context" and cctx means
 /// "canonical context". So hcid is header context id and ccid is
 /// canonical context id.
 class Contexts {
 public:
+    /// The count of active header contexts in this index.
     std::uint32_t header_context_count() {
         return max_hctx_id - erased_hctx_ids.size();
     }
 
+    /// The count of active canonical contexts in this index.
     std::uint32_t canonical_context_count() {
         return max_cctx_id - erased_cctx_ids.size();
+    }
+
+    /// Whether this contexts has only one single context.
+    bool is_single_header_context() {
+        return max_hctx_id == 1 && erased_hctx_ids.empty();
     }
 
     auto erased_flag() {
@@ -39,31 +60,24 @@ public:
     /// Get a new header context id.
     std::uint32_t alloc_hctx_id();
 
-    struct InsertSlot {
-        /// The old element id.
-        std::uint32_t old_elem_id;
+    /// Get a new canonical context id.
+    std::uint32_t alloc_cctx_id();
 
-        /// The new element id which is the element where the old element
-        /// was inserted.
-        std::uint32_t new_elem_id = -1;
-    };
+    ElementID alloc_dependent_elem_id() {
+        auto id = dependent_elem_states.size();
+        dependent_elem_states.emplace_back(false);
+        return id;
+    }
 
-    /// For most of self contained header, it has only one canonical context.
-    /// This is a fast path to handle such cash.
-    void merge_one(this Contexts& self,
-                   Contexts& other,
-                   std::vector<InsertSlot> dependent_elements,
-                   std::vector<InsertSlot> independent_elements);
-
-    /// Merge other's contexts into this.
-    void merge(this Contexts& self,
-               Contexts& other,
-               std::vector<InsertSlot> dependent_elements,
-               std::vector<InsertSlot> independent_elements);
+    ElementID alloc_independent_elem_id() {
+        auto id = independent_elem_states.size();
+        independent_elem_states.emplace_back();
+        return id;
+    }
 
     void remove(this Contexts& self, llvm::StringRef path);
 
-private:
+protected:
     /// The max header context id.
     std::uint32_t max_hctx_id = 0;
 
@@ -104,11 +118,11 @@ private:
     /// A map between dependent element id and its state, for dependent element
     /// we use bitmap to store states. Each bit in bitmap represents whether
     /// this element occurs in corresponding canonical context id.
-    llvm::SmallVector<Bitmap> dependent_element_states;
+    llvm::SmallVector<Bitmap> dependent_elem_states;
 
     /// A map between independent element id and its state, for independent element
     /// we directly store the header context ids that it occurs in.
-    std::vector<llvm::DenseSet<std::uint32_t>> independent_element_states;
+    std::vector<llvm::DenseSet<std::uint32_t>> independent_elem_states;
 };
 
 }  // namespace clice::index

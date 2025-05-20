@@ -19,7 +19,7 @@ public:
         auto [it, _] = indices.try_emplace(fid, new SymbolIndex());
         auto& index = *it->second;
         /// Fix me build include graph here.
-        index.addContext(context_path, graph.getInclude(fid));
+        index.add_context(context_path, graph.getInclude(fid));
         return index;
     }
 
