@@ -19,7 +19,7 @@ static void merge_elements(SymbolIndex& self, SymbolIndex& other, auto& update_c
             /// If insert successfully, this is a new symbol and it means
             /// we need update all context states of this symbol.
             for(auto& relation: self_symbol.relations) {
-                update_context(relation, Contextual(relation), true);
+                update_context(relation.ctx, Contextual(relation.ctx), true);
             }
             continue;
         }
@@ -27,7 +27,7 @@ static void merge_elements(SymbolIndex& self, SymbolIndex& other, auto& update_c
         /// If self already has this symbol, try to merge all relations.
         for(auto& relation: symbol.relations) {
             auto [it, success] = self_symbol.relations.insert(relation);
-            update_context(*it, Contextual(relation), success);
+            update_context(it->ctx, Contextual(relation.ctx), success);
         }
     }
 
@@ -38,7 +38,7 @@ static void merge_elements(SymbolIndex& self, SymbolIndex& other, auto& update_c
         if(success) [[unlikely]] {
             /// Insert successfully.
             for(auto& occurrence: self_occurrence_group) {
-                update_context(occurrence, Contextual(occurrence), true);
+                update_context(occurrence.ctx, Contextual(occurrence.ctx), true);
             }
             continue;
         }
@@ -56,19 +56,18 @@ static void merge_elements(SymbolIndex& self, SymbolIndex& other, auto& update_c
             }
 
             if(i != self_occurrence_group.size()) {
-                update_context(self_occurrence_group[i], Contextual(occurrence), false);
+                update_context(self_occurrence_group[i].ctx, Contextual(occurrence.ctx), false);
             } else {
                 /// If not found insert new occurrence.
                 auto& o = self_occurrence_group.emplace_back(occurrence);
-                update_context(o, Contextual(occurrence), true);
+                update_context(o.ctx, Contextual(occurrence.ctx), true);
             }
         }
     }
 }
 
 void SymbolIndex::quick_merge(this SymbolIndex& self, SymbolIndex& other) {
-    assert(other.is_single_header_context() &&
-           "quick merge could be only used for the index with single header context");
+    assert(!other.merged && "quick merge could be only used for the unmerged index");
 
     /// We could make sure the other has only one header context.
     std::uint32_t new_hctx_id = self.alloc_hctx_id();
@@ -78,6 +77,8 @@ void SymbolIndex::quick_merge(this SymbolIndex& self, SymbolIndex& other) {
     std::uint32_t new_cctx_id = -1;
 
     llvm::SmallVector<std::uint32_t> visited_elem_ids;
+
+    /// TODO: simplify the logic of update context.
 
     auto update_context = [&](Contextual& self_elem, Contextual other_elem, bool is_new) {
         std::uint32_t new_elem_id;
@@ -99,8 +100,7 @@ void SymbolIndex::quick_merge(this SymbolIndex& self, SymbolIndex& other) {
                 self.independent_elem_states[new_elem_id].insert(new_hctx_id);
             }
 
-            other_elem.set(new_elem_id);
-            self_elem = other_elem;
+            self_elem = Contextual::from(other_elem.is_dependent(), new_elem_id);
         } else {
             if(self_elem.is_dependent()) {
                 if(is_new_cctx) {
@@ -145,9 +145,18 @@ void SymbolIndex::quick_merge(this SymbolIndex& self, SymbolIndex& other) {
     for(auto id: visited_elem_ids) {
         self.dependent_elem_states[id].set(new_hctx_id);
     }
+
+    auto& [path, old_contexts] = *other.header_contexts.begin();
+    self.header_contexts[path].emplace_back(HeaderContext{
+        .include = old_contexts[0].include,
+        .hctx_id = new_hctx_id,
+        .cctx_id = new_cctx_id,
+    });
 }
 
-void SymbolIndex::merge(this SymbolIndex& self, SymbolIndex& other) {}
+void SymbolIndex::merge(this SymbolIndex& self, SymbolIndex& other) {
+    self.quick_merge(other);
+}
 
 Symbol& SymbolIndex::getSymbol(std::uint64_t symbol_id) {
     assert(canonical_context_count() == 1 && "please use merge for multiple contexts");
@@ -161,45 +170,41 @@ Symbol& SymbolIndex::getSymbol(std::uint64_t symbol_id) {
     return it->second;
 }
 
-void SymbolIndex::addRelation(Symbol& symbol, Relation relation, bool isDependent) {
-    // assert(contexts.size() == 1 && "please use merge for multiple contexts");
-    // assert(contexts[0].canonical_context_id == 0);
-
-    /// relation.setDependent(isDependent);
-
-    if(isDependent) {
-        /// relation.addContext(0);
-        /// element_context_id_ref_counts[0] += 1;
+void SymbolIndex::addRelation(Symbol& symbol, Relation relation, bool is_dependent) {
+    assert(!merged && "add relation could be used in only not merged index");
+    std::uint32_t element_id;
+    if(is_dependent) {
+        element_id = alloc_dependent_elem_id();
+        cctx_element_refs[0] += 1;
     } else {
-        /// relation.set(independent_context_refs.size());
-        /// independent_context_refs.emplace_back();
-        /// independent_context_refs.back().insert(0);
+        element_id = alloc_independent_elem_id();
+        independent_elem_states.emplace_back(0);
     }
 
+    relation.ctx = Contextual::from(is_dependent, element_id);
     symbol.relations.insert(relation);
 }
 
 void SymbolIndex::addOccurrence(LocalSourceRange range,
                                 std::int64_t target_symbol,
-                                bool isDependent) {
-    // assert(contexts.size() == 1 && "please use merge for multiple contexts");
-    // assert(contexts[0].canonical_context_id == 0);
-    //
-    // auto& targets = occurrences[range];
-    // Occurrence occurrence;
-    // occurrence.target_symbol = target_symbol;
-    // occurrence.setDependent(isDependent);
-    //
-    // if(isDependent) {
-    //     occurrence.addContext(0);
-    //     element_context_id_ref_counts[0] += 1;
-    // } else {
-    //     occurrence.set(independent_context_refs.size());
-    //     independent_context_refs.emplace_back();
-    //     independent_context_refs.back().insert(0);
-    // }
-    //
-    // targets.insert(occurrence);
+                                bool is_dependent) {
+    assert(!merged && "add occurrence could be used in only not merged index");
+
+    auto& targets = occurrences[range];
+
+    std::uint32_t element_id;
+    if(is_dependent) {
+        element_id = alloc_dependent_elem_id();
+        cctx_element_refs[0] += 1;
+    } else {
+        element_id = alloc_independent_elem_id();
+        independent_elem_states.emplace_back(0);
+    }
+
+    Occurrence occurrence;
+    occurrence.target_symbol = target_symbol;
+    occurrence.ctx = Contextual::from(is_dependent, element_id);
+    targets.emplace_back(occurrence);
 }
 
 }  // namespace memory2

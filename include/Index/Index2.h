@@ -22,7 +22,8 @@ using SymbolID = std::uint64_t;
 
 using SourceRange = LocalSourceRange;
 
-struct Relation : Contextual {
+struct Relation {
+    Contextual ctx;
     RelationKind kind;
 
     /// The range of this relation.
@@ -54,7 +55,8 @@ struct Symbol {
     llvm::DenseSet<Relation> relations;
 };
 
-struct Occurrence : Contextual {
+struct Occurrence {
+    Contextual ctx;
     SymbolID target_symbol;
 };
 
@@ -66,6 +68,14 @@ public:
     static index::Shared<std::unique_ptr<SymbolIndex>> build(ASTInfo& AST);
 
     Symbol& getSymbol(std::uint64_t symbol_id);
+
+    void add_context(llvm::StringRef path, std::uint32_t include) {
+        assert(!merged && "");
+        auto& context = header_contexts[path].emplace_back();
+        context.include = include;
+        context.cctx_id = alloc_cctx_id();
+        context.hctx_id = alloc_hctx_id();
+    }
 
     void addRelation(Symbol& symbol, Relation relation, bool isDependent = true);
 
@@ -86,6 +96,9 @@ private:
     void slow_merge(this SymbolIndex& self, SymbolIndex& other);
 
 public:
+    /// Whether this has been merged with other files.
+    bool merged = false;
+
     /// All symbols in this index.
     llvm::DenseMap<SymbolID, Symbol> symbols;
 

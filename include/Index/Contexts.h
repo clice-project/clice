@@ -11,18 +11,28 @@
 
 namespace clice::index {
 
-using ElementID = std::uint32_t;
-
 struct Contextual {
-    ElementID element_id;
+    /// The actual element id,
+    std::uint32_t element_id;
 
-    bool is_dependent() {
-        return true;
+    constexpr inline static std::uint32_t FLAG = (1ull << 31);
+
+    static Contextual from(bool is_dependent, std::uint32_t offset) {
+        Contextual ctx;
+        ctx.element_id = offset;
+        if(!is_dependent) {
+            ctx.element_id |= FLAG;
+        }
+        return ctx;
     }
 
-    void set(std::uint32_t offset) {}
+    bool is_dependent() {
+        return (element_id & FLAG) == 0;
+    }
 
-    std::uint32_t offset() {}
+    std::uint32_t offset() {
+        return element_id & ~FLAG;
+    }
 };
 
 /// A header context could be represented by file:include.
@@ -31,6 +41,10 @@ struct Contextual {
 /// canonical context id.
 class Contexts {
 public:
+    std::uint32_t file_count() {
+        return header_contexts.size();
+    }
+
     /// The count of active header contexts in this index.
     std::uint32_t header_context_count() {
         return max_hctx_id - erased_hctx_ids.size();
@@ -55,7 +69,7 @@ public:
         return map;
     }
 
-    void add_context(llvm::StringRef path, std::uint32_t include);
+
 
     /// Get a new header context id.
     std::uint32_t alloc_hctx_id();
@@ -63,13 +77,13 @@ public:
     /// Get a new canonical context id.
     std::uint32_t alloc_cctx_id();
 
-    ElementID alloc_dependent_elem_id() {
+    std::uint32_t alloc_dependent_elem_id() {
         auto id = dependent_elem_states.size();
         dependent_elem_states.emplace_back(false);
         return id;
     }
 
-    ElementID alloc_independent_elem_id() {
+    std::uint32_t alloc_independent_elem_id() {
         auto id = independent_elem_states.size();
         independent_elem_states.emplace_back();
         return id;
