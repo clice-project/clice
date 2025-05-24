@@ -11,14 +11,17 @@ TEST(SymbolIndex2, AddRemoveContext) {
     SymbolIndex index;
 
     {
-        index.add_context("test.h", 1);
+        auto context = index.add_context("test.h", 1);
+        EXPECT_EQ(context.cctx_id, 0);
+        EXPECT_EQ(context.hctx_id, 0);
         EXPECT_EQ(index.header_context_count(), 1);
         EXPECT_EQ(index.canonical_context_count(), 1);
     }
 
     {
-        index.add_context("test.h", 2);
-
+        auto context = index.add_context("test.h", 2);
+        EXPECT_EQ(context.cctx_id, 1);
+        EXPECT_EQ(context.hctx_id, 1);
         EXPECT_EQ(index.header_context_count(), 2);
         EXPECT_EQ(index.canonical_context_count(), 2);
     }
@@ -26,8 +29,9 @@ TEST(SymbolIndex2, AddRemoveContext) {
     EXPECT_EQ(index.file_count(), 1);
 
     {
-        index.add_context("test2.h", 1);
-
+        auto context = index.add_context("test2.h", 1);
+        EXPECT_EQ(context.cctx_id, 2);
+        EXPECT_EQ(context.hctx_id, 2);
         EXPECT_EQ(index.header_context_count(), 3);
         EXPECT_EQ(index.canonical_context_count(), 3);
     }
@@ -41,7 +45,9 @@ TEST(SymbolIndex2, AddRemoveContext) {
 
     /// Test reuse context id and context ref.
     {
-        index.add_context("test3.h", 1);
+        auto context = index.add_context("test3.h", 1);
+        EXPECT_EQ(context.cctx_id, 0);
+        EXPECT_EQ(context.hctx_id, 0);
         EXPECT_EQ(index.header_context_count(), 2);
         EXPECT_EQ(index.canonical_context_count(), 2);
     }

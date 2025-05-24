@@ -137,7 +137,9 @@ void SymbolIndex::quick_merge(this SymbolIndex& self, SymbolIndex& other) {
                 break;
             }
         }
+    }
 
+    if(new_cctx_id == -1) {
         new_cctx_id = self.alloc_cctx_id();
     }
 
@@ -175,6 +177,7 @@ void SymbolIndex::addRelation(Symbol& symbol, Relation relation, bool is_depende
     std::uint32_t element_id;
     if(is_dependent) {
         element_id = alloc_dependent_elem_id();
+        dependent_elem_states[element_id].set(0);
         cctx_element_refs[0] += 1;
     } else {
         element_id = alloc_independent_elem_id();
@@ -195,6 +198,7 @@ void SymbolIndex::addOccurrence(LocalSourceRange range,
     std::uint32_t element_id;
     if(is_dependent) {
         element_id = alloc_dependent_elem_id();
+        dependent_elem_states[element_id].set(0);
         cctx_element_refs[0] += 1;
     } else {
         element_id = alloc_independent_elem_id();

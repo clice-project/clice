@@ -69,20 +69,23 @@ public:
 
     Symbol& getSymbol(std::uint64_t symbol_id);
 
-    void add_context(llvm::StringRef path, std::uint32_t include) {
+    HeaderContext add_context(llvm::StringRef path, std::uint32_t include) {
         assert(!merged && "");
         auto& context = header_contexts[path].emplace_back();
         context.include = include;
         context.cctx_id = alloc_cctx_id();
         context.hctx_id = alloc_hctx_id();
+        return context;
     }
 
-    void addRelation(Symbol& symbol, Relation relation, bool isDependent = true);
+    void addRelation(Symbol& symbol, Relation relation, bool is_dependent = true);
 
-    void addOccurrence(LocalSourceRange range, std::int64_t target_symbol, bool isDependent = true);
+    void addOccurrence(LocalSourceRange range,
+                       std::int64_t target_symbol,
+                       bool is_dependent = true);
 
     void merge(this SymbolIndex& self, SymbolIndex& other);
-
+        
 private:
     /// Merge another index into this. Most of header file is actually
     /// self contained file and has only one canonical context. This

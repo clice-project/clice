@@ -17,14 +17,14 @@ std::uint32_t Contexts::alloc_hctx_id() {
 
 std::uint32_t Contexts::alloc_cctx_id() {
     std::uint32_t new_cctx_id;
-    if(erased_hctx_ids.empty()) {
+    if(erased_cctx_ids.empty()) {
         new_cctx_id = max_cctx_id;
         max_cctx_id += 1;
         cctx_hctx_refs.emplace_back(1);
         cctx_element_refs.emplace_back(0);
     } else {
         new_cctx_id = erased_cctx_ids.front();
-        erased_hctx_ids.pop_front();
+        erased_cctx_ids.pop_front();
         cctx_hctx_refs[new_cctx_id] = 1;
         cctx_element_refs[new_cctx_id] = 0;
     }
@@ -59,6 +59,8 @@ void Contexts::remove(this Contexts& self, llvm::StringRef path) {
             self.cctx_element_refs[cctx_id] = 0;
         }
     }
+
+    self.header_contexts.erase(it);
 
     /// Remove all refs to this header context id.
     for(auto& state: self.independent_elem_states) {
