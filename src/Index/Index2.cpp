@@ -66,7 +66,7 @@ static void merge_elements(SymbolIndex& self, SymbolIndex& other, auto& update_c
     }
 }
 
-void SymbolIndex::quick_merge(this SymbolIndex& self, SymbolIndex& other) {
+auto SymbolIndex::quick_merge(this SymbolIndex& self, SymbolIndex& other) -> HeaderContext {
     assert(!other.merged && "quick merge could be only used for the unmerged index");
 
     /// We could make sure the other has only one header context.
@@ -141,23 +141,27 @@ void SymbolIndex::quick_merge(this SymbolIndex& self, SymbolIndex& other) {
 
     if(new_cctx_id == -1) {
         new_cctx_id = self.alloc_cctx_id();
+        is_new_cctx = true;
     }
 
-    /// In the end we set all visited element ids.
-    for(auto id: visited_elem_ids) {
-        self.dependent_elem_states[id].set(new_hctx_id);
+    if(is_new_cctx) {
+        /// In the end we set all visited element ids.
+        for(auto id: visited_elem_ids) {
+            self.dependent_elem_states[id].set(new_cctx_id);
+        }
+        self.cctx_element_refs[new_cctx_id] = other.cctx_element_refs.front();
     }
 
     auto& [path, old_contexts] = *other.header_contexts.begin();
-    self.header_contexts[path].emplace_back(HeaderContext{
+    return self.header_contexts[path].emplace_back(HeaderContext{
         .include = old_contexts[0].include,
         .hctx_id = new_hctx_id,
         .cctx_id = new_cctx_id,
     });
 }
 
-void SymbolIndex::merge(this SymbolIndex& self, SymbolIndex& other) {
-    self.quick_merge(other);
+auto SymbolIndex::merge(this SymbolIndex& self, SymbolIndex& other) -> HeaderContext {
+    return self.quick_merge(other);
 }
 
 Symbol& SymbolIndex::getSymbol(std::uint64_t symbol_id) {

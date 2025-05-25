@@ -91,7 +91,7 @@ public:
 
     void remove(this Contexts& self, llvm::StringRef path);
 
-protected:
+public:
     /// The max header context id.
     std::uint32_t max_hctx_id = 0;
 

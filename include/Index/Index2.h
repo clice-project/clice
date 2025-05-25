@@ -84,13 +84,13 @@ public:
                        std::int64_t target_symbol,
                        bool is_dependent = true);
 
-    void merge(this SymbolIndex& self, SymbolIndex& other);
+    HeaderContext merge(this SymbolIndex& self, SymbolIndex& other);
         
 private:
     /// Merge another index into this. Most of header file is actually
     /// self contained file and has only one canonical context. This
     /// is a fast path for it.
-    void quick_merge(this SymbolIndex& self, SymbolIndex& other);
+    HeaderContext quick_merge(this SymbolIndex& self, SymbolIndex& other);
 
     /// Merge another index into this, this could handle even though
     /// another has multiple canonical context. But of course slow than
