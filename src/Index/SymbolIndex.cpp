@@ -305,8 +305,6 @@ public:
             std::numeric_limits<std::uint32_t>::max(),
         };
 
-        using enum RelationKind::Kind;
-
         if(kind.isDeclOrDef()) {
             auto [fid2, definitionRange] = AST.toLocalExpansionRange(decl->getSourceRange());
             assert(fid == fid2 && "Invalid definition location");
@@ -345,7 +343,6 @@ public:
     }
 
 private:
-    llvm::DenseMap<const void*, uint64_t> symbolIDs;
     llvm::DenseMap<clang::FileID, SymbolIndexBuilder> builders;
 };
 
