@@ -169,7 +169,7 @@ private:
     llvm::DenseMap<clang::FileID, llvm::StringRef> pathCache;
 
     /// Cache for symbol id.
-    llvm::DenseMap<const void*, uint32_t> symbolHashCache;
+    llvm::DenseMap<const void*, std::uint64_t> symbolHashCache;
 
     llvm::BumpPtrAllocator pathStorage;
 };
