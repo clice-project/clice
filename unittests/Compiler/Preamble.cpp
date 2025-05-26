@@ -15,7 +15,7 @@ TEST(Preamble, ComputePreambleBound) {
         Annotation annotation{content};
         auto bounds = computePreambleBounds(annotation.source());
 
-        println("{}", dump(bounds));
+        clice::println("{}", dump(bounds));
 
         EXPECT_EQ(bounds.size(), marks.size(), chain);
 

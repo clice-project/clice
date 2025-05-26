@@ -40,11 +40,11 @@ void dump(SymbolIndex& index, DumpConfig config) {
     if(config.enable_symbol) {
         println("\n-------------------------Symbols Info--------------------------");
         for(auto& [symbol_id, symbol]: index.symbols) {
-            println("symbol: {}, kind: {}", symbol.name, symbol.kind.name());
+            clice::println("symbol: {}, kind: {}", symbol.name, symbol.kind.name());
             for(auto& relation: symbol.relations) {
                 if(relation.ctx.is_dependent()) {
                     auto context = index.dependent_elem_states[relation.ctx.offset()];
-                    println("   kind: {}, context: {:#b}",
+                    clice::println("   kind: {}, context: {:#b}",
                             relation.kind.name(),
                             context.to_ulong());
                 }
