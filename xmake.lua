@@ -1,7 +1,7 @@
 set_xmakever("2.9.7")
 set_project("clice")
 
-set_allowedplats("windows", "linux")
+set_allowedplats("windows", "linux", "macosx")
 set_allowedmodes("debug", "release")
 
 option("enable_test", {default = true})
@@ -17,7 +17,7 @@ if has_config("dev") then
                 .."See https://github.com/clice-project/clice/issues/42 for more information.")
             os.raise()
         end
-    elseif is_plat("linux") and is_mode("debug") then
+    elseif is_mode("debug") and (is_plat("linux") or is_plat("macosx")) then
         set_policy("build.sanitizer.address", true)
     end
 
@@ -128,7 +128,7 @@ rule("clice_build_config")
             else
                 target:add("ldflags", "-fuse-ld=lld-link")
             end
-        elseif target:is_plat("linux") then
+        elseif target:is_plat("linux") or target:is_plat("macosx") then
             -- gnu ld need to fix link order
             target:add("ldflags", "-fuse-ld=lld")
         end
@@ -142,6 +142,10 @@ package("llvm")
         elseif is_plat("linux") then
             add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release-lto.tar.xz")
             add_versions("20.0.0", "adeb46c441265a4e442aea1b9d55f3950bc240aa84e2498b106d8dfd64e123cc")
+        elseif is_plat("macosx") then
+            -- FIXME: MacOS package url and hash need edit
+            add_urls("file:///Users/qingfengzl/Workspace/clice-project/llvm-binary/build/package/arm64-macosx-apple-release.tar.xz")
+            add_versions("20.0.0", "02f680a1da376d2b7ab224f74bbef66e719549b157509126aef28da664ed11d2")
         end
     else
         if is_plat("windows") then
@@ -157,10 +161,19 @@ package("llvm")
                 add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
                 add_versions("20.0.0", "30ba7357eb40000f1d13d92242f7d87c3ff623e62205a41d10334d605739af89")
             end
+        elseif is_plat("macosx") then
+            -- FIXME: MacOS package url and hash need edit
+            if is_mode("debug") then
+                add_urls("file:///Users/qingfengzl/Workspace/clice-project/llvm-binary/build/package/arm64-macosx-apple-debug.tar.xz")
+                add_versions("20.0.0", "0d8315fc728692c12bcc442fe3598bfceefa6e697a982a4bbbdb211ba12ccae0")
+            elseif is_mode("release") then
+                add_urls("file:///Users/qingfengzl/Workspace/clice-project/llvm-binary/build/package/arm64-macosx-apple-release.tar.xz")
+                add_versions("20.0.0", "02f680a1da376d2b7ab224f74bbef66e719549b157509126aef28da664ed11d2")
+            end
         end
     end
 
-    if is_plat("linux") then
+    if is_plat("linux") or is_plat("macosx") then
         if is_mode("debug") then
             add_configs("shared", {description = "Build shared library.", default = true, type = "boolean", readonly = true})
         end
