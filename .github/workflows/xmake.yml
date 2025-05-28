@@ -143,4 +143,6 @@ jobs:
           xmake build --verbose --diagnosis --all
 
       - name: Run tests
-        run: xmake test --verbose
+        run: |
+          export DYLD_INSERT_LIBRARIES=/opt/homebrew/Cellar/llvm/20.1.4/lib/clang/20/lib/darwin/libclang_rt.asan_osx_dynamic.dylib 
+          xmake test --verbose
