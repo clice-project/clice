@@ -124,15 +124,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup xmake
-        uses: xmake-io/github-action-setup-xmake@v1
-        with:
-          xmake-version: branch@master
-          actions-cache-folder: '.xmake-cache'
-          actions-cache-key: ${{ matrix.os }}
-          package-cache: true
-          package-cache-key: ${{ matrix.os }}
-          build-cache: true
-          build-cache-key: ${{ matrix.os }}-${{ matrix.build_type }}
+        run: |
+          brew install xmake
+
+      # - name: Setup xmake
+      #   uses: xmake-io/github-action-setup-xmake@v1
+      #   with:
+      #     xmake-version: branch@master
+      #     actions-cache-folder: '.xmake-cache'
+      #     actions-cache-key: ${{ matrix.os }}
+      #     package-cache: true
+      #     package-cache-key: ${{ matrix.os }}
+      #     build-cache: true
+      #     build-cache-key: ${{ matrix.os }}-${{ matrix.build_type }}
 
       - name: Xmake configure
         run: |
