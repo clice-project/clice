@@ -128,7 +128,7 @@ rule("clice_build_config")
             else
                 target:add("ldflags", "-fuse-ld=lld-link")
             end
-        elseif target:is_plat("linux") or target:is_plat("macosx") then
+        elseif target:is_plat("linux") then
             -- gnu ld need to fix link order
             target:add("ldflags", "-fuse-ld=lld")
         end
@@ -143,9 +143,8 @@ package("llvm")
             add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release-lto.tar.xz")
             add_versions("20.0.0", "adeb46c441265a4e442aea1b9d55f3950bc240aa84e2498b106d8dfd64e123cc")
         elseif is_plat("macosx") then
-            -- FIXME: MacOS package url and hash need edit
-            add_urls("file:///Users/qingfengzl/Workspace/clice-project/llvm-binary/build/package/arm64-macosx-apple-release.tar.xz")
-            add_versions("20.0.0", "02f680a1da376d2b7ab224f74bbef66e719549b157509126aef28da664ed11d2")
+            add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release-lto.tar.xz")
+            add_versions("20.1.5", "fd4b0eccbe387a12bfe5251fce27e8067674a33d8a59c9918e05aa249c55724f")
         end
     else
         if is_plat("windows") then
@@ -162,13 +161,12 @@ package("llvm")
                 add_versions("20.0.0", "30ba7357eb40000f1d13d92242f7d87c3ff623e62205a41d10334d605739af89")
             end
         elseif is_plat("macosx") then
-            -- FIXME: MacOS package url and hash need edit
             if is_mode("debug") then
-                add_urls("file:///Users/qingfengzl/Workspace/clice-project/llvm-binary/build/package/arm64-macosx-apple-debug.tar.xz")
-                add_versions("20.0.0", "0d8315fc728692c12bcc442fe3598bfceefa6e697a982a4bbbdb211ba12ccae0")
+                add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-debug.tar.xz")
+                add_versions("20.1.5", "9a201845a25067f8284180aa2a7fafd95cca3907c3310b7447be34f9bf4ec246")
             elseif is_mode("release") then
-                add_urls("file:///Users/qingfengzl/Workspace/clice-project/llvm-binary/build/package/arm64-macosx-apple-release.tar.xz")
-                add_versions("20.0.0", "02f680a1da376d2b7ab224f74bbef66e719549b157509126aef28da664ed11d2")
+                add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release.tar.xz")
+                add_versions("20.1.5", "b36165d2bb77528d7b0b9428c27d59319f6b245811552e0a3ad3b39d18662a2d")
             end
         end
     end
