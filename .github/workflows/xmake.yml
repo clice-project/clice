@@ -116,10 +116,6 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Setup llvm
-        run: |
-          brew install llvm@20
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -140,7 +136,7 @@ jobs:
 
       - name: Xmake configure
         run: |
-          xmake config --yes --mode=${{ matrix.build_type }} --toolchain=clang --sdk=/opt/homebrew/opt/llvm@20
+          xmake config --yes --mode=${{ matrix.build_type }} --toolchain=clang
 
       - name: Build clice
         run: |
@@ -148,5 +144,4 @@ jobs:
 
       - name: Run tests
         run: |
-          export DYLD_INSERT_LIBRARIES=/opt/homebrew/Cellar/llvm/20.1.4/lib/clang/20/lib/darwin/libclang_rt.asan_osx_dynamic.dylib 
           xmake test --verbose
