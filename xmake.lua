@@ -17,7 +17,7 @@ if has_config("dev") then
                 .."See https://github.com/clice-project/clice/issues/42 for more information.")
             os.raise()
         end
-    elseif is_mode("debug") and (is_plat("linux", "macosx") then
+    elseif is_mode("debug") and is_plat("linux", "macosx") then
         set_policy("build.sanitizer.address", true)
     end
 
