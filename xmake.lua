@@ -17,7 +17,7 @@ if has_config("dev") then
                 .."See https://github.com/clice-project/clice/issues/42 for more information.")
             os.raise()
         end
-    elseif is_mode("debug") and (is_plat("linux") or is_plat("macosx")) then
+    elseif is_mode("debug") and (is_plat("linux", "macosx") then
         set_policy("build.sanitizer.address", true)
     end
 
@@ -171,7 +171,7 @@ package("llvm")
         end
     end
 
-    if is_plat("linux") or is_plat("macosx") then
+    if is_plat("linux", "macosx") then
         if is_mode("debug") then
             add_configs("shared", {description = "Build shared library.", default = true, type = "boolean", readonly = true})
         end

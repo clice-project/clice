@@ -119,6 +119,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup llvm
+        run: |
+          brew install llvm@20
+
       - name: Setup xmake
         run: |
           brew install xmake
@@ -136,7 +140,7 @@ jobs:
 
       - name: Xmake configure
         run: |
-          xmake config --yes --mode=${{ matrix.build_type }} --toolchain=clang
+          xmake config --yes --mode=${{ matrix.build_type }} --toolchain=clang --sdk=/opt/homebrew/opt/lld@20
 
       - name: Build clice
         run: |
