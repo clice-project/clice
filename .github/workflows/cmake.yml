@@ -20,7 +20,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-24.04, windows-2022]
+        os: [ubuntu-24.04, windows-2022, macos-15]
 
     runs-on: ${{ matrix.os }}
 
@@ -48,6 +48,11 @@ jobs:
 
           sudo apt install -y cmake ninja-build
 
+      - name: Setup llvm@20
+        if: matrix.os == 'macos-15'
+        run: |
+          brew install llvm@20
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -63,6 +68,11 @@ jobs:
           curl -O -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x64-windows-msvc-release.7z"
           7z x x64-windows-msvc-release.7z "-o.llvm"
 
+      - name: Setup llvm binary
+        if: matrix.os == 'macos-15'
+        run: |
+          curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-debug.tar.xz" | tar -xJ -C ./.llvm
+
       - name: Setup msvc sysroot for cmake
         if: matrix.os == 'windows-2022'
         uses: ilammy/msvc-dev-cmd@v1
@@ -70,6 +80,13 @@ jobs:
       - name: Build clice (debug)
         if: matrix.os == 'ubuntu-24.04'
         run: |
+          cmake --preset debug
+          cmake --build --preset debug -v
+
+      - name: Build clice (debug, macos)
+        if: matrix.os == 'macos-15'
+        run: |
+          export PATH="/opt/homebrew/opt/llvm@20/bin:$PATH"
           cmake --preset debug
           cmake --build --preset debug -v
 
