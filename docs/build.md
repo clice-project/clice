@@ -2,7 +2,7 @@
 
 - Windows
 - Linux
-- MacOS
+- macOS
 
 # Dependencies
 
