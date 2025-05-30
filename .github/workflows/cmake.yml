@@ -71,6 +71,7 @@ jobs:
       - name: Setup llvm binary
         if: matrix.os == 'macos-15'
         run: |
+          mkdir -p ./.llvm
           curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-debug.tar.xz" | tar -xJ -C ./.llvm
 
       - name: Setup msvc sysroot for cmake
