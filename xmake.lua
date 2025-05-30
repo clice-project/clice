@@ -144,7 +144,7 @@ package("llvm")
             add_versions("20.0.0", "adeb46c441265a4e442aea1b9d55f3950bc240aa84e2498b106d8dfd64e123cc")
         elseif is_plat("macosx") then
             add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release-lto.tar.xz")
-            add_versions("20.1.5", "fd4b0eccbe387a12bfe5251fce27e8067674a33d8a59c9918e05aa249c55724f")
+            add_versions("20.1.5", "f1c16076e0841b9e40cf21352d6661c7167bf6a76fa646b0fcba67e05bec2e7c")
         end
     else
         if is_plat("windows") then
@@ -163,10 +163,10 @@ package("llvm")
         elseif is_plat("macosx") then
             if is_mode("debug") then
                 add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-debug.tar.xz")
-                add_versions("20.1.5", "9a201845a25067f8284180aa2a7fafd95cca3907c3310b7447be34f9bf4ec246")
+                add_versions("20.1.5", "743e926a47d702a89b9dbe2f3b905cfde5a06fb2b41035bd3451e8edb5330222")
             elseif is_mode("release") then
                 add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release.tar.xz")
-                add_versions("20.1.5", "b36165d2bb77528d7b0b9428c27d59319f6b245811552e0a3ad3b39d18662a2d")
+                add_versions("20.1.5", "16f473e069d5d8225dc5f2cd513ae4a2161127385fd384d2a4737601d83030e7")
             end
         end
     end
