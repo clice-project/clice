@@ -48,10 +48,10 @@ jobs:
 
           sudo apt install -y cmake ninja-build
 
-      - name: Setup llvm@20
+      - name: Setup llvm@20 and lld
         if: matrix.os == 'macos-15'
         run: |
-          brew install llvm@20
+          brew install llvm@20 lld@20
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -87,7 +87,7 @@ jobs:
       - name: Build clice (debug, macos)
         if: matrix.os == 'macos-15'
         run: |
-          export PATH="/opt/homebrew/opt/llvm@20/bin:$PATH"
+          export PATH="/opt/homebrew/opt/llvm@20/bin:/opt/homebrew/opt/lld@20/bin:$PATH"
           cmake --preset debug
           cmake --build --preset debug -v
 
