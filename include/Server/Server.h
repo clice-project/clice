@@ -50,7 +50,6 @@ private:
 
 private:
     std::uint32_t id = 0;
-    Indexer indexer;
     Scheduler scheduler;
     LSPConverter converter;
     CompilationDatabase database;
