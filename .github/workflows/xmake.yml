@@ -106,3 +106,42 @@ jobs:
 
       - name: Run tests
         run: xmake test --verbose
+
+  macos:
+    strategy:
+      matrix:
+        os: [ macos-15 ]
+        build_type: [release, debug]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup llvm
+        run: |
+          brew install llvm@20
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: branch@master
+          actions-cache-folder: '.xmake-cache'
+          actions-cache-key: ${{ matrix.os }}
+          package-cache: true
+          package-cache-key: ${{ matrix.os }}
+          build-cache: true
+          build-cache-key: ${{ matrix.os }}-${{ matrix.build_type }}
+
+      - name: Xmake configure
+        run: |
+          xmake config --yes --mode=${{ matrix.build_type }} --toolchain=clang --sdk=/opt/homebrew/opt/llvm@20
+
+      - name: Build clice
+        run: |
+          xmake build --verbose --diagnosis --all
+
+      - name: Run tests
+        run: |
+          xmake test --verbose

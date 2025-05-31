@@ -26,7 +26,7 @@ struct DocumentLink : TestFixture {
     }
 
     void dump() {
-        println("{}", clice::dump(result[AST->getInterestedFile()]));
+        clice::println("{}", clice::dump(result[AST->getInterestedFile()]));
     }
 };
 

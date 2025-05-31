@@ -2,6 +2,7 @@
 
 - Windows
 - Linux
+- macOS
 
 # Dependencies
 
@@ -46,6 +47,9 @@ For users who cannot build LLVM from source, we provide precompiled binaries for
 # Linux precompiled binary require glibc 2.31 (build on ubuntu 20.04)
 $ mkdir -p ./.llvm
 $ curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x86_64-linux-gnu-release.tar.xz" | tar -xJ -C ./.llvm
+# MacOS precompiled binary require macos15+
+$ mkdir -p ./.llvm
+$ curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release.tar.xz" | tar -xJ -C ./.llvm
 # windows precompiled binary only MD runtime support
 $ curl -O -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x64-windows-msvc-release.7z"
 $ 7z x x64-windows-msvc-release.7z "-o.llvm"
@@ -55,6 +59,12 @@ $ 7z x x64-windows-msvc-release.7z "-o.llvm"
 $ cmake -B build -DCLICE_DEV=ON -DCLICE_ENABLE_TEST=OFF -DLLVM_INSTALL_PATH=.llvm
 $ cmake --build build
 ```
+
+> [!IMPORTANT]
+>
+> The precompiled binary for MacOS is compiled by homebrew llvm@20.
+>
+> Please use the same toolchain to compile clice, DO NOT use Apple Clang.
 
 ## Xmake
 

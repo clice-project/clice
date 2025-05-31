@@ -132,7 +132,7 @@ inline std::string toPath(llvm::StringRef uri) {
     } else {
         std::abort();
     }
-#elif defined(__unix__)
+#elif defined(__unix__) || defined(__APPLE__)
     if(cloned.starts_with("file://")) {
         cloned = cloned.drop_front(7);
     } else {
@@ -146,7 +146,7 @@ inline std::string toPath(llvm::StringRef uri) {
 
     llvm::SmallString<128> result;
     if(auto err = fs::real_path(decoded, result)) {
-        print("Failed to get real path: {}, Input is {}\n", err.message(), decoded);
+        clice::print("Failed to get real path: {}, Input is {}\n", err.message(), decoded);
         std::abort();
     }
 
