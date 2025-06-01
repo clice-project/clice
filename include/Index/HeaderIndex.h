@@ -1,45 +1,11 @@
 #pragma once
 
-#include <bitset>
-#include <cstdint>
-#include <deque>
-#include <vector>
+#include "RawIndex.h"
 
-#include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/StringMap.h"
-#include "llvm/ADT/BitVector.h"
+namespace clice::index::memory {
 
-namespace clice::index {
-
-struct Contextual {
-    /// The actual element id,
-    std::uint32_t element_id;
-
-    constexpr inline static std::uint32_t FLAG = (1ull << 31);
-
-    static Contextual from(bool is_dependent, std::uint32_t offset) {
-        Contextual ctx;
-        ctx.element_id = offset;
-        if(!is_dependent) {
-            ctx.element_id |= FLAG;
-        }
-        return ctx;
-    }
-
-    bool is_dependent() {
-        return (element_id & FLAG) == 0;
-    }
-
-    std::uint32_t offset() {
-        return element_id & ~FLAG;
-    }
-};
-
-/// A header context could be represented by file:include.
-/// In the following context, hctx means "header context" and cctx means
-/// "canonical context". So hcid is header context id and ccid is
-/// canonical context id.
-class Contexts {
+/// HeaderIndex store extra information to merge raw index from different header contexts.
+class HeaderIndex : public RawIndex {
 public:
     std::uint32_t file_count() {
         return header_contexts.size();
@@ -69,8 +35,6 @@ public:
         return map;
     }
 
-
-
     /// Get a new header context id.
     std::uint32_t alloc_hctx_id();
 
@@ -89,9 +53,34 @@ public:
         return id;
     }
 
-    void remove(this Contexts& self, llvm::StringRef path);
+    struct HeaderContext {
+        /// The include location id of this header context.
+        std::uint32_t include;
+
+        /// The header context id of this header context.
+        std::uint32_t hctx_id;
+
+        /// The canonical context id of this header context.
+        std::uint32_t cctx_id;
+    };
+
+    void remove(this HeaderIndex& self, llvm::StringRef path);
+
+    HeaderContext add_context(llvm::StringRef path, std::uint32_t include) {
+        assert(!merged && "");
+        auto& context = header_contexts[path].emplace_back();
+        context.include = include;
+        context.cctx_id = alloc_cctx_id();
+        context.hctx_id = alloc_hctx_id();
+        return context;
+    }
+
+    HeaderContext
+        merge(this HeaderIndex& self, llvm::StringRef path, std::uint32_t include, RawIndex& raw);
 
 public:
+    bool merged = false;
+
     /// The max header context id.
     std::uint32_t max_hctx_id = 0;
 
@@ -104,17 +93,6 @@ public:
 
     /// Same as above but for canonical context id.
     std::deque<std::uint32_t> erased_cctx_ids;
-
-    struct HeaderContext {
-        /// The include location id of this header context.
-        std::uint32_t include;
-
-        /// The header context id of this header context.
-        std::uint32_t hctx_id;
-
-        /// The canonical context id of this header context.
-        std::uint32_t cctx_id;
-    };
 
     /// A map between source file path and its header contexts.
     llvm::StringMap<llvm::SmallVector<HeaderContext>> header_contexts;
@@ -139,4 +117,68 @@ public:
     std::vector<llvm::DenseSet<std::uint32_t>> independent_elem_states;
 };
 
-}  // namespace clice::index
+}  // namespace clice::index::memory
+
+namespace llvm {
+
+template <typename... Ts>
+unsigned dense_hash(const Ts&... ts) {
+    return llvm::DenseMapInfo<std::tuple<Ts...>>::getHashValue(std::tuple{ts...});
+}
+
+template <>
+struct DenseMapInfo<clice::LocalSourceRange> {
+    using R = clice::LocalSourceRange;
+
+    inline static R getEmptyKey() {
+        return R(0, -1);
+    }
+
+    inline static R getTombstoneKey() {
+        return R(-1, 0);
+    }
+
+    static auto getHashValue(const R& r) {
+        return dense_hash(r.begin, r.end);
+    }
+
+    static bool isEqual(const R& lhs, const R& rhs) {
+        return lhs == rhs;
+    }
+};
+
+template <>
+struct DenseMapInfo<clice::index::memory::Relation> {
+    using R = clice::index::memory::Relation;
+
+    inline static R getEmptyKey() {
+        return R{
+            .kind = clice::RelationKind(),
+            .range = clice::LocalSourceRange(0, 0),
+            .target_symbol = 0,
+        };
+    }
+
+    inline static R getTombstoneKey() {
+        return R{
+            .kind = clice::RelationKind(),
+            .range = clice::LocalSourceRange(-1, -1),
+            .target_symbol = 0,
+        };
+    }
+
+    /// Contextual doen't take part in hashing and equality.
+    static auto getHashValue(const R& relation) {
+        return dense_hash(relation.kind.value(),
+                          relation.range.begin,
+                          relation.range.end,
+                          relation.target_symbol);
+    }
+
+    static bool isEqual(const R& lhs, const R& rhs) {
+        return lhs.kind == rhs.kind && lhs.range == rhs.range &&
+               lhs.target_symbol == rhs.target_symbol;
+    }
+};
+
+}  // namespace llvm

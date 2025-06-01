@@ -149,6 +149,12 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
 }
 
 async::Task<> Scheduler::buildAST(std::string path, std::string content) {
+    auto file = &openFiles[path];
+
+    /// Try get the lock, the waiter on the lock will be resumed when
+    /// guard is destroyed.
+    auto guard = co_await file->ASTBuiltLock.try_lock();
+
     /// PCH is already updated.
     co_await buildPCH(path, content);
 
@@ -171,16 +177,14 @@ async::Task<> Scheduler::buildAST(std::string path, std::string content) {
         co_return;
     }
 
-    auto& file = openFiles[path];
+    /// Index the source file.
+    co_await indexer.index(*info);
 
-    /// Try get the lock, the waiter on the lock will be resumed when
-    /// guard is destroyed.
-    auto guard = co_await file.ASTBuiltLock.try_lock();
-
+    file = &openFiles[path];
     /// Update built AST info.
-    file.AST = std::make_shared<ASTInfo>(std::move(*info));
+    file->AST = std::make_shared<ASTInfo>(std::move(*info));
     /// Dispose the task so that it will destroyed when task complete.
-    file.ASTBuild.dispose();
+    file->ASTBuild.dispose();
 
     log::info("Building AST successfully for {}", path);
 }

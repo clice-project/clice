@@ -16,17 +16,16 @@ std::expected<void, std::string> load(llvm::StringRef execute, llvm::StringRef f
 void init(std::string_view workplace);
 
 struct ServerOptions {
-    std::vector<std::string> compile_commands_dirs;
+    std::vector<std::string> compile_commands_dirs = {"${workspace}/build"};
 };
 
 struct CacheOptions {
-    std::string dir;
+    std::string dir = "${workspace}/.clice/cache";
     uint32_t limit = 0;
 };
 
 struct IndexOptions {
-    std::string dir;
-    bool implicitInstantiation = true;
+    std::string dir = "${workspace}/.clice/index";
 };
 
 struct Rule {

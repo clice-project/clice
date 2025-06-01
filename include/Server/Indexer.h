@@ -1,116 +1,77 @@
 #pragma once
 
-#include "Config.h"
-#include "IncludeGraph.h"
+#include <vector>
 #include "Async/Async.h"
+#include "AST/SymbolID.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/StringMap.h"
 #include "Compiler/Command.h"
-#include "Index/FeatureIndex.h"
-#include "llvm/ADT/StringSet.h"
-#include "Feature/Lookup.h"
+#include "Index/Index.h"
 
 namespace clice {
 
-class Indexer : public IncludeGraph {
+class ASTInfo;
+
+class Indexer {
 public:
-    Indexer(CompilationDatabase& database, const config::IndexOptions& options);
+    /// Index an opened file, its AST is already builtin
+    /// and PCH is used for it.
+    async::Task<> index(ASTInfo& AST);
 
-    /// Add a file to wait for indexing.
-    void add(std::string file);
+    /// Index an static file.
+    async::Task<> index(llvm::StringRef file);
 
-    /// Remove a file from indexing.
-    void remove(std::string file);
-
-    void indexAll();
-
-    void save();
-
-    void load();
-
-public:
-    Header* getHeader(llvm::StringRef file) const;
-
-    TranslationUnit* getTranslationUnit(llvm::StringRef file) const;
-
-    /// Return current header context of given header file. If the header
-    /// does't have an active context, the result will be invalid.
-    std::optional<proto::HeaderContext> currentContext(llvm::StringRef header) const;
-
-    /// Switch the context of the header to given context. If success,
-    /// return true.
-    bool switchContext(llvm::StringRef header, proto::HeaderContext context);
-
-    /// Resolve the given header context to a group of locations.
-    std::vector<proto::IncludeLocation> resolveContext(proto::HeaderContext context) const;
-
-    /// Return all header contexts of given header file, note that a header may have thousands
-    /// of header contexts, of course we won't return them all at once. We would return a group
-    /// of contexts for each different header context. The maximum of group count is determined
-    /// by limit. Optionally, you can specify a 'contextFile' to filter the results, returning only
-    /// contexts related to that file.
-    std::vector<proto::HeaderContextGroup>
-        allContexts(llvm::StringRef headerFile,
-                    uint32_t limit = 10,
-                    llvm::StringRef contextFile = llvm::StringRef()) const;
+    using Path = std::string;
+    using PathID = std::uint32_t;
+    using SymbolID = std::uint64_t;
 
 public:
-    struct SymbolID {
-        uint64_t hash;
-        std::string name;
+    Indexer(CompilationDatabase& database) : database(database) {}
+
+    PathID getPath(llvm::StringRef path) {
+        auto it = paths.find(path);
+        if(it != paths.end()) {
+            return it->second;
+        }
+
+        auto id = path_storage.size();
+        path_storage.emplace_back(path);
+        paths.try_emplace(path, id);
+        return id;
+    }
+
+private:
+    struct HeaderIndices {
+        using RawIndex = std::pair<std::uint32_t, std::unique_ptr<index::memory::RawIndex>>;
+
+        /// The merged index.
+        std::unique_ptr<index::memory::HeaderIndex> merged;
+
+        llvm::DenseMap<PathID, std::vector<RawIndex>> unmergeds;
     };
 
-    /// Return all indices of the given translation unit. If the file is empty,
-    /// return all indices of the IncludeGraph.
-    std::vector<std::string> indices(TranslationUnit* tu = nullptr);
-
-    /// Resolve the symbol at the given position.
-    async::Task<std::vector<SymbolID>> resolve(const proto::TextDocumentPositionParams& params);
-
-    // using LookupCallback = llvm::unique_function<bool(llvm::StringRef path,
-    //                                                   llvm::StringRef content,
-    //                                                   const index::SymbolIndex::Symbol& symbol)>;
-    //
-    // async::Task<> lookup(llvm::ArrayRef<SymbolID> targets,
-    //                     llvm::ArrayRef<std::string> files,
-    //                     LookupCallback callback);
-    //
-    ///// Lookup the reference information according to the given position.
-    // async::Task<proto::ReferenceResult> lookup(const proto::ReferenceParams& params,
-    //                                            RelationKind kind);
-    //
-    ///// According to the given file and offset, resolve the symbol at the offset.
-    // async::Task<proto::HierarchyPrepareResult>
-    //     prepareHierarchy(const proto::HierarchyPrepareParams& params);
-    //
-    // async::Task<proto::CallHierarchyIncomingCallsResult>
-    //    incomingCalls(const proto::HierarchyParams& params);
-    //
-    // async::Task<proto::CallHierarchyOutgoingCallsResult>
-    //    outgoingCalls(const proto::HierarchyParams& params);
-    //
-    // async::Task<proto::TypeHierarchyResult> typeHierarchy(const proto::HierarchyParams& params,
-    //                                                          bool super);
-
-public:
-    async::Task<std::optional<index::FeatureIndex>> getFeatureIndex(std::string& buffer,
-                                                                    llvm::StringRef file) const;
-
-    async::Task<std::vector<feature::SemanticToken>> semanticTokens(llvm::StringRef file) const;
-
-    async::Task<std::vector<feature::FoldingRange>> foldingRanges(llvm::StringRef file) const;
-
-    async::Task<std::vector<feature::DocumentLink>> documentLinks(llvm::StringRef file) const;
-
-private:
-    async::Task<> index(std::string file);
-
-private:
     CompilationDatabase& database;
-    const config::IndexOptions& options;
 
-    llvm::StringMap<async::Task<>> tasks;
-    llvm::StringSet<> pending;
+    /// All paths of indices.
+    std::vector<Path> path_storage;
 
-    std::size_t concurrency = std::thread::hardware_concurrency();
+    /// A map between path and its id.
+    llvm::StringMap<PathID> paths;
+
+    /// A map between symbol id and files that contains it.
+    llvm::DenseMap<SymbolID, llvm::DenseSet<PathID>> symbol_indices;
+
+    /// A map between source file path and its static indices.
+    llvm::DenseMap<PathID, Path> static_indices;
+
+    std::uint32_t unmerged_count = 0;
+
+    /// In-memory header indices.
+    llvm::DenseMap<PathID, std::unique_ptr<HeaderIndices>> dynamic_header_indices;
+
+    /// In-memory translation unit indices.
+    llvm::DenseMap<PathID, std::unique_ptr<index::memory::TUIndex>> dynamic_tu_indices;
 };
-}  // namespace clice
 
+}  // namespace clice

@@ -1,29 +1,22 @@
 #pragma once
 
-#include "SymbolIndex.h"
-#include "FeatureIndex.h"
-#include "Async/FileSystem.h"
+#include <deque>
+#include <bitset>
+#include <vector>
+#include <variant>
 
-namespace clice::index {
+#include "TUIndex.h"
+#include "RawIndex.h"
+#include "HeaderIndex.h"
+#include "IncludeGraph.h"
 
-struct Index {
-    std::optional<std::vector<char>> symbol;
-    llvm::XXH128_hash_t symbolHash = {0, 0};
+namespace clice::index::memory {
 
-    std::optional<std::vector<char>> feature;
-    llvm::XXH128_hash_t featureHash = {0, 0};
-
-    static Shared<Index> build(ASTInfo& AST);
-
-    async::Task<> write(std::string path) {
-        if(symbol) {
-            co_await async::fs::write(path + ".sidx", symbol->data(), symbol->size());
-        }
-
-        if(feature) {
-            co_await async::fs::write(path + ".fidx", feature->data(), feature->size());
-        }
-    }
+struct Indices {
+    std::unique_ptr<TUIndex> tu_index;
+    llvm::DenseMap<clang::FileID, std::unique_ptr<RawIndex>> header_indices;
 };
 
-}  // namespace clice::index
+Indices index(ASTInfo& AST);
+
+}  // namespace clice::index::memory
