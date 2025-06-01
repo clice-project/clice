@@ -6,6 +6,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
+#include "Compiler/Command.h"
 #include "Index/Index.h"
 
 namespace clice {
@@ -26,6 +27,8 @@ public:
     using SymbolID = std::uint64_t;
 
 public:
+    Indexer(CompilationDatabase& database) : database(database) {}
+
     PathID getPath(llvm::StringRef path) {
         auto it = paths.find(path);
         if(it != paths.end()) {
@@ -47,6 +50,8 @@ private:
 
         llvm::DenseMap<PathID, std::vector<RawIndex>> unmergeds;
     };
+
+    CompilationDatabase& database;
 
     /// All paths of indices.
     std::vector<Path> path_storage;

@@ -1,6 +1,8 @@
 #include "Compiler/AST.h"
+#include "Compiler/Compilation.h"
 #include "Index/Index.h"
 #include "Server/Indexer.h"
+#include "Support/Logger.h"
 
 namespace clice {
 
@@ -41,6 +43,21 @@ async::Task<> Indexer::index(ASTInfo& AST) {
     }
 
     dynamic_tu_indices[tu_id] = std::move(tu_index);
+}
+
+async::Task<> Indexer::index(llvm::StringRef file) {
+    CompilationParams params;
+    params.srcPath = file;
+    params.command = database.getCommand(file);
+
+    auto AST = co_await async::submit([&] { return compile(params); });
+
+    if(!AST) {
+        log::info("Fail to index background file {}", file);
+        co_return;
+    }
+
+    co_await index(*AST);
 }
 
 }  // namespace clice
