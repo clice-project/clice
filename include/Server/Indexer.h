@@ -27,7 +27,7 @@ private:
     using Path = std::string;
     using PathID = std::uint32_t;
     using SymbolID = std::uint64_t;
-    using SymbolIndex = std::unique_ptr<index::memory2::SymbolIndex>;
+    using SymbolIndex = std::unique_ptr<index::memory::HeaderIndex>;
 
     /// All paths of indices.
     std::vector<Path> path_storage;

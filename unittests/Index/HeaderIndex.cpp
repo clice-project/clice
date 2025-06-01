@@ -121,7 +121,7 @@ std::string test_code(HeaderIndex& index, std::uint32_t id) {
     return code;
 }
 
-TEST(SymbolIndex2, AddRemoveContext) {
+TEST(HeaderIndex, AddRemoveContext) {
     HeaderIndex index;
 
     {
@@ -181,13 +181,13 @@ TEST(SymbolIndex2, AddRemoveContext) {
     EXPECT_EQ(index.file_count(), 4);
 }
 
-TEST(SymbolIndex2, SymbolInsert) {
+TEST(HeaderIndex, SymbolInsert) {
     HeaderIndex index;
     index.add_context("test.h", 1);
     index.add_occurrence({1, 2}, 1);
 }
 
-TEST(SymbolIndex2, MergeEmpty) {
+TEST(HeaderIndex, MergeEmpty) {
     HeaderIndex base;
 
     RawIndex index;
@@ -210,7 +210,7 @@ TEST(SymbolIndex2, MergeEmpty) {
     EXPECT_EQ(base.file_count(), 3);
 }
 
-TEST(SymbolIndex2, MergeOccurrence) {
+TEST(HeaderIndex, MergeOccurrence) {
     HeaderIndex base;
 
     RawIndex index;
@@ -232,7 +232,7 @@ TEST(SymbolIndex2, MergeOccurrence) {
     EXPECT_EQ(base.file_count(), 3);
 }
 
-TEST(SymbolIndex2, MergeSymbol) {
+TEST(HeaderIndex, MergeSymbol) {
     LocalSourceRange range = {0, 0};
 
     HeaderIndex base;
@@ -286,7 +286,7 @@ TEST(SymbolIndex2, MergeSymbol) {
     }
 }
 
-TEST(SymbolIndex2, MergeReuse) {
+TEST(HeaderIndex, MergeReuse) {
     LocalSourceRange range = {0, 0};
     HeaderIndex base;
 
@@ -313,7 +313,7 @@ TEST(SymbolIndex2, MergeReuse) {
     EXPECT_EQ(base.canonical_context_count(), 2);
 }
 
-TEST(SymbolIndex2, MergeComplex) {
+TEST(HeaderIndex, MergeComplex) {
     RawIndex index1;
     {
         auto& symbol = index1.get_symbol(5617328926567294902ull);
@@ -827,7 +827,7 @@ TEST(SymbolIndex2, MergeComplex) {
 
 #if 0
 /// Only for local tests.
-TEST(SymbolIndex2, Build) {
+TEST(HeaderIndex, Build) {
     llvm::StringRef context = R"(
 #include <iostream>
 )";
