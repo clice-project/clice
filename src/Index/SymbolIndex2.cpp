@@ -1,5 +1,5 @@
 #include "AST/Semantic.h"
-#include "Index/Index2.h"
+#include "Index/Index.h"
 #include "Index/IncludeGraph.h"
 #include "Support/Format.h"
 
@@ -130,14 +130,19 @@ public:
         return std::move(indices);
     }
 
-private:
+public:
     IncludeGraph graph;
     std::string context_path;
     llvm::DenseMap<clang::FileID, std::unique_ptr<SymbolIndex>> indices;
 };
 
-index::Shared<std::unique_ptr<SymbolIndex>> SymbolIndex::build(ASTInfo& AST) {
-    return SymbolIndexBuilder(AST).build();
+IndexResult index(ASTInfo& AST) {
+    SymbolIndexBuilder builder(AST);
+    builder.run();
+    return IndexResult{
+        std::move(builder.graph),
+        std::move(builder.indices),
+    };
 }
 
 }  // namespace clice::index::memory2
