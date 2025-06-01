@@ -15,6 +15,13 @@ async::Task<> Indexer::index(ASTInfo& AST) {
     for(auto& [fid, index]: header_indices) {
         auto id = getPath(index->path);
         auto it = dynamic_header_indices.find(id);
+
+        /// FIXME: If the value less than 0, it represents the file is from
+        /// PCH or module. How to handle such file?
+        if(fid < clang::FileID::getSentinel()) {
+            continue;
+        }
+
         auto include = tu_index->graph.getInclude(fid);
 
         if(it != dynamic_header_indices.end()) {

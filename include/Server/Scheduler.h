@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Indexer.h"
 #include "Async/Async.h"
 #include "Compiler/AST.h"
 #include "Compiler/Module.h"
@@ -34,8 +35,8 @@ struct OpenFile {
 
 class Scheduler {
 public:
-    Scheduler(LSPConverter& converter, CompilationDatabase& database) :
-        converter(converter), database(database) {}
+    Scheduler(Indexer& indexer, LSPConverter& converter, CompilationDatabase& database) :
+        indexer(indexer), converter(converter), database(database) {}
 
     /// Add or update a document.
     void addDocument(std::string path, std::string content);
@@ -58,6 +59,7 @@ private:
     async::Task<> buildAST(std::string file, std::string content);
 
 private:
+    Indexer& indexer;
     LSPConverter& converter;
     CompilationDatabase& database;
 

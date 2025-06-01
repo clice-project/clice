@@ -55,7 +55,7 @@ async::Task<> Server::registerCapacity(llvm::StringRef id,
     });
 }
 
-Server::Server() : scheduler(converter, database) {
+Server::Server() : scheduler(indexer, converter, database) {
     onRequests.try_emplace("initialize", &Server::onInitialize);
     onRequests.try_emplace("textDocument/semanticTokens/full", &Server::onSemanticToken);
     onRequests.try_emplace("textDocument/completion", &Server::onCodeCompletion);
