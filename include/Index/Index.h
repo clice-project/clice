@@ -13,8 +13,8 @@
 namespace clice::index::memory {
 
 struct Indices {
-    IncludeGraph graph;
-    llvm::DenseMap<clang::FileID, std::unique_ptr<RawIndex>> raw_indices;
+    std::unique_ptr<TUIndex> tu_index;
+    llvm::DenseMap<clang::FileID, std::unique_ptr<RawIndex>> header_indices;
 };
 
 Indices index(ASTInfo& AST);

@@ -7,19 +7,28 @@ namespace clice::index::memory {
 
 namespace {
 
-class SymbolIndexBuilder : public SemanticVisitor<SymbolIndexBuilder> {
+class IndexBuilder : public Indices, public SemanticVisitor<IndexBuilder> {
 public:
-    SymbolIndexBuilder(ASTInfo& AST) :
-        SemanticVisitor(AST, false), graph(IncludeGraph::from(AST)),
-        context_path(AST.getFilePath(SM.getMainFileID())) {}
+    IndexBuilder(ASTInfo& AST) : SemanticVisitor(AST, false) {
+        tu_index = std::make_unique<TUIndex>();
+        tu_index->path = AST.getFilePath(SM.getMainFileID());
+        tu_index->content = AST.getFileContent(SM.getMainFileID());
+        tu_index->graph = IncludeGraph::from(AST);
+    }
 
     RawIndex& getIndex(clang::FileID fid) {
-        if(auto it = indices.find(fid); it != indices.end()) {
+        if(fid == SM.getMainFileID()) {
+            return *tu_index;
+        }
+
+        if(auto it = header_indices.find(fid); it != header_indices.end()) {
             return *it->second;
         }
 
-        auto [it, _] = indices.try_emplace(fid, new RawIndex());
+        auto [it, _] = header_indices.try_emplace(fid, new RawIndex());
         auto& index = *it->second;
+        index.path = AST.getFilePath(fid);
+        index.content = AST.getFileContent(fid);
         return index;
     }
 
@@ -123,22 +132,14 @@ public:
         auto& symbol = index.get_symbol(symbol_id.hash);
         index.add_relation(symbol, relation);
     }
-
-public:
-    IncludeGraph graph;
-    std::string context_path;
-    llvm::DenseMap<clang::FileID, std::unique_ptr<RawIndex>> indices;
 };
 
 }  // namespace
 
 Indices index(ASTInfo& AST) {
-    SymbolIndexBuilder builder(AST);
+    IndexBuilder builder(AST);
     builder.run();
-    return Indices{
-        std::move(builder.graph),
-        std::move(builder.indices),
-    };
+    return std::move(builder);
 }
 
 }  // namespace clice::index::memory
