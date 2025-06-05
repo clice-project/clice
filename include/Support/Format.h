@@ -10,7 +10,7 @@ namespace clice {
 
 template <typename... Args>
 void print(std::format_string<Args...> fmt, Args&&... args) {
-    llvm::outs() << std::vformat(fmt.get(), std::make_format_args(args...));
+    llvm::outs() << std::format(fmt, std::forward<Args>(args)...);
 }
 
 template <typename... Args>

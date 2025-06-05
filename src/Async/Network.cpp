@@ -3,12 +3,6 @@
 
 namespace clice::async::net {
 
-/// The initialize should not have any error. If so,  we can't continue.
-#define UV_CHECK_RESUlT(error)                                                                     \
-    if(error < 0) {                                                                                \
-        log::fatal("{}", std::error_code(error, std::system_category()));                          \
-    }
-
 namespace {
 
 net::Callback callback = {};
@@ -79,13 +73,13 @@ void listen(Callback callback) {
     net::callback = std::move(callback);
     writer = uv_cast<uv_stream_t>(out);
 
-    UV_CHECK_RESUlT(uv_pipe_init(async::loop, &in, 0));
-    UV_CHECK_RESUlT(uv_pipe_open(&in, 0));
+    uv_check_result(uv_pipe_init(async::loop, &in, 0));
+    uv_check_result(uv_pipe_open(&in, 0));
 
-    UV_CHECK_RESUlT(uv_pipe_init(async::loop, &out, 0));
-    UV_CHECK_RESUlT(uv_pipe_open(&out, 1));
+    uv_check_result(uv_pipe_init(async::loop, &out, 0));
+    uv_check_result(uv_pipe_open(&out, 1));
 
-    UV_CHECK_RESUlT(uv_read_start(uv_cast<uv_stream_t>(in), net::on_alloc, net::on_read));
+    uv_check_result(uv_read_start(uv_cast<uv_stream_t>(in), net::on_alloc, net::on_read));
 }
 
 void listen(const char* ip, unsigned int port, Callback callback) {
@@ -95,20 +89,20 @@ void listen(const char* ip, unsigned int port, Callback callback) {
     net::callback = std::move(callback);
     writer = uv_cast<uv_stream_t>(client);
 
-    UV_CHECK_RESUlT(uv_tcp_init(async::loop, &server));
-    UV_CHECK_RESUlT(uv_tcp_init(async::loop, &client));
+    uv_check_result(uv_tcp_init(async::loop, &server));
+    uv_check_result(uv_tcp_init(async::loop, &client));
 
     struct ::sockaddr_in addr;
-    UV_CHECK_RESUlT(uv_ip4_addr(ip, port, &addr));
-    UV_CHECK_RESUlT(uv_tcp_bind(&server, (const struct ::sockaddr*)&addr, 0));
+    uv_check_result(uv_ip4_addr(ip, port, &addr));
+    uv_check_result(uv_tcp_bind(&server, (const struct ::sockaddr*)&addr, 0));
 
     auto on_connection = [](uv_stream_t* server, int status) {
-        UV_CHECK_RESUlT(status);
-        UV_CHECK_RESUlT(uv_accept(server, uv_cast<uv_stream_t>(client)));
-        UV_CHECK_RESUlT(uv_read_start(uv_cast<uv_stream_t>(client), net::on_alloc, net::on_read));
+        uv_check_result(status);
+        uv_check_result(uv_accept(server, uv_cast<uv_stream_t>(client)));
+        uv_check_result(uv_read_start(uv_cast<uv_stream_t>(client), net::on_alloc, net::on_read));
     };
 
-    UV_CHECK_RESUlT(uv_listen(uv_cast<uv_stream_t>(server), 1, on_connection));
+    uv_check_result(uv_listen(uv_cast<uv_stream_t>(server), 1, on_connection));
 }
 
 void spawn(llvm::StringRef path, llvm::ArrayRef<std::string> args, Callback callback) {
@@ -119,9 +113,9 @@ void spawn(llvm::StringRef path, llvm::ArrayRef<std::string> args, Callback call
     net::callback = std::move(callback);
     writer = reinterpret_cast<uv_stream_t*>(&in);
 
-    UV_CHECK_RESUlT(uv_pipe_init(async::loop, &in, 0));
-    UV_CHECK_RESUlT(uv_pipe_init(async::loop, &out, 0));
-    UV_CHECK_RESUlT(uv_pipe_init(async::loop, &err, 0));
+    uv_check_result(uv_pipe_init(async::loop, &in, 0));
+    uv_check_result(uv_pipe_init(async::loop, &out, 0));
+    uv_check_result(uv_pipe_init(async::loop, &err, 0));
 
     static uv_process_t process;
     static uv_process_options_t options;
@@ -164,8 +158,8 @@ void spawn(llvm::StringRef path, llvm::ArrayRef<std::string> args, Callback call
     }
     options.args = argv.data();
 
-    UV_CHECK_RESUlT(uv_spawn(async::loop, &process, &options));
-    UV_CHECK_RESUlT(uv_read_start((uv_stream_t*)&out, net::on_alloc, net::on_read));
+    uv_check_result(uv_spawn(async::loop, &process, &options));
+    uv_check_result(uv_read_start((uv_stream_t*)&out, net::on_alloc, net::on_read));
 
     /// FIXME: This implementation is not correct.
     auto on_read = [](uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
@@ -179,7 +173,7 @@ void spawn(llvm::StringRef path, llvm::ArrayRef<std::string> args, Callback call
         }
     };
 
-    UV_CHECK_RESUlT(uv_read_start((uv_stream_t*)&err, net::on_alloc, on_read));
+    uv_check_result(uv_read_start((uv_stream_t*)&err, net::on_alloc, on_read));
 }
 
 namespace awaiter {

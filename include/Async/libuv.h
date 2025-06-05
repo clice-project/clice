@@ -16,6 +16,7 @@
 #include <system_error>
 
 #include "Support/TypeTraits.h"
+#include "Support/Logger.h"
 
 namespace clice::async {
 
@@ -57,6 +58,8 @@ T* uv_cast(U& u) {
     }
     return reinterpret_cast<T*>(&u);
 }
+
+void uv_check_result(const int result, const std::source_location location = std::source_location::current());
 
 template <typename T>
 class Task;
