@@ -1,21 +1,9 @@
 #include <deque>
 
 #include "Async/Async.h"
-#include "Support/Logger.h"
 
 namespace clice::async {
 
-/// Check the result of a libuv function call and log an error if it failed.
-/// Use source_location to log the file, line, and function name where the error occurred.
-void uv_check_result(const int result, const std::source_location location = std::source_location::current()) {
-    if(result < 0) {
-        log::warn("libuv error: {}", uv_strerror(result));
-        log::warn("At {}:{}:{}", 
-                  location.file_name(), 
-                  location.line(),
-                  location.function_name());
-    }
-}
 
 /// The default event loop.
 uv_loop_t* loop = nullptr;
