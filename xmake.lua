@@ -7,6 +7,7 @@ set_allowedmodes("debug", "release")
 option("enable_test", {default = true})
 option("dev", {default = true})
 option("release", {default = false})
+option("llvm", {default = nil, description = "Specify pre-compiled llvm binary directory."})
 
 if has_config("dev") then
     set_policy("compatibility.version", "3.0")
@@ -41,7 +42,8 @@ if has_config("release") then
     includes("@builtin/xpack")
 end
 
-add_requires("llvm", libuv_require, "toml++")
+add_requires(libuv_require, "toml++")
+add_requires("llvm", {system = false})
 
 add_rules("mode.release", "mode.debug")
 set_languages("c++23")
@@ -135,38 +137,43 @@ rule("clice_build_config")
     end)
 
 package("llvm")
-    if has_config("release") then
-        if is_plat("windows") then
-            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release-lto.7z")
-            add_versions("20.0.0", "c985d60825991eb6c7400be1b9872edf1de929908b12b282829efa52fda4c75c")
-        elseif is_plat("linux") then
-            add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release-lto.tar.xz")
-            add_versions("20.0.0", "adeb46c441265a4e442aea1b9d55f3950bc240aa84e2498b106d8dfd64e123cc")
-        elseif is_plat("macosx") then
-            add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release-lto.tar.xz")
-            add_versions("20.1.5", "f1c16076e0841b9e40cf21352d6661c7167bf6a76fa646b0fcba67e05bec2e7c")
-        end
+    set_policy("package.install_locally", true)
+    if has_config("llvm") then
+        set_sourcedir(get_config("llvm"))
     else
-        if is_plat("windows") then
-            if is_mode("release") then
-                add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
-                add_versions("20.0.0", "4ef335845ebb52f8237bda3bcc7246b06085fdf5edc5cc6cf7f3a7c9ef655c09")
+        if has_config("release") then
+            if is_plat("windows") then
+                add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release-lto.7z")
+                add_versions("20.0.0", "c985d60825991eb6c7400be1b9872edf1de929908b12b282829efa52fda4c75c")
+            elseif is_plat("linux") then
+                add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release-lto.tar.xz")
+                add_versions("20.0.0", "adeb46c441265a4e442aea1b9d55f3950bc240aa84e2498b106d8dfd64e123cc")
+            elseif is_plat("macosx") then
+                add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release-lto.tar.xz")
+                add_versions("20.1.5", "f1c16076e0841b9e40cf21352d6661c7167bf6a76fa646b0fcba67e05bec2e7c")
             end
-        elseif is_plat("linux") then
-            if is_mode("debug") then
-                add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-debug.tar.xz")
-                add_versions("20.0.0", "7dc045424a9667f20845dec058d211476b84300ebcfc8c3a3aabf41bff37cfd9")
-            elseif is_mode("release") then
-                add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
-                add_versions("20.0.0", "30ba7357eb40000f1d13d92242f7d87c3ff623e62205a41d10334d605739af89")
-            end
-        elseif is_plat("macosx") then
-            if is_mode("debug") then
-                add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-debug.tar.xz")
-                add_versions("20.1.5", "743e926a47d702a89b9dbe2f3b905cfde5a06fb2b41035bd3451e8edb5330222")
-            elseif is_mode("release") then
-                add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release.tar.xz")
-                add_versions("20.1.5", "16f473e069d5d8225dc5f2cd513ae4a2161127385fd384d2a4737601d83030e7")
+        else
+            if is_plat("windows") then
+                if is_mode("release") then
+                    add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
+                    add_versions("20.0.0", "4ef335845ebb52f8237bda3bcc7246b06085fdf5edc5cc6cf7f3a7c9ef655c09")
+                end
+            elseif is_plat("linux") then
+                if is_mode("debug") then
+                    add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-debug.tar.xz")
+                    add_versions("20.0.0", "7dc045424a9667f20845dec058d211476b84300ebcfc8c3a3aabf41bff37cfd9")
+                elseif is_mode("release") then
+                    add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
+                    add_versions("20.0.0", "30ba7357eb40000f1d13d92242f7d87c3ff623e62205a41d10334d605739af89")
+                end
+            elseif is_plat("macosx") then
+                if is_mode("debug") then
+                    add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-debug.tar.xz")
+                    add_versions("20.1.5", "743e926a47d702a89b9dbe2f3b905cfde5a06fb2b41035bd3451e8edb5330222")
+                elseif is_mode("release") then
+                    add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release.tar.xz")
+                    add_versions("20.1.5", "16f473e069d5d8225dc5f2cd513ae4a2161127385fd384d2a4737601d83030e7")
+                end
             end
         end
     end
@@ -186,9 +193,15 @@ package("llvm")
             package:add("defines", "CLANG_BUILD_STATIC")
         end
 
-        os.mv("bin", package:installdir())
-        os.mv("lib", package:installdir())
-        os.mv("include", package:installdir())
+        if has_config("llvm") then
+            os.vcp("bin", package:installdir())
+            os.vcp("lib", package:installdir())
+            os.vcp("include", package:installdir())
+        else
+            os.mv("bin", package:installdir())
+            os.mv("lib", package:installdir())
+            os.mv("include", package:installdir())
+        end
     end)
 
 if has_config("release") then

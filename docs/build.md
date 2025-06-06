@@ -2,7 +2,7 @@
 
 - Windows
 - Linux
-- macOS
+- MacOS
 
 # Dependencies
 
@@ -11,10 +11,20 @@
 - CMake/Xmake
 - [tomlplusplus](https://github.com/marzer/tomlplusplus)
 - [libuv](https://github.com/libuv/libuv)
-- [LLVM](https://github.com/llvm/llvm-project) >= 19.1.7
+- [LLVM](https://github.com/llvm/llvm-project) >= 20
 - [googletest](https://github.com/google/googletest) (optional)
 
-clice requires Clang's private headers for compilation:
+# Building
+
+## LLVM
+
+We provide precompiled LLVM binaries for those who don't want to manually build LLVM. If you want to use your own version or debug LLVM, you can continue reading.
+
+- If you have experience with xmake, you can directly use our script for building LLVM: https://github.com/clice-project/llvm-binary/blob/main/xmake.lua
+
+- Manually build LLVM yourself.
+
+clice requires clang's private headers for compilation:
 
 - `clang/lib/Sema/CoroutineStmtBuilder.h`
 - `clang/lib/Sema/TypeLocBuilder.h` 
@@ -24,12 +34,10 @@ Copy these headers to either:
 - `<clice_dir>/include/clang/Sema` 
 - `<LLVM_INSTALL_PATH>/include/clang/Sema`
 
-we provide a script to download these headers to `<clice_dir>/include/clang/Sema` (require xmake).
+We provide a script to download these headers to `<clice_dir>/include/clang/Sema` (require xmake).
 ```bash
 xmake l scripts/fetch-clang-headers.lua
 ```
-
-# Building
 
 ## CMake
 
@@ -39,17 +47,17 @@ The CMake option `-DCLICE_DEV=ON` will automatically fetch `tomlplusplus` and `l
 
 LLVM precompiled binaries must be installed at `-DLLVM_INSTALL_PATH=path/to/llvm`.
 
-For users who cannot build LLVM from source, we provide precompiled binaries for Windows & Linux.
-
 ```bash
 # .github/workflows/cmake.yml
 
 # Linux precompiled binary require glibc 2.31 (build on ubuntu 20.04)
 $ mkdir -p ./.llvm
 $ curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x86_64-linux-gnu-release.tar.xz" | tar -xJ -C ./.llvm
+
 # MacOS precompiled binary require macos15+
 $ mkdir -p ./.llvm
 $ curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release.tar.xz" | tar -xJ -C ./.llvm
+
 # windows precompiled binary only MD runtime support
 $ curl -O -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x64-windows-msvc-release.7z"
 $ 7z x x64-windows-msvc-release.7z "-o.llvm"
@@ -64,7 +72,7 @@ $ cmake --build build
 >
 > The precompiled binary for MacOS is compiled by homebrew llvm@20.
 >
-> Please use the same toolchain to compile clice, DO NOT use Apple Clang.
+> Please use the same toolchain to build clice, DO NOT use Apple Clang.
 
 ## Xmake
 
