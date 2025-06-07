@@ -42,7 +42,7 @@ struct IncludeGraph {
         return paths[path_ref];
     }
 
-    std::uint32_t getInclude(clang::FileID fid) {
+    std::uint32_t getInclude(clang::FileID fid) const {
         auto it = file_table.find(fid);
         assert(it != file_table.end());
         return it->second;

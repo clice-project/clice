@@ -6,94 +6,180 @@ namespace clice::testing {
 
 namespace {
 
-TEST(Preamble, ComputePreambleBound) {
-    Annotation annotation = {""};
-
-    auto test = [](llvm::StringRef content,
-                   std::vector<llvm::StringRef> marks,
+void EXPECT_BOUNDS(std::vector<llvm::StringRef> marks,
+                   llvm::StringRef content,
                    LocationChain chain = LocationChain()) {
-        Annotation annotation{content};
-        auto bounds = computePreambleBounds(annotation.source());
+    Annotation annotation{content};
+    auto bounds = computePreambleBounds(annotation.source());
 
-        clice::println("{}", dump(bounds));
+    ASSERT_EQ(bounds.size(), marks.size(), chain);
 
-        EXPECT_EQ(bounds.size(), marks.size(), chain);
+    for(std::uint32_t i = 0; i < bounds.size(); i++) {
+        EXPECT_EQ(bounds[i], annotation.offset(marks[i]), chain);
+    }
+}
 
-        for(std::uint32_t i = 0; i < bounds.size(); i++) {
-            EXPECT_EQ(bounds[i], annotation.offset(marks[i]), chain);
+llvm::StringMap<std::string> scan(llvm::StringRef content) {
+    llvm::StringMap<std::string> files;
+    std::string current_filename;
+    std::string current_content;
+
+    auto save_previous_file = [&]() {
+        if(current_filename.empty()) {
+            return;
         }
+
+        files.try_emplace(current_filename, llvm::StringRef(current_content).trim());
+        current_filename.clear();
+        current_content.clear();
     };
 
-    annotation = {"#include <iostream>$(end)"};
+    while(!content.empty()) {
+        llvm::StringRef line = content.take_front(content.find_first_of("\r\n"));
+        content = content.drop_front(line.size());
+        if(content.starts_with("\r\n")) {
+            content = content.drop_front(2);
+        } else if(content.starts_with("\n")) {
+            content = content.drop_front(1);
+        }
 
-    test("#include <iostream>$(0)", {"0"});
-    test("#include <iostream>$(0)\n", {"0"});
+        if(line.starts_with("#[") && line.ends_with("]")) {
+            save_previous_file();
+            current_filename = line.slice(2, line.size() - 1).str();
+        } else if(!current_filename.empty()) {
+            current_content += line;
+            current_content += '\n';
+        }
+    }
 
-    test(R"cpp(
+    save_previous_file();
+
+    return files;
+}
+
+void EXPECT_BUILD_PCH(llvm::StringRef command,
+                      llvm::StringRef test_contents,
+                      LocationChain chain = LocationChain()) {
+    auto tmp = fs::createTemporaryFile("clice", "pch");
+    ASSERT_TRUE(tmp);
+    std::string outPath = std::move(*tmp);
+
+    auto files = scan(test_contents);
+    ASSERT_TRUE(files.contains("main.cpp"));
+    std::string content = files["main.cpp"];
+    files.erase("main.cpp");
+
+    CompilationParams params;
+    params.srcPath = "main.cpp";
+    params.content = content;
+    params.outPath = outPath;
+    params.bound = computePreambleBound(content);
+    params.command = command;
+
+    for(auto& [path, content]: files) {
+        params.addRemappedFile(path::join(".", path), content);
+    }
+
+    /// Build PCH.
+    PCHInfo info;
+    {
+        /// NOTE: PCH file is written when CompilerInstance is destructed.
+        auto AST = compile(params, info);
+        ASSERT_TRUE(AST, chain);
+
+        EXPECT_EQ(info.path, outPath, chain);
+        EXPECT_EQ(info.command, command, chain);
+        /// TODO: EXPECT_EQ(info.deps, deps);
+    }
+
+    /// Build AST with PCH.
+    for(auto& [path, content]: files) {
+        params.addRemappedFile(path::join(".", path), content);
+    }
+
+    params.bound.reset();
+    params.pch = {info.path, info.preamble.size()};
+    auto AST = compile(params);
+    ASSERT_TRUE(AST, chain);
+}
+
+TEST(Preamble, Bounds) {
+    EXPECT_BOUNDS({"0"}, "#include <iostream>$(0)");
+    EXPECT_BOUNDS({"0"}, "#include <iostream>$(0)\n");
+
+    EXPECT_BOUNDS({"0", "1"},
+                  R"cpp(
 #ifdef TEST
 #include <iostream>$(0)
 #define 1
 #endif$(1)
-    )cpp",
-         {"0", "1"});
+)cpp");
 
-    test(R"cpp(
+    EXPECT_BOUNDS({"0"},
+                  R"cpp(
 #include <iostream>$(0)
 int x = 1;
-    )cpp",
-         {"0"});
+)cpp");
 
-    test(R"cpp(
+    EXPECT_BOUNDS({"0"}, R"cpp(
 module;
 #include <iostream>$(0)
 export module test;
-    )cpp",
-         {"0"});
+)cpp");
 }
 
-TEST(Preamble, BuildPreambleForTU) {
-    auto outPath = path::join(".", "main.pch");
+TEST(Preamble, TranslationUnit) {
+    EXPECT_BUILD_PCH("clang++ -std=c++20 main.cpp",
+                     R"cpp(
+#[test.h]
+int foo();
+
+#[main.cpp]
+#include "test.h"
+int x = foo();
+)cpp");
+}
+
+TEST(Preamble, Module) {
+    EXPECT_BUILD_PCH("clang++ -std=c++20 main.cpp",
+                     R"cpp(
+#[test.h]
+int foo();
+
+#[main.cpp]
+module;
+#include "test.h"
+export module test;
+export int x = foo();
+)cpp");
+}
+
+TEST(Preamble, Header) {
     llvm::StringRef command = "clang++ -std=c++20 main.cpp";
 
-    llvm::StringRef test = R"cpp(
+    llvm::StringRef content = R"cpp(
+#[test.h]
 int foo();
+int bar();
+
+#[test1.h]
+#include "test.h"
+Point x = {foo(), bar()};
+
+#[test2.h]
+struct Point {
+    int x;
+    int y;
+};
+
+#include "test1.h"
+
+#[test3.h]
+#include "test2.h"
+
+#[main.cpp]
+#include "test3.h"
 )cpp";
-
-    llvm::StringRef content = R"cpp(#include "test.h"
-int x = foo();
-)cpp";
-
-    std::vector<std::string> deps = {path::join(".", "test.h")};
-
-    CompilationParams params;
-    params.outPath = outPath;
-    params.srcPath = "main.cpp";
-    params.content = content;
-    params.command = command;
-    params.bound = computePreambleBound(content);
-
-    llvm::SmallString<128> path;
-    params.addRemappedFile(deps[0], test);
-
-    /// Build PCH.
-    PCHInfo out;
-    {
-        auto info = compile(params, out);
-        EXPECT_TRUE(bool(info));
-
-        EXPECT_EQ(out.path, outPath);
-        EXPECT_EQ(out.preamble, R"(#include "test.h")");
-        EXPECT_EQ(out.command, command);
-        EXPECT_EQ(out.deps, deps);
-    }
-
-    /// Build AST
-    {
-        params.bound.reset();
-        params.pch = {outPath, out.preamble.size()};
-        auto info = compile(params);
-        EXPECT_TRUE(bool(info));
-    }
 }
 
 /// FIXME: headers not found
@@ -102,14 +188,14 @@ int x = foo();
 ///     llvm::StringRef content = R"(
 /// #include <cstdio>
 /// )";
-/// 
+///
 ///     CompilationParams params;
 ///     params.srcPath = "main.pch";
 ///     params.content = content;
 ///     params.command = "clang++ -std=c++20 -xc++ main.pch";
 ///     params.outPath = path::join(".", "header1.pch");
 ///     params.bound = computePreambleBound(content);
-/// 
+///
 ///     {
 ///         PCHInfo out;
 ///         auto AST = compile(params, out);
@@ -118,17 +204,17 @@ int x = foo();
 ///         }
 ///         llvm::outs() << "bound: " << *params.bound << "\n";
 ///     }
-/// 
+///
 ///     content = R"(
 /// #include <cstdio>
 /// #include <cmath>
 /// )";
-/// 
+///
 ///     params.pch = std::pair{params.outPath.str(), *params.bound};
 ///     params.content = content;
 ///     params.outPath = path::join(".", "header2.pch");
 ///     params.bound = computePreambleBound(content);
-/// 
+///
 ///     {
 ///         PCHInfo out;
 ///         auto AST = compile(params, out);
@@ -137,20 +223,20 @@ int x = foo();
 ///         }
 ///         llvm::outs() << "bound: " << *params.bound << "\n";
 ///     }
-/// 
+///
 ///     content = R"(
 /// int main() {
 ///     auto y = abs(1.0);
 ///     return 0;
 /// }
 /// )";
-/// 
+///
 ///     params.pch = std::pair{params.outPath.str(), 0};
 ///     params.srcPath = "main.cpp";
 ///     params.command = "clang++ -std=c++20 main.cpp";
 ///     params.content = content;
 ///     params.outPath = path::join(".", "header2.pch");
-/// 
+///
 ///     {
 ///         auto AST = compile(params);
 ///         if(!AST) {
@@ -160,60 +246,6 @@ int x = foo();
 ///         /// AST->tu()->dump();
 ///     }
 /// }
-
-TEST(Preamble, BuildPreambleForHeader) {
-    /// TODO: The key point is find interested file according to the header context.
-}
-
-TEST(Preamble, BuildPreambleForMU) {
-    auto outPath = path::join(".", "main.pch");
-    llvm::StringRef command = "clang++ -std=c++20 main.cpp";
-
-    llvm::StringRef test = R"cpp(
-int foo();
-)cpp";
-
-    llvm::StringRef content = R"cpp(
-module;
-#include "test.h"
-export module test;
-export int x = foo();
-)cpp";
-
-    std::vector<std::string> deps = {path::join(".", "test.h")};
-
-    CompilationParams params;
-    params.outPath = outPath;
-    params.srcPath = "main.cpp";
-    params.content = content;
-    params.command = command;
-    params.bound = computePreambleBound(content);
-
-    llvm::SmallString<128> path;
-    params.addRemappedFile(deps[0], test);
-
-    /// Build PCH.
-    PCHInfo out;
-    {
-        auto info = compile(params, out);
-        EXPECT_TRUE(bool(info));
-
-        EXPECT_EQ(out.path, outPath);
-        EXPECT_EQ(out.preamble, llvm::StringRef(R"(
-module;
-#include "test.h")"));
-        EXPECT_EQ(out.command, command);
-        EXPECT_EQ(out.deps, deps);
-    }
-
-    /// Build AST
-    {
-        params.bound.reset();
-        params.pch = {outPath, out.preamble.size()};
-        auto info = compile(params);
-        EXPECT_TRUE(bool(info));
-    }
-}
 
 }  // namespace
 
