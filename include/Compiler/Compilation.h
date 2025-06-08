@@ -45,16 +45,6 @@ struct CompilationParams {
     }
 };
 
-namespace impl {
-
-/// Create a compiler invocation from the given compilation parameters.
-std::unique_ptr<clang::CompilerInvocation> createInvocation(CompilationParams& params);
-
-/// Create a compiler instance from the given compilation parameters.
-std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& params);
-
-}  // namespace impl
-
 /// Only preprocess ths source flie.
 std::expected<ASTInfo, std::string> preprocess(CompilationParams& params);
 

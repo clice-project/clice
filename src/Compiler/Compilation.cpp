@@ -6,7 +6,7 @@
 
 namespace clice {
 
-namespace impl {
+namespace {
 
 std::unique_ptr<clang::CompilerInvocation> createInvocation(CompilationParams& params) {
     llvm::SmallString<1024> buffer;
@@ -91,10 +91,6 @@ std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& param
     return instance;
 }
 
-}  // namespace impl
-
-namespace {
-
 /// Execute given action with the on the given instance. `callback` is called after
 /// `BeginSourceFile`. Beacuse `BeginSourceFile` may create new preprocessor.
 std::expected<void, std::string> ExecuteAction(clang::CompilerInstance& instance,
@@ -167,18 +163,18 @@ std::expected<ASTInfo, std::string> ExecuteAction(std::unique_ptr<clang::Compile
 }  // namespace
 
 std::expected<ASTInfo, std::string> preprocess(CompilationParams& params) {
-    auto instance = impl::createInstance(params);
+    auto instance = createInstance(params);
     return ExecuteAction(std::move(instance), std::make_unique<clang::PreprocessOnlyAction>());
 }
 
 std::expected<ASTInfo, std::string> compile(CompilationParams& params) {
-    auto instance = impl::createInstance(params);
+    auto instance = createInstance(params);
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
 
 std::expected<ASTInfo, std::string> compile(CompilationParams& params,
                                             clang::CodeCompleteConsumer* consumer) {
-    auto instance = impl::createInstance(params);
+    auto instance = createInstance(params);
 
     auto& [file, offset] = params.completion;
 
@@ -216,7 +212,7 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params,
 std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& out) {
     assert(params.bound.has_value() && "Preamble bounds is required to build PCH");
 
-    auto instance = impl::createInstance(params);
+    auto instance = createInstance(params);
 
     llvm::StringRef outPath = params.outPath.str();
 
@@ -239,13 +235,12 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& 
 }
 
 std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCMInfo& out) {
-    auto instance = impl::createInstance(params);
+    auto instance = createInstance(params);
 
     /// Set options to generate PCM.
     instance->getFrontendOpts().OutputFile = params.outPath.str();
     instance->getFrontendOpts().ProgramAction = clang::frontend::GenerateReducedModuleInterface;
 
-    ;
     if(auto info = ExecuteAction(std::move(instance),
                                  std::make_unique<clang::GenerateReducedModuleInterfaceAction>())) {
         assert(info->pp().isInNamedInterfaceUnit() &&
