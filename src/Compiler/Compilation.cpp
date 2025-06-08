@@ -166,6 +166,11 @@ std::expected<ASTInfo, std::string> ExecuteAction(std::unique_ptr<clang::Compile
 
 }  // namespace
 
+std::expected<ASTInfo, std::string> preprocess(CompilationParams& params) {
+    auto instance = impl::createInstance(params);
+    return ExecuteAction(std::move(instance), std::make_unique<clang::PreprocessOnlyAction>());
+}
+
 std::expected<ASTInfo, std::string> compile(CompilationParams& params) {
     auto instance = impl::createInstance(params);
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());

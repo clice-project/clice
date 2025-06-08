@@ -57,24 +57,34 @@ llvm::StringMap<std::string> scan(llvm::StringRef content) {
     return files;
 }
 
-void EXPECT_BUILD_PCH(llvm::StringRef command,
+void EXPECT_BUILD_PCH(llvm::StringRef main_file,
                       llvm::StringRef test_contents,
+                      llvm::StringRef preamble = "",
                       LocationChain chain = LocationChain()) {
     auto tmp = fs::createTemporaryFile("clice", "pch");
     ASSERT_TRUE(tmp);
     std::string outPath = std::move(*tmp);
 
     auto files = scan(test_contents);
-    ASSERT_TRUE(files.contains("main.cpp"));
-    std::string content = files["main.cpp"];
-    files.erase("main.cpp");
+    if(!preamble.empty()) {
+        files.try_emplace("preamble.h", preamble);
+    }
+
+    ASSERT_TRUE(files.contains(main_file));
+    std::string content = files[main_file];
+    files.erase(main_file);
 
     CompilationParams params;
-    params.srcPath = "main.cpp";
+    params.srcPath = main_file;
     params.content = content;
     params.outPath = outPath;
     params.bound = computePreambleBound(content);
-    params.command = command;
+
+    if(!preamble.empty()) {
+        params.command = std::format("clang++ -xc++ -std=c++20 --include=preamble.h {}", main_file);
+    } else {
+        params.command = std::format("clang++ -xc++ -std=c++20 {}", main_file);
+    }
 
     for(auto& [path, content]: files) {
         params.addRemappedFile(path::join(".", path), content);
@@ -88,7 +98,7 @@ void EXPECT_BUILD_PCH(llvm::StringRef command,
         ASSERT_TRUE(AST, chain);
 
         EXPECT_EQ(info.path, outPath, chain);
-        EXPECT_EQ(info.command, command, chain);
+        EXPECT_EQ(info.command, params.command, chain);
         /// TODO: EXPECT_EQ(info.deps, deps);
     }
 
@@ -129,7 +139,7 @@ export module test;
 }
 
 TEST(Preamble, TranslationUnit) {
-    EXPECT_BUILD_PCH("clang++ -std=c++20 main.cpp",
+    EXPECT_BUILD_PCH("main.cpp",
                      R"cpp(
 #[test.h]
 int foo();
@@ -141,7 +151,7 @@ int x = foo();
 }
 
 TEST(Preamble, Module) {
-    EXPECT_BUILD_PCH("clang++ -std=c++20 main.cpp",
+    EXPECT_BUILD_PCH("main.cpp",
                      R"cpp(
 #[test.h]
 int foo();
@@ -155,11 +165,8 @@ export int x = foo();
 }
 
 TEST(Preamble, Header) {
-    llvm::StringRef command = "clang++ -std=c++20 main.cpp";
-
-    llvm::StringRef content = R"cpp(
+    llvm::StringRef test_contents = R"cpp(
 #[test.h]
-int foo();
 int bar();
 
 #[test1.h]
@@ -175,77 +182,121 @@ struct Point {
 #include "test1.h"
 
 #[test3.h]
-#include "test2.h"
+int foo();
 
 #[main.cpp]
 #include "test3.h"
+#include "test2.h"
 )cpp";
+
+    auto files = scan(test_contents);
+    ASSERT_TRUE(files.contains("main.cpp"));
+    std::string content = files["main.cpp"];
+    files.erase("main.cpp");
+
+    std::string preamble;
+
+    /// Compute implicit include.
+    {
+
+        CompilationParams params;
+        params.content = content;
+        params.srcPath = "main.cpp";
+        params.command = "clang++ -std=c++20 main.cpp";
+
+        for(auto& [path, file]: files) {
+            params.addRemappedFile(path::join(".", path), file);
+        }
+
+        auto AST = preprocess(params);
+        ASSERT_TRUE(AST);
+
+        auto& SM = AST->srcMgr();
+        auto path = path::join(".", "test1.h");
+        auto entry = SM.getFileManager().getFileRef(path);
+        ASSERT_TRUE(entry);
+
+        auto fid = SM.translateFile(*entry);
+        ASSERT_TRUE(fid.isValid());
+
+        while(fid.isValid()) {
+            auto location = SM.getIncludeLoc(fid);
+            auto [fid2, offset] = AST->getDecomposedLoc(location);
+            auto content = AST->getFileContent(fid2).substr(0, offset);
+
+            /// Remove incomplete include.
+            content = content.substr(0, content.rfind("\n"));
+            preamble += content;
+            fid = fid2;
+        }
+    }
+
+    EXPECT_BUILD_PCH("test1.h", test_contents, preamble);
 }
 
-/// FIXME: headers not found
-///
-/// TEST(Preamble, BuildChainedPreamble) {
-///     llvm::StringRef content = R"(
-/// #include <cstdio>
-/// )";
-///
-///     CompilationParams params;
-///     params.srcPath = "main.pch";
-///     params.content = content;
-///     params.command = "clang++ -std=c++20 -xc++ main.pch";
-///     params.outPath = path::join(".", "header1.pch");
-///     params.bound = computePreambleBound(content);
-///
-///     {
-///         PCHInfo out;
-///         auto AST = compile(params, out);
-///         if(!AST) {
-///             println("error: {}", AST.error());
-///         }
-///         llvm::outs() << "bound: " << *params.bound << "\n";
-///     }
-///
-///     content = R"(
-/// #include <cstdio>
-/// #include <cmath>
-/// )";
-///
-///     params.pch = std::pair{params.outPath.str(), *params.bound};
-///     params.content = content;
-///     params.outPath = path::join(".", "header2.pch");
-///     params.bound = computePreambleBound(content);
-///
-///     {
-///         PCHInfo out;
-///         auto AST = compile(params, out);
-///         if(!AST) {
-///             println("error: {}", AST.error());
-///         }
-///         llvm::outs() << "bound: " << *params.bound << "\n";
-///     }
-///
-///     content = R"(
-/// int main() {
-///     auto y = abs(1.0);
-///     return 0;
-/// }
-/// )";
-///
-///     params.pch = std::pair{params.outPath.str(), 0};
-///     params.srcPath = "main.cpp";
-///     params.command = "clang++ -std=c++20 main.cpp";
-///     params.content = content;
-///     params.outPath = path::join(".", "header2.pch");
-///
-///     {
-///         auto AST = compile(params);
-///         if(!AST) {
-///             println("error: {}", AST.error());
-///         }
-///         llvm::outs() << "bound: " << *params.bound << "\n";
-///         /// AST->tu()->dump();
-///     }
-/// }
+TEST(Preamble, Chain) {
+    llvm::StringRef test_contents = R"cpp(
+#[test.h]
+int bar();
+
+#[test2.h]
+int foo();
+
+#[main.cpp]
+#include "test.h"
+#include "test2.h"
+int x = bar();
+int y = foo();
+)cpp";
+
+    auto files = scan(test_contents);
+    ASSERT_TRUE(files.contains("main.cpp"));
+    std::string content = files["main.cpp"];
+    files.erase("main.cpp");
+
+    auto bounds = computePreambleBounds(content);
+
+    CompilationParams params;
+    params.srcPath = "main.cpp";
+    params.content = content;
+    params.command = "clang++ -std=c++20 main.cpp";
+
+    PCHInfo info;
+    for(auto bound: bounds) {
+        auto tmp = fs::createTemporaryFile("clice", "pch");
+        ASSERT_TRUE(tmp);
+        std::string outPath = std::move(*tmp);
+
+        if(params.bound && !params.outPath.empty()) {
+            params.pch = {params.outPath.str().str(), *params.bound};
+        }
+
+        params.outPath = outPath;
+        params.bound = bound;
+
+        for(auto& [path, content]: files) {
+            params.addRemappedFile(path::join(".", path), content);
+        }
+
+        {
+            auto AST = compile(params, info);
+            ASSERT_TRUE(AST);
+
+            EXPECT_EQ(info.path, outPath);
+            EXPECT_EQ(info.command, params.command);
+        }
+    }
+
+    /// Build AST with PCH.
+    for(auto& [path, content]: files) {
+        params.addRemappedFile(path::join(".", path), content);
+    }
+
+    params.bound.reset();
+    params.pch = {info.path, info.preamble.size()};
+    auto AST = compile(params);
+    ASSERT_TRUE(AST);
+}
 
 }  // namespace
 
