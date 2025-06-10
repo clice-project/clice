@@ -1,6 +1,7 @@
 #include "Compiler/Preamble.h"
 #include "AST/SourceCode.h"
 #include "Support/Format.h"
+#include "Support/Logger.h"
 
 namespace clice {
 
@@ -16,8 +17,8 @@ std::uint32_t computePreambleBound(llvm::StringRef content) {
 std::vector<std::uint32_t> computePreambleBounds(llvm::StringRef content) {
     std::vector<std::uint32_t> result;
 
-    /// The last token we iterate over.
-    clang::Token end;
+    /// The endLoc of the last token we iterate over.
+    clang::SourceLocation end_loc;
     /// Whether the token is after `#`.
     bool isAfterHash = false;
     /// Whether the token is in the directive line.
@@ -25,8 +26,12 @@ std::vector<std::uint32_t> computePreambleBounds(llvm::StringRef content) {
     /// Whether the token is after `module`.
     bool isAfterModule = false;
 
-    auto addResult = [&](const clang::Token& token) {
-        auto offset = token.getEndLoc().getRawEncoding() - fakeLoc.getRawEncoding();
+    auto addResult = [&](const clang::SourceLocation end_loc) {
+        if(end_loc.isInvalid()) {
+            log::fatal("end_loc is invalid, but should be valid");
+            return;
+        }
+        auto offset = end_loc.getRawEncoding() - fakeLoc.getRawEncoding();
         if(result.empty() || result.back() != offset) {
             result.emplace_back(offset);
         }
@@ -36,7 +41,7 @@ std::vector<std::uint32_t> computePreambleBounds(llvm::StringRef content) {
         if(token.isAtStartOfLine()) {
             if(isInHeader) {
                 /// If the last line is `#include`, add it to result.
-                addResult(end);
+                addResult(end_loc);
                 isInHeader = false;
             }
 
@@ -72,17 +77,17 @@ std::vector<std::uint32_t> computePreambleBounds(llvm::StringRef content) {
             }
         }
 
-        end = token;
+        end_loc = token.getEndLoc();
 
         return true;
     });
 
     /// Add last location.
-    if(end.getLocation().isInvalid()) {
+    if(end_loc.isInvalid()) {
         return std::vector<std::uint32_t>{};
     }
 
-    addResult(end);
+    addResult(end_loc);
 
     return result;
 }

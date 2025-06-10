@@ -114,6 +114,8 @@ void EXPECT_BUILD_PCH(llvm::StringRef main_file,
 }
 
 TEST(Preamble, Bounds) {
+    EXPECT_BOUNDS({}, "int main(){}");
+
     EXPECT_BOUNDS({"0"}, "#include <iostream>$(0)");
     EXPECT_BOUNDS({"0"}, "#include <iostream>$(0)\n");
 
