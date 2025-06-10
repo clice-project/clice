@@ -115,12 +115,25 @@ struct Pragma {
     clang::SourceLocation loc;
 };
 
+struct Import {
+    /// The name of imported module.
+    std::string name;
+
+    /// The location of import keyword, may comes from macro expansion.
+    clang::SourceLocation location;
+
+    /// The locations of tokens that make up the token name, may comes
+    /// from macro expansion.
+    std::vector<clang::SourceLocation> name_locations;
+};
+
 struct Directive {
     std::vector<Include> includes;
     std::vector<HasInclude> hasIncludes;
     std::vector<Condition> conditions;
     std::vector<MacroRef> macros;
     std::vector<Pragma> pragmas;
+    std::vector<Import> imports;
 
     /// Tell preprocessor to collect directives information and store them in `directives`.
     static void attach(clang::Preprocessor& pp,

@@ -45,15 +45,8 @@ struct CompilationParams {
     }
 };
 
-namespace impl {
-
-/// Create a compiler invocation from the given compilation parameters.
-std::unique_ptr<clang::CompilerInvocation> createInvocation(CompilationParams& params);
-
-/// Create a compiler instance from the given compilation parameters.
-std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& params);
-
-}  // namespace impl
+/// Only preprocess ths source flie.
+std::expected<ASTInfo, std::string> preprocess(CompilationParams& params);
 
 /// Build AST from given file path and content. If pch or pcm provided, apply them to the compiler.
 /// Note this function will not check whether we need to update the PCH or PCM, caller should check
