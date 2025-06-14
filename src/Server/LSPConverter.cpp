@@ -80,6 +80,10 @@ std::uint32_t toOffset(llvm::StringRef content,
     content = content.take_until([](char c) { return c == '\n'; });
     assert(position.character <= content.size() && "Character value is out of range");
 
+    if(position.character == 0) {
+        return offset;
+    }
+
     if(kind == PositionEncodingKind::UTF8) {
         offset += position.character;
         return offset;
