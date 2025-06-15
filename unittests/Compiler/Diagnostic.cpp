@@ -15,7 +15,7 @@ TEST(Diagnostic, Error) {
 
     auto unit = compile(params);
     ASSERT_FALSE(unit);
-    println("{}", unit.error());
+    clice::println("{}", unit.error());
 }
 
 }  // namespace
