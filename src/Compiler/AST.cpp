@@ -28,12 +28,12 @@ clang::FileID CompilationUnit::file_id(llvm::StringRef file) {
     return clang::FileID();
 }
 
-clang::FileID CompilationUnit::file_id(clang::SourceLocation loca1tion) {
-    return SM.getFileID(loca1tion);
+clang::FileID CompilationUnit::file_id(clang::SourceLocation location) {
+    return SM.getFileID(location);
 }
 
-std::uint32_t CompilationUnit::file_offset(clang::SourceLocation loca1tion) {
-    return SM.getFileOffset(loca1tion);
+std::uint32_t CompilationUnit::file_offset(clang::SourceLocation location) {
+    return SM.getFileOffset(location);
 }
 
 clang::SourceLocation CompilationUnit::start_location(clang::FileID fid) {
@@ -44,12 +44,25 @@ clang::SourceLocation CompilationUnit::end_location(clang::FileID fid) {
     return SM.getLocForEndOfFile(fid);
 }
 
+clang::SourceLocation CompilationUnit::spelling_location(clang::SourceLocation loc) {
+    return SM.getSpellingLoc(loc);
+}
+
+clang::SourceLocation CompilationUnit::expansion_location(clang::SourceLocation location) {
+    return SM.getExpansionLoc(location);
+}
+
+auto CompilationUnit::decompose_location(clang::SourceLocation location)
+    -> std::pair<clang::FileID, std::uint32_t> {
+    return SM.getDecomposedLoc(location);
+}
+
 clang::SourceLocation CompilationUnit::include_location(clang::FileID fid) {
     return SM.getIncludeLoc(fid);
 }
 
-clang::PresumedLoc CompilationUnit::presumed_location(clang::SourceLocation loca1tion) {
-    return SM.getPresumedLoc(loca1tion, false);
+clang::PresumedLoc CompilationUnit::presumed_location(clang::SourceLocation location) {
+    return SM.getPresumedLoc(location, false);
 }
 
 llvm::ArrayRef<clang::syntax::Token> CompilationUnit::spelled_tokens(clang::FileID fid) {
@@ -60,8 +73,8 @@ llvm::ArrayRef<clang::syntax::Token> CompilationUnit::expanded_tokens(clang::Sou
     return buffer->expandedTokens(range);
 }
 
-llvm::StringRef CompilationUnit::token_spelling(clang::SourceLocation loca1tion) {
-    return getTokenSpelling(SM, loca1tion);
+llvm::StringRef CompilationUnit::token_spelling(clang::SourceLocation location) {
+    return getTokenSpelling(SM, location);
 }
 
 llvm::StringRef CompilationUnit::module_name() {
@@ -84,13 +97,13 @@ std::vector<std::string> CompilationUnit::deps() {
     for(auto& [fid, diretive]: directives()) {
         for(auto& include: diretive.includes) {
             if(!include.skipped) {
-                deps.try_emplace(getFilePath(include.fid));
+                deps.try_emplace(file_path(include.fid));
             }
         }
 
         for(auto& hasInclude: diretive.hasIncludes) {
             if(hasInclude.fid.isValid()) {
-                deps.try_emplace(getFilePath(hasInclude.fid));
+                deps.try_emplace(file_path(hasInclude.fid));
             }
         }
     }
@@ -104,7 +117,7 @@ std::vector<std::string> CompilationUnit::deps() {
     return result;
 }
 
-llvm::StringRef CompilationUnit::getFilePath(clang::FileID fid) {
+llvm::StringRef CompilationUnit::file_path(clang::FileID fid) {
     assert(fid.isValid() && "Invalid fid");
     if(auto it = pathCache.find(fid); it != pathCache.end()) {
         return it->second;
@@ -134,27 +147,27 @@ llvm::StringRef CompilationUnit::getFilePath(clang::FileID fid) {
     return it->second;
 }
 
-std::pair<clang::FileID, LocalSourceRange> CompilationUnit::toLocalRange(clang::SourceRange range) {
+std::pair<clang::FileID, LocalSourceRange> CompilationUnit::decompose_range(clang::SourceRange range) {
     auto [begin, end] = range;
     assert(begin.isValid() && end.isValid() && "Invalid source range");
     assert(begin.isFileID() && end.isValid() && "Input source range should be a file range");
 
     if(begin == end) {
-        auto [fid, offset] = getDecomposedLoc(begin);
+        auto [fid, offset] = decompose_location(begin);
         return {
             fid,
             {offset, offset + getTokenLength(SM, end)}
         };
     } else {
-        auto [beginFID, beginOffset] = getDecomposedLoc(begin);
-        auto [endFID, endOffset] = getDecomposedLoc(end);
+        auto [beginFID, beginOffset] = decompose_location(begin);
+        auto [endFID, endOffset] = decompose_location(end);
         if(beginFID == endFID) {
             return {
                 beginFID,
                 {beginOffset, endOffset + getTokenLength(SM, end)}
             };
         } else {
-            auto content = getFileContent(beginFID);
+            auto content = file_content(beginFID);
             return {
                 beginFID,
                 {beginOffset, static_cast<uint32_t>(content.size())}
@@ -164,12 +177,12 @@ std::pair<clang::FileID, LocalSourceRange> CompilationUnit::toLocalRange(clang::
 }
 
 std::pair<clang::FileID, LocalSourceRange>
-    CompilationUnit::toLocalExpansionRange(clang::SourceRange range) {
+    CompilationUnit::decompose_expansion_range(clang::SourceRange range) {
     auto [begin, end] = range;
     if(begin == end) {
-        return toLocalRange(getExpansionLoc(begin));
+        return decompose_range(expansion_location(begin));
     } else {
-        return toLocalRange(clang::SourceRange(getExpansionLoc(begin), getExpansionLoc(end)));
+        return decompose_range(clang::SourceRange(expansion_location(begin), expansion_location(end)));
     }
 }
 

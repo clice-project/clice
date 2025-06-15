@@ -105,14 +105,14 @@ public:
     void handleDeclOccurrence(const clang::NamedDecl* decl,
                               RelationKind kind,
                               clang::SourceLocation location) {
-        /// FIXME: Currently we only handle file loca1tion.
+        /// FIXME: Currently we only handle file location.
         if(location.isMacroID()) {
             return;
         }
 
         decl = normalize(decl);
 
-        auto [fid, range] = unit.toLocalRange(location);
+        auto [fid, range] = unit.decompose_range(location);
         auto& file = files[fid];
         file.add(unit, decl, range);
     }

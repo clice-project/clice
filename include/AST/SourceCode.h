@@ -28,19 +28,6 @@ struct LocalSourceRange {
     }
 };
 
-struct Location {
-    /// The file path.
-    std::string file;
-
-    /// The range in the file.
-    LocalSourceRange range;
-
-    constexpr bool operator== (const Location& other) const = default;
-
-    constexpr bool valid() const {
-        return !file.empty() && range.valid();
-    }
-};
 
 /// Get the content of the file with the given file ID.
 llvm::StringRef getFileContent(const clang::SourceManager& SM, clang::FileID fid);

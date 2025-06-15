@@ -14,11 +14,11 @@ index::Shared<DocumentLinks> indexDocumentLink(CompilationUnit& unit) {
 
     for(auto& [fid, diretives]: unit.directives()) {
         for(auto& include: diretives.includes) {
-            auto [_, range] = unit.toLocalRange(include.fileNameRange);
-            result[fid].emplace_back(range, unit.getFilePath(include.fid).str());
+            auto [_, range] = unit.decompose_range(include.fileNameRange);
+            result[fid].emplace_back(range, unit.file_path(include.fid).str());
         }
 
-        auto content = unit.getFileContent(fid);
+        auto content = unit.file_content(fid);
         for(auto& hasInclude: diretives.hasIncludes) {
             /// If the include path is empty, skip it.
             if(hasInclude.fid.isInvalid()) {
@@ -26,7 +26,7 @@ index::Shared<DocumentLinks> indexDocumentLink(CompilationUnit& unit) {
             }
 
             auto location = hasInclude.location;
-            auto [_, offset] = unit.getDecomposedLoc(location);
+            auto [_, offset] = unit.decompose_location(location);
 
             auto subContent = content.substr(offset);
 
@@ -46,7 +46,7 @@ index::Shared<DocumentLinks> indexDocumentLink(CompilationUnit& unit) {
             });
 
             result[fid].emplace_back(LocalSourceRange{offset, endOffset},
-                                     unit.getFilePath(hasInclude.fid).str());
+                                     unit.file_path(hasInclude.fid).str());
         }
     }
 

@@ -37,9 +37,19 @@ public:
 public:
     clang::FileID file_id(llvm::StringRef file);
 
-    clang::FileID file_id(clang::SourceLocation loca1tion);
+    clang::FileID file_id(clang::SourceLocation location);
 
-    std::uint32_t file_offset(clang::SourceLocation loca1tion);
+    std::uint32_t file_offset(clang::SourceLocation location);
+
+    /// Get the file path of a file ID. If the file exists the path
+    /// will be real path, otherwise it will be virtual path. The result
+    /// makes sure the path is ended with '/0'.
+    llvm::StringRef file_path(clang::FileID fid);
+
+    /// Get the content of a file ID.
+    llvm::StringRef file_content(clang::FileID fid) const {
+        return SM.getBufferData(fid);
+    }
 
     clang::SourceLocation start_location(clang::FileID fid);
 
@@ -47,13 +57,27 @@ public:
 
     clang::SourceLocation include_location(clang::FileID fid);
 
-    clang::PresumedLoc presumed_location(clang::SourceLocation loca1tion);
+    clang::SourceLocation spelling_location(clang::SourceLocation location);
+
+    clang::SourceLocation expansion_location(clang::SourceLocation location);
+
+    std::pair<clang::FileID, std::uint32_t> decompose_location(clang::SourceLocation location);
+
+    /// Decompose a source range into file ID and local source range. The begin and end
+    /// of the input source range both should be `FileID`. If the range is cross multiple
+    /// files, we cut off the range at the end of the first file.
+    std::pair<clang::FileID, LocalSourceRange> decompose_range(clang::SourceRange range);
+
+    /// Same as `toLocalRange`, but will translate range to expansion range.
+    std::pair<clang::FileID, LocalSourceRange> decompose_expansion_range(clang::SourceRange range);
+
+    clang::PresumedLoc presumed_location(clang::SourceLocation location);
 
     llvm::ArrayRef<clang::syntax::Token> spelled_tokens(clang::FileID fid);
 
     llvm::ArrayRef<clang::syntax::Token> expanded_tokens(clang::SourceRange range);
 
-    llvm::StringRef token_spelling(clang::SourceLocation loca1tion);
+    llvm::StringRef token_spelling(clang::SourceLocation location);
 
     llvm::StringRef module_name();
 
@@ -90,7 +114,7 @@ public:
     }
 
     llvm::StringRef getInterestedFileContent() const {
-        return getFileContent(interested);
+        return file_content(interested);
     }
 
     /// All files involved in building the unit.
@@ -98,55 +122,10 @@ public:
 
     std::vector<std::string> deps();
 
-    clang::SourceLocation getSpellingLoc(clang::SourceLocation loc) const {
-        return SM.getSpellingLoc(loc);
-    }
-
-    clang::SourceLocation getExpansionLoc(clang::SourceLocation loc) const {
-        return SM.getExpansionLoc(loc);
-    }
-
-    auto getDecomposedLoc(clang::SourceLocation loc) const {
-        return SM.getDecomposedLoc(loc);
-    }
-
-    /// Get the file ID of a source location. The source location should always
-    /// be a spelling location.
-    clang::FileID getFileID(clang::SourceLocation spelling) {
-        assert(spelling.isValid() && spelling.isFileID() && "Invalid source location");
-        return SM.getFileID(spelling);
-    }
-
-    /// Get the file path of a file ID. If the file exists the path
-    /// will be real path, otherwise it will be virtual path. The result
-    /// makes sure the path is ended with '/0'.
-    llvm::StringRef getFilePath(clang::FileID fid);
-
-    /// Get the content of a file ID.
-    llvm::StringRef getFileContent(clang::FileID fid) const {
-        return SM.getBufferData(fid);
-    }
-
     /// Check if a file is a builtin file.
     bool isBuiltinFile(clang::FileID fid) {
-        auto path = getFilePath(fid);
+        auto path = file_path(fid);
         return path == "<built-in>" || path == "<command line>" || path == "<scratch space>";
-    }
-
-    /// Decompose a source range into file ID and local source range. The begin and end
-    /// of the input source range both should be `FileID`. If the range is cross multiple
-    /// files, we cut off the range at the end of the first file.
-    std::pair<clang::FileID, LocalSourceRange> toLocalRange(clang::SourceRange range);
-
-    /// Same as `toLocalRange`, but will translate range to expansion range.
-    std::pair<clang::FileID, LocalSourceRange> toLocalExpansionRange(clang::SourceRange range);
-
-    Location toLocation(clang::SourceRange range) {
-        auto [fid, localRange] = toLocalRange(range);
-        return Location{
-            .file = getFilePath(fid).str(),
-            .range = localRange,
-        };
     }
 
     /// Get symbol ID for given declaration.

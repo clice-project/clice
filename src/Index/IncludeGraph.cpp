@@ -21,7 +21,7 @@ static std::uint32_t addIncludeChain(CompilationUnit& unit,
         locations.emplace_back();
         locations[index].line = presumed.getLine();
 
-        auto path = unit.getFilePath(presumed.getFileID());
+        auto path = unit.file_path(presumed.getFileID());
         auto [iter, success] = path_table.try_emplace(path, paths.size());
         if(success) {
             paths.emplace_back(path);

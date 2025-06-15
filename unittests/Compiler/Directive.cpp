@@ -26,9 +26,9 @@ struct Directive : ::testing::Test, Tester {
                         llvm::StringRef path,
                         LocationChain chain = LocationChain()) {
         auto& include = includes[index];
-        auto [_, offset] = unit->getDecomposedLoc(include.location);
+        auto [_, offset] = unit->decompose_location(include.location);
         EXPECT_EQ(offset, this->offset(position), chain);
-        EXPECT_EQ(include.skipped ? "" : unit->getFilePath(include.fid), path, chain);
+        EXPECT_EQ(include.skipped ? "" : unit->file_path(include.fid), path, chain);
     }
 
     void EXPECT_HAS_INCLUDE(std::size_t index,
@@ -36,9 +36,9 @@ struct Directive : ::testing::Test, Tester {
                             llvm::StringRef path,
                             LocationChain chain = LocationChain()) {
         auto& hasInclude = hasIncludes[index];
-        auto [_, offset] = unit->getDecomposedLoc(hasInclude.location);
+        auto [_, offset] = unit->decompose_location(hasInclude.location);
         EXPECT_EQ(offset, this->offset(position), chain);
-        EXPECT_EQ(hasInclude.fid.isValid() ? unit->getFilePath(hasInclude.fid) : "", path, chain);
+        EXPECT_EQ(hasInclude.fid.isValid() ? unit->file_path(hasInclude.fid) : "", path, chain);
     }
 
     void EXPECT_CON(std::size_t index,
@@ -46,7 +46,7 @@ struct Directive : ::testing::Test, Tester {
                     llvm::StringRef position,
                     LocationChain chain = LocationChain()) {
         auto& condition = conditions[index];
-        auto [_, offset] = unit->getDecomposedLoc(condition.loc);
+        auto [_, offset] = unit->decompose_location(condition.loc);
         EXPECT_EQ(condition.kind, kind, chain);
         EXPECT_EQ(offset, this->offset(position), chain);
     }
@@ -56,7 +56,7 @@ struct Directive : ::testing::Test, Tester {
                       llvm::StringRef position,
                       LocationChain chain = LocationChain()) {
         auto& macro = macros[index];
-        auto [_, offset] = unit->getDecomposedLoc(macro.loc);
+        auto [_, offset] = unit->decompose_location(macro.loc);
         EXPECT_EQ(macro.kind, kind, chain);
         EXPECT_EQ(offset, this->offset(position), chain);
     }
@@ -67,7 +67,7 @@ struct Directive : ::testing::Test, Tester {
                        llvm::StringRef text,
                        LocationChain chain = LocationChain()) {
         auto& pragma = pragmas[index];
-        auto [_, offset] = unit->getDecomposedLoc(pragma.loc);
+        auto [_, offset] = unit->decompose_location(pragma.loc);
         EXPECT_EQ(pragma.kind, kind, chain);
         EXPECT_EQ(pragma.stmt, text, chain);
         EXPECT_EQ(offset, this->offset(position), chain);

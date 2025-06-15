@@ -94,12 +94,12 @@ public:
 
     void addToken(clang::SourceLocation location, SymbolKind kind, SymbolModifiers modifiers) {
         if(location.isMacroID()) {
-            auto spelling = unit.getSpellingLoc(location);
-            auto expansion = unit.getExpansionLoc(location);
+            auto spelling = unit.spelling_location(location);
+            auto expansion = unit.expansion_location(location);
 
             /// FIXME: For location from macro, we only handle the case that the
             /// spelling and expansion are in the same file currently.
-            if(unit.getFileID(spelling) != unit.getFileID(expansion)) {
+            if(unit.file_id(spelling) != unit.file_id(expansion)) {
                 return;
             }
 
@@ -107,14 +107,14 @@ public:
             location = spelling;
         }
 
-        auto [fid, range] = unit.toLocalRange(location);
+        auto [fid, range] = unit.decompose_range(location);
         auto& tokens = interestedOnly ? result : sharedResult[fid];
         tokens.emplace_back(range, kind, modifiers);
     }
 
     /// Render semantic tokens for file through raw lexer.
     void highlight(clang::FileID fid) {
-        auto content = unit.getFileContent(fid);
+        auto content = unit.file_content(fid);
         auto& langOpts = unit.lang_options();
 
         /// Whether the token is after `#`.

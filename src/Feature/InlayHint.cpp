@@ -132,7 +132,7 @@ private:
     void addInlayHint(InlayHintKind kind,
                       clang::SourceLocation location,
                       std::vector<index::SymbolID> labels) {
-        auto [fid, offset] = unit.getDecomposedLoc(location);
+        auto [fid, offset] = unit.decompose_location(location);
         auto& hints = interestedOnly ? result : sharedResult[fid];
         hints.emplace_back(offset, kind, labels);
     }
@@ -151,7 +151,7 @@ private:
             // SM.isMacroArgExpansion(clang::SourceLocation());
             // SM.isMacroBodyExpansion(clang::SourceLocation());
 
-            if(lbrace == unit.getExpansionLoc(loc)) {
+            if(lbrace == unit.expansion_location(loc)) {
                 /// If they have same location, they are both expansion location and expanded from
                 /// macro.
 

@@ -172,19 +172,19 @@ private:
         }
 
         auto [begin, end] = range;
-        begin = unit.getExpansionLoc(begin);
-        end = unit.getExpansionLoc(end);
+        begin = unit.expansion_location(begin);
+        end = unit.expansion_location(end);
 
         /// If they are from the same macro expansion, skip it.
         if(begin == end) {
             return;
         }
 
-        auto [fid, localRange] = unit.toLocalRange(clang::SourceRange(begin, end));
+        auto [fid, localRange] = unit.decompose_range(clang::SourceRange(begin, end));
         auto [beginOffset, endOffset] = localRange;
 
         bool isSameLine = true;
-        auto content = unit.getFileContent(fid);
+        auto content = unit.file_content(fid);
         for(auto i = beginOffset; i < endOffset; ++i) {
             if(content[i] == '\n') {
                 isSameLine = false;

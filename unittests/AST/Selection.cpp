@@ -11,8 +11,8 @@ using OffsetRange = std::pair<std::uint32_t, std::uint32_t>;
 
 OffsetRange takeWholeFile(CompilationUnit& unit) {
     auto fileID = unit.getInterestedFile();
-    auto begin = unit.getDecomposedLoc(unit.start_location(fileID));
-    auto end = unit.getDecomposedLoc(unit.end_location(fileID));
+    auto begin = unit.decompose_location(unit.start_location(fileID));
+    auto end = unit.decompose_location(unit.end_location(fileID));
     return {begin.second, end.second};
 }
 

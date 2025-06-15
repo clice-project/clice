@@ -219,8 +219,8 @@ int foo();
 
         while(fid.isValid()) {
             auto location = unit->include_location(fid);
-            auto [fid2, offset] = unit->getDecomposedLoc(location);
-            auto content = unit->getFileContent(fid2).substr(0, offset);
+            auto [fid2, offset] = unit->decompose_location(location);
+            auto content = unit->file_content(fid2).substr(0, offset);
 
             /// Remove incomplete include.
             content = content.substr(0, content.rfind("\n"));

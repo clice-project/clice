@@ -11,8 +11,8 @@ class IndexBuilder : public Indices, public SemanticVisitor<IndexBuilder> {
 public:
     IndexBuilder(CompilationUnit& unit) : SemanticVisitor(unit, false) {
         tu_index = std::make_unique<TUIndex>();
-        tu_index->path = unit.getFilePath(unit.getInterestedFile());
-        tu_index->content = unit.getFileContent(unit.getInterestedFile());
+        tu_index->path = unit.file_path(unit.getInterestedFile());
+        tu_index->content = unit.file_content(unit.getInterestedFile());
         tu_index->graph = IncludeGraph::from(unit);
     }
 
@@ -27,8 +27,8 @@ public:
 
         auto [it, _] = header_indices.try_emplace(fid, new RawIndex());
         auto& index = *it->second;
-        index.path = unit.getFilePath(fid);
-        index.content = unit.getFileContent(fid);
+        index.path = unit.file_path(fid);
+        index.content = unit.file_content(fid);
         return index;
     }
 
@@ -39,12 +39,12 @@ public:
         decl = normalize(decl);
 
         if(location.isMacroID()) {
-            auto spelling = unit.getSpellingLoc(location);
-            auto expansion = unit.getExpansionLoc(location);
+            auto spelling = unit.spelling_location(location);
+            auto expansion = unit.expansion_location(location);
 
             /// FIXME: For location from macro, we only handle the case that the
             /// spelling and expansion are in the same file currently.
-            if(unit.getFileID(spelling) != unit.getFileID(expansion)) {
+            if(unit.file_id(spelling) != unit.file_id(expansion)) {
                 return;
             }
 
@@ -52,7 +52,7 @@ public:
             location = spelling;
         }
 
-        auto [fid, range] = unit.toLocalRange(location);
+        auto [fid, range] = unit.decompose_range(location);
         auto& index = getIndex(fid);
         auto symbol_id = unit.getSymbolID(decl);
         auto& symbol = index.get_symbol(symbol_id.hash);
@@ -68,7 +68,7 @@ public:
             return;
         }
 
-        auto [fid, range] = unit.toLocalRange(location);
+        auto [fid, range] = unit.decompose_range(location);
         auto& index = getIndex(fid);
         auto symbol_id = unit.getSymbolID(def);
         auto& symbol = index.get_symbol(symbol_id.hash);
@@ -80,7 +80,7 @@ public:
             auto begin = def->getDefinitionLoc();
             auto end = def->getDefinitionEndLoc();
             assert(begin.isFileID() && end.isFileID() && "Invalid location");
-            auto [fid2, definition_range] = unit.toLocalRange(clang::SourceRange(begin, end));
+            auto [fid2, definition_range] = unit.decompose_range(clang::SourceRange(begin, end));
             assert(fid == fid2 && "Invalid macro definition location");
             /// definitionLoc = builder.getLocation(range);
 
@@ -104,12 +104,12 @@ public:
                         RelationKind kind,
                         const clang::NamedDecl* target,
                         clang::SourceRange range) {
-        auto [fid, relationRange] = unit.toLocalExpansionRange(range);
+        auto [fid, relationRange] = unit.decompose_expansion_range(range);
 
         Relation relation{.kind = kind};
 
         if(kind.isDeclOrDef()) {
-            auto [fid2, definitionRange] = unit.toLocalExpansionRange(decl->getSourceRange());
+            auto [fid2, definitionRange] = unit.decompose_expansion_range(decl->getSourceRange());
             assert(fid == fid2 && "Invalid definition location");
             relation.range = relationRange;
             relation.definition_range = definitionRange;

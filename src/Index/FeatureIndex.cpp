@@ -80,8 +80,8 @@ Shared<std::vector<char>> FeatureIndex::build(CompilationUnit& unit) {
     Shared<std::vector<char>> result;
 
     for(auto&& [fid, index]: indices) {
-        index.path = unit.getFilePath(fid);
-        index.content = unit.getFileContent(fid);
+        index.path = unit.file_path(fid);
+        index.content = unit.file_content(fid);
         auto [buffer, _] = binary::serialize(index);
         result.try_emplace(fid, std::move(buffer));
     }
