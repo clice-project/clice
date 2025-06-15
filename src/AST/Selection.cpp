@@ -16,15 +16,14 @@ struct SelectionBuilder {
     SelectionBuilder(std::uint32_t begin,
                      std::uint32_t end,
                      clang::ASTContext& context,
-                     CompilationUnit& unit,
-                     clang::syntax::TokenBuffer& buffer) : context(context), buffer(buffer) {
+                     CompilationUnit& unit) : context(context), unit(unit) {
         assert(end >= begin && "End offset should be greater than or equal to begin offset.");
 
         // The location in clang AST is token-based, of course. Because the parser
         // processes tokens from the lexer. So we need to find boundary tokens at first.
         // FIXME: support other file.
         auto& src = context.getSourceManager();
-        auto tokens = buffer.spelledTokens(src.getMainFileID());
+        auto tokens = unit.spelled_tokens(src.getMainFileID());
         auto bound = selectionBound(tokens, {begin, end}, unit);
 
         left = bound.first, right = bound.second;
@@ -36,8 +35,8 @@ struct SelectionBuilder {
     SelectionBuilder(const Token* left,
                      const Token* right,
                      clang::ASTContext& context,
-                     clang::syntax::TokenBuffer& buffer) :
-        left(left), right(right), context(context), buffer(buffer) {}
+                     CompilationUnit& unit) :
+        left(left), right(right), context(context), unit(unit) {}
 
     /// Compute 2 boundary tokens by given pair of offset as the selection range, the `end` of
     /// pair should be greater than `begin`.
@@ -66,7 +65,7 @@ struct SelectionBuilder {
     }
 
     bool isValidOffsetRange() const {
-        const auto tokens = buffer.spelledTokens(context.getSourceManager().getMainFileID());
+        const auto tokens = unit.spelled_tokens(context.getSourceManager().getMainFileID());
         return left != tokens.end() && right != tokens.end();
     }
 
@@ -164,8 +163,7 @@ struct SelectionBuilder {
     const clang::syntax::Token* right;
 
     clang::ASTContext& context;
-    clang::syntax::TokenBuffer& buffer;
-
+    CompilationUnit& unit;
     /// father nodes stack.
     std::stack<Node*> stack;
     std::deque<Node> storage;
@@ -272,9 +270,8 @@ void dumpImpl(llvm::raw_ostream& os, const SelectionTree::Node* node, clang::AST
 SelectionTree::SelectionTree(std::uint32_t begin,
                              std::uint32_t end,
                              clang::ASTContext& context,
-                             CompilationUnit& unit,
-                             clang::syntax::TokenBuffer& tokens) {
-    SelectionBuilder builder(begin, end, context, unit, tokens);
+                             CompilationUnit& unit) {
+    SelectionBuilder builder(begin, end, context, unit);
     *this = builder.build();
 }
 
@@ -285,10 +282,9 @@ void SelectionTree::dump(llvm::raw_ostream& os, clang::ASTContext& context) cons
 
 SelectionTree SelectionTree::selectToken(const clang::syntax::Token& token,
                                          clang::ASTContext& context,
-                                         CompilationUnit& unit,
-                                         clang::syntax::TokenBuffer& tokens) {
+                                         CompilationUnit& unit) {
     auto range = token.range(context.getSourceManager());
-    return SelectionTree(range.beginOffset(), range.endOffset(), context, unit, tokens);
+    return SelectionTree(range.beginOffset(), range.endOffset(), context, unit);
 }
 
 }  // namespace clice

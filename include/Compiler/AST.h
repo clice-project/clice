@@ -70,11 +70,6 @@ public:
         return instance->getSema();
     }
 
-    auto& tokBuf() {
-        assert(buffer && "Token buffer is not available");
-        return *buffer;
-    }
-
     auto& resolver() {
         assert(m_resolver && "Template resolver is not available");
         return *m_resolver;

@@ -96,7 +96,7 @@ $(b1)int xxx$(b2)yyy$(e1) = 1$(e2);$(e3)
     for(auto& [begin, end]: selects) {
         auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
-        SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
+        SelectionBuilder builder(left, right, unit.context(), unit);
         auto tree = builder.build();
         // debug(tree);
 
@@ -127,7 +127,7 @@ void f($(b1)int xxx$(b2)yyy$(e1) = 1$(e2)) {}
     for(auto& [begin, end]: selects) {
         auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
-        SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
+        SelectionBuilder builder(left, right, unit.context(), unit);
         auto tree = builder.build();
         // debug(tree);
 
@@ -160,7 +160,7 @@ namespace test {
     EXPECT_EQ(left->kind(), clang::tok::kw_int);
     EXPECT_EQ(right->kind(), clang::tok::semi);
 
-    SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
+    SelectionBuilder builder(left, right, unit.context(), unit);
     auto tree = builder.build();
     // debug(tree);
 
@@ -195,7 +195,7 @@ namespace test {
     EXPECT_EQ(left->kind(), clang::tok::kw_int);
     EXPECT_EQ(right->kind(), clang::tok::r_brace);
 
-    SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
+    SelectionBuilder builder(left, right, unit.context(), unit);
     auto tree = builder.build();
     // debug(tree);
 
@@ -230,7 +230,7 @@ $(class_begin)class Test {
     EXPECT_EQ(left->kind(), clang::tok::kw_class);
     EXPECT_EQ(right->kind(), clang::tok::semi);
 
-    SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
+    SelectionBuilder builder(left, right, unit.context(), unit);
     auto tree = builder.build();
     // debug(tree);
 
@@ -260,7 +260,7 @@ class Test {
     EXPECT_EQ(left->kind(), clang::tok::identifier);
     EXPECT_EQ(right->kind(), clang::tok::identifier);
 
-    SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
+    SelectionBuilder builder(left, right, unit.context(), unit);
     auto tree = builder.build();
     // debug(tree);
 
@@ -290,7 +290,7 @@ void f(int& x){
         EXPECT_EQ(left->kind(), clang::tok::identifier);
         EXPECT_EQ(right->kind(), clang::tok::numeric_constant);
 
-        SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
+        SelectionBuilder builder(left, right, unit.context(), unit);
         auto tree = builder.build();
         // debug(tree);
 
@@ -316,7 +316,7 @@ void f(int& x){
         EXPECT_EQ(left->kind(), clang::tok::equalequal);
         EXPECT_EQ(right->kind(), clang::tok::equalequal);
 
-        SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
+        SelectionBuilder builder(left, right, unit.context(), unit);
         auto tree = builder.build();
         // debug(tree);
 
@@ -353,7 +353,7 @@ class Test {
             auto [left, right] =
                 SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
-            SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
+            SelectionBuilder builder(left, right, unit.context(), unit);
             auto tree = builder.build();
             // debug(tree);
 
@@ -382,7 +382,7 @@ class Test {
             auto [left, right] =
                 SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
-            SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
+            SelectionBuilder builder(left, right, unit.context(), unit);
             auto tree = builder.build();
             // debug(tree);
 

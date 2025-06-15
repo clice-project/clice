@@ -14,7 +14,7 @@ public:
     using Base = FilteredASTVisitor<SemanticVisitor>;
 
     SemanticVisitor(CompilationUnit& unit, bool interestedOnly) :
-        Base(unit, interestedOnly, {}), unit(unit), TB(unit.tokBuf()), resolver(unit.resolver()) {}
+        Base(unit, interestedOnly, {}), unit(unit), resolver(unit.resolver()) {}
 
 public:
     Derived& getDerived() {
@@ -121,32 +121,32 @@ public:
             }
         }
 
-        if(auto module = unit.context().getCurrentNamedModule()) {
-            auto keyword = module->DefinitionLoc;
-            auto begin = TB.spelledTokenContaining(keyword);
-            // assert(begin->kind() == clang::tok::identifier && begin->text(SM) == "module" &&
-            //        "Invalid module declaration");
-
-            begin += 1;
-            auto end = TB.spelledTokens(unit.file_id(keyword)).end();
-
-            for(auto iter = begin; iter != end; ++iter) {
-                if(iter->kind() == clang::tok::identifier) {
-                    if(auto next = iter + 1; next != end && (next->kind() == clang::tok::period ||
-                                                             next->kind() == clang::tok::colon)) {
-                        iter += 1;
-                        continue;
-                    }
-
-                    end = iter + 1;
-                    break;
-                }
-
-                std::unreachable();
-            }
-
-            handleModuleOccurrence(keyword, llvm::ArrayRef<clang::syntax::Token>(begin, end));
-        }
+        // if(auto module = unit.context().getCurrentNamedModule()) {
+        //     auto keyword = module->DefinitionLoc;
+        //     auto begin = TB.spelledTokenContaining(keyword);
+        //     // assert(begin->kind() == clang::tok::identifier && begin->text(SM) == "module" &&
+        //     //        "Invalid module declaration");
+        //
+        //    begin += 1;
+        //    auto end = TB.spelledTokens(unit.file_id(keyword)).end();
+        //
+        //    for(auto iter = begin; iter != end; ++iter) {
+        //        if(iter->kind() == clang::tok::identifier) {
+        //            if(auto next = iter + 1; next != end && (next->kind() == clang::tok::period ||
+        //                                                     next->kind() == clang::tok::colon)) {
+        //                iter += 1;
+        //                continue;
+        //            }
+        //
+        //            end = iter + 1;
+        //            break;
+        //        }
+        //
+        //        std::unreachable();
+        //    }
+        //
+        //    handleModuleOccurrence(keyword, llvm::ArrayRef<clang::syntax::Token>(begin, end));
+        //}
     }
 
 public:
@@ -716,7 +716,6 @@ public:
 
 protected:
     CompilationUnit& unit;
-    clang::syntax::TokenBuffer& TB;
     TemplateResolver& resolver;
     llvm::SmallVector<clang::Decl*> decls;
 };

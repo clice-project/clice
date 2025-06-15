@@ -105,7 +105,7 @@ public:
     }
 
     bool VisitCallExpr(const clang::CallExpr* call) {
-        auto tokens = unit.tokBuf().expandedTokens(call->getSourceRange());
+        auto tokens = unit.expanded_tokens(call->getSourceRange());
         if(tokens.back().kind() != clang::tok::r_paren)
             return true;
 
@@ -207,7 +207,7 @@ private:
 
     /// Collect function parameter list between '(' and ')'.
     void collectParameterList(clang::SourceRange bounds) {
-        auto tokens = unit.tokBuf().expandedTokens(bounds);
+        auto tokens = unit.expanded_tokens(bounds);
         auto leftParen = tokens.drop_until([](const auto& tk) {  //
             return tk.kind() == clang::tok::l_paren;
         });
