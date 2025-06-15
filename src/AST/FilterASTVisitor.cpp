@@ -16,13 +16,13 @@ bool RAVFileter::filterable(clang::SourceRange range) const {
         auto [fid, offset] = unit.decompose_location(unit.expansion_location(begin));
 
         /// For builtin files, we don't want to visit them.
-        if(unit.isBuiltinFile(fid)) {
+        if(unit.is_builtin_file(fid)) {
             return true;
         }
 
         /// Filter out if the location is not in the interested file.
         if(interestedOnly) {
-            auto interested = unit.getInterestedFile();
+            auto interested = unit.interested_file();
             if(fid != interested) {
                 return true;
             }
@@ -35,12 +35,12 @@ bool RAVFileter::filterable(clang::SourceRange range) const {
         auto [beginFID, beginOffset] = unit.decompose_location(unit.expansion_location(begin));
         auto [endFID, endOffset] = unit.decompose_location(unit.expansion_location(end));
 
-        if(unit.isBuiltinFile(beginFID) || unit.isBuiltinFile(endFID)) {
+        if(unit.is_builtin_file(beginFID) || unit.is_builtin_file(endFID)) {
             return true;
         }
 
         if(interestedOnly) {
-            auto interested = unit.getInterestedFile();
+            auto interested = unit.interested_file();
             if(beginFID != interested && endFID != interested) {
                 return true;
             }

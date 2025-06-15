@@ -145,7 +145,7 @@ public:
 
     auto buildForFile(CompilationUnit& unit) {
         TraverseTranslationUnitDecl(unit.tu());
-        collectDrectives(unit.directives()[unit.getInterestedFile()]);
+        collectDrectives(unit.directives()[unit.interested_file()]);
         std::ranges::sort(result, refl::less);
         return std::move(result);
     }

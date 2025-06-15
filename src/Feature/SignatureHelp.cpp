@@ -69,7 +69,7 @@ std::vector<SignatureHelpItem> signatureHelp(CompilationParams& params,
                                              const config::SignatureHelpOption& option) {
     std::vector<SignatureHelpItem> items;
     auto consumer = new SignatureHelpCollector({});
-    if(auto info = compile(params, consumer)) {}
+    if(auto info = complete(params, consumer)) {}
     return items;
 }
 

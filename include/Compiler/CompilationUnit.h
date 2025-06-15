@@ -63,6 +63,15 @@ public:
     /// Get the content of a file ID.
     llvm::StringRef file_content(clang::FileID fid);
 
+    /// The interested file ID. For file without header context, it is the main file ID.
+    /// For file with header context, it is the file ID of header file.
+    clang::FileID interested_file();
+
+    llvm::StringRef interested_content();
+
+    /// Check if a file is a builtin file.
+    bool is_builtin_file(clang::FileID fid);
+
     clang::SourceLocation start_location(clang::FileID fid);
 
     clang::SourceLocation end_location(clang::FileID fid);
@@ -102,10 +111,7 @@ public:
 
     clang::LangOptions& lang_options();
 
-public:
     clang::ASTContext& context();
-
-    clang::Sema& sema();
 
     TemplateResolver& resolver();
 
@@ -113,19 +119,10 @@ public:
 
     clang::TranslationUnitDecl* tu();
 
-    /// The interested file ID. For file without header context, it is the main file ID.
-    /// For file with header context, it is the file ID of header file.
-    clang::FileID getInterestedFile();
-
-    llvm::StringRef getInterestedFileContent();
-
     /// All files involved in building the unit.
     const llvm::DenseSet<clang::FileID>& files();
 
     std::vector<std::string> deps();
-
-    /// Check if a file is a builtin file.
-    bool isBuiltinFile(clang::FileID fid);
 
     /// Get symbol ID for given declaration.
     index::SymbolID getSymbolID(const clang::NamedDecl* decl);

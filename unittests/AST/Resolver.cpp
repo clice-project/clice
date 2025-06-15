@@ -16,7 +16,7 @@ struct InputFinder : clang::RecursiveASTVisitor<InputFinder> {
 
     bool TraverseDecl(clang::Decl* decl) {
         if(decl && (llvm::isa<clang::TranslationUnitDecl>(decl) ||
-                    unit.file_id(decl->getLocation()) == unit.getInterestedFile())) {
+                    unit.file_id(decl->getLocation()) == unit.interested_file())) {
             return Base::TraverseDecl(decl);
         }
 

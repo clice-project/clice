@@ -12,8 +12,8 @@ namespace clice::testing {
 //         Tester::compile();
 //         indices = index::SymbolIndex::build(*AST);
 //         index = {
-//             indices[unit->getInterestedFile()].data(),
-//             static_cast<uint32_t>(indices[unit->getInterestedFile()].size()),
+//             indices[unit->interested_file()].data(),
+//             static_cast<uint32_t>(indices[unit->interested_file()].size()),
 //         };
 //     }
 //
