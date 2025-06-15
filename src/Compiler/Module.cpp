@@ -104,7 +104,7 @@ std::expected<ModuleInfo, std::string> scanModule(CompilationParams& params) {
         return std::unexpected(unit.error());
     }
 
-    for(auto& import: unit->directives()[unit->getInterestedFile()].imports) {
+    for(auto& import: unit->directives()[unit->interested_file()].imports) {
         info.mods.emplace_back(import.name);
     }
 

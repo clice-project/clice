@@ -20,7 +20,7 @@ struct SemanticToken : TestFixture {
                       LocationChain chain = LocationChain()) {
         bool visited = false;
         auto offset = offsets[pos];
-        auto& tokens = result[unit->getInterestedFile()];
+        auto& tokens = result[unit->interested_file()];
 
         for(auto& token: tokens) {
             if(token.range.begin == offset) {
@@ -41,7 +41,7 @@ struct SemanticToken : TestFixture {
                       LocationChain chain = LocationChain()) {
         bool visited = false;
         auto offset = offsets[pos];
-        auto& tokens = result[unit->getInterestedFile()];
+        auto& tokens = result[unit->interested_file()];
 
         for(auto& token: tokens) {
             if(token.range.begin == offset) {
@@ -57,7 +57,7 @@ struct SemanticToken : TestFixture {
     }
 
     void dumpResult() {
-        auto& tokens = result[unit->getInterestedFile()];
+        auto& tokens = result[unit->interested_file()];
         for(auto& token: tokens) {
             clice::println("token: {}", dump(token));
         }

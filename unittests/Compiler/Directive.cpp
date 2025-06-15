@@ -13,7 +13,7 @@ struct Directive : ::testing::Test, Tester {
 
     void run(const char* standard = "-std=c++20") {
         Tester::compile("-std=c++23");
-        auto fid = unit->getInterestedFile();
+        auto fid = unit->interested_file();
         includes = unit->directives()[fid].includes;
         hasIncludes = unit->directives()[fid].hasIncludes;
         conditions = unit->directives()[fid].conditions;
