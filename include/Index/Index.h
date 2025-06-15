@@ -17,6 +17,6 @@ struct Indices {
     llvm::DenseMap<clang::FileID, std::unique_ptr<RawIndex>> header_indices;
 };
 
-Indices index(ASTInfo& AST);
+Indices index(CompilationUnit& unit);
 
 }  // namespace clice::index::memory

@@ -836,7 +836,7 @@ TEST(HeaderIndex, Build) {
     tester.addMain("main.cpp", context);
     tester.compile();
 
-    auto& AST = *tester.AST;
+    auto& unit = *tester.AST;
     auto indices = RawIndex::build(AST);
 
     std::optional<RawIndex> base = RawIndex();
@@ -848,7 +848,7 @@ TEST(HeaderIndex, Build) {
 
     std::uint32_t id = 1;
     for(auto& [fid, index]: indices) {
-        if(AST.getFilePath(fid) == path) {
+        if(unit.getFilePath(fid) == path) {
             /// println("{}", test_code(*index, id));
             id += 1;
             if(!base) {

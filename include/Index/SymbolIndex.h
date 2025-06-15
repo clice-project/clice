@@ -73,7 +73,7 @@ public:
     /// Locate the symbol with given symbol id.
     std::optional<Symbol> locateSymbol(const SymbolID& id) const;
 
-    static Shared<std::vector<char>> build(ASTInfo& AST);
+    static Shared<std::vector<char>> build(CompilationUnit& unit);
 
     json::Value toJSON(bool line = true);
 

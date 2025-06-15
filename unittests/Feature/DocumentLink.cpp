@@ -11,7 +11,7 @@ struct DocumentLink : TestFixture {
     void run(llvm::StringRef code) {
         addMain("main.cpp", code);
         Tester::compile();
-        result = feature::indexDocumentLink(*AST);
+        result = feature::indexDocumentLink(*unit);
     }
 
     void EXPECT_LINK(uint32_t index,
@@ -19,14 +19,14 @@ struct DocumentLink : TestFixture {
                      llvm::StringRef end,
                      llvm::StringRef path,
                      LocationChain chain = LocationChain()) {
-        auto& link = result[AST->getInterestedFile()][index];
+        auto& link = result[unit->getInterestedFile()][index];
         EXPECT_EQ(link.range.begin, offset(begin), chain);
         EXPECT_EQ(link.range.end, offset(end), chain);
         EXPECT_EQ(link.file, path, chain);
     }
 
     void dump() {
-        clice::println("{}", clice::dump(result[AST->getInterestedFile()]));
+        clice::println("{}", clice::dump(result[unit->getInterestedFile()]));
     }
 };
 
@@ -65,7 +65,7 @@ TEST_F(DocumentLink, Include) {
     addFile(pguard_macro, guard_macro);
     run(main);
 
-    auto& links = result[AST->getInterestedFile()];
+    auto& links = result[unit->getInterestedFile()];
     EXPECT_EQ(links.size(), 6);
     EXPECT_LINK(0, "0", "0e", ptest);
     EXPECT_LINK(1, "1", "1e", ptest);
@@ -91,7 +91,7 @@ TEST_F(DocumentLink, HasInclude) {
 
     run(main);
 
-    auto& links = result[AST->getInterestedFile()];
+    auto& links = result[unit->getInterestedFile()];
     EXPECT_EQ(links.size(), 2);
     EXPECT_LINK(0, "0", "0e", path);
     EXPECT_LINK(1, "1", "1e", path);

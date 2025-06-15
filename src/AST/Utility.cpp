@@ -95,7 +95,7 @@ const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
     }
 
     /// For `FieldDecl` and `TypedefNameDecl`, clang will not store their instantiation information
-    /// in the AST. So we need to look up the original decl manually.
+    /// in the unit. So we need to look up the original decl manually.
     if(llvm::isa<clang::FieldDecl, clang::TypedefNameDecl>(decl)) {
         /// FIXME: figure out the context.
         if(auto context = getDeclContextForTemplateInstationPattern(decl)) {

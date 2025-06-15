@@ -63,14 +63,14 @@ public:
     }
 
     auto buildForFile() {
-        highlight(AST.getInterestedFile());
+        highlight(unit.getInterestedFile());
         run();
         merge(result);
         return std::move(result);
     }
 
     auto buildForIndex() {
-        for(auto fid: AST.files()) {
+        for(auto fid: unit.files()) {
             highlight(fid);
         }
 
@@ -94,12 +94,12 @@ public:
 
     void addToken(clang::SourceLocation location, SymbolKind kind, SymbolModifiers modifiers) {
         if(location.isMacroID()) {
-            auto spelling = AST.getSpellingLoc(location);
-            auto expansion = AST.getExpansionLoc(location);
+            auto spelling = unit.spelling_location(location);
+            auto expansion = unit.expansion_location(location);
 
             /// FIXME: For location from macro, we only handle the case that the
             /// spelling and expansion are in the same file currently.
-            if(AST.getFileID(spelling) != AST.getFileID(expansion)) {
+            if(unit.file_id(spelling) != unit.file_id(expansion)) {
                 return;
             }
 
@@ -107,15 +107,15 @@ public:
             location = spelling;
         }
 
-        auto [fid, range] = AST.toLocalRange(location);
+        auto [fid, range] = unit.decompose_range(location);
         auto& tokens = interestedOnly ? result : sharedResult[fid];
         tokens.emplace_back(range, kind, modifiers);
     }
 
     /// Render semantic tokens for file through raw lexer.
     void highlight(clang::FileID fid) {
-        auto content = getFileContent(SM, fid);
-        auto& langOpts = PP.getLangOpts();
+        auto content = unit.file_content(fid);
+        auto& langOpts = unit.lang_options();
 
         /// Whether the token is after `#`.
         bool isAfterHash = false;
@@ -125,7 +125,7 @@ public:
         bool isInDirectiveLine = false;
 
         /// Use to distinguish whether the token is in a keyword.
-        clang::IdentifierTable identifierTable(PP.getLangOpts());
+        clang::IdentifierTable identifierTable(langOpts);
 
         auto callback = [&](const clang::Token& token) -> bool {
             SymbolKind kind = SymbolKind::Invalid;
@@ -263,17 +263,17 @@ public:
 
 }  // namespace
 
-SemanticTokens semanticTokens(ASTInfo& AST) {
-    SemanticTokensCollector collector(AST, true);
-    collector.highlight(AST.getInterestedFile());
+SemanticTokens semanticTokens(CompilationUnit& unit) {
+    SemanticTokensCollector collector(unit, true);
+    collector.highlight(unit.getInterestedFile());
     collector.run();
     collector.merge(collector.result);
     return std::move(collector.result);
 }
 
-index::Shared<SemanticTokens> indexSemanticToken(ASTInfo& AST) {
-    SemanticTokensCollector collector(AST, false);
-    for(auto fid: AST.files()) {
+index::Shared<SemanticTokens> indexSemanticToken(CompilationUnit& unit) {
+    SemanticTokensCollector collector(unit, false);
+    for(auto fid: unit.files()) {
         collector.highlight(fid);
     }
 

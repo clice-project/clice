@@ -11,7 +11,7 @@ struct SemanticToken : TestFixture {
     void run(llvm::StringRef code) {
         addMain("main.cpp", code);
         Tester::compile();
-        result = feature::indexSemanticToken(*AST);
+        result = feature::indexSemanticToken(*unit);
     }
 
     void EXPECT_TOKEN(llvm::StringRef pos,
@@ -20,7 +20,7 @@ struct SemanticToken : TestFixture {
                       LocationChain chain = LocationChain()) {
         bool visited = false;
         auto offset = offsets[pos];
-        auto& tokens = result[AST->getInterestedFile()];
+        auto& tokens = result[unit->getInterestedFile()];
 
         for(auto& token: tokens) {
             if(token.range.begin == offset) {
@@ -41,7 +41,7 @@ struct SemanticToken : TestFixture {
                       LocationChain chain = LocationChain()) {
         bool visited = false;
         auto offset = offsets[pos];
-        auto& tokens = result[AST->getInterestedFile()];
+        auto& tokens = result[unit->getInterestedFile()];
 
         for(auto& token: tokens) {
             if(token.range.begin == offset) {
@@ -57,7 +57,7 @@ struct SemanticToken : TestFixture {
     }
 
     void dumpResult() {
-        auto& tokens = result[AST->getInterestedFile()];
+        auto& tokens = result[unit->getInterestedFile()];
         for(auto& token: tokens) {
             clice::println("token: {}", dump(token));
         }

@@ -2,7 +2,7 @@
 
 #include "Indexer.h"
 #include "Async/Async.h"
-#include "Compiler/AST.h"
+#include "Compiler/CompilationUnit.h"
 #include "Compiler/Module.h"
 #include "Compiler/Preamble.h"
 
@@ -24,7 +24,7 @@ struct OpenFile {
     async::Event PCHBuiltEvent;
 
     /// For each opened file, we would like to build an AST for it.
-    std::shared_ptr<ASTInfo> AST;
+    std::shared_ptr<CompilationUnit> AST;
     async::Task<> ASTBuild;
     async::Lock ASTBuiltLock;
 

@@ -15,7 +15,7 @@ namespace clice {
 // expand macro(one step by step).
 // invert if.
 
-class ASTInfo;
+class CompilationUnit;
 
 namespace {
 class SelectionBuilder;
@@ -154,13 +154,13 @@ public:
     static SelectionTree selectOffsetRange(std::uint32_t begin,
                                            std::uint32_t end,
                                            clang::ASTContext& context,
-                                           clang::syntax::TokenBuffer& tokens) {
-        return SelectionTree(begin, end, context, tokens);
+                                           CompilationUnit& unit) {
+        return SelectionTree(begin, end, context, unit);
     }
 
     static SelectionTree selectToken(const clang::syntax::Token& token,
                                      clang::ASTContext& context,
-                                     clang::syntax::TokenBuffer& tokens);
+                                     CompilationUnit& unit);
 
 private:
     /// Construct a selection tree from the given source range. `start` and `end` means offset from
@@ -168,7 +168,7 @@ private:
     SelectionTree(std::uint32_t begin,
                   std::uint32_t end,
                   clang::ASTContext& context,
-                  clang::syntax::TokenBuffer& tokens);
+                  CompilationUnit& unit);
 
     // The root node of selection tree.
     Node* root;

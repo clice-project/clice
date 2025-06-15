@@ -13,16 +13,16 @@ bool RAVFileter::filterable(clang::SourceRange range) const {
 
     if(begin == end) {
         /// We are only interested in expansion location.
-        auto [fid, offset] = AST.getDecomposedLoc(AST.getExpansionLoc(begin));
+        auto [fid, offset] = unit.decompose_location(unit.expansion_location(begin));
 
         /// For builtin files, we don't want to visit them.
-        if(AST.isBuiltinFile(fid)) {
+        if(unit.isBuiltinFile(fid)) {
             return true;
         }
 
         /// Filter out if the location is not in the interested file.
         if(interestedOnly) {
-            auto interested = AST.getInterestedFile();
+            auto interested = unit.getInterestedFile();
             if(fid != interested) {
                 return true;
             }
@@ -32,15 +32,15 @@ bool RAVFileter::filterable(clang::SourceRange range) const {
             }
         }
     } else {
-        auto [beginFID, beginOffset] = AST.getDecomposedLoc(AST.getExpansionLoc(begin));
-        auto [endFID, endOffset] = AST.getDecomposedLoc(AST.getExpansionLoc(end));
+        auto [beginFID, beginOffset] = unit.decompose_location(unit.expansion_location(begin));
+        auto [endFID, endOffset] = unit.decompose_location(unit.expansion_location(end));
 
-        if(AST.isBuiltinFile(beginFID) || AST.isBuiltinFile(endFID)) {
+        if(unit.isBuiltinFile(beginFID) || unit.isBuiltinFile(endFID)) {
             return true;
         }
 
         if(interestedOnly) {
-            auto interested = AST.getInterestedFile();
+            auto interested = unit.getInterestedFile();
             if(beginFID != interested && endFID != interested) {
                 return true;
             }

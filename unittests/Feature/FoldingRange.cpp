@@ -11,7 +11,7 @@ struct FoldingRange : TestFixture {
     void run(llvm::StringRef source) {
         addMain("main.cpp", source);
         TestFixture::compile();
-        result = feature::foldingRanges(*AST);
+        result = feature::foldingRanges(*unit);
     }
 
     void EXPECT_RANGE(std::size_t index,

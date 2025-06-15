@@ -11,7 +11,7 @@ class Sema;
 
 namespace clice {
 
-/// This class is used to resolve dependent names in the AST.
+/// This class is used to resolve dependent names in the unit.
 /// For dependent names, we cannot know the any information about the name until
 /// the template is instantiated. This can be frustrating, you cannot get
 /// completion, you cannot get go-to-definition, etc. To avoid this, we just use

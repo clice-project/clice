@@ -8,7 +8,7 @@
 
 namespace clice {
 
-class ASTInfo;
+class CompilationUnit;
 
 struct CompilationParams;
 

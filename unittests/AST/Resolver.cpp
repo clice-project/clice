@@ -6,17 +6,17 @@ namespace clice::testing {
 namespace {
 
 struct InputFinder : clang::RecursiveASTVisitor<InputFinder> {
-    ASTInfo& info;
+    CompilationUnit& unit;
     clang::QualType input;
     clang::QualType expect;
 
     using Base = clang::RecursiveASTVisitor<InputFinder>;
 
-    InputFinder(ASTInfo& info) : info(info) {}
+    InputFinder(CompilationUnit& unit) : unit(unit) {}
 
     bool TraverseDecl(clang::Decl* decl) {
         if(decl && (llvm::isa<clang::TranslationUnitDecl>(decl) ||
-                    info.srcMgr().isInMainFile(decl->getLocation()))) {
+                    unit.file_id(decl->getLocation()) == unit.getInterestedFile())) {
             return Base::TraverseDecl(decl);
         }
 
@@ -41,10 +41,10 @@ struct TemplateResolver : TestFixture {
         addMain("main.cpp", code);
         compile();
 
-        InputFinder finder(*AST);
-        finder.TraverseAST(AST->context());
+        InputFinder finder(*unit);
+        finder.TraverseAST(unit->context());
 
-        auto input = AST->resolver().resolve(finder.input);
+        auto input = unit->resolver().resolve(finder.input);
         auto expect = finder.expect;
 
         EXPECT_EQ(input.isNull(), false, chain);
@@ -461,7 +461,7 @@ struct test {
 /// TEST_F(TemplateResolver, Standard) {
 ///     run(R"cpp(
 /// #include <vector>
-/// 
+///
 /// template <typename T>
 /// struct test {
 ///     using input = typename std::vector<T>::reference;

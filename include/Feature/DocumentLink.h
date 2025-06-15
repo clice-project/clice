@@ -18,10 +18,10 @@ struct DocumentLink {
 using DocumentLinks = std::vector<DocumentLink>;
 
 /// Generate document link for main file.
-DocumentLinks documentLinks(ASTInfo& AST);
+DocumentLinks documentLinks(CompilationUnit& unit);
 
 /// Generate document link for all source file.
-index::Shared<DocumentLinks> indexDocumentLink(ASTInfo& AST);
+index::Shared<DocumentLinks> indexDocumentLink(CompilationUnit& unit);
 
 }  // namespace clice::feature
 

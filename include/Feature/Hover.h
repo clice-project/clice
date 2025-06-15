@@ -71,13 +71,13 @@ struct Hovers {
 };
 
 /// Generate the hover information for the given declaration(for test).
-Hover hover(ASTInfo& AST, const clang::NamedDecl* decl);
+Hover hover(CompilationUnit& unit, const clang::NamedDecl* decl);
 
 /// Generate the hover information for the symbol at the given offset.
-Hover hover(ASTInfo& AST, uint32_t offset);
+Hover hover(CompilationUnit& unit, uint32_t offset);
 
-/// Generate the hover information for all files in the given AST.
-index::Shared<Hovers> indexHover(ASTInfo& AST);
+/// Generate the hover information for all files in the given unit.
+index::Shared<Hovers> indexHover(CompilationUnit& unit);
 
 }  // namespace clice::feature
 

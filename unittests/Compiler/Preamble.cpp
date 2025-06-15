@@ -210,21 +210,17 @@ int foo();
             params.addRemappedFile(path::join(".", path), file);
         }
 
-        auto AST = preprocess(params);
-        ASSERT_TRUE(AST);
+        auto unit = preprocess(params);
+        ASSERT_TRUE(unit);
 
-        auto& SM = AST->srcMgr();
         auto path = path::join(".", "test1.h");
-        auto entry = SM.getFileManager().getFileRef(path);
-        ASSERT_TRUE(entry);
-
-        auto fid = SM.translateFile(*entry);
+        auto fid = unit->file_id(path);
         ASSERT_TRUE(fid.isValid());
 
         while(fid.isValid()) {
-            auto location = SM.getIncludeLoc(fid);
-            auto [fid2, offset] = AST->getDecomposedLoc(location);
-            auto content = AST->getFileContent(fid2).substr(0, offset);
+            auto location = unit->include_location(fid);
+            auto [fid2, offset] = unit->decompose_location(location);
+            auto content = unit->file_content(fid2).substr(0, offset);
 
             /// Remove incomplete include.
             content = content.substr(0, content.rfind("\n"));

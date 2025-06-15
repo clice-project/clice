@@ -182,7 +182,7 @@ async::Task<> Scheduler::buildAST(std::string path, std::string content) {
 
     file = &openFiles[path];
     /// Update built AST info.
-    file->AST = std::make_shared<ASTInfo>(std::move(*info));
+    file->AST = std::make_shared<CompilationUnit>(std::move(*info));
     /// Dispose the task so that it will destroyed when task complete.
     file->ASTBuild.dispose();
 

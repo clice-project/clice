@@ -47,10 +47,10 @@ struct FoldingRange {
 using FoldingRanges = std::vector<FoldingRange>;
 
 /// Generate folding range for interested file only.
-FoldingRanges foldingRanges(ASTInfo& AST);
+FoldingRanges foldingRanges(CompilationUnit& unit);
 
 /// Generate folding range for all files.
-index::Shared<FoldingRanges> indexFoldingRange(ASTInfo& AST);
+index::Shared<FoldingRanges> indexFoldingRange(CompilationUnit& unit);
 
 }  // namespace clice::feature
 

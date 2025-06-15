@@ -453,7 +453,7 @@ namespace _2 {
     tx.addMain("main.cpp", source);
     tx.compile();
 
-    auto& info = tx.AST;
+    auto& info = tx.unit;
     EXPECT_TRUE(info.has_value());
 
     /// auto maps = feature::inlayHints(*info);

@@ -1,5 +1,6 @@
 #include "Compiler/Module.h"
 #include "Compiler/Compilation.h"
+#include "clang/Lex/Lexer.h"
 
 namespace clice {
 
@@ -98,21 +99,17 @@ std::string scanModuleName(CompilationParams& params) {
 
 std::expected<ModuleInfo, std::string> scanModule(CompilationParams& params) {
     ModuleInfo info;
-    auto AST = preprocess(params);
-    if(!AST) {
-        return std::unexpected(AST.error());
+    auto unit = preprocess(params);
+    if(!unit) {
+        return std::unexpected(unit.error());
     }
 
-    auto&& pp = AST->pp();
-
-    for(auto& import: AST->directives()[AST->getInterestedFile()].imports) {
+    for(auto& import: unit->directives()[unit->getInterestedFile()].imports) {
         info.mods.emplace_back(import.name);
     }
 
-    if(pp.isInNamedModule()) {
-        info.isInterfaceUnit = pp.isInNamedInterfaceUnit();
-        info.name = pp.getNamedModuleName();
-    }
+    info.isInterfaceUnit = unit->is_module_interface_unit();
+    info.name = unit->module_name();
 
     return info;
 }

@@ -9,7 +9,7 @@ namespace clice::testing {
 
 struct Tester {
     CompilationParams params;
-    std::optional<ASTInfo> AST;
+    std::optional<CompilationUnit> unit;
 
     /// Annoated locations.
     llvm::StringMap<std::uint32_t> offsets;
@@ -79,7 +79,7 @@ public:
         params.command = std::format("clang++ {} {} -fms-extensions", standard, params.srcPath);
         auto info = clice::compile(params);
         ASSERT_TRUE(info);
-        this->AST.emplace(std::move(*info));
+        this->unit.emplace(std::move(*info));
         return *this;
     }
 
