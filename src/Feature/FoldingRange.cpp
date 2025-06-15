@@ -10,13 +10,13 @@ namespace {
 class FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> {
 public:
     FoldingRangeCollector(CompilationUnit& unit, bool interestedOnly) :
-        FilteredASTVisitor(unit, interestedOnly, std::nullopt), SM(unit.srcMgr()), TB(unit.tokBuf()) {}
+        FilteredASTVisitor(unit, interestedOnly, std::nullopt) {}
 
     constexpr static auto LastColOfLine = std::numeric_limits<unsigned>::max();
 
     bool VisitNamespaceDecl(const clang::NamespaceDecl* decl) {
         // Find first '{' in namespace declaration.
-        auto shrink = TB.expandedTokens(decl->getSourceRange())
+        auto shrink = unit.expanded_tokens(decl->getSourceRange())
                           .drop_until([](const clang::syntax::Token& token) -> bool {
                               return token.kind() == clang::tok::l_brace;
                           });
@@ -239,7 +239,8 @@ private:
         }
     }
 
-    using ASTDirectives = std::remove_reference_t<decltype(std::declval<CompilationUnit>().directives())>;
+    using ASTDirectives =
+        std::remove_reference_t<decltype(std::declval<CompilationUnit>().directives())>;
 
     void collectDrectives(const Directive& directive) {
         collectConditionMacro(directive.conditions);
@@ -302,8 +303,6 @@ private:
 
     /// Collect all condition macro's block as folding range.
     void collectPragmaRegion(const std::vector<Pragma>& pragmas) {
-        const auto& SM = unit.srcMgr();
-
         llvm::SmallVector<const Pragma*> stack;
         for(auto& pragma: pragmas) {
             if(pragma.kind == Pragma::Region) {
@@ -320,8 +319,6 @@ private:
     }
 
 private:
-    clang::SourceManager& SM;
-    clang::syntax::TokenBuffer& TB;
     FoldingRanges result;
     index::Shared<FoldingRanges> indexResult;
 };

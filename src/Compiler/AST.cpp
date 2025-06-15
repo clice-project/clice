@@ -14,9 +14,54 @@ const llvm::DenseSet<clang::FileID>& CompilationUnit::files() {
                 }
             }
         }
-        allFiles.insert(srcMgr().getMainFileID());
+        allFiles.insert(SM.getMainFileID());
     }
     return allFiles;
+}
+
+clang::FileID CompilationUnit::file_id(llvm::StringRef file) {
+    auto entry = SM.getFileManager().getFileRef(file);
+    if(entry) {
+        return SM.translateFile(*entry);
+    }
+
+    return clang::FileID();
+}
+
+clang::FileID CompilationUnit::file_id(clang::SourceLocation loca1tion) {
+    return SM.getFileID(loca1tion);
+}
+
+std::uint32_t CompilationUnit::file_offset(clang::SourceLocation loca1tion) {
+    return SM.getFileOffset(loca1tion);
+}
+
+clang::SourceLocation CompilationUnit::start_location(clang::FileID fid) {
+    return SM.getLocForStartOfFile(fid);
+}
+
+clang::SourceLocation CompilationUnit::end_location(clang::FileID fid) {
+    return SM.getLocForEndOfFile(fid);
+}
+
+clang::SourceLocation CompilationUnit::include_location(clang::FileID fid) {
+    return SM.getIncludeLoc(fid);
+}
+
+clang::PresumedLoc CompilationUnit::presumed_location(clang::SourceLocation loca1tion) {
+    return SM.getPresumedLoc(loca1tion, false);
+}
+
+llvm::ArrayRef<clang::syntax::Token> CompilationUnit::spelled_tokens(clang::FileID fid) {
+    return buffer->spelledTokens(fid);
+}
+
+llvm::ArrayRef<clang::syntax::Token> CompilationUnit::expanded_tokens(clang::SourceRange range) {
+    return buffer->expandedTokens(range);
+}
+
+llvm::StringRef CompilationUnit::token_spelling(clang::SourceLocation loca1tion) {
+    return getTokenSpelling(SM, loca1tion);
 }
 
 std::vector<std::string> CompilationUnit::deps() {

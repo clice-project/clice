@@ -15,11 +15,11 @@ namespace clice {
 class CompilationUnit {
 public:
     CompilationUnit(clang::FileID interested,
-            std::unique_ptr<clang::FrontendAction> action,
-            std::unique_ptr<clang::CompilerInstance> instance,
-            std::optional<TemplateResolver> resolver,
-            std::optional<clang::syntax::TokenBuffer> buffer,
-            llvm::DenseMap<clang::FileID, Directive> directives) :
+                    std::unique_ptr<clang::FrontendAction> action,
+                    std::unique_ptr<clang::CompilerInstance> instance,
+                    std::optional<TemplateResolver> resolver,
+                    std::optional<clang::syntax::TokenBuffer> buffer,
+                    llvm::DenseMap<clang::FileID, Directive> directives) :
         interested(interested), action(std::move(action)), instance(std::move(instance)),
         m_resolver(std::move(resolver)), buffer(std::move(buffer)),
         m_directives(std::move(directives)), SM(this->instance->getSourceManager()) {}
@@ -35,10 +35,27 @@ public:
     }
 
 public:
-    auto& srcMgr() {
-        return instance->getSourceManager();
-    }
+    clang::FileID file_id(llvm::StringRef file);
 
+    clang::FileID file_id(clang::SourceLocation loca1tion);
+
+    std::uint32_t file_offset(clang::SourceLocation loca1tion);
+
+    clang::SourceLocation start_location(clang::FileID fid);
+
+    clang::SourceLocation end_location(clang::FileID fid);
+
+    clang::SourceLocation include_location(clang::FileID fid);
+
+    clang::PresumedLoc presumed_location(clang::SourceLocation loca1tion);
+
+    llvm::ArrayRef<clang::syntax::Token> spelled_tokens(clang::FileID fid);
+
+    llvm::ArrayRef<clang::syntax::Token> expanded_tokens(clang::SourceRange range);
+
+    llvm::StringRef token_spelling(clang::SourceLocation loca1tion);
+
+public:
     auto& pp() {
         return instance->getPreprocessor();
     }

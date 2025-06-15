@@ -114,7 +114,7 @@ public:
 
     /// Render semantic tokens for file through raw lexer.
     void highlight(clang::FileID fid) {
-        auto content = getFileContent(SM, fid);
+        auto content = unit.getFileContent(fid);
         auto& langOpts = PP.getLangOpts();
 
         /// Whether the token is after `#`.

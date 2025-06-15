@@ -14,8 +14,8 @@ public:
     using Base = FilteredASTVisitor<SemanticVisitor>;
 
     SemanticVisitor(CompilationUnit& unit, bool interestedOnly) :
-        Base(unit, interestedOnly, {}), unit(unit), PP(unit.pp()), SM(unit.srcMgr()),
-        TB(unit.tokBuf()), resolver(unit.resolver()) {}
+        Base(unit, interestedOnly, {}), unit(unit), PP(unit.pp()), TB(unit.tokBuf()),
+        resolver(unit.resolver()) {}
 
 public:
     Derived& getDerived() {
@@ -125,11 +125,11 @@ public:
         if(auto module = unit.context().getCurrentNamedModule()) {
             auto keyword = module->DefinitionLoc;
             auto begin = TB.spelledTokenContaining(keyword);
-            assert(begin->kind() == clang::tok::identifier && begin->text(SM) == "module" &&
-                   "Invalid module declaration");
+            // assert(begin->kind() == clang::tok::identifier && begin->text(SM) == "module" &&
+            //        "Invalid module declaration");
 
             begin += 1;
-            auto end = TB.spelledTokens(SM.getFileID(keyword)).end();
+            auto end = TB.spelledTokens(unit.file_id(keyword)).end();
 
             for(auto iter = begin; iter != end; ++iter) {
                 if(iter->kind() == clang::tok::identifier) {
@@ -162,28 +162,29 @@ public:
 #define VISIT_TYPELOC(type) bool Visit##type(clang::type loc)
 
     VISIT_DECL(ImportDecl) {
-        auto tokens = TB.expandedTokens(decl->getSourceRange());
-
-        assert(tokens.size() >= 2 && tokens[0].kind() == clang::tok::identifier &&
-               tokens[0].text(SM) == "import" && "Invalid import declaration");
-        assert([&]() {
-            auto range = tokens.drop_front(1);
-            for(auto iter = range.begin(); iter != range.end(); ++iter) {
-                if(iter->kind() == clang::tok::identifier) {
-                    if(auto next = iter + 1;
-                       next != range.end() && (next->kind() == clang::tok::coloncolon ||
-                                               next->kind() == clang::tok::period)) {
-                        continue;
-                    }
-                    break;
-                } else {
-                    return false;
-                }
-            }
-            return true;
-        }() && "Invalid import declaration");
-
-        handleModuleOccurrence(tokens[0].location(), tokens.drop_front(1));
+        /// FIXME:
+        // auto tokens = TB.expandedTokens(decl->getSourceRange());
+        //
+        // assert(tokens.size() >= 2 && tokens[0].kind() == clang::tok::identifier &&
+        //       tokens[0].text(SM) == "import" && "Invalid import declaration");
+        // assert([&]() {
+        //    auto range = tokens.drop_front(1);
+        //    for(auto iter = range.begin(); iter != range.end(); ++iter) {
+        //        if(iter->kind() == clang::tok::identifier) {
+        //            if(auto next = iter + 1;
+        //               next != range.end() && (next->kind() == clang::tok::coloncolon ||
+        //                                       next->kind() == clang::tok::period)) {
+        //                continue;
+        //            }
+        //            break;
+        //        } else {
+        //            return false;
+        //        }
+        //    }
+        //    return true;
+        //}() && "Invalid import declaration");
+        //
+        // handleModuleOccurrence(tokens[0].location(), tokens.drop_front(1));
 
         return true;
     }
@@ -717,7 +718,6 @@ public:
 protected:
     CompilationUnit& unit;
     clang::Preprocessor& PP;
-    clang::SourceManager& SM;
     clang::syntax::TokenBuffer& TB;
     TemplateResolver& resolver;
     llvm::SmallVector<clang::Decl*> decls;

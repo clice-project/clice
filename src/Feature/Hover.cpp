@@ -53,9 +53,9 @@ std::string getQualifier(CompilationUnit& unit, const clang::NamedDecl* decl) {
 
 std::string getSourceCode(CompilationUnit& unit, const clang::NamedDecl* decl) {
     clang::SourceRange range = decl->getSourceRange();
-    auto& TB = unit.tokBuf();
-    auto& SM = unit.srcMgr();
-    auto tokens = TB.expandedTokens(range);
+    // auto& TB = unit.tokBuf();
+    // auto& SM = unit.srcMgr();
+    // auto tokens = TB.expandedTokens(range);
     /// FIXME: How to cut off the tokens?
     return "";
 }

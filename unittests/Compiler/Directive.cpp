@@ -5,7 +5,6 @@ namespace clice::testing {
 namespace {
 
 struct Directive : ::testing::Test, Tester {
-    clang::SourceManager* SM;
     llvm::ArrayRef<Include> includes;
     llvm::ArrayRef<HasInclude> hasIncludes;
     llvm::ArrayRef<Condition> conditions;
@@ -14,8 +13,7 @@ struct Directive : ::testing::Test, Tester {
 
     void run(const char* standard = "-std=c++20") {
         Tester::compile("-std=c++23");
-        SM = &unit->srcMgr();
-        auto fid = SM->getMainFileID();
+        auto fid = unit->getInterestedFile();
         includes = unit->directives()[fid].includes;
         hasIncludes = unit->directives()[fid].hasIncludes;
         conditions = unit->directives()[fid].conditions;

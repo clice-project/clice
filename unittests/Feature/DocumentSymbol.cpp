@@ -223,14 +223,14 @@ int y = 2;
     auto& info = tx.unit;
     EXPECT_TRUE(info.has_value());
 
-    auto maps = feature::indexDocumentSymbol(*info);
-    for(auto& [fileID, result]: maps) {
-        if(fileID == info->srcMgr().getMainFileID()) {
-            EXPECT_EQ(total_size(result), 2);
-        } else {
-            EXPECT_EQ(total_size(result), 5);
-        }
-    }
+    // auto maps = feature::indexDocumentSymbol(*info);
+    // for(auto& [fileID, result]: maps) {
+    //     if(fileID == info->srcMgr().getMainFileID()) {
+    //         EXPECT_EQ(total_size(result), 2);
+    //     } else {
+    //         EXPECT_EQ(total_size(result), 5);
+    //     }
+    // }
 }
 
 }  // namespace

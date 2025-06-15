@@ -154,12 +154,14 @@ public:
     static SelectionTree selectOffsetRange(std::uint32_t begin,
                                            std::uint32_t end,
                                            clang::ASTContext& context,
+                                           CompilationUnit& unit,
                                            clang::syntax::TokenBuffer& tokens) {
-        return SelectionTree(begin, end, context, tokens);
+        return SelectionTree(begin, end, context, unit, tokens);
     }
 
     static SelectionTree selectToken(const clang::syntax::Token& token,
                                      clang::ASTContext& context,
+                                     CompilationUnit& unit,
                                      clang::syntax::TokenBuffer& tokens);
 
 private:
@@ -168,6 +170,7 @@ private:
     SelectionTree(std::uint32_t begin,
                   std::uint32_t end,
                   clang::ASTContext& context,
+                  CompilationUnit& unit,
                   clang::syntax::TokenBuffer& tokens);
 
     // The root node of selection tree.

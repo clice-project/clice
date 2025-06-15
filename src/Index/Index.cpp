@@ -11,13 +11,13 @@ class IndexBuilder : public Indices, public SemanticVisitor<IndexBuilder> {
 public:
     IndexBuilder(CompilationUnit& unit) : SemanticVisitor(unit, false) {
         tu_index = std::make_unique<TUIndex>();
-        tu_index->path = unit.getFilePath(SM.getMainFileID());
-        tu_index->content = unit.getFileContent(SM.getMainFileID());
+        tu_index->path = unit.getFilePath(unit.getInterestedFile());
+        tu_index->content = unit.getFileContent(unit.getInterestedFile());
         tu_index->graph = IncludeGraph::from(unit);
     }
 
     RawIndex& getIndex(clang::FileID fid) {
-        if(fid == SM.getMainFileID()) {
+        if(fid == unit.getInterestedFile()) {
             return *tu_index;
         }
 
@@ -73,7 +73,7 @@ public:
         auto symbol_id = unit.getSymbolID(def);
         auto& symbol = index.get_symbol(symbol_id.hash);
         symbol.kind = SymbolKind::Macro;
-        symbol.name = getTokenSpelling(SM, def->getDefinitionLoc());
+        symbol.name = unit.token_spelling(def->getDefinitionLoc());
         index.add_occurrence(range, symbol_id.hash);
 
         if(kind & RelationKind::Definition) {

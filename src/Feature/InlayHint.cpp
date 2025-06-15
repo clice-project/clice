@@ -147,9 +147,9 @@ private:
             auto arg = args[i];
             auto loc = arg->getSourceRange().getBegin();
 
-            auto& SM = unit.srcMgr();
-            SM.isMacroArgExpansion(clang::SourceLocation());
-            SM.isMacroBodyExpansion(clang::SourceLocation());
+            // auto& SM = unit.srcMgr();
+            // SM.isMacroArgExpansion(clang::SourceLocation());
+            // SM.isMacroBodyExpansion(clang::SourceLocation());
 
             if(lbrace == unit.getExpansionLoc(loc)) {
                 /// If they have same location, they are both expansion location and expanded from

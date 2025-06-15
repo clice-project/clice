@@ -10,11 +10,10 @@ namespace {
 using OffsetRange = std::pair<std::uint32_t, std::uint32_t>;
 
 OffsetRange takeWholeFile(CompilationUnit& unit) {
-    auto& src = unit.srcMgr();
-    auto fileID = src.getMainFileID();
-    auto begin = src.getFileOffset(src.getLocForStartOfFile(fileID));
-    auto end = src.getFileOffset(src.getLocForEndOfFile(fileID));
-    return {begin, end};
+    auto fileID = unit.getInterestedFile();
+    auto begin = unit.getDecomposedLoc(unit.start_location(fileID));
+    auto end = unit.getDecomposedLoc(unit.end_location(fileID));
+    return {begin.second, end.second};
 }
 
 void debug(llvm::raw_ostream& os,
@@ -92,12 +91,12 @@ $(b1)int xxx$(b2)yyy$(e1) = 1$(e2);$(e3)
         }
     }
 
-    auto& unit = tx.unit;
-    auto tokens = unit->tokBuf().spelledTokens(unit->srcMgr().getMainFileID());
+    auto& unit = *tx.unit;
+    auto tokens = unit.spelled_tokens(unit.getInterestedFile());
     for(auto& [begin, end]: selects) {
-        auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit->srcMgr());
+        auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
-        SelectionBuilder builder(left, right, unit->context(), unit->tokBuf());
+        SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
         auto tree = builder.build();
         // debug(tree);
 
@@ -123,12 +122,12 @@ void f($(b1)int xxx$(b2)yyy$(e1) = 1$(e2)) {}
         }
     }
 
-    auto& unit = tx.unit;
-    auto tokens = unit->tokBuf().spelledTokens(unit->srcMgr().getMainFileID());
+    auto& unit = *tx.unit;
+    auto tokens = unit.spelled_tokens(unit.getInterestedFile());
     for(auto& [begin, end]: selects) {
-        auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit->srcMgr());
+        auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
-        SelectionBuilder builder(left, right, unit->context(), unit->tokBuf());
+        SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
         auto tree = builder.build();
         // debug(tree);
 
@@ -150,18 +149,18 @@ namespace test {
     SelectionTester tx("main.cpp", code);
     tx.compile();
 
-    auto& unit = tx.unit;
+    auto& unit = *tx.unit;
 
     uint32_t begin = tx.offset("stmt_begin");
     uint32_t end = tx.offset("stmt_end");
 
-    auto tokens = unit->tokBuf().spelledTokens(unit->srcMgr().getMainFileID());
-    auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit->srcMgr());
+    auto tokens = unit.spelled_tokens(unit.getInterestedFile());
+    auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
     EXPECT_EQ(left->kind(), clang::tok::kw_int);
     EXPECT_EQ(right->kind(), clang::tok::semi);
 
-    SelectionBuilder builder(left, right, unit->context(), unit->tokBuf());
+    SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
     auto tree = builder.build();
     // debug(tree);
 
@@ -185,18 +184,18 @@ namespace test {
     SelectionTester tx("main.cpp", code);
     tx.compile();
 
-    auto& unit = tx.unit;
+    auto& unit = *tx.unit;
 
     uint32_t begin = tx.offset("multi_begin");
     uint32_t end = tx.offset("multi_end");
 
-    auto tokens = unit->tokBuf().spelledTokens(unit->srcMgr().getMainFileID());
-    auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit->srcMgr());
+    auto tokens = unit.spelled_tokens(unit.getInterestedFile());
+    auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
     EXPECT_EQ(left->kind(), clang::tok::kw_int);
     EXPECT_EQ(right->kind(), clang::tok::r_brace);
 
-    SelectionBuilder builder(left, right, unit->context(), unit->tokBuf());
+    SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
     auto tree = builder.build();
     // debug(tree);
 
@@ -220,18 +219,18 @@ $(class_begin)class Test {
     SelectionTester tx("main.cpp", code);
     tx.compile();
 
-    auto& unit = tx.unit;
+    auto& unit = *tx.unit;
 
     uint32_t begin = tx.offset("class_begin");
     uint32_t end = tx.offset("class_end");
 
-    auto tokens = unit->tokBuf().spelledTokens(unit->srcMgr().getMainFileID());
-    auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit->srcMgr());
+    auto tokens = unit.spelled_tokens(unit.getInterestedFile());
+    auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
     EXPECT_EQ(left->kind(), clang::tok::kw_class);
     EXPECT_EQ(right->kind(), clang::tok::semi);
 
-    SelectionBuilder builder(left, right, unit->context(), unit->tokBuf());
+    SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
     auto tree = builder.build();
     // debug(tree);
 
@@ -250,18 +249,18 @@ class Test {
     SelectionTester tx("main.cpp", code);
     tx.compile();
 
-    auto& unit = tx.unit;
+    auto& unit = *tx.unit;
 
     uint32_t begin = tx.offset("begin");
     uint32_t end = tx.offset("end");
 
-    auto tokens = unit->tokBuf().spelledTokens(unit->srcMgr().getMainFileID());
-    auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit->srcMgr());
+    auto tokens = unit.spelled_tokens(unit.getInterestedFile());
+    auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
     EXPECT_EQ(left->kind(), clang::tok::identifier);
     EXPECT_EQ(right->kind(), clang::tok::identifier);
 
-    SelectionBuilder builder(left, right, unit->context(), unit->tokBuf());
+    SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
     auto tree = builder.build();
     // debug(tree);
 
@@ -279,19 +278,19 @@ void f(int& x){
     SelectionTester tx("main.cpp", code);
     tx.compile();
 
-    auto& unit = tx.unit;
+    auto& unit = *tx.unit;
 
     {
         uint32_t begin = tx.offset("begin1");
         uint32_t end = tx.offset("end1");
 
-        auto tokens = unit->tokBuf().spelledTokens(unit->srcMgr().getMainFileID());
-        auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit->srcMgr());
+        auto tokens = unit.spelled_tokens(unit.getInterestedFile());
+        auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
         EXPECT_EQ(left->kind(), clang::tok::identifier);
         EXPECT_EQ(right->kind(), clang::tok::numeric_constant);
 
-        SelectionBuilder builder(left, right, unit->context(), unit->tokBuf());
+        SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
         auto tree = builder.build();
         // debug(tree);
 
@@ -308,8 +307,8 @@ void f(int& x){
         uint32_t begin = tx.offset("begin2");
         uint32_t end = tx.offset("end2");
 
-        auto tokens = unit->tokBuf().spelledTokens(unit->srcMgr().getMainFileID());
-        auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit->srcMgr());
+        auto tokens = unit.spelled_tokens(unit.getInterestedFile());
+        auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
         auto lk = left->kind();
         auto rk = right->kind();
@@ -317,7 +316,7 @@ void f(int& x){
         EXPECT_EQ(left->kind(), clang::tok::equalequal);
         EXPECT_EQ(right->kind(), clang::tok::equalequal);
 
-        SelectionBuilder builder(left, right, unit->context(), unit->tokBuf());
+        SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
         auto tree = builder.build();
         // debug(tree);
 
@@ -348,13 +347,13 @@ class Test {
             }
         }
 
-        auto& unit = tx.unit;
-        auto tokens = unit->tokBuf().spelledTokens(unit->srcMgr().getMainFileID());
+        auto& unit = *tx.unit;
+        auto tokens = unit.spelled_tokens(unit.getInterestedFile());
         for(auto& [begin, end]: b12_e123) {
             auto [left, right] =
-                SelectionBuilder::selectionBound(tokens, {begin, end}, unit->srcMgr());
+                SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
-            SelectionBuilder builder(left, right, unit->context(), unit->tokBuf());
+            SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
             auto tree = builder.build();
             // debug(tree);
 
@@ -377,13 +376,13 @@ class Test {
             }
         }
 
-        auto& unit = tx.unit;
-        auto tokens = unit->tokBuf().spelledTokens(unit->srcMgr().getMainFileID());
+        auto& unit = *tx.unit;
+        auto tokens = unit.spelled_tokens(unit.getInterestedFile());
         for(auto& [begin, end]: b3_e123) {
             auto [left, right] =
-                SelectionBuilder::selectionBound(tokens, {begin, end}, unit->srcMgr());
+                SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
-            SelectionBuilder builder(left, right, unit->context(), unit->tokBuf());
+            SelectionBuilder builder(left, right, unit.context(), unit.tokBuf());
             auto tree = builder.build();
             // debug(tree);
 

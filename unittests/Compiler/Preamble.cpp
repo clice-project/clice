@@ -213,16 +213,12 @@ int foo();
         auto unit = preprocess(params);
         ASSERT_TRUE(unit);
 
-        auto& SM = unit->srcMgr();
         auto path = path::join(".", "test1.h");
-        auto entry = SM.getFileManager().getFileRef(path);
-        ASSERT_TRUE(entry);
-
-        auto fid = SM.translateFile(*entry);
+        auto fid = unit->file_id(path);
         ASSERT_TRUE(fid.isValid());
 
         while(fid.isValid()) {
-            auto location = SM.getIncludeLoc(fid);
+            auto location = unit->include_location(fid);
             auto [fid2, offset] = unit->getDecomposedLoc(location);
             auto content = unit->getFileContent(fid2).substr(0, offset);
 

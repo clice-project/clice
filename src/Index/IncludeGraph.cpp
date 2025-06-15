@@ -7,7 +7,6 @@ static std::uint32_t addIncludeChain(CompilationUnit& unit,
                                      clang::FileID fid,
                                      IncludeGraph& graph,
                                      llvm::StringMap<std::uint32_t>& path_table) {
-    auto& SM = unit.srcMgr();
     auto& [paths, locations, file_table] = graph;
     auto [iter, success] = file_table.try_emplace(fid, locations.size());
     if(!success) {
@@ -16,9 +15,9 @@ static std::uint32_t addIncludeChain(CompilationUnit& unit,
 
     auto index = iter->second;
 
-    auto includeLoc = SM.getIncludeLoc(fid);
+    auto includeLoc = unit.include_location(fid);
     if(includeLoc.isValid()) {
-        auto presumed = SM.getPresumedLoc(includeLoc, false);
+        auto presumed = unit.presumed_location(includeLoc);
         locations.emplace_back();
         locations[index].line = presumed.getLine();
 
@@ -32,7 +31,7 @@ static std::uint32_t addIncludeChain(CompilationUnit& unit,
         uint32_t include = -1;
         if(presumed.getIncludeLoc().isValid()) {
             include =
-                addIncludeChain(unit, SM.getFileID(presumed.getIncludeLoc()), graph, path_table);
+                addIncludeChain(unit, unit.file_id(presumed.getIncludeLoc()), graph, path_table);
         }
         locations[index].include = include;
     }
