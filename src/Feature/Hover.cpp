@@ -1,7 +1,7 @@
 #include "AST/Selection.h"
 #include "AST/Semantic.h"
 #include "AST/Utility.h"
-#include "Compiler/AST.h"
+#include "Compiler/CompilationUnit.h"
 #include "Index/Shared.h"
 #include "Support/Compare.h"
 #include "Support/Ranges.h"

@@ -2,7 +2,7 @@
 
 #include "Indexer.h"
 #include "Async/Async.h"
-#include "Compiler/AST.h"
+#include "Compiler/CompilationUnit.h"
 #include "Compiler/Module.h"
 #include "Compiler/Preamble.h"
 

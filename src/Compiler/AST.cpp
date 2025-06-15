@@ -1,4 +1,4 @@
-#include "Compiler/AST.h"
+#include "Compiler/CompilationUnit.h"
 #include "Index/USR.h"
 #include "AST/Utility.h"
 

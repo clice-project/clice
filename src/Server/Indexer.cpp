@@ -1,4 +1,4 @@
-#include "Compiler/AST.h"
+#include "Compiler/CompilationUnit.h"
 #include "Compiler/Compilation.h"
 #include "Index/Index.h"
 #include "Server/Indexer.h"

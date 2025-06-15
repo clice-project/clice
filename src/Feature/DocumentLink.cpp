@@ -1,4 +1,4 @@
-#include "Compiler/AST.h"
+#include "Compiler/CompilationUnit.h"
 #include "Feature/DocumentLink.h"
 #include "Support/Ranges.h"
 #include "Support/Compare.h"

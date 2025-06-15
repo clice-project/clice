@@ -1,4 +1,4 @@
-#include "Compiler/AST.h"
+#include "Compiler/CompilationUnit.h"
 #include "Support/Binary.h"
 #include "Index/FeatureIndex.h"
 

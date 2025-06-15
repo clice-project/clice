@@ -1,5 +1,5 @@
 #include "AST/Selection.h"
-#include "Compiler/AST.h"
+#include "Compiler/CompilationUnit.h"
 
 #include "clang/AST/RecursiveASTVisitor.h"
 

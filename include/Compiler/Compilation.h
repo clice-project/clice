@@ -1,8 +1,8 @@
 #pragma once
 
-#include "AST.h"
 #include "Module.h"
 #include "Preamble.h"
+#include "CompilationUnit.h"
 #include "Support/FileSystem.h"
 
 namespace clice {
@@ -61,6 +61,6 @@ std::expected<CompilationUnit, std::string> compile(CompilationParams& params, P
 
 /// Run code completion at the given location.
 std::expected<CompilationUnit, std::string> compile(CompilationParams& params,
-                                            clang::CodeCompleteConsumer* consumer);
+                                                    clang::CodeCompleteConsumer* consumer);
 
 }  // namespace clice

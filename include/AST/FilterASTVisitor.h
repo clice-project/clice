@@ -1,7 +1,7 @@
 #pragma once
 
 #include "AST/SourceCode.h"
-#include "Compiler/AST.h"
+#include "Compiler/CompilationUnit.h"
 
 #include "clang/AST/RecursiveASTVisitor.h"
 
