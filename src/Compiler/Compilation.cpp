@@ -199,7 +199,7 @@ std::expected<CompilationUnit, std::string>
         .pathCache = llvm::DenseMap<clang::FileID, llvm::StringRef>(),
         .symbolHashCache = llvm::DenseMap<const void*, std::uint64_t>(),
     };
-    
+
     return CompilationUnit(CompilationUnit::SyntaxOnly, impl);
 }
 
@@ -215,8 +215,8 @@ std::expected<CompilationUnit, std::string> compile(CompilationParams& params) {
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
 
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params,
-                                                    clang::CodeCompleteConsumer* consumer) {
+std::expected<CompilationUnit, std::string> complete(CompilationParams& params,
+                                                     clang::CodeCompleteConsumer* consumer) {
     auto instance = createInstance(params);
 
     auto& [file, offset] = params.completion;

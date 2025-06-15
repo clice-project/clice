@@ -49,22 +49,23 @@ struct CompilationParams {
     }
 };
 
+using CompilationResult = std::expected<CompilationUnit, std::string>;
+
 /// Only preprocess ths source flie.
-std::expected<CompilationUnit, std::string> preprocess(CompilationParams& params);
+CompilationResult preprocess(CompilationParams& params);
 
 /// Build AST from given file path and content. If pch or pcm provided, apply them to the compiler.
 /// Note this function will not check whether we need to update the PCH or PCM, caller should check
 /// their reusability and update in time.
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params);
+CompilationResult compile(CompilationParams& params);
 
 /// Build PCH from given file path and content.
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params, PCHInfo& out);
+CompilationResult compile(CompilationParams& params, PCHInfo& out);
 
 /// Build PCM from given file path and content.
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params, PCMInfo& out);
+CompilationResult compile(CompilationParams& params, PCMInfo& out);
 
 /// Run code completion at the given location.
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params,
-                                                    clang::CodeCompleteConsumer* consumer);
+CompilationResult complete(CompilationParams& params, clang::CodeCompleteConsumer* consumer);
 
 }  // namespace clice
