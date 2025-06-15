@@ -7,18 +7,18 @@ namespace clice::feature {
 
 namespace {}
 
-DocumentLinks documentLinks(ASTInfo& AST);
+DocumentLinks documentLinks(CompilationUnit& unit);
 
-index::Shared<DocumentLinks> indexDocumentLink(ASTInfo& AST) {
+index::Shared<DocumentLinks> indexDocumentLink(CompilationUnit& unit) {
     index::Shared<DocumentLinks> result;
 
-    for(auto& [fid, diretives]: AST.directives()) {
+    for(auto& [fid, diretives]: unit.directives()) {
         for(auto& include: diretives.includes) {
-            auto [_, range] = AST.toLocalRange(include.fileNameRange);
-            result[fid].emplace_back(range, AST.getFilePath(include.fid).str());
+            auto [_, range] = unit.toLocalRange(include.fileNameRange);
+            result[fid].emplace_back(range, unit.getFilePath(include.fid).str());
         }
 
-        auto content = AST.getFileContent(fid);
+        auto content = unit.getFileContent(fid);
         for(auto& hasInclude: diretives.hasIncludes) {
             /// If the include path is empty, skip it.
             if(hasInclude.fid.isInvalid()) {
@@ -26,7 +26,7 @@ index::Shared<DocumentLinks> indexDocumentLink(ASTInfo& AST) {
             }
 
             auto location = hasInclude.location;
-            auto [_, offset] = AST.getDecomposedLoc(location);
+            auto [_, offset] = unit.getDecomposedLoc(location);
 
             auto subContent = content.substr(offset);
 
@@ -46,7 +46,7 @@ index::Shared<DocumentLinks> indexDocumentLink(ASTInfo& AST) {
             });
 
             result[fid].emplace_back(LocalSourceRange{offset, endOffset},
-                                     AST.getFilePath(hasInclude.fid).str());
+                                     unit.getFilePath(hasInclude.fid).str());
         }
     }
 

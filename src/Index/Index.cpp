@@ -9,11 +9,11 @@ namespace {
 
 class IndexBuilder : public Indices, public SemanticVisitor<IndexBuilder> {
 public:
-    IndexBuilder(ASTInfo& AST) : SemanticVisitor(AST, false) {
+    IndexBuilder(CompilationUnit& unit) : SemanticVisitor(unit, false) {
         tu_index = std::make_unique<TUIndex>();
-        tu_index->path = AST.getFilePath(SM.getMainFileID());
-        tu_index->content = AST.getFileContent(SM.getMainFileID());
-        tu_index->graph = IncludeGraph::from(AST);
+        tu_index->path = unit.getFilePath(SM.getMainFileID());
+        tu_index->content = unit.getFileContent(SM.getMainFileID());
+        tu_index->graph = IncludeGraph::from(unit);
     }
 
     RawIndex& getIndex(clang::FileID fid) {
@@ -27,8 +27,8 @@ public:
 
         auto [it, _] = header_indices.try_emplace(fid, new RawIndex());
         auto& index = *it->second;
-        index.path = AST.getFilePath(fid);
-        index.content = AST.getFileContent(fid);
+        index.path = unit.getFilePath(fid);
+        index.content = unit.getFileContent(fid);
         return index;
     }
 
@@ -39,12 +39,12 @@ public:
         decl = normalize(decl);
 
         if(location.isMacroID()) {
-            auto spelling = AST.getSpellingLoc(location);
-            auto expansion = AST.getExpansionLoc(location);
+            auto spelling = unit.getSpellingLoc(location);
+            auto expansion = unit.getExpansionLoc(location);
 
             /// FIXME: For location from macro, we only handle the case that the
             /// spelling and expansion are in the same file currently.
-            if(AST.getFileID(spelling) != AST.getFileID(expansion)) {
+            if(unit.getFileID(spelling) != unit.getFileID(expansion)) {
                 return;
             }
 
@@ -52,9 +52,9 @@ public:
             location = spelling;
         }
 
-        auto [fid, range] = AST.toLocalRange(location);
+        auto [fid, range] = unit.toLocalRange(location);
         auto& index = getIndex(fid);
-        auto symbol_id = AST.getSymbolID(decl);
+        auto symbol_id = unit.getSymbolID(decl);
         auto& symbol = index.get_symbol(symbol_id.hash);
         symbol.kind = SymbolKind::from(decl);
         index.add_occurrence(range, symbol_id.hash);
@@ -68,9 +68,9 @@ public:
             return;
         }
 
-        auto [fid, range] = AST.toLocalRange(location);
+        auto [fid, range] = unit.toLocalRange(location);
         auto& index = getIndex(fid);
-        auto symbol_id = AST.getSymbolID(def);
+        auto symbol_id = unit.getSymbolID(def);
         auto& symbol = index.get_symbol(symbol_id.hash);
         symbol.kind = SymbolKind::Macro;
         symbol.name = getTokenSpelling(SM, def->getDefinitionLoc());
@@ -80,7 +80,7 @@ public:
             auto begin = def->getDefinitionLoc();
             auto end = def->getDefinitionEndLoc();
             assert(begin.isFileID() && end.isFileID() && "Invalid location");
-            auto [fid2, definition_range] = AST.toLocalRange(clang::SourceRange(begin, end));
+            auto [fid2, definition_range] = unit.toLocalRange(clang::SourceRange(begin, end));
             assert(fid == fid2 && "Invalid macro definition location");
             /// definitionLoc = builder.getLocation(range);
 
@@ -104,12 +104,12 @@ public:
                         RelationKind kind,
                         const clang::NamedDecl* target,
                         clang::SourceRange range) {
-        auto [fid, relationRange] = AST.toLocalExpansionRange(range);
+        auto [fid, relationRange] = unit.toLocalExpansionRange(range);
 
         Relation relation{.kind = kind};
 
         if(kind.isDeclOrDef()) {
-            auto [fid2, definitionRange] = AST.toLocalExpansionRange(decl->getSourceRange());
+            auto [fid2, definitionRange] = unit.toLocalExpansionRange(decl->getSourceRange());
             assert(fid == fid2 && "Invalid definition location");
             relation.range = relationRange;
             relation.definition_range = definitionRange;
@@ -117,10 +117,10 @@ public:
             relation.range = relationRange;
             relation.target_symbol = 0;
         } else if(kind.isBetweenSymbol()) {
-            auto symbol_id = AST.getSymbolID(normalize(target));
+            auto symbol_id = unit.getSymbolID(normalize(target));
             relation.target_symbol = symbol_id.hash;
         } else if(kind.isCall()) {
-            auto symbol_id = AST.getSymbolID(normalize(target));
+            auto symbol_id = unit.getSymbolID(normalize(target));
             relation.range = relationRange;
             relation.target_symbol = symbol_id.hash;
         } else {
@@ -128,7 +128,7 @@ public:
         }
 
         auto& index = getIndex(fid);
-        auto symbol_id = AST.getSymbolID(normalize(decl));
+        auto symbol_id = unit.getSymbolID(normalize(decl));
         auto& symbol = index.get_symbol(symbol_id.hash);
         index.add_relation(symbol, relation);
     }
@@ -136,8 +136,8 @@ public:
 
 }  // namespace
 
-Indices index(ASTInfo& AST) {
-    IndexBuilder builder(AST);
+Indices index(CompilationUnit& unit) {
+    IndexBuilder builder(unit);
     builder.run();
     return std::move(builder);
 }

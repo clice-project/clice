@@ -3,11 +3,11 @@
 
 namespace clice::index {
 
-static std::uint32_t addIncludeChain(ASTInfo& AST,
+static std::uint32_t addIncludeChain(CompilationUnit& unit,
                                      clang::FileID fid,
                                      IncludeGraph& graph,
                                      llvm::StringMap<std::uint32_t>& path_table) {
-    auto& SM = AST.srcMgr();
+    auto& SM = unit.srcMgr();
     auto& [paths, locations, file_table] = graph;
     auto [iter, success] = file_table.try_emplace(fid, locations.size());
     if(!success) {
@@ -22,7 +22,7 @@ static std::uint32_t addIncludeChain(ASTInfo& AST,
         locations.emplace_back();
         locations[index].line = presumed.getLine();
 
-        auto path = AST.getFilePath(presumed.getFileID());
+        auto path = unit.getFilePath(presumed.getFileID());
         auto [iter, success] = path_table.try_emplace(path, paths.size());
         if(success) {
             paths.emplace_back(path);
@@ -32,7 +32,7 @@ static std::uint32_t addIncludeChain(ASTInfo& AST,
         uint32_t include = -1;
         if(presumed.getIncludeLoc().isValid()) {
             include =
-                addIncludeChain(AST, SM.getFileID(presumed.getIncludeLoc()), graph, path_table);
+                addIncludeChain(unit, SM.getFileID(presumed.getIncludeLoc()), graph, path_table);
         }
         locations[index].include = include;
     }
@@ -40,11 +40,11 @@ static std::uint32_t addIncludeChain(ASTInfo& AST,
     return index;
 }
 
-IncludeGraph IncludeGraph::from(ASTInfo& AST) {
+IncludeGraph IncludeGraph::from(CompilationUnit& unit) {
     llvm::StringMap<std::uint32_t> path_table;
     IncludeGraph graph;
-    for(auto fid: AST.files()) {
-        addIncludeChain(AST, fid, graph, path_table);
+    for(auto fid: unit.files()) {
+        addIncludeChain(unit, fid, graph, path_table);
     }
     return graph;
 }

@@ -13,9 +13,9 @@ class SemanticVisitor : public FilteredASTVisitor<SemanticVisitor<Derived>> {
 public:
     using Base = FilteredASTVisitor<SemanticVisitor>;
 
-    SemanticVisitor(ASTInfo& AST, bool interestedOnly) :
-        Base(AST, interestedOnly, {}), AST(AST), PP(AST.pp()), SM(AST.srcMgr()), TB(AST.tokBuf()),
-        resolver(AST.resolver()) {}
+    SemanticVisitor(CompilationUnit& unit, bool interestedOnly) :
+        Base(unit, interestedOnly, {}), unit(unit), PP(unit.pp()), SM(unit.srcMgr()),
+        TB(unit.tokBuf()), resolver(unit.resolver()) {}
 
 public:
     Derived& getDerived() {
@@ -103,9 +103,9 @@ public:
     }
 
     void run() {
-        Base::TraverseAST(AST.context());
+        Base::TraverseAST(unit.context());
 
-        for(auto directive: AST.directives()) {
+        for(auto directive: unit.directives()) {
             for(auto macro: directive.second.macros) {
                 switch(macro.kind) {
                     case MacroRef::Kind::Def: {
@@ -122,7 +122,7 @@ public:
             }
         }
 
-        if(auto module = AST.context().getCurrentNamedModule()) {
+        if(auto module = unit.context().getCurrentNamedModule()) {
             auto keyword = module->DefinitionLoc;
             auto begin = TB.spelledTokenContaining(keyword);
             assert(begin->kind() == clang::tok::identifier && begin->text(SM) == "module" &&
@@ -715,7 +715,7 @@ public:
     }
 
 protected:
-    ASTInfo& AST;
+    CompilationUnit& unit;
     clang::Preprocessor& PP;
     clang::SourceManager& SM;
     clang::syntax::TokenBuffer& TB;

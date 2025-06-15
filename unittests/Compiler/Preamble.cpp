@@ -210,10 +210,10 @@ int foo();
             params.addRemappedFile(path::join(".", path), file);
         }
 
-        auto AST = preprocess(params);
-        ASSERT_TRUE(AST);
+        auto unit = preprocess(params);
+        ASSERT_TRUE(unit);
 
-        auto& SM = AST->srcMgr();
+        auto& SM = unit->srcMgr();
         auto path = path::join(".", "test1.h");
         auto entry = SM.getFileManager().getFileRef(path);
         ASSERT_TRUE(entry);
@@ -223,8 +223,8 @@ int foo();
 
         while(fid.isValid()) {
             auto location = SM.getIncludeLoc(fid);
-            auto [fid2, offset] = AST->getDecomposedLoc(location);
-            auto content = AST->getFileContent(fid2).substr(0, offset);
+            auto [fid2, offset] = unit->getDecomposedLoc(location);
+            auto content = unit->getFileContent(fid2).substr(0, offset);
 
             /// Remove incomplete include.
             content = content.substr(0, content.rfind("\n"));

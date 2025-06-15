@@ -9,12 +9,12 @@ namespace clice {
 
 struct RAVFileter {
 
-    RAVFileter(ASTInfo& AST, bool interestedOnly, std::optional<LocalSourceRange> limit) :
-        AST(AST), limit(limit), interestedOnly(interestedOnly) {}
+    RAVFileter(CompilationUnit& unit, bool interestedOnly, std::optional<LocalSourceRange> limit) :
+        unit(unit), limit(limit), interestedOnly(interestedOnly) {}
 
     bool filterable(clang::SourceRange range) const;
 
-    ASTInfo& AST;
+    CompilationUnit& unit;
     std::optional<LocalSourceRange> limit;
     bool interestedOnly = true;
 };
@@ -26,10 +26,10 @@ class FilteredASTVisitor : public clang::RecursiveASTVisitor<Derived>, public RA
 public:
     using Base = clang::RecursiveASTVisitor<Derived>;
 
-    FilteredASTVisitor(ASTInfo& AST,
+    FilteredASTVisitor(CompilationUnit& unit,
                        bool interestedOnly,
                        std::optional<LocalSourceRange> targetRange = std::nullopt) :
-        RAVFileter(AST, interestedOnly, targetRange) {}
+        RAVFileter(unit, interestedOnly, targetRange) {}
 
 #define CHECK_DERIVED_IMPL(func)                                                                   \
     static_assert(std::same_as<decltype(&FilteredASTVisitor::func), decltype(&Derived::func)>,     \

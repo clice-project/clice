@@ -9,8 +9,8 @@ namespace {
 
 class FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> {
 public:
-    FoldingRangeCollector(ASTInfo& AST, bool interestedOnly) :
-        FilteredASTVisitor(AST, interestedOnly, std::nullopt), SM(AST.srcMgr()), TB(AST.tokBuf()) {}
+    FoldingRangeCollector(CompilationUnit& unit, bool interestedOnly) :
+        FilteredASTVisitor(unit, interestedOnly, std::nullopt), SM(unit.srcMgr()), TB(unit.tokBuf()) {}
 
     constexpr static auto LastColOfLine = std::numeric_limits<unsigned>::max();
 
@@ -105,7 +105,7 @@ public:
     }
 
     bool VisitCallExpr(const clang::CallExpr* call) {
-        auto tokens = AST.tokBuf().expandedTokens(call->getSourceRange());
+        auto tokens = unit.tokBuf().expandedTokens(call->getSourceRange());
         if(tokens.back().kind() != clang::tok::r_paren)
             return true;
 
@@ -143,16 +143,16 @@ public:
         return true;
     }
 
-    auto buildForFile(ASTInfo& AST) {
-        TraverseTranslationUnitDecl(AST.tu());
-        collectDrectives(AST.directives()[AST.getInterestedFile()]);
+    auto buildForFile(CompilationUnit& unit) {
+        TraverseTranslationUnitDecl(unit.tu());
+        collectDrectives(unit.directives()[unit.getInterestedFile()]);
         std::ranges::sort(result, refl::less);
         return std::move(result);
     }
 
-    auto buildForIndex(ASTInfo& AST) {
-        TraverseTranslationUnitDecl(AST.tu());
-        for(auto& [fid, directive]: AST.directives()) {
+    auto buildForIndex(CompilationUnit& unit) {
+        TraverseTranslationUnitDecl(unit.tu());
+        for(auto& [fid, directive]: unit.directives()) {
             collectDrectives(directive);
         }
 
@@ -172,19 +172,19 @@ private:
         }
 
         auto [begin, end] = range;
-        begin = AST.getExpansionLoc(begin);
-        end = AST.getExpansionLoc(end);
+        begin = unit.getExpansionLoc(begin);
+        end = unit.getExpansionLoc(end);
 
         /// If they are from the same macro expansion, skip it.
         if(begin == end) {
             return;
         }
 
-        auto [fid, localRange] = AST.toLocalRange(clang::SourceRange(begin, end));
+        auto [fid, localRange] = unit.toLocalRange(clang::SourceRange(begin, end));
         auto [beginOffset, endOffset] = localRange;
 
         bool isSameLine = true;
-        auto content = AST.getFileContent(fid);
+        auto content = unit.getFileContent(fid);
         for(auto i = beginOffset; i < endOffset; ++i) {
             if(content[i] == '\n') {
                 isSameLine = false;
@@ -207,7 +207,7 @@ private:
 
     /// Collect function parameter list between '(' and ')'.
     void collectParameterList(clang::SourceRange bounds) {
-        auto tokens = AST.tokBuf().expandedTokens(bounds);
+        auto tokens = unit.tokBuf().expandedTokens(bounds);
         auto leftParen = tokens.drop_until([](const auto& tk) {  //
             return tk.kind() == clang::tok::l_paren;
         });
@@ -239,7 +239,7 @@ private:
         }
     }
 
-    using ASTDirectives = std::remove_reference_t<decltype(std::declval<ASTInfo>().directives())>;
+    using ASTDirectives = std::remove_reference_t<decltype(std::declval<CompilationUnit>().directives())>;
 
     void collectDrectives(const Directive& directive) {
         collectConditionMacro(directive.conditions);
@@ -302,7 +302,7 @@ private:
 
     /// Collect all condition macro's block as folding range.
     void collectPragmaRegion(const std::vector<Pragma>& pragmas) {
-        const auto& SM = AST.srcMgr();
+        const auto& SM = unit.srcMgr();
 
         llvm::SmallVector<const Pragma*> stack;
         for(auto& pragma: pragmas) {
@@ -328,12 +328,12 @@ private:
 
 }  // namespace
 
-FoldingRanges foldingRanges(ASTInfo& AST) {
-    return FoldingRangeCollector(AST, true).buildForFile(AST);
+FoldingRanges foldingRanges(CompilationUnit& unit) {
+    return FoldingRangeCollector(unit, true).buildForFile(unit);
 }
 
-index::Shared<FoldingRanges> indexFoldingRange(ASTInfo& AST) {
-    return FoldingRangeCollector(AST, false).buildForIndex(AST);
+index::Shared<FoldingRanges> indexFoldingRange(CompilationUnit& unit) {
+    return FoldingRangeCollector(unit, false).buildForIndex(unit);
 }  // namespace feature
 
 }  // namespace clice::feature

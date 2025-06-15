@@ -238,7 +238,7 @@ struct SelectionCollector : public clang::RecursiveASTVisitor<SelectionCollector
         return builder.hook(I, [&] { return Base::TraverseConstructorInitializer(I); });
     }
 
-    /// FIXME: figure out concept in clang AST.
+    /// FIXME: figure out concept in clang unit.
     bool TraverseConceptReference(clang::ConceptReference* concept_) {
         return true;
     }

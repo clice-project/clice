@@ -15,7 +15,7 @@ namespace clice {
 // expand macro(one step by step).
 // invert if.
 
-class ASTInfo;
+class CompilationUnit;
 
 namespace {
 class SelectionBuilder;

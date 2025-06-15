@@ -12,9 +12,9 @@
 namespace clice {
 
 /// All AST related information needed for language server.
-class ASTInfo {
+class CompilationUnit {
 public:
-    ASTInfo(clang::FileID interested,
+    CompilationUnit(clang::FileID interested,
             std::unique_ptr<clang::FrontendAction> action,
             std::unique_ptr<clang::CompilerInstance> instance,
             std::optional<TemplateResolver> resolver,
@@ -24,11 +24,11 @@ public:
         m_resolver(std::move(resolver)), buffer(std::move(buffer)),
         m_directives(std::move(directives)), SM(this->instance->getSourceManager()) {}
 
-    ASTInfo(const ASTInfo&) = delete;
+    CompilationUnit(const CompilationUnit&) = delete;
 
-    ASTInfo(ASTInfo&&) = default;
+    CompilationUnit(CompilationUnit&&) = default;
 
-    ~ASTInfo() {
+    ~CompilationUnit() {
         if(action) {
             action->EndSourceFile();
         }
@@ -79,7 +79,7 @@ public:
         return getFileContent(interested);
     }
 
-    /// All files involved in building the AST.
+    /// All files involved in building the unit.
     const llvm::DenseSet<clang::FileID>& files();
 
     std::vector<std::string> deps();
@@ -145,7 +145,7 @@ private:
     /// The interested file ID.
     clang::FileID interested;
 
-    /// The frontend action used to build the AST.
+    /// The frontend action used to build the unit.
     std::unique_ptr<clang::FrontendAction> action;
 
     /// Compiler instance, responsible for performing the actual compilation and managing the
@@ -172,6 +172,8 @@ private:
     llvm::DenseMap<const void*, std::uint64_t> symbolHashCache;
 
     llvm::BumpPtrAllocator pathStorage;
+
+    std::vector<clang::Decl*> top_level_decls;
 };
 
 }  // namespace clice

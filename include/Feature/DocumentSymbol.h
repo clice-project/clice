@@ -30,10 +30,10 @@ struct DocumentSymbol {
 using DocumentSymbols = std::vector<DocumentSymbol>;
 
 /// Generate document symbols for only interested file.
-DocumentSymbols documentSymbols(ASTInfo& AST);
+DocumentSymbols documentSymbols(CompilationUnit& unit);
 
-/// Generate document symbols for all file in AST.
-index::Shared<DocumentSymbols> indexDocumentSymbol(ASTInfo& AST);
+/// Generate document symbols for all file in unit.
+index::Shared<DocumentSymbols> indexDocumentSymbol(CompilationUnit& unit);
 
 }  // namespace clice::feature
 

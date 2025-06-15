@@ -11,13 +11,13 @@
 
 namespace clice {
 
-class ASTInfo;
+class CompilationUnit;
 
 class Indexer {
 public:
     /// Index an opened file, its AST is already builtin
     /// and PCH is used for it.
-    async::Task<> index(ASTInfo& AST);
+    async::Task<> index(CompilationUnit& unit);
 
     /// Index an static file.
     async::Task<> index(llvm::StringRef file);

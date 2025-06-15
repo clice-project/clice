@@ -132,7 +132,7 @@ private:
     void addInlayHint(InlayHintKind kind,
                       clang::SourceLocation location,
                       std::vector<index::SymbolID> labels) {
-        auto [fid, offset] = AST.getDecomposedLoc(location);
+        auto [fid, offset] = unit.getDecomposedLoc(location);
         auto& hints = interestedOnly ? result : sharedResult[fid];
         hints.emplace_back(offset, kind, labels);
     }
@@ -147,11 +147,11 @@ private:
             auto arg = args[i];
             auto loc = arg->getSourceRange().getBegin();
 
-            auto& SM = AST.srcMgr();
+            auto& SM = unit.srcMgr();
             SM.isMacroArgExpansion(clang::SourceLocation());
             SM.isMacroBodyExpansion(clang::SourceLocation());
 
-            if(lbrace == AST.getExpansionLoc(loc)) {
+            if(lbrace == unit.getExpansionLoc(loc)) {
                 /// If they have same location, they are both expansion location and expanded from
                 /// macro.
 
@@ -171,16 +171,16 @@ public:
 
 }  // namespace
 
-InlayHints inlayHints(ASTInfo& AST, LocalSourceRange target) {
-    InlayHintsCollector collector(AST, true, target);
-    collector.TraverseAST(AST.context());
+InlayHints inlayHints(CompilationUnit& unit, LocalSourceRange target) {
+    InlayHintsCollector collector(unit, true, target);
+    collector.TraverseAST(unit.context());
     ranges::sort(collector.result, refl::less);
     return std::move(collector.result);
 }
 
-index::Shared<InlayHints> indexInlayHints(ASTInfo& AST) {
-    InlayHintsCollector collector(AST, true);
-    collector.TraverseAST(AST.context());
+index::Shared<InlayHints> indexInlayHints(CompilationUnit& unit) {
+    InlayHintsCollector collector(unit, true);
+    collector.TraverseAST(unit.context());
     for(auto&& [fid, result]: collector.sharedResult) {
         ranges::sort(result, refl::less);
     }

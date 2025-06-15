@@ -6,13 +6,13 @@ namespace clice::testing {
 namespace {
 
 struct InputFinder : clang::RecursiveASTVisitor<InputFinder> {
-    ASTInfo& info;
+    CompilationUnit& info;
     clang::QualType input;
     clang::QualType expect;
 
     using Base = clang::RecursiveASTVisitor<InputFinder>;
 
-    InputFinder(ASTInfo& info) : info(info) {}
+    InputFinder(CompilationUnit& info) : info(info) {}
 
     bool TraverseDecl(clang::Decl* decl) {
         if(decl && (llvm::isa<clang::TranslationUnitDecl>(decl) ||
@@ -41,10 +41,10 @@ struct TemplateResolver : TestFixture {
         addMain("main.cpp", code);
         compile();
 
-        InputFinder finder(*AST);
-        finder.TraverseAST(AST->context());
+        InputFinder finder(*unit);
+        finder.TraverseAST(unit->context());
 
-        auto input = AST->resolver().resolve(finder.input);
+        auto input = unit->resolver().resolve(finder.input);
         auto expect = finder.expect;
 
         EXPECT_EQ(input.isNull(), false, chain);

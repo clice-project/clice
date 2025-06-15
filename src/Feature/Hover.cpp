@@ -11,8 +11,8 @@ namespace clice::feature {
 
 namespace {
 
-std::vector<HoverItem> getHoverItems(ASTInfo& AST, const clang::NamedDecl* decl) {
-    clang::ASTContext& Ctx = AST.context();
+std::vector<HoverItem> getHoverItems(CompilationUnit& unit, const clang::NamedDecl* decl) {
+    clang::ASTContext& Ctx = unit.context();
     std::vector<HoverItem> items;
 
     auto addItem = [&items](HoverItem::HoverKind kind, uint32_t value) {
@@ -34,8 +34,8 @@ std::vector<HoverItem> getHoverItems(ASTInfo& AST, const clang::NamedDecl* decl)
     return items;
 }
 
-std::string getDocument(ASTInfo& AST, const clang::NamedDecl* decl) {
-    clang::ASTContext& Ctx = AST.context();
+std::string getDocument(CompilationUnit& unit, const clang::NamedDecl* decl) {
+    clang::ASTContext& Ctx = unit.context();
     const clang::RawComment* comment = Ctx.getRawCommentForAnyRedecl(decl);
     if(!comment) {
         return "";
@@ -44,17 +44,17 @@ std::string getDocument(ASTInfo& AST, const clang::NamedDecl* decl) {
     return comment->getRawText(Ctx.getSourceManager()).str();
 }
 
-std::string getQualifier(ASTInfo& AST, const clang::NamedDecl* decl) {
+std::string getQualifier(CompilationUnit& unit, const clang::NamedDecl* decl) {
     std::string result;
     llvm::raw_string_ostream os(result);
     decl->printNestedNameSpecifier(os);
     return result;
 }
 
-std::string getSourceCode(ASTInfo& AST, const clang::NamedDecl* decl) {
+std::string getSourceCode(CompilationUnit& unit, const clang::NamedDecl* decl) {
     clang::SourceRange range = decl->getSourceRange();
-    auto& TB = AST.tokBuf();
-    auto& SM = AST.srcMgr();
+    auto& TB = unit.tokBuf();
+    auto& SM = unit.srcMgr();
     auto tokens = TB.expandedTokens(range);
     /// FIXME: How to cut off the tokens?
     return "";
@@ -63,10 +63,10 @@ std::string getSourceCode(ASTInfo& AST, const clang::NamedDecl* decl) {
 struct HoversStorage : Hovers {
     llvm::DenseMap<const void*, uint32_t> cache;
 
-    void add(ASTInfo& AST, const clang::NamedDecl* decl, LocalSourceRange range) {
+    void add(CompilationUnit& unit, const clang::NamedDecl* decl, LocalSourceRange range) {
         auto [iter, success] = cache.try_emplace(decl, hovers.size());
         if(success) {
-            hovers.emplace_back(hover(AST, decl));
+            hovers.emplace_back(hover(unit, decl));
         }
         occurrences.emplace_back(range, iter->second);
     }
@@ -97,10 +97,10 @@ struct HoversStorage : Hovers {
     }
 };
 
-/// For index all hover information in the given AST.
+/// For index all hover information in the given unit.
 class HoverCollector : public SemanticVisitor<HoverCollector> {
 public:
-    HoverCollector(ASTInfo& AST) : SemanticVisitor<HoverCollector>(AST, false) {}
+    HoverCollector(CompilationUnit& unit) : SemanticVisitor<HoverCollector>(unit, false) {}
 
     void handleDeclOccurrence(const clang::NamedDecl* decl,
                               RelationKind kind,
@@ -112,9 +112,9 @@ public:
 
         decl = normalize(decl);
 
-        auto [fid, range] = AST.toLocalRange(location);
+        auto [fid, range] = unit.toLocalRange(location);
         auto& file = files[fid];
-        file.add(AST, decl, range);
+        file.add(unit, decl, range);
     }
 
     auto build() {
@@ -136,19 +136,19 @@ private:
 
 }  // namespace
 
-Hover hover(ASTInfo& AST, const clang::NamedDecl* decl) {
+Hover hover(CompilationUnit& unit, const clang::NamedDecl* decl) {
     return Hover{
         .kind = SymbolKind::from(decl),
         .name = getDeclName(decl),
-        .items = getHoverItems(AST, decl),
-        .document = getDocument(AST, decl),
-        .qualifier = getQualifier(AST, decl),
-        .source = getSourceCode(AST, decl),
+        .items = getHoverItems(unit, decl),
+        .document = getDocument(unit, decl),
+        .qualifier = getQualifier(unit, decl),
+        .source = getSourceCode(unit, decl),
     };
 }
 
-index::Shared<Hovers> indexHover(ASTInfo& AST) {
-    HoverCollector collector(AST);
+index::Shared<Hovers> indexHover(CompilationUnit& unit) {
+    HoverCollector collector(unit);
     return collector.build();
 }
 

@@ -26,7 +26,7 @@ struct Hover : TestFixture {
         addMain("main.cpp", code);
         compile();
         DeclCollector collector;
-        collector.TraverseTranslationUnitDecl(AST->tu());
+        collector.TraverseTranslationUnitDecl(unit->tu());
         decls = std::move(collector.decls);
     }
 };

@@ -6,9 +6,9 @@
 
 namespace clice {
 
-async::Task<> Indexer::index(ASTInfo& AST) {
+async::Task<> Indexer::index(CompilationUnit& unit) {
     auto [tu_index, header_indices] =
-        co_await async::submit([&] { return index::memory::index(AST); });
+        co_await async::submit([&] { return index::memory::index(unit); });
 
     auto tu_id = getPath(tu_index->path);
 

@@ -34,6 +34,42 @@ std::unique_ptr<clang::CompilerInvocation> createInvocation(CompilationParams& p
     return invocation;
 }
 
+class CliceASTConsumer : public clang::ASTConsumer {
+public:
+    CliceASTConsumer(std::vector<clang::Decl*>& top_level_decls,
+                     const std::shared_ptr<std::atomic<bool>>& contiune_parse) :
+        top_level_decls(top_level_decls), contiune_parse(contiune_parse) {}
+
+    bool HandleTopLevelDecl(clang::DeclGroupRef group) override {
+        for(auto decl: group) {
+            top_level_decls.emplace_back(decl);
+        }
+        return *contiune_parse;
+    }
+
+private:
+    std::vector<clang::Decl*>& top_level_decls;
+    std::shared_ptr<std::atomic<bool>> contiune_parse;
+};
+
+class ProxyASTConsumer {};
+
+class CliceFrontendAction : public clang::SyntaxOnlyAction {
+public:
+    CliceFrontendAction(std::unique_ptr<clang::ASTConsumer>& consumer) :
+        consumer(std::move(consumer)) {}
+
+    std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance& instance,
+                                                          llvm::StringRef file) override {
+        return std::move(consumer);
+    }
+
+private:
+    std::unique_ptr<clang::ASTConsumer> consumer;
+};
+
+
+
 std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& params) {
     auto instance = std::make_unique<clang::CompilerInstance>();
 
@@ -109,7 +145,7 @@ std::expected<void, std::string> ExecuteAction(clang::CompilerInstance& instance
     return {};
 }
 
-std::expected<ASTInfo, std::string> ExecuteAction(std::unique_ptr<clang::CompilerInstance> instance,
+std::expected<CompilationUnit, std::string> ExecuteAction(std::unique_ptr<clang::CompilerInstance> instance,
                                                   std::unique_ptr<clang::FrontendAction> action) {
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
@@ -152,7 +188,7 @@ std::expected<ASTInfo, std::string> ExecuteAction(std::unique_ptr<clang::Compile
         resolver.emplace(instance->getSema());
     }
 
-    return ASTInfo(pp.getSourceManager().getMainFileID(),
+    return CompilationUnit(pp.getSourceManager().getMainFileID(),
                    std::move(action),
                    std::move(instance),
                    std::move(resolver),
@@ -162,17 +198,17 @@ std::expected<ASTInfo, std::string> ExecuteAction(std::unique_ptr<clang::Compile
 
 }  // namespace
 
-std::expected<ASTInfo, std::string> preprocess(CompilationParams& params) {
+std::expected<CompilationUnit, std::string> preprocess(CompilationParams& params) {
     auto instance = createInstance(params);
     return ExecuteAction(std::move(instance), std::make_unique<clang::PreprocessOnlyAction>());
 }
 
-std::expected<ASTInfo, std::string> compile(CompilationParams& params) {
+std::expected<CompilationUnit, std::string> compile(CompilationParams& params) {
     auto instance = createInstance(params);
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
 
-std::expected<ASTInfo, std::string> compile(CompilationParams& params,
+std::expected<CompilationUnit, std::string> compile(CompilationParams& params,
                                             clang::CodeCompleteConsumer* consumer) {
     auto instance = createInstance(params);
 
@@ -209,7 +245,7 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params,
     return ExecuteAction(std::move(instance), std::make_unique<clang::SyntaxOnlyAction>());
 }
 
-std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& out) {
+std::expected<CompilationUnit, std::string> compile(CompilationParams& params, PCHInfo& out) {
     assert(params.bound.has_value() && "Preamble bounds is required to build PCH");
 
     auto instance = createInstance(params);
@@ -234,7 +270,7 @@ std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCHInfo& 
     }
 }
 
-std::expected<ASTInfo, std::string> compile(CompilationParams& params, PCMInfo& out) {
+std::expected<CompilationUnit, std::string> compile(CompilationParams& params, PCMInfo& out) {
     auto instance = createInstance(params);
 
     /// Set options to generate PCM.

@@ -4,7 +4,7 @@
 
 namespace clice {
 
-const llvm::DenseSet<clang::FileID>& ASTInfo::files() {
+const llvm::DenseSet<clang::FileID>& CompilationUnit::files() {
     if(allFiles.empty()) {
         /// FIXME: handle preamble and embed file id.
         for(auto& [fid, diretive]: directives()) {
@@ -19,7 +19,7 @@ const llvm::DenseSet<clang::FileID>& ASTInfo::files() {
     return allFiles;
 }
 
-std::vector<std::string> ASTInfo::deps() {
+std::vector<std::string> CompilationUnit::deps() {
     llvm::StringSet<> deps;
 
     /// FIXME: consider `#embed` and `__has_embed`.
@@ -47,7 +47,7 @@ std::vector<std::string> ASTInfo::deps() {
     return result;
 }
 
-llvm::StringRef ASTInfo::getFilePath(clang::FileID fid) {
+llvm::StringRef CompilationUnit::getFilePath(clang::FileID fid) {
     assert(fid.isValid() && "Invalid fid");
     if(auto it = pathCache.find(fid); it != pathCache.end()) {
         return it->second;
@@ -77,7 +77,7 @@ llvm::StringRef ASTInfo::getFilePath(clang::FileID fid) {
     return it->second;
 }
 
-std::pair<clang::FileID, LocalSourceRange> ASTInfo::toLocalRange(clang::SourceRange range) {
+std::pair<clang::FileID, LocalSourceRange> CompilationUnit::toLocalRange(clang::SourceRange range) {
     auto [begin, end] = range;
     assert(begin.isValid() && end.isValid() && "Invalid source range");
     assert(begin.isFileID() && end.isValid() && "Input source range should be a file range");
@@ -107,7 +107,7 @@ std::pair<clang::FileID, LocalSourceRange> ASTInfo::toLocalRange(clang::SourceRa
 }
 
 std::pair<clang::FileID, LocalSourceRange>
-    ASTInfo::toLocalExpansionRange(clang::SourceRange range) {
+    CompilationUnit::toLocalExpansionRange(clang::SourceRange range) {
     auto [begin, end] = range;
     if(begin == end) {
         return toLocalRange(getExpansionLoc(begin));
@@ -116,7 +116,7 @@ std::pair<clang::FileID, LocalSourceRange>
     }
 }
 
-index::SymbolID ASTInfo::getSymbolID(const clang::NamedDecl* decl) {
+index::SymbolID CompilationUnit::getSymbolID(const clang::NamedDecl* decl) {
     uint64_t hash;
     auto iter = symbolHashCache.find(decl);
     if(iter != symbolHashCache.end()) {
@@ -130,7 +130,7 @@ index::SymbolID ASTInfo::getSymbolID(const clang::NamedDecl* decl) {
     return index::SymbolID{hash, getDeclName(decl)};
 }
 
-index::SymbolID ASTInfo::getSymbolID(const clang::MacroInfo* macro) {
+index::SymbolID CompilationUnit::getSymbolID(const clang::MacroInfo* macro) {
     std::uint64_t hash;
     auto name = getTokenSpelling(SM, macro->getDefinitionLoc());
     auto iter = symbolHashCache.find(macro);

@@ -15,8 +15,8 @@ class DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollecto
 public:
     using Base = FilteredASTVisitor<DocumentSymbolCollector>;
 
-    DocumentSymbolCollector(ASTInfo& AST, bool interestedOnly) :
-        Base(AST, interestedOnly, std::nullopt) {}
+    DocumentSymbolCollector(CompilationUnit& unit, bool interestedOnly) :
+        Base(unit, interestedOnly, std::nullopt) {}
 
     bool isInterested(clang::Decl* decl) {
         switch(decl->getKind()) {
@@ -50,7 +50,7 @@ public:
         }
 
         auto ND = llvm::cast<clang::NamedDecl>(decl);
-        auto [fid, selectionRange] = AST.toLocalRange(AST.getExpansionLoc(ND->getLocation()));
+        auto [fid, selectionRange] = unit.toLocalRange(unit.getExpansionLoc(ND->getLocation()));
 
         auto& frame = interestedOnly ? result : sharedResult[fid];
         auto cursor = frame.cursor;
@@ -85,18 +85,18 @@ public:
 
 }  // namespace
 
-DocumentSymbols documentSymbols(ASTInfo& AST) {
-    DocumentSymbolCollector collector(AST, true);
-    collector.TraverseDecl(AST.tu());
+DocumentSymbols documentSymbols(CompilationUnit& unit) {
+    DocumentSymbolCollector collector(unit, true);
+    collector.TraverseDecl(unit.tu());
 
     auto& frame = collector.result;
     ranges::sort(frame.symbols, refl::less);
     return std::move(frame.symbols);
 }
 
-index::Shared<DocumentSymbols> indexDocumentSymbol(ASTInfo& AST) {
-    DocumentSymbolCollector collector(AST, true);
-    collector.TraverseDecl(AST.tu());
+index::Shared<DocumentSymbols> indexDocumentSymbol(CompilationUnit& unit) {
+    DocumentSymbolCollector collector(unit, true);
+    collector.TraverseDecl(unit.tu());
 
     index::Shared<DocumentSymbols> result;
     for(auto& [fid, frame]: collector.sharedResult) {

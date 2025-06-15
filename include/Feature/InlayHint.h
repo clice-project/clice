@@ -33,8 +33,8 @@ struct InlayHint {
 
 using InlayHints = std::vector<InlayHint>;
 
-InlayHints inlayHints(ASTInfo& AST, LocalSourceRange target);
+InlayHints inlayHints(CompilationUnit& unit, LocalSourceRange target);
 
-index::Shared<InlayHints> indexInlayHint(ASTInfo& AST);
+index::Shared<InlayHints> indexInlayHint(CompilationUnit& unit);
 
 }  // namespace clice::feature

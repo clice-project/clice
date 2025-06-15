@@ -195,7 +195,7 @@ struct HeaderContext {
     /// The path of context file.
     std::string file;
 
-    /// The version of context file's AST.
+    /// The version of context file's unit.
     uint32_t version;
 
     /// The include location id for further resolving.

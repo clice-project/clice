@@ -31,7 +31,7 @@ public:
 
     feature::DocumentSymbols documentSymbols() const;
 
-    static Shared<std::vector<char>> build(ASTInfo& AST);
+    static Shared<std::vector<char>> build(CompilationUnit& unit);
 
 public:
     char* base;

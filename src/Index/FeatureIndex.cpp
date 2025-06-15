@@ -58,30 +58,30 @@ feature::DocumentSymbols FeatureIndex::documentSymbols() const {
     return binary::deserialize(index.get<"symbols">());
 }
 
-Shared<std::vector<char>> FeatureIndex::build(ASTInfo& AST) {
+Shared<std::vector<char>> FeatureIndex::build(CompilationUnit& unit) {
     Shared<memory::FeatureIndex> indices;
 
-    for(auto&& [fid, result]: feature::indexSemanticToken(AST)) {
+    for(auto&& [fid, result]: feature::indexSemanticToken(unit)) {
         indices[fid].tokens = std::move(result);
     }
 
-    for(auto&& [fid, result]: feature::indexFoldingRange(AST)) {
+    for(auto&& [fid, result]: feature::indexFoldingRange(unit)) {
         indices[fid].foldings = std::move(result);
     }
 
-    for(auto&& [fid, result]: feature::indexDocumentLink(AST)) {
+    for(auto&& [fid, result]: feature::indexDocumentLink(unit)) {
         indices[fid].links = std::move(result);
     }
 
-    for(auto&& [fid, result]: feature::indexDocumentSymbol(AST)) {
+    for(auto&& [fid, result]: feature::indexDocumentSymbol(unit)) {
         indices[fid].symbols = std::move(result);
     }
 
     Shared<std::vector<char>> result;
 
     for(auto&& [fid, index]: indices) {
-        index.path = AST.getFilePath(fid);
-        index.content = AST.getFileContent(fid);
+        index.path = unit.getFilePath(fid);
+        index.content = unit.getFileContent(fid);
         auto [buffer, _] = binary::serialize(index);
         result.try_emplace(fid, std::move(buffer));
     }

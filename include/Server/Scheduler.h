@@ -24,7 +24,7 @@ struct OpenFile {
     async::Event PCHBuiltEvent;
 
     /// For each opened file, we would like to build an AST for it.
-    std::shared_ptr<ASTInfo> AST;
+    std::shared_ptr<CompilationUnit> AST;
     async::Task<> ASTBuild;
     async::Lock ASTBuiltLock;
 
