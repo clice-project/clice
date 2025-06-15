@@ -3,6 +3,7 @@
 #include "Compiler/Compilation.h"
 #include "Feature/CodeCompletion.h"
 #include "clang/Sema/Sema.h"
+#include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
 
 namespace clice::feature {

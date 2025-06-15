@@ -4,9 +4,6 @@
 #include "AST/SymbolID.h"
 #include "AST/SourceCode.h"
 #include "AST/Resolver.h"
-
-#include "clang/Frontend/CompilerInstance.h"
-#include "clang/Frontend/FrontendActions.h"
 #include "clang/Tooling/Syntax/Tokens.h"
 
 namespace clice {
@@ -14,26 +11,6 @@ namespace clice {
 /// All AST related information needed for language server.
 class CompilationUnit {
 public:
-    CompilationUnit(clang::FileID interested,
-                    std::unique_ptr<clang::FrontendAction> action,
-                    std::unique_ptr<clang::CompilerInstance> instance,
-                    std::optional<TemplateResolver> resolver,
-                    std::optional<clang::syntax::TokenBuffer> buffer,
-                    llvm::DenseMap<clang::FileID, Directive> directives) :
-        interested(interested), action(std::move(action)), instance(std::move(instance)),
-        m_resolver(std::move(resolver)), buffer(std::move(buffer)),
-        m_directives(std::move(directives)), SM(this->instance->getSourceManager()) {}
-
-    CompilationUnit(const CompilationUnit&) = delete;
-
-    CompilationUnit(CompilationUnit&&) = default;
-
-    ~CompilationUnit() {
-        if(action) {
-            action->EndSourceFile();
-        }
-    }
-
     /// The kind describes how we preprocess ths source file
     /// to get this compilation unit.
     enum class Kind : std::uint8_t {
@@ -59,6 +36,17 @@ public:
     };
 
     using enum Kind;
+    struct Impl;
+
+    CompilationUnit(Kind kind, Impl* impl) : kind(kind), impl(impl) {}
+
+    CompilationUnit(const CompilationUnit&) = delete;
+
+    CompilationUnit(CompilationUnit&& other) : kind(other.kind), impl(other.impl) {
+        other.impl = nullptr;
+    }
+
+    ~CompilationUnit();
 
 public:
     clang::FileID file_id(llvm::StringRef file);
@@ -73,9 +61,7 @@ public:
     llvm::StringRef file_path(clang::FileID fid);
 
     /// Get the content of a file ID.
-    llvm::StringRef file_content(clang::FileID fid) const {
-        return SM.getBufferData(fid);
-    }
+    llvm::StringRef file_content(clang::FileID fid);
 
     clang::SourceLocation start_location(clang::FileID fid);
 
@@ -117,36 +103,21 @@ public:
     clang::LangOptions& lang_options();
 
 public:
-    auto& context() {
-        return instance->getASTContext();
-    }
+    clang::ASTContext& context();
 
-    auto& sema() {
-        return instance->getSema();
-    }
+    clang::Sema& sema();
 
-    auto& resolver() {
-        assert(m_resolver && "Template resolver is not available");
-        return *m_resolver;
-    }
+    TemplateResolver& resolver();
 
-    auto& directives() {
-        return m_directives;
-    }
+    llvm::DenseMap<clang::FileID, Directive>& directives();
 
-    auto tu() {
-        return instance->getASTContext().getTranslationUnitDecl();
-    }
+    clang::TranslationUnitDecl* tu();
 
     /// The interested file ID. For file without header context, it is the main file ID.
     /// For file with header context, it is the file ID of header file.
-    clang::FileID getInterestedFile() const {
-        return interested;
-    }
+    clang::FileID getInterestedFile();
 
-    llvm::StringRef getInterestedFileContent() const {
-        return file_content(interested);
-    }
+    llvm::StringRef getInterestedFileContent();
 
     /// All files involved in building the unit.
     const llvm::DenseSet<clang::FileID>& files();
@@ -154,10 +125,7 @@ public:
     std::vector<std::string> deps();
 
     /// Check if a file is a builtin file.
-    bool isBuiltinFile(clang::FileID fid) {
-        auto path = file_path(fid);
-        return path == "<built-in>" || path == "<command line>" || path == "<scratch space>";
-    }
+    bool isBuiltinFile(clang::FileID fid);
 
     /// Get symbol ID for given declaration.
     index::SymbolID getSymbolID(const clang::NamedDecl* decl);
@@ -166,38 +134,9 @@ public:
     index::SymbolID getSymbolID(const clang::MacroInfo* macro);
 
 private:
-    /// The interested file ID.
-    clang::FileID interested;
+    Kind kind;
 
-    /// The frontend action used to build the unit.
-    std::unique_ptr<clang::FrontendAction> action;
-
-    /// Compiler instance, responsible for performing the actual compilation and managing the
-    /// lifecycle of all objects during the compilation process.
-    std::unique_ptr<clang::CompilerInstance> instance;
-
-    /// The template resolver used to resolve dependent name.
-    std::optional<TemplateResolver> m_resolver;
-
-    /// Token information collected during the preprocessing.
-    std::optional<clang::syntax::TokenBuffer> buffer;
-
-    /// All diretive information collected during the preprocessing.
-    llvm::DenseMap<clang::FileID, Directive> m_directives;
-
-    llvm::DenseSet<clang::FileID> allFiles;
-
-    clang::SourceManager& SM;
-
-    /// Cache for file path. It is used to avoid multiple file path lookup.
-    llvm::DenseMap<clang::FileID, llvm::StringRef> pathCache;
-
-    /// Cache for symbol id.
-    llvm::DenseMap<const void*, std::uint64_t> symbolHashCache;
-
-    llvm::BumpPtrAllocator pathStorage;
-
-    std::vector<clang::Decl*> top_level_decls;
+    Impl* impl;
 };
 
 }  // namespace clice

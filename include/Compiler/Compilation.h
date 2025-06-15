@@ -5,6 +5,10 @@
 #include "CompilationUnit.h"
 #include "Support/FileSystem.h"
 
+namespace clang {
+class CodeCompleteConsumer;
+}
+
 namespace clice {
 
 struct CompilationParams {

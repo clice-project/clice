@@ -1,3 +1,4 @@
+#include "CompilationUnitImpl.h"
 #include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
 
@@ -187,12 +188,19 @@ std::expected<CompilationUnit, std::string>
         resolver.emplace(instance->getSema());
     }
 
-    return CompilationUnit(pp.getSourceManager().getMainFileID(),
-                           std::move(action),
-                           std::move(instance),
-                           std::move(resolver),
-                           std::move(tokBuf),
-                           std::move(directives));
+    auto impl = new CompilationUnit::Impl{
+        .interested = pp.getSourceManager().getMainFileID(),
+        .SM = instance->getSourceManager(),
+        .action = std::move(action),
+        .instance = std::move(instance),
+        .m_resolver = std::move(resolver),
+        .buffer = std::move(tokBuf),
+        .m_directives = std::move(directives),
+        .pathCache = llvm::DenseMap<clang::FileID, llvm::StringRef>(),
+        .symbolHashCache = llvm::DenseMap<const void*, std::uint64_t>(),
+    };
+    
+    return CompilationUnit(CompilationUnit::SyntaxOnly, impl);
 }
 
 }  // namespace
