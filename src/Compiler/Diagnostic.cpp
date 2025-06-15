@@ -2,17 +2,14 @@
 #include "clang/AST/Type.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
+#include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/DiagnosticIDs.h"
 #include "clang/Basic/AllDiagnostics.h"
+#include "clang/Basic/SourceManager.h"
 
 namespace clice {
 
-void DiagnosticCollector::BeginSourceFile(const clang::LangOptions& Opts,
-                                          const clang::Preprocessor* PP) {
-
-};
-
-const char* getDiagnosticCode(unsigned ID) {
+llvm::StringRef Diagnostic::diagnostic_code(std::uint32_t ID) {
     switch(ID) {
 #define DIAG(ENUM,                                                                                 \
              CLASS,                                                                                \
@@ -38,7 +35,7 @@ const char* getDiagnosticCode(unsigned ID) {
 #include "clang/Basic/DiagnosticSemaKinds.inc"
 #include "clang/Basic/DiagnosticSerializationKinds.inc"
 #undef DIAG
-        default: return nullptr;
+        default: return llvm::StringRef();
     }
 }
 
@@ -112,31 +109,74 @@ void dumpArg(clang::DiagnosticsEngine::ArgumentKind kind, std::uint64_t value) {
     llvm::outs() << "\n";
 }
 
-void DiagnosticCollector::HandleDiagnostic(clang::DiagnosticsEngine::Level level,
-                                           const clang::Diagnostic& diagnostic) {
-    llvm::SmallString<128> message;
-    diagnostic.FormatDiagnostic(message);
-    // diagnostic.getLocation();
-    // fmt::print(fg(fmt::color::red),
-    //           "[Diagnostic, kind: {}, message: {}]\n",
-    //           refl::enum_name(level),
-    //           message.str().str());
-    diagnostic.getLocation().dump(diagnostic.getDiags()->getSourceManager());
-    // get diagnostic text.
-    auto id = diagnostic.getID();
-    llvm::outs() << getDiagnosticCode(id) << "\n";
-    // llvm::outs() << diagnostic.getDiags()->getDiagnosticIDs()->getDescription(id) << "\n";
+// Checks whether a location is within a half-open range.
+// Note that clang also uses closed source ranges, which this can't handle!
+bool locationInRange(clang::SourceLocation L,
+                     clang::CharSourceRange R,
+                     const clang::SourceManager& M) {
+    assert(R.isCharRange());
+    if(!R.isValid() || M.getFileID(R.getBegin()) != M.getFileID(R.getEnd()) ||
+       M.getFileID(R.getBegin()) != M.getFileID(L))
+        return false;
+    return L != R.getEnd() && M.isPointWithin(L, R.getBegin(), R.getEnd());
+}
 
-    // dumpArg(diagnostic.getArgKind(0), diagnostic.getRawArg(0));
+class DiagnosticCollector : public clang::DiagnosticConsumer {
+public:
+    DiagnosticCollector(std::vector<Diagnostic>& diagnostics) : diagnostics(diagnostics) {}
 
-    // FIXME:
-    // use DiagnosticEngine::SetArgToStringFn to set a custom function to convert arguments to
-    // strings. Support markdown diagnostic in LSP 3.18. allow complex type to display in markdown
-    // code block.
+    static DiagnosticLevel diagnostic_level(clang::DiagnosticsEngine::Level level) {
+        switch(level) {
+            case clang::DiagnosticsEngine::Ignored: return DiagnosticLevel::Ignored;
+            case clang::DiagnosticsEngine::Note: return DiagnosticLevel::Note;
+            case clang::DiagnosticsEngine::Remark: return DiagnosticLevel::Remark;
+            case clang::DiagnosticsEngine::Warning: return DiagnosticLevel::Warning;
+            case clang::DiagnosticsEngine::Error: return DiagnosticLevel::Error;
+            case clang::DiagnosticsEngine::Fatal: return DiagnosticLevel::Fatal;
+            default: return DiagnosticLevel::Invalid;
+        }
+    }
+
+    void BeginSourceFile(const clang::LangOptions& Opts, const clang::Preprocessor* PP) override {}
+
+    void HandleDiagnostic(clang::DiagnosticsEngine::Level level,
+                          const clang::Diagnostic& raw_diagnostic) override {
+
+        auto& diagnostic = diagnostics.emplace_back();
+        diagnostic.id = raw_diagnostic.getID();
+        diagnostic.level = diagnostic_level(level);
+
+        llvm::SmallString<256> message;
+        raw_diagnostic.FormatDiagnostic(message);
+        diagnostic.message = message.str();
+
+        auto location = raw_diagnostic.getLocation();
+        if(location.isInvalid()) {
+            return;
+        }
+
+        auto& SM = raw_diagnostic.getDiags()->getSourceManager();
+        for(auto& range: raw_diagnostic.getRanges()) {
+            if(locationInRange(raw_diagnostic.getLocation(), range, SM)) {
+                diagnostic.range = range.getAsRange();
+                break;
+            }
+        }
+
+        // TODO:
+        // use DiagnosticEngine::SetArgToStringFn to set a custom function to convert arguments to
+        // strings. Support markdown diagnostic in LSP 3.18. allow complex type to display in
+        // markdown code block.
+    }
+
+    void EndSourceFile() override {}
+
+private:
+    std::vector<Diagnostic>& diagnostics;
 };
 
-void DiagnosticCollector::EndSourceFile() {
-
-};
+clang::DiagnosticConsumer* Diagnostic::create(std::vector<Diagnostic>& diagnostics) {
+    return new DiagnosticCollector(diagnostics);
+}
 
 }  // namespace clice
