@@ -55,11 +55,13 @@ public:
 
     llvm::StringRef token_spelling(clang::SourceLocation loca1tion);
 
-public:
-    auto& pp() {
-        return instance->getPreprocessor();
-    }
+    llvm::StringRef module_name();
 
+    bool is_module_interface_unit();
+
+    clang::LangOptions& lang_options();
+
+public:
     auto& context() {
         return instance->getASTContext();
     }

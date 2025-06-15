@@ -64,6 +64,18 @@ llvm::StringRef CompilationUnit::token_spelling(clang::SourceLocation loca1tion)
     return getTokenSpelling(SM, loca1tion);
 }
 
+llvm::StringRef CompilationUnit::module_name() {
+    return instance->getPreprocessor().getNamedModuleName();
+}
+
+bool CompilationUnit::is_module_interface_unit() {
+    return instance->getPreprocessor().isInNamedInterfaceUnit();
+}
+
+clang::LangOptions& CompilationUnit::lang_options() {
+    return instance->getLangOpts();
+}
+
 std::vector<std::string> CompilationUnit::deps() {
     llvm::StringSet<> deps;
 

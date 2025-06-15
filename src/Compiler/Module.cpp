@@ -103,16 +103,12 @@ std::expected<ModuleInfo, std::string> scanModule(CompilationParams& params) {
         return std::unexpected(unit.error());
     }
 
-    auto&& pp = unit->pp();
-
     for(auto& import: unit->directives()[unit->getInterestedFile()].imports) {
         info.mods.emplace_back(import.name);
     }
 
-    if(pp.isInNamedModule()) {
-        info.isInterfaceUnit = pp.isInNamedInterfaceUnit();
-        info.name = pp.getNamedModuleName();
-    }
+    info.isInterfaceUnit = unit->is_module_interface_unit();
+    info.name = unit->module_name();
 
     return info;
 }

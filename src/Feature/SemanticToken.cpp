@@ -115,7 +115,7 @@ public:
     /// Render semantic tokens for file through raw lexer.
     void highlight(clang::FileID fid) {
         auto content = unit.getFileContent(fid);
-        auto& langOpts = PP.getLangOpts();
+        auto& langOpts = unit.lang_options();
 
         /// Whether the token is after `#`.
         bool isAfterHash = false;
@@ -125,7 +125,7 @@ public:
         bool isInDirectiveLine = false;
 
         /// Use to distinguish whether the token is in a keyword.
-        clang::IdentifierTable identifierTable(PP.getLangOpts());
+        clang::IdentifierTable identifierTable(langOpts);
 
         auto callback = [&](const clang::Token& token) -> bool {
             SymbolKind kind = SymbolKind::Invalid;

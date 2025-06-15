@@ -14,8 +14,7 @@ public:
     using Base = FilteredASTVisitor<SemanticVisitor>;
 
     SemanticVisitor(CompilationUnit& unit, bool interestedOnly) :
-        Base(unit, interestedOnly, {}), unit(unit), PP(unit.pp()), TB(unit.tokBuf()),
-        resolver(unit.resolver()) {}
+        Base(unit, interestedOnly, {}), unit(unit), TB(unit.tokBuf()), resolver(unit.resolver()) {}
 
 public:
     Derived& getDerived() {
@@ -717,7 +716,6 @@ public:
 
 protected:
     CompilationUnit& unit;
-    clang::Preprocessor& PP;
     clang::syntax::TokenBuffer& TB;
     TemplateResolver& resolver;
     llvm::SmallVector<clang::Decl*> decls;

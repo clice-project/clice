@@ -68,8 +68,6 @@ private:
     std::unique_ptr<clang::ASTConsumer> consumer;
 };
 
-
-
 std::unique_ptr<clang::CompilerInstance> createInstance(CompilationParams& params) {
     auto instance = std::make_unique<clang::CompilerInstance>();
 
@@ -145,8 +143,9 @@ std::expected<void, std::string> ExecuteAction(clang::CompilerInstance& instance
     return {};
 }
 
-std::expected<CompilationUnit, std::string> ExecuteAction(std::unique_ptr<clang::CompilerInstance> instance,
-                                                  std::unique_ptr<clang::FrontendAction> action) {
+std::expected<CompilationUnit, std::string>
+    ExecuteAction(std::unique_ptr<clang::CompilerInstance> instance,
+                  std::unique_ptr<clang::FrontendAction> action) {
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         return std::unexpected("Failed to begin source file");
@@ -189,11 +188,11 @@ std::expected<CompilationUnit, std::string> ExecuteAction(std::unique_ptr<clang:
     }
 
     return CompilationUnit(pp.getSourceManager().getMainFileID(),
-                   std::move(action),
-                   std::move(instance),
-                   std::move(resolver),
-                   std::move(tokBuf),
-                   std::move(directives));
+                           std::move(action),
+                           std::move(instance),
+                           std::move(resolver),
+                           std::move(tokBuf),
+                           std::move(directives));
 }
 
 }  // namespace
@@ -209,7 +208,7 @@ std::expected<CompilationUnit, std::string> compile(CompilationParams& params) {
 }
 
 std::expected<CompilationUnit, std::string> compile(CompilationParams& params,
-                                            clang::CodeCompleteConsumer* consumer) {
+                                                    clang::CodeCompleteConsumer* consumer) {
     auto instance = createInstance(params);
 
     auto& [file, offset] = params.completion;
@@ -279,10 +278,10 @@ std::expected<CompilationUnit, std::string> compile(CompilationParams& params, P
 
     if(auto info = ExecuteAction(std::move(instance),
                                  std::make_unique<clang::GenerateReducedModuleInterfaceAction>())) {
-        assert(info->pp().isInNamedInterfaceUnit() &&
+        assert(info->is_module_interface_unit() &&
                "Only module interface unit could be built as PCM");
         out.isInterfaceUnit = true;
-        out.name = info->pp().getNamedModuleName();
+        out.name = info->module_name();
         for(auto& [name, path]: params.pcms) {
             out.mods.emplace_back(name);
         }
