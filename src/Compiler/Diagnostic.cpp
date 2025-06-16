@@ -123,7 +123,8 @@ bool locationInRange(clang::SourceLocation L,
 
 class DiagnosticCollector : public clang::DiagnosticConsumer {
 public:
-    DiagnosticCollector(std::vector<Diagnostic>& diagnostics) : diagnostics(diagnostics) {}
+    DiagnosticCollector(std::shared_ptr<std::vector<Diagnostic>> diagnostics) :
+        diagnostics(diagnostics) {}
 
     static DiagnosticLevel diagnostic_level(clang::DiagnosticsEngine::Level level) {
         switch(level) {
@@ -142,7 +143,7 @@ public:
     void HandleDiagnostic(clang::DiagnosticsEngine::Level level,
                           const clang::Diagnostic& raw_diagnostic) override {
 
-        auto& diagnostic = diagnostics.emplace_back();
+        auto& diagnostic = diagnostics->emplace_back();
         diagnostic.id = raw_diagnostic.getID();
         diagnostic.level = diagnostic_level(level);
 
@@ -172,10 +173,11 @@ public:
     void EndSourceFile() override {}
 
 private:
-    std::vector<Diagnostic>& diagnostics;
+    std::shared_ptr<std::vector<Diagnostic>> diagnostics;
 };
 
-clang::DiagnosticConsumer* Diagnostic::create(std::vector<Diagnostic>& diagnostics) {
+clang::DiagnosticConsumer*
+    Diagnostic::create(std::shared_ptr<std::vector<Diagnostic>> diagnostics) {
     return new DiagnosticCollector(diagnostics);
 }
 

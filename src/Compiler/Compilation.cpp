@@ -60,7 +60,9 @@ private:
     std::unique_ptr<clang::ASTConsumer> consumer;
 };
 
-auto createInvocation(CompilationParams& params)
+auto createInvocation(CompilationParams& params,
+                      std::shared_ptr<std::vector<Diagnostic>>& diagnostics,
+                      llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine>& diagnostic_engine)
     -> std::expected<std::unique_ptr<clang::CompilerInvocation>, std::string> {
     llvm::SmallString<1024> buffer;
     llvm::SmallVector<const char*, 16> args;
@@ -68,20 +70,15 @@ auto createInvocation(CompilationParams& params)
     auto result = mangleCommand(params.command, args, buffer);
     TRY_OR_RETURN(result);
 
-    std::vector<Diagnostic> diagnostics;
-    auto engine = clang::CompilerInstance::createDiagnostics(*params.vfs,
-                                                             new clang::DiagnosticOptions(),
-                                                             Diagnostic::create(diagnostics));
-
     clang::CreateInvocationOptions options = {};
     options.VFS = params.vfs;
-    options.Diags = engine;
+    options.Diags = diagnostic_engine;
 
     auto invocation = clang::createInvocation(args, options);
     if(!invocation) {
         /// FIXME: Use better way to render error.
         std::string error = "fail to create compiler invocation\n";
-        for(auto& diagnostic: diagnostics) {
+        for(auto& diagnostic: *diagnostics) {
             error += std::format("{}\n", diagnostic.message);
         }
         return std::unexpected(std::move(error));
@@ -94,23 +91,53 @@ auto createInvocation(CompilationParams& params)
     langOpts.CommentOpts.ParseAllComments = true;
     langOpts.RetainCommentsFromSystemHeaders = true;
 
+    auto& PPOpts = invocation->getPreprocessorOpts();
+
+    if(!params.content.empty()) {
+        /// Add remapped files, if bounds is provided, cut off the content.
+        std::size_t size = params.bound.has_value() ? params.bound.value() : params.content.size();
+        PPOpts.addRemappedFile(
+            params.srcPath,
+            llvm::MemoryBuffer::getMemBufferCopy(params.content.substr(0, size), params.srcPath)
+                .release());
+    }
+
+    for(auto& [file, buffer]: params.buffers) {
+        PPOpts.addRemappedFile(file, buffer.release());
+    }
+    params.buffers.clear();
+
+    assert(!PPOpts.RetainRemappedFileBuffers && "RetainRemappedFileBuffers should be false");
+
+    auto [pch, bound] = params.pch;
+    PPOpts.ImplicitPCHInclude = std::move(pch);
+    if(bound != 0) {
+        PPOpts.PrecompiledPreambleBytes = {bound, false};
+    }
+
+    auto& HSOpts = invocation->getHeaderSearchOpts();
+    for(auto& [name, path]: params.pcms) {
+        HSOpts.PrebuiltModuleFiles.try_emplace(name.str(), std::move(path));
+    }
+
     return invocation;
 }
 
-std::expected<std::unique_ptr<clang::CompilerInstance>, std::string>
-    createInstance(CompilationParams& params) {
-    auto instance = std::make_unique<clang::CompilerInstance>();
+template <typename Action, typename Adjuster>
+std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& params,
+                                                          const Adjuster& adjuster) {
+    auto diagnostics = std::make_shared<std::vector<Diagnostic>>();
+    auto diagnostic_engine =
+        clang::CompilerInstance::createDiagnostics(*params.vfs,
+                                                   new clang::DiagnosticOptions(),
+                                                   Diagnostic::create(diagnostics));
 
-    auto invocation = createInvocation(params);
+    auto invocation = createInvocation(params, diagnostics, diagnostic_engine);
     TRY_OR_RETURN(invocation);
 
+    auto instance = std::make_unique<clang::CompilerInstance>();
     instance->setInvocation(std::move(*invocation));
-
-    /// TODO: use a thread safe filesystem and our customized `DiagnosticConsumer`.
-    instance->createDiagnostics(
-        *params.vfs,
-        new clang::TextDiagnosticPrinter(llvm::outs(), new clang::DiagnosticOptions()),
-        true);
+    instance->setDiagnostics(diagnostic_engine.get());
 
     if(auto remapping = clang::createVFSFromCompilerInvocation(instance->getInvocation(),
                                                                instance->getDiagnostics(),
@@ -118,51 +145,9 @@ std::expected<std::unique_ptr<clang::CompilerInstance>, std::string>
         instance->createFileManager(std::move(remapping));
     }
 
-    /// Add remapped files, if bounds is provided, cut off the content.
-    std::size_t size = params.bound.has_value() ? params.bound.value() : params.content.size();
-
-    assert(!instance->getPreprocessorOpts().RetainRemappedFileBuffers &&
-           "RetainRemappedFileBuffers should be false");
-
-    if(!params.content.empty()) {
-        instance->getPreprocessorOpts().addRemappedFile(
-            params.srcPath,
-            llvm::MemoryBuffer::getMemBufferCopy(params.content.substr(0, size), params.srcPath)
-                .release());
-    }
-
-    /// Add all remapped file.
-    for(auto& [file, buffer]: params.buffers) {
-        instance->getPreprocessorOpts().addRemappedFile(file, buffer.release());
-    }
-    params.buffers.clear();
-
     if(!instance->createTarget()) {
-        std::abort();
+        return std::unexpected("fail to create target");
     }
-
-    auto [pch, bound] = params.pch;
-
-    auto& PPOpts = instance->getPreprocessorOpts();
-    PPOpts.ImplicitPCHInclude = std::move(pch);
-
-    if(bound != 0) {
-        PPOpts.PrecompiledPreambleBytes = {bound, false};
-    }
-
-    for(auto& [name, path]: params.pcms) {
-        auto& HSOpts = instance->getHeaderSearchOpts();
-        HSOpts.PrebuiltModuleFiles.try_emplace(name.str(), std::move(path));
-    }
-
-    return instance;
-}
-
-template <typename Action, typename Adjuster>
-std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& params,
-                                                          const Adjuster& adjuster) {
-    std::unique_ptr<clang::CompilerInstance> instance;
-    ASSIGN_OR_RETURN(instance, createInstance(params));
 
     /// Adjust the compiler instance, for example, set preamble or modules.
     adjuster(*instance);

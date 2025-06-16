@@ -38,7 +38,7 @@ struct Diagnostic {
 
     static llvm::StringRef diagnostic_code(std::uint32_t id);
 
-    static clang::DiagnosticConsumer* create(std::vector<Diagnostic>& diagnostics);
+    static clang::DiagnosticConsumer* create(std::shared_ptr<std::vector<Diagnostic>> diagnostics);
 };
 
 }  // namespace clice
