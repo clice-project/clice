@@ -5,11 +5,9 @@
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 
-namespace clice {
-
 #define TRY_OR_RETURN(expr)                                                                        \
     do {                                                                                           \
-        auto& macro_result = (expr);                                                               \
+        auto&& macro_result = (expr);                                                              \
         if(!macro_result.has_value()) {                                                            \
             return std::unexpected(std::move(macro_result.error()));                               \
         }                                                                                          \
@@ -24,101 +22,76 @@ namespace clice {
         var = std::move(*macro_result);                                                            \
     } while(0)
 
+namespace clice {
+
 namespace {
 
-class CliceASTConsumer : public clang::ASTConsumer {
-public:
-    CliceASTConsumer(std::vector<clang::Decl*>& top_level_decls,
-                     const std::shared_ptr<std::atomic<bool>>& contiune_parse) :
-        top_level_decls(top_level_decls), contiune_parse(contiune_parse) {}
-
-    bool HandleTopLevelDecl(clang::DeclGroupRef group) override {
-        for(auto decl: group) {
-            top_level_decls.emplace_back(decl);
-        }
-        return *contiune_parse;
+std::unexpected<std::string> report_diagnostics(llvm::StringRef message,
+                                                std::vector<Diagnostic>& diagnostics) {
+    std::string error = message.str();
+    for(auto& diagnostic: diagnostics) {
+        error += std::format("{}\n", diagnostic.message);
     }
+    return std::unexpected(std::move(error));
+}
 
-private:
-    std::vector<clang::Decl*>& top_level_decls;
-    std::shared_ptr<std::atomic<bool>> contiune_parse;
-};
-
-class ProxyASTConsumer {};
-
-class CliceFrontendAction : public clang::SyntaxOnlyAction {
-public:
-    CliceFrontendAction(std::unique_ptr<clang::ASTConsumer>& consumer) :
-        consumer(std::move(consumer)) {}
-
-    std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance& instance,
-                                                          llvm::StringRef file) override {
-        return std::move(consumer);
-    }
-
-private:
-    std::unique_ptr<clang::ASTConsumer> consumer;
-};
-
-auto createInvocation(CompilationParams& params,
-                      std::shared_ptr<std::vector<Diagnostic>>& diagnostics,
-                      llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine>& diagnostic_engine)
+/// create a `clang::CompilerInvocation` for compilation, it set and reset
+/// all necessary arguments and flags for clice compilation.
+auto create_invocation(CompilationParams& params,
+                       std::shared_ptr<std::vector<Diagnostic>>& diagnostics,
+                       llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine>& diagnostic_engine)
     -> std::expected<std::unique_ptr<clang::CompilerInvocation>, std::string> {
+
+    /// split orgin command into c-style command arguments for creating invocation.
     llvm::SmallString<1024> buffer;
-    llvm::SmallVector<const char*, 16> args;
+    llvm::SmallVector<const char*, 32> args;
+    TRY_OR_RETURN(mangle_command(params.command, args, buffer));
 
-    auto result = mangleCommand(params.command, args, buffer);
-    TRY_OR_RETURN(result);
-
-    clang::CreateInvocationOptions options = {};
-    options.VFS = params.vfs;
-    options.Diags = diagnostic_engine;
+    /// create clang invocation.
+    clang::CreateInvocationOptions options = {
+        .Diags = diagnostic_engine,
+        .VFS = params.vfs,
+    };
 
     auto invocation = clang::createInvocation(args, options);
     if(!invocation) {
-        /// FIXME: Use better way to render error.
-        std::string error = "fail to create compiler invocation\n";
-        for(auto& diagnostic: *diagnostics) {
-            error += std::format("{}\n", diagnostic.message);
-        }
-        return std::unexpected(std::move(error));
+        return report_diagnostics("fail to create compiler invocation", *diagnostics);
     }
 
-    auto& frontOpts = invocation->getFrontendOpts();
-    frontOpts.DisableFree = false;
-
-    clang::LangOptions& langOpts = invocation->getLangOpts();
-    langOpts.CommentOpts.ParseAllComments = true;
-    langOpts.RetainCommentsFromSystemHeaders = true;
-
-    auto& PPOpts = invocation->getPreprocessorOpts();
+    auto& pp_opts = invocation->getPreprocessorOpts();
+    assert(!pp_opts.RetainRemappedFileBuffers && "RetainRemappedFileBuffers should be false");
 
     if(!params.content.empty()) {
         /// Add remapped files, if bounds is provided, cut off the content.
         std::size_t size = params.bound.has_value() ? params.bound.value() : params.content.size();
-        PPOpts.addRemappedFile(
+        pp_opts.addRemappedFile(
             params.srcPath,
             llvm::MemoryBuffer::getMemBufferCopy(params.content.substr(0, size), params.srcPath)
                 .release());
     }
 
     for(auto& [file, buffer]: params.buffers) {
-        PPOpts.addRemappedFile(file, buffer.release());
+        pp_opts.addRemappedFile(file, buffer.release());
     }
     params.buffers.clear();
 
-    assert(!PPOpts.RetainRemappedFileBuffers && "RetainRemappedFileBuffers should be false");
-
     auto [pch, bound] = params.pch;
-    PPOpts.ImplicitPCHInclude = std::move(pch);
+    pp_opts.ImplicitPCHInclude = std::move(pch);
     if(bound != 0) {
-        PPOpts.PrecompiledPreambleBytes = {bound, false};
+        pp_opts.PrecompiledPreambleBytes = {bound, false};
     }
 
-    auto& HSOpts = invocation->getHeaderSearchOpts();
+    auto& header_search_opts = invocation->getHeaderSearchOpts();
     for(auto& [name, path]: params.pcms) {
-        HSOpts.PrebuiltModuleFiles.try_emplace(name.str(), std::move(path));
+        header_search_opts.PrebuiltModuleFiles.try_emplace(name.str(), std::move(path));
     }
+
+    auto& front_opts = invocation->getFrontendOpts();
+    front_opts.DisableFree = false;
+
+    clang::LangOptions& langOpts = invocation->getLangOpts();
+    langOpts.CommentOpts.ParseAllComments = true;
+    langOpts.RetainCommentsFromSystemHeaders = true;
 
     return invocation;
 }
@@ -132,7 +105,7 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
                                                    new clang::DiagnosticOptions(),
                                                    Diagnostic::create(diagnostics));
 
-    auto invocation = createInvocation(params, diagnostics, diagnostic_engine);
+    auto invocation = create_invocation(params, diagnostics, diagnostic_engine);
     TRY_OR_RETURN(invocation);
 
     auto instance = std::make_unique<clang::CompilerInstance>();
