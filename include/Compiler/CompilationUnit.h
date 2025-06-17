@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Directive.h"
+#include "Diagnostic.h"
 #include "AST/SymbolID.h"
 #include "AST/SourceCode.h"
 #include "AST/Resolver.h"
@@ -118,6 +119,8 @@ public:
     llvm::DenseMap<clang::FileID, Directive>& directives();
 
     clang::TranslationUnitDecl* tu();
+
+    const std::vector<Diagnostic>& diagnostics();
 
     /// All files involved in building the unit.
     const llvm::DenseSet<clang::FileID>& files();

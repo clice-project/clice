@@ -246,6 +246,10 @@ clang::TranslationUnitDecl* CompilationUnit::tu() {
     return impl->instance->getASTContext().getTranslationUnitDecl();
 }
 
+const std::vector<Diagnostic>& CompilationUnit::diagnostics() {
+    return *impl->diagnostics;
+}
+
 llvm::DenseMap<clang::FileID, Directive>& CompilationUnit::directives() {
     return impl->m_directives;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Compiler/CompilationUnit.h"
+#include "Compiler/Diagnostic.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Frontend/CompilerInstance.h"
 
@@ -39,6 +40,8 @@ struct CompilationUnit::Impl {
     llvm::BumpPtrAllocator pathStorage;
 
     std::vector<clang::Decl*> top_level_decls;
+
+    std::shared_ptr<std::vector<Diagnostic>> diagnostics;
 };
 
 }  // namespace clice

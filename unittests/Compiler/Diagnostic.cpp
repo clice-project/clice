@@ -8,15 +8,26 @@ namespace {
 
 using namespace clice;
 
+TEST(Diagnostic, CommandError) {
+    CompilationParams params;
+    /// miss input file.
+    params.command = "clang++";
+    params.add_remapped_file("main.cpp", "int main() { return 0; }");
+    auto unit = compile(params);
+    ASSERT_FALSE(unit);
+}
+
 TEST(Diagnostic, Error) {
     CompilationParams params;
     params.command = "clang++ main.cpp";
-    params.add_remapped_file("main.cpp", "int main() { return 0; }");
+    params.add_remapped_file("main.cpp", "int main() { return 0 }");
     auto unit = compile(params);
-    /// ASSERT_FALSE(unit);
-    /// clice::println("{}", unit.error());
+    ASSERT_TRUE(unit);
+    ASSERT_TRUE(!unit->diagnostics().empty());
 
-    clice::println("{}", unit->file_content(unit->interested_file()));
+    for(auto& diag: unit->diagnostics()) {
+        clice::println("{}", diag.message);
+    }
 }
 
 }  // namespace

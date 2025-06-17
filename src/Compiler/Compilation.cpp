@@ -169,6 +169,7 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
         .m_directives = std::move(directives),
         .pathCache = llvm::DenseMap<clang::FileID, llvm::StringRef>(),
         .symbolHashCache = llvm::DenseMap<const void*, std::uint64_t>(),
+        .diagnostics = diagnostics,
     };
 
     return CompilationUnit(CompilationUnit::SyntaxOnly, impl);
