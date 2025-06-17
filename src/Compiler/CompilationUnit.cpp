@@ -229,21 +229,25 @@ index::SymbolID CompilationUnit::getSymbolID(const clang::MacroInfo* macro) {
     return index::SymbolID{hash, name.str()};
 }
 
-clang::FileID CompilationUnit::getInterestedFile() {
+clang::FileID CompilationUnit::interested_file() {
     return impl->interested;
 }
 
-llvm::StringRef CompilationUnit::getInterestedFileContent() {
+llvm::StringRef CompilationUnit::interested_content() {
     return file_content(impl->interested);
 }
 
-bool CompilationUnit::isBuiltinFile(clang::FileID fid) {
+bool CompilationUnit::is_builtin_file(clang::FileID fid) {
     auto path = file_path(fid);
     return path == "<built-in>" || path == "<command line>" || path == "<scratch space>";
 }
 
 clang::TranslationUnitDecl* CompilationUnit::tu() {
     return impl->instance->getASTContext().getTranslationUnitDecl();
+}
+
+const std::vector<Diagnostic>& CompilationUnit::diagnostics() {
+    return *impl->diagnostics;
 }
 
 llvm::DenseMap<clang::FileID, Directive>& CompilationUnit::directives() {
@@ -253,10 +257,6 @@ llvm::DenseMap<clang::FileID, Directive>& CompilationUnit::directives() {
 TemplateResolver& CompilationUnit::resolver() {
     assert(impl->m_resolver && "Template resolver is not available");
     return *impl->m_resolver;
-}
-
-clang::Sema& CompilationUnit::sema() {
-    return impl->instance->getSema();
 }
 
 clang::ASTContext& CompilationUnit::context() {

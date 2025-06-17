@@ -12,23 +12,11 @@ class CodeCompleteConsumer;
 namespace clice {
 
 struct CompilationParams {
-    /// Source file content.
-    llvm::StringRef content;
-
-    /// Source file path.
-    llvm::SmallString<128> srcPath;
-
     /// Output file path.
     llvm::SmallString<128> outPath;
 
     /// Responsible for storing the arguments.
     llvm::SmallString<1024> command;
-
-    /// - If we are building PCH, we need a size to verify the bounds of preamble. That is
-    /// which source code range the PCH will cover.
-    /// - If we are building main file AST for header, we need a size to cut off code after the
-    /// `#include` directive that includes the header to speed up the parsing.
-    std::optional<std::uint32_t> bound;
 
     llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 
@@ -44,27 +32,34 @@ struct CompilationParams {
     /// The memory buffers for all remapped file.
     llvm::StringMap<std::unique_ptr<llvm::MemoryBuffer>> buffers;
 
-    void addRemappedFile(llvm::StringRef path, llvm::StringRef content) {
+    void add_remapped_file(llvm::StringRef path,
+                           llvm::StringRef content,
+                           std::uint32_t bound = -1) {
+        if(bound != -1) {
+            assert(bound < content.size());
+            content = content.substr(0, bound);
+        }
         buffers.try_emplace(path, llvm::MemoryBuffer::getMemBufferCopy(content));
     }
 };
 
+using CompilationResult = std::expected<CompilationUnit, std::string>;
+
 /// Only preprocess ths source flie.
-std::expected<CompilationUnit, std::string> preprocess(CompilationParams& params);
+CompilationResult preprocess(CompilationParams& params);
 
 /// Build AST from given file path and content. If pch or pcm provided, apply them to the compiler.
 /// Note this function will not check whether we need to update the PCH or PCM, caller should check
 /// their reusability and update in time.
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params);
+CompilationResult compile(CompilationParams& params);
 
 /// Build PCH from given file path and content.
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params, PCHInfo& out);
+CompilationResult compile(CompilationParams& params, PCHInfo& out);
 
 /// Build PCM from given file path and content.
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params, PCMInfo& out);
+CompilationResult compile(CompilationParams& params, PCMInfo& out);
 
 /// Run code completion at the given location.
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params,
-                                                    clang::CodeCompleteConsumer* consumer);
+CompilationResult complete(CompilationParams& params, clang::CodeCompleteConsumer* consumer);
 
 }  // namespace clice

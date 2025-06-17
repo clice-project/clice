@@ -63,7 +63,7 @@ public:
     }
 
     auto buildForFile() {
-        highlight(unit.getInterestedFile());
+        highlight(unit.interested_file());
         run();
         merge(result);
         return std::move(result);
@@ -265,7 +265,7 @@ public:
 
 SemanticTokens semanticTokens(CompilationUnit& unit) {
     SemanticTokensCollector collector(unit, true);
-    collector.highlight(unit.getInterestedFile());
+    collector.highlight(unit.interested_file());
     collector.run();
     collector.merge(collector.result);
     return std::move(collector.result);

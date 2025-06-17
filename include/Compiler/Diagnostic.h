@@ -1,17 +1,44 @@
 #pragma once
 
-#include "clang/Basic/Diagnostic.h"
+#include <cstdint>
+#include <string>
+#include "AST/SourceCode.h"
+
+namespace clang {
+class DiagnosticConsumer;
+}
 
 namespace clice {
 
-class DiagnosticCollector : public clang::DiagnosticConsumer {
-public:
-    void BeginSourceFile(const clang::LangOptions& Opts, const clang::Preprocessor* PP) override;
+enum class DiagnosticLevel : std::uint8_t {
+    Ignored,
+    Note,
+    Remark,
+    Warning,
+    Error,
+    Fatal,
+    Invalid,
+};
 
-    void HandleDiagnostic(clang::DiagnosticsEngine::Level DiagLevel,
-                          const clang::Diagnostic& Info) override;
+struct Diagnostic {
+    /// The diagnostic id.
+    std::uint32_t id;
 
-    void EndSourceFile() override;
+    /// The level of this diagnostic.
+    DiagnosticLevel level;
+
+    /// The source range of this diagnostic(may be invalid, if this diagnostic
+    /// is from command line. e.g. unknown command line argument).
+    clang::SourceRange range;
+
+    /// The error message of this diagnostic.
+    std::string message;
+
+    /// TODO: Collect fix it of diagnostics.
+
+    static llvm::StringRef diagnostic_code(std::uint32_t id);
+
+    static clang::DiagnosticConsumer* create(std::shared_ptr<std::vector<Diagnostic>> diagnostics);
 };
 
 }  // namespace clice

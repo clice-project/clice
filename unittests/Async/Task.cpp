@@ -88,7 +88,7 @@ TEST(Async, TaskCancelRecursively) {
     auto task1 = [&]() -> async::Task<> {
         x = 1;
         co_await async::sleep(300);
-        println("Task1 done");
+        clice::println("Task1 done");
         x = 2;
     };
 

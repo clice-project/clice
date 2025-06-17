@@ -5,7 +5,7 @@
 
 namespace clice {
 
-std::expected<void, std::string> mangleCommand(llvm::StringRef command,
+std::expected<void, std::string> mangle_command(llvm::StringRef command,
                                                llvm::SmallVectorImpl<const char*>& out,
                                                llvm::SmallVectorImpl<char>& buffer) {
     llvm::SmallString<128> current;

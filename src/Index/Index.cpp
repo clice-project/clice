@@ -11,13 +11,13 @@ class IndexBuilder : public Indices, public SemanticVisitor<IndexBuilder> {
 public:
     IndexBuilder(CompilationUnit& unit) : SemanticVisitor(unit, false) {
         tu_index = std::make_unique<TUIndex>();
-        tu_index->path = unit.file_path(unit.getInterestedFile());
-        tu_index->content = unit.file_content(unit.getInterestedFile());
+        tu_index->path = unit.file_path(unit.interested_file());
+        tu_index->content = unit.file_content(unit.interested_file());
         tu_index->graph = IncludeGraph::from(unit);
     }
 
     RawIndex& getIndex(clang::FileID fid) {
-        if(fid == unit.getInterestedFile()) {
+        if(fid == unit.interested_file()) {
             return *tu_index;
         }
 

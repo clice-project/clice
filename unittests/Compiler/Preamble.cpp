@@ -75,10 +75,9 @@ void EXPECT_BUILD_PCH(llvm::StringRef main_file,
     files.erase(main_file);
 
     CompilationParams params;
-    params.srcPath = main_file;
-    params.content = content;
     params.outPath = outPath;
-    params.bound = computePreambleBound(content);
+    auto bound = computePreambleBound(content);
+    params.add_remapped_file(main_file, content, bound);
 
     if(!preamble.empty()) {
         params.command = std::format("clang++ -xc++ -std=c++20 --include=preamble.h {}", main_file);
@@ -87,7 +86,7 @@ void EXPECT_BUILD_PCH(llvm::StringRef main_file,
     }
 
     for(auto& [path, content]: files) {
-        params.addRemappedFile(path::join(".", path), content);
+        params.add_remapped_file(path::join(".", path), content);
     }
 
     /// Build PCH.
@@ -104,13 +103,13 @@ void EXPECT_BUILD_PCH(llvm::StringRef main_file,
 
     /// Build AST with PCH.
     for(auto& [path, content]: files) {
-        params.addRemappedFile(path::join(".", path), content);
+        params.add_remapped_file(path::join(".", path), content);
     }
 
-    params.bound.reset();
+    params.add_remapped_file(main_file, content);
     params.pch = {info.path, info.preamble.size()};
-    auto AST = compile(params);
-    ASSERT_TRUE(AST, chain);
+    auto unit = compile(params);
+    ASSERT_TRUE(unit, chain);
 }
 
 TEST(Preamble, Bounds) {
@@ -202,12 +201,11 @@ int foo();
     {
 
         CompilationParams params;
-        params.content = content;
-        params.srcPath = "main.cpp";
+        params.add_remapped_file("main.cpp", content);
         params.command = "clang++ -std=c++20 main.cpp";
 
         for(auto& [path, file]: files) {
-            params.addRemappedFile(path::join(".", path), file);
+            params.add_remapped_file(path::join(".", path), file);
         }
 
         auto unit = preprocess(params);
@@ -255,25 +253,25 @@ int y = foo();
     auto bounds = computePreambleBounds(content);
 
     CompilationParams params;
-    params.srcPath = "main.cpp";
-    params.content = content;
     params.command = "clang++ -std=c++20 main.cpp";
 
     PCHInfo info;
+    std::uint32_t last_bound = 0;
     for(auto bound: bounds) {
         auto tmp = fs::createTemporaryFile("clice", "pch");
         ASSERT_TRUE(tmp);
         std::string outPath = std::move(*tmp);
 
-        if(params.bound && !params.outPath.empty()) {
-            params.pch = {params.outPath.str().str(), *params.bound};
+        params.add_remapped_file("main.cpp", content, bound);
+        if(params.outPath.empty()) {
+            params.pch = {params.outPath.str().str(), last_bound};
         }
 
         params.outPath = outPath;
-        params.bound = bound;
+        last_bound = bound;
 
         for(auto& [path, content]: files) {
-            params.addRemappedFile(path::join(".", path), content);
+            params.add_remapped_file(path::join(".", path), content);
         }
 
         {
@@ -287,13 +285,13 @@ int y = foo();
 
     /// Build AST with PCH.
     for(auto& [path, content]: files) {
-        params.addRemappedFile(path::join(".", path), content);
+        params.add_remapped_file(path::join(".", path), content);
     }
 
-    params.bound.reset();
-    params.pch = {info.path, info.preamble.size()};
-    auto AST = compile(params);
-    ASSERT_TRUE(AST);
+    params.add_remapped_file("main.cpp", content);
+    params.pch = {info.path, last_bound};
+    auto unit = compile(params);
+    ASSERT_TRUE(unit);
 }
 
 }  // namespace

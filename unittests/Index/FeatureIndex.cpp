@@ -12,7 +12,7 @@ TEST(FeatureIndex, SemanticTokens) {
 
     /// auto index = index(*tester.info);
 
-    // auto& m = index.at(tester.info->getInterestedFile());
+    // auto& m = index.at(tester.info->interested_file());
     //
     // auto tokens = m.semanticTokens();
     //
