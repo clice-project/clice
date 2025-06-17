@@ -10,6 +10,7 @@ namespace clice::testing {
 struct Tester {
     CompilationParams params;
     std::optional<CompilationUnit> unit;
+    std::string src_path;
 
     /// Annoated locations.
     llvm::StringMap<std::uint32_t> offsets;
@@ -19,17 +20,17 @@ public:
     Tester() = default;
 
     Tester(llvm::StringRef file, llvm::StringRef content) {
-        params.srcPath = file;
-        params.content = annoate(content);
+        src_path = file;
+        params.add_remapped_file(file, annoate(content));
     }
 
     void addMain(llvm::StringRef file, llvm::StringRef content) {
-        params.srcPath = file;
-        params.content = annoate(content);
+        src_path = file;
+        params.add_remapped_file(file, annoate(content));
     }
 
     void addFile(llvm::StringRef name, llvm::StringRef content) {
-        params.addRemappedFile(name, annoate(content));
+        params.add_remapped_file(name, annoate(content));
     }
 
     llvm::StringRef annoate(llvm::StringRef content) {
@@ -76,7 +77,7 @@ public:
     }
 
     Tester& compile(llvm::StringRef standard = "-std=c++20") {
-        params.command = std::format("clang++ {} {} -fms-extensions", standard, params.srcPath);
+        params.command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
         auto info = clice::compile(params);
         ASSERT_TRUE(info);
         this->unit.emplace(std::move(*info));

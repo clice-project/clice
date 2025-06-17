@@ -55,8 +55,7 @@ async::Task<json::Value> Scheduler::completion(std::string path, std::uint32_t o
     /// Set compilation params ... .
     CompilationParams params;
     params.command = database.getCommand(path);
-    params.srcPath = path;
-    params.content = openFile->content;
+    params.add_remapped_file(path, openFile->content);
     params.pch = {PCH->path, PCH->preamble.size()};
     params.completion = {path, offset};
 
@@ -105,11 +104,9 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
                                             std::uint32_t bound,
                                             std::string content) -> async::Task<> {
         CompilationParams params;
-        params.srcPath = path;
         params.command = scheduler.database.getCommand(path);
-        params.content = content;
-        params.bound = bound;
         params.outPath = path::join(config::index.dir, path::filename(path) + ".pch");
+        params.add_remapped_file(path, content, bound);
 
         PCHInfo info;
         auto result = co_await async::submit([&] { return compile(params, info); });
@@ -164,9 +161,8 @@ async::Task<> Scheduler::buildAST(std::string path, std::string content) {
     }
 
     CompilationParams params;
-    params.srcPath = path;
     params.command = database.getCommand(path);
-    params.content = content;
+    params.add_remapped_file(path, content);
     params.pch = {PCH->path, PCH->preamble.size()};
 
     /// Check result

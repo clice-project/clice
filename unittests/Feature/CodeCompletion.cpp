@@ -22,10 +22,9 @@ int main() {
 
     Annotation annotation = {code};
     CompilationParams params;
-    params.content = annotation.source();
-    params.srcPath = "main.cpp";
     params.command = "clang++ -std=c++20 main.cpp";
     params.completion = {"main.cpp", annotation.offset("pos")};
+    params.add_remapped_file("main.cpp", annotation.source());
 
     config::CodeCompletionOption options = {};
     auto result = feature::codeCompletion(params, options);

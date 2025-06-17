@@ -12,23 +12,11 @@ class CodeCompleteConsumer;
 namespace clice {
 
 struct CompilationParams {
-    /// Source file content.
-    llvm::StringRef content;
-
-    /// Source file path.
-    llvm::SmallString<128> srcPath;
-
     /// Output file path.
     llvm::SmallString<128> outPath;
 
     /// Responsible for storing the arguments.
     llvm::SmallString<1024> command;
-
-    /// - If we are building PCH, we need a size to verify the bounds of preamble. That is
-    /// which source code range the PCH will cover.
-    /// - If we are building main file AST for header, we need a size to cut off code after the
-    /// `#include` directive that includes the header to speed up the parsing.
-    std::optional<std::uint32_t> bound;
 
     llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 
@@ -44,7 +32,13 @@ struct CompilationParams {
     /// The memory buffers for all remapped file.
     llvm::StringMap<std::unique_ptr<llvm::MemoryBuffer>> buffers;
 
-    void addRemappedFile(llvm::StringRef path, llvm::StringRef content) {
+    void add_remapped_file(llvm::StringRef path,
+                           llvm::StringRef content,
+                           std::uint32_t bound = -1) {
+        if(bound != -1) {
+            assert(bound < content.size());
+            content = content.substr(0, bound);
+        }
         buffers.try_emplace(path, llvm::MemoryBuffer::getMemBufferCopy(content));
     }
 };

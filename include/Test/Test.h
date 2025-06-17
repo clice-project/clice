@@ -65,6 +65,9 @@ inline void EXPECT_FALSE(auto&& value, LocationChain chain = LocationChain()) {
 inline void ASSERT_TRUE(auto&& value, LocationChain chain = LocationChain()) {
     if(!static_cast<bool>(value)) {
         ASSERT_FAILURE("ASSERT true!", chain);
+        if constexpr(requires { value.error(); }) {
+            println("{}", value.error());
+        }
     }
 }
 

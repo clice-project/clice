@@ -42,12 +42,12 @@ auto create_invocation(CompilationParams& params,
                        llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine>& diagnostic_engine)
     -> std::expected<std::unique_ptr<clang::CompilerInvocation>, std::string> {
 
-    /// split orgin command into c-style command arguments for creating invocation.
+    /// Split orgin command into c-style command arguments for creating invocation.
     llvm::SmallString<1024> buffer;
     llvm::SmallVector<const char*, 32> args;
     TRY_OR_RETURN(mangle_command(params.command, args, buffer));
 
-    /// create clang invocation.
+    /// Create clang invocation.
     clang::CreateInvocationOptions options = {
         .Diags = diagnostic_engine,
         .VFS = params.vfs,
@@ -60,15 +60,6 @@ auto create_invocation(CompilationParams& params,
 
     auto& pp_opts = invocation->getPreprocessorOpts();
     assert(!pp_opts.RetainRemappedFileBuffers && "RetainRemappedFileBuffers should be false");
-
-    if(!params.content.empty()) {
-        /// Add remapped files, if bounds is provided, cut off the content.
-        std::size_t size = params.bound.has_value() ? params.bound.value() : params.content.size();
-        pp_opts.addRemappedFile(
-            params.srcPath,
-            llvm::MemoryBuffer::getMemBufferCopy(params.content.substr(0, size), params.srcPath)
-                .release());
-    }
 
     for(auto& [file, buffer]: params.buffers) {
         pp_opts.addRemappedFile(file, buffer.release());
@@ -129,7 +120,7 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         /// TODO: collect error message from diagnostics.
-        return std::unexpected("Failed to begin source file");
+        return report_diagnostics("Failed to begin source file", *diagnostics);
     }
 
     auto& pp = instance->getPreprocessor();
@@ -197,12 +188,14 @@ std::expected<CompilationUnit, std::string> complete(CompilationParams& params,
                                                      clang::CodeCompleteConsumer* consumer) {
 
     auto& [file, offset] = params.completion;
-    assert(file == params.srcPath && "completing could only occur in main file");
 
     /// The location of clang is 1-1 based.
     std::uint32_t line = 1;
     std::uint32_t column = 1;
-    llvm::StringRef content = params.content;
+
+    /// FIXME:
+    assert(params.buffers.size() == 1);
+    llvm::StringRef content = params.buffers.begin()->second->getBuffer();
 
     for(auto c: content.substr(0, offset)) {
         if(c == '\n') {
@@ -223,10 +216,10 @@ std::expected<CompilationUnit, std::string> complete(CompilationParams& params,
 }
 
 std::expected<CompilationUnit, std::string> compile(CompilationParams& params, PCHInfo& out) {
-    assert(params.bound.has_value() && "Preamble bounds is required to build PCH");
+    /// assert(params.bound.has_value() && "Preamble bounds is required to build PCH");
 
     out.path = params.outPath.str();
-    out.preamble = params.content.substr(0, *params.bound);
+    /// out.preamble = params.content.substr(0, *params.bound);
     out.command = params.command.str();
     /// FIXME: out.deps = info->deps();
 
@@ -244,7 +237,6 @@ std::expected<CompilationUnit, std::string> compile(CompilationParams& params, P
         out.mods.emplace_back(name);
     }
     out.path = params.outPath.str();
-    out.srcPath = params.srcPath.str();
 
     return clang_compile<clang::GenerateReducedModuleInterfaceAction>(
         params,
@@ -253,6 +245,7 @@ std::expected<CompilationUnit, std::string> compile(CompilationParams& params, P
             instance.getFrontendOpts().OutputFile = params.outPath.str();
             instance.getFrontendOpts().ProgramAction =
                 clang::frontend::GenerateReducedModuleInterface;
+            out.srcPath = instance.getFrontendOpts().Inputs[0].getFile();
         });
 }
 

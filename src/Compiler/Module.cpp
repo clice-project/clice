@@ -13,12 +13,16 @@ std::string scanModuleName(CompilationParams& params) {
     langOpts.Modules = true;
     langOpts.CPlusPlus20 = true;
 
+    /// FIXME: Figure out main file from command line.
+    assert(params.buffers.size() == 1);
+    auto content = params.buffers.begin()->second->getBuffer();
+
     /// We use raw mode of lexer to avoid the preprocessor.
     clang::Lexer lexer(clang::SourceLocation(),
                        langOpts,
-                       params.content.begin(),
-                       params.content.begin(),
-                       params.content.end());
+                       content.begin(),
+                       content.begin(),
+                       content.end());
 
     /// Whether we are in a condition directive.
     bool isInDirective = false;
