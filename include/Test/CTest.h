@@ -3,12 +3,14 @@
 #include "Test.h"
 #include "Annotation.h"
 #include "Server/Protocol.h"
+#include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
 
 namespace clice::testing {
 
 struct Tester {
     CompilationParams params;
+    CompilationDatabase database;
     std::optional<CompilationUnit> unit;
     std::string src_path;
 
@@ -77,7 +79,10 @@ public:
     }
 
     Tester& compile(llvm::StringRef standard = "-std=c++20") {
-        params.command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
+        auto command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
+        database.add_command(src_path, command);
+        params.arguments = database.get_command(src_path);
+        
         auto info = clice::compile(params);
         ASSERT_TRUE(info);
         this->unit.emplace(std::move(*info));

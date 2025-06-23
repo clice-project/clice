@@ -22,7 +22,9 @@ int main() {
 
     Annotation annotation = {code};
     CompilationParams params;
-    params.command = "clang++ -std=c++20 main.cpp";
+            std::vector<const char*> arguments = {"clang++", "-std=c++20", "main.cpp"};
+        params.arguments = arguments;
+        
     params.completion = {"main.cpp", annotation.offset("pos")};
     params.add_remapped_file("main.cpp", annotation.source());
 

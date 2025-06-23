@@ -16,7 +16,7 @@ struct CompilationParams {
     llvm::SmallString<128> outPath;
 
     /// Responsible for storing the arguments.
-    llvm::SmallString<1024> command;
+    llvm::ArrayRef<const char*> arguments;
 
     llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 
@@ -32,6 +32,7 @@ struct CompilationParams {
     /// The memory buffers for all remapped file.
     llvm::StringMap<std::unique_ptr<llvm::MemoryBuffer>> buffers;
 
+    
     void add_remapped_file(llvm::StringRef path,
                            llvm::StringRef content,
                            std::uint32_t bound = -1) {

@@ -10,9 +10,17 @@ PCMInfo buildPCM(llvm::StringRef file, llvm::StringRef code) {
     llvm::SmallString<128> outPath;
     fs::createUniquePath(llvm::Twine(file) + "%%%%%%.pcm", outPath, true);
 
+    std::string path = file.str();
+    std::vector<const char*> arguments = {
+        "clang++",
+        "-std=c++20",
+        "-xc++",
+        path.c_str(),
+    };
+
     CompilationParams params;
     params.outPath = outPath;
-    params.command = "clang++ -std=c++20 -x c++ " + file.str();
+    params.arguments = arguments;
     params.add_remapped_file(file, code);
     params.add_remapped_file("./test.h", "export int foo2();");
 
@@ -26,8 +34,15 @@ PCMInfo buildPCM(llvm::StringRef file, llvm::StringRef code) {
 }
 
 ModuleInfo scan(llvm::StringRef content) {
+    std::vector<const char*> arguments = {
+        "clang++",
+        "-std=c++20",
+        "-xc++",
+        "main.ixx",
+    };
+
     CompilationParams params;
-    params.command = "clang++ -std=c++20 -x c++ main.ixx";
+    params.arguments = arguments;
     params.add_remapped_file("main.ixx", content);
     params.add_remapped_file("./test.h", "export module A");
     auto info = scanModule(params);

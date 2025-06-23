@@ -7,56 +7,31 @@
 
 namespace clice {
 
-/// Processes and adjusts a raw compile command from compile_commands.json.
-///
-/// This function tokenizes the input command, removes unnecessary arguments,
-/// and ensures the resulting format is suitable for execution.
-///
-/// @param command The raw shell-escaped compile command.
-/// @param out A vector to hold pointers to the processed arguments.
-/// @param buffer A storage buffer for the actual argument strings.
-std::expected<void, std::string> mangle_command(llvm::StringRef command,
-                                                llvm::SmallVectorImpl<const char*>& out,
-                                                llvm::SmallVectorImpl<char>& buffer);
-
 /// `CompilationDatabase` is responsible for managing the compile commands.
 ///
 /// FIXME: currently we assume that a file only occurs once in the CDB.
 /// This is not always correct, but it is enough for now.
 class CompilationDatabase {
 public:
-    /// Update the compile commands with the given file.
-    void updateCommands(llvm::StringRef file);
+    using Self = CompilationDatabase;
 
-    /// Update the compile commands with the given file and compile command.
-    void updateCommand(llvm::StringRef file, llvm::StringRef command);
+    /// Update the compile commands with the given file.
+    void update_commands(this Self& self, llvm::StringRef file);
 
     /// Update the module map with the given file and module name.
-    void updateModule(llvm::StringRef file, llvm::StringRef name);
-
-    /// Lookup the compile commands of the given file.
-    llvm::StringRef getCommand(llvm::StringRef file);
+    void update_module(llvm::StringRef file, llvm::StringRef name);
 
     /// Lookup the module interface unit file path of the given module name.
-    llvm::StringRef getModuleFile(llvm::StringRef name);
+    llvm::StringRef get_module_file(llvm::StringRef name);
 
     auto size() const {
         return commands.size();
-    }
-
-    auto begin() {
-        return commands.begin();
-    }
-
-    auto end() {
-        return commands.end();
     }
 
     enum class Style {
         GNU = 0,
         MSVC,
     };
-    using Self = CompilationDatabase;
 
     void add_command(this Self& self,
                      llvm::StringRef path,
@@ -72,9 +47,6 @@ private:
     std::vector<const char*> save_args(this Self& self, llvm::ArrayRef<const char*> args);
 
 private:
-    /// A map between file path and compile commands.
-    llvm::StringMap<std::string> commands;
-
     /// For C++20 module, we only can got dependent module name
     /// in source context. But we need dependent module file path
     /// to build PCM. So we will scan(preprocess) all project files
@@ -91,7 +63,7 @@ private:
 
     // A map between file path and compile commands.
     /// TODO: Path cannot represent unique file, we should use better, like inode ...
-    llvm::DenseMap<const char*, std::unique_ptr<std::vector<const char*>>> commands2;
+    llvm::DenseMap<const char*, std::unique_ptr<std::vector<const char*>>> commands;
 };
 
 }  // namespace clice

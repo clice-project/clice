@@ -118,7 +118,7 @@ async::Task<json::Value> Server::onInitialize(json::Value value) {
     config::init(converter.workspace());
 
     for(auto& dir: config::server.compile_commands_dirs) {
-        database.updateCommands(dir + "/compile_commands.json");
+        database.update_commands(dir + "/compile_commands.json");
     }
 
     co_return result;
