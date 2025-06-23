@@ -193,15 +193,9 @@ package("llvm")
             package:add("defines", "CLANG_BUILD_STATIC")
         end
 
-        if has_config("llvm") then
-            os.vcp("bin", package:installdir())
-            os.vcp("lib", package:installdir())
-            os.vcp("include", package:installdir())
-        else
-            os.mv("bin", package:installdir())
-            os.mv("lib", package:installdir())
-            os.mv("include", package:installdir())
-        end
+        os.vcp("bin", package:installdir())
+        os.vcp("lib", package:installdir())
+        os.vcp("include", package:installdir())
     end)
 
 if has_config("release") then
