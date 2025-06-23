@@ -71,17 +71,11 @@ jobs:
   windows:
     strategy:
       matrix:
-        os: [windows-2022]
+        os: [windows-2025]
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Setup llvm
-        uses: MinoruSekine/setup-scoop@v4.0.1
-        with:
-          buckets: main
-          apps: llvm
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
