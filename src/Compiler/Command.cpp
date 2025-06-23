@@ -2,12 +2,13 @@
 #include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
 #include "Support/FileSystem.h"
+#include "llvm/Support/CommandLine.h"
 
 namespace clice {
 
 std::expected<void, std::string> mangle_command(llvm::StringRef command,
-                                               llvm::SmallVectorImpl<const char*>& out,
-                                               llvm::SmallVectorImpl<char>& buffer) {
+                                                llvm::SmallVectorImpl<const char*>& out,
+                                                llvm::SmallVectorImpl<char>& buffer) {
     llvm::SmallString<128> current;
     llvm::SmallVector<uint32_t> indices;
     bool inSingleQuote = false;
@@ -187,6 +188,83 @@ llvm::StringRef CompilationDatabase::getModuleFile(llvm::StringRef name) {
         return "";
     }
     return iter->second;
+}
+
+llvm::StringRef CompilationDatabase::save_string(this Self& self, llvm::StringRef string) {
+    auto it = self.unique.find(string);
+
+    /// FIXME: arg may be empty?
+
+    /// If we already store the argument, reuse it.
+    if(it != self.unique.end()) {
+        return *it;
+    }
+
+    /// Allocate new argument.
+    const auto size = string.size();
+    auto ptr = self.memory_pool.Allocate<char>(size + 1);
+    std::memcpy(ptr, string.data(), size);
+    ptr[size] = '\0';
+
+    /// Insert new argument.
+    auto result = llvm::StringRef(ptr, size);
+    self.unique.insert(result);
+    return result;
+}
+
+std::vector<const char*> CompilationDatabase::save_args(this Self& self,
+                                                        llvm::ArrayRef<const char*> args) {
+    std::vector<const char*> result;
+    result.reserve(args.size());
+
+    for(auto i = 0; i < args.size(); i++) {
+        result.emplace_back(self.save_string(args[i]).data());
+    }
+
+    return result;
+}
+
+void CompilationDatabase::add_command(this Self& self,
+                                      llvm::StringRef path,
+                                      llvm::StringRef command,
+                                      Style style) {
+    llvm::SmallVector<const char*> args;
+
+    /// temporary allocator to meet the argument requirements of tokenize.
+    llvm::BumpPtrAllocator allocator;
+    llvm::StringSaver saver(allocator);
+
+    /// FIXME: we may want to check the first argument of command to
+    /// make sure its mode.
+    if(style == Style::GNU) {
+        llvm::cl::TokenizeGNUCommandLine(command, saver, args);
+    } else if(style == Style::MSVC) {
+        llvm::cl::TokenizeWindowsCommandLineFull(command, saver, args);
+    } else {
+        std::abort();
+    }
+
+    auto path_ = self.save_string(path);
+    auto new_args = self.save_args(args);
+
+    auto it = self.commands2.find(path_.data());
+    if(it == self.commands2.end()) {
+        self.commands2.try_emplace(path_.data(),
+                                   std::make_unique<std::vector<const char*>>(std::move(new_args)));
+    } else {
+        *it->second = std::move(new_args);
+    }
+}
+
+llvm::ArrayRef<const char*> CompilationDatabase::get_command(this Self& self,
+                                                             llvm::StringRef path) {
+    auto path_ = self.save_string(path);
+    auto it = self.commands2.find(path_.data());
+    if(it != self.commands2.end()) {
+        return *it->second;
+    } else {
+        return {};
+    }
 }
 
 }  // namespace clice
