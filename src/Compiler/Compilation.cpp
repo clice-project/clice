@@ -42,18 +42,13 @@ auto create_invocation(CompilationParams& params,
                        llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine>& diagnostic_engine)
     -> std::expected<std::unique_ptr<clang::CompilerInvocation>, std::string> {
 
-    /// Split orgin command into c-style command arguments for creating invocation.
-    llvm::SmallString<1024> buffer;
-    llvm::SmallVector<const char*, 32> args;
-    TRY_OR_RETURN(mangle_command(params.command, args, buffer));
-
     /// Create clang invocation.
     clang::CreateInvocationOptions options = {
         .Diags = diagnostic_engine,
         .VFS = params.vfs,
     };
 
-    auto invocation = clang::createInvocation(args, options);
+    auto invocation = clang::createInvocation(params.arguments, options);
     if(!invocation) {
         return report_diagnostics("fail to create compiler invocation", *diagnostics);
     }
@@ -221,7 +216,7 @@ std::expected<CompilationUnit, std::string> compile(CompilationParams& params, P
 
     out.path = params.outPath.str();
     /// out.preamble = params.content.substr(0, *params.bound);
-    out.command = params.command.str();
+    /// out.command = params.arguments.str();
     /// FIXME: out.deps = info->deps();
 
     return clang_compile<clang::GeneratePCHAction>(params, [&](clang::CompilerInstance& instance) {
