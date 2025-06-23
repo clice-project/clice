@@ -20,17 +20,17 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-24.04, windows-2022, macos-15]
+        os: [ubuntu-24.04, windows-2025, macos-15]
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Setup llvm & ninja
+      - name: Setup ninja
         if: matrix.os == 'windows-2022'
         uses: MinoruSekine/setup-scoop@v4.0.1
         with:
           buckets: main
-          apps: llvm ninja
+          apps: ninja
 
       - name: Setup llvm & libstdc++ & cmake & ninja
         if: matrix.os == 'ubuntu-24.04'
