@@ -59,7 +59,7 @@ async::Task<json::Value> Scheduler::completion(std::string path, std::uint32_t o
     params.pch = {PCH->path, PCH->preamble.size()};
     params.completion = {path, offset};
 
-    auto result = co_await async::submit([&] { return feature::codeCompletion(params, {}); });
+    auto result = co_await async::submit([&] { return feature::code_complete(params, {}); });
 
     openFile = &openFiles[path];
     co_return converter.convert(openFile->content, result);

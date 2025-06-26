@@ -60,6 +60,8 @@ struct CompletionItem {
 
     bool deprecated;
 
+    float score;
+
     struct Edit {
         std::string text;
 
@@ -69,7 +71,7 @@ struct CompletionItem {
 
 using CodeCompletionResult = std::vector<CompletionItem>;
 
-CodeCompletionResult codeCompletion(CompilationParams& params,
+CodeCompletionResult code_complete(CompilationParams& params,
                                     const config::CodeCompletionOption& option);
 
 }  // namespace feature
