@@ -18,7 +18,7 @@ struct CodeCompletion : TestFixture {
         config::CodeCompletionOption options = {};
         auto result = feature::code_complete(params, options);
         for(auto& item: result) {
-            println("{} {}", refl::enum_name(item.kind), item.label);
+            clice::println("{} {}", refl::enum_name(item.kind), item.label);
         }
         return result;
     }
