@@ -12,7 +12,23 @@ struct CompilationParams;
 
 namespace config {
 
-struct CodeCompletionOption {};
+struct CodeCompletionOption {
+    /// Insert placeholder for keywords? function call parameters? template arguments?
+    bool enable_keyword_snippet = false;
+
+    /// Also apply for lambda ...
+    bool enable_function_arguments_snippet = false;
+    bool enable_template_arguments_snippet = false;
+
+    bool insert_paren_in_function_call = false;
+    /// TODO: Add more detailed option, see
+    /// https://github.com/llvm/llvm-project/issues/63565
+
+    bool bundle_overloads = true;
+
+    /// The limits of code completion, 0 is non limit.
+    std::uint32_t limit = 0;
+};
 
 };  // namespace config
 
@@ -60,6 +76,8 @@ struct CompletionItem {
 
     bool deprecated;
 
+    float score;
+
     struct Edit {
         std::string text;
 
@@ -69,8 +87,8 @@ struct CompletionItem {
 
 using CodeCompletionResult = std::vector<CompletionItem>;
 
-CodeCompletionResult codeCompletion(CompilationParams& params,
-                                    const config::CodeCompletionOption& option);
+CodeCompletionResult code_complete(CompilationParams& params,
+                                   const config::CodeCompletionOption& option);
 
 }  // namespace feature
 
