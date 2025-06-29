@@ -12,13 +12,16 @@ namespace clice::feature {
 namespace {
 
 struct CompletionPrefix {
-    // The unqualified partial name.
-    // If there is none, begin() == end() == completion position.
+    /// The spelled scope qualifier, such as Foo::.
+    /// If there is none, begin() == end() == name.begin().
+    llvm::StringRef qualifier;
+
+    /// The unqualified partial name.
+    /// If there is none, begin() == end() == completion position.
     llvm::StringRef name;
 
-    // The spelled scope qualifier, such as Foo::.
-    // If there is none, begin() == end() == name.begin().
-    llvm::StringRef qualifier;
+    /// FIXME: Get the suffix after the name to cutoff extra completion result.
+    llvm::StringRef suffix;
 
     static CompletionPrefix from(llvm::StringRef content, std::uint32_t offset) {
         assert(offset <= content.size());
@@ -49,8 +52,8 @@ struct CompletionPrefix {
 
 class CodeCompletionCollector final : public clang::CodeCompleteConsumer {
 public:
-    CodeCompletionCollector(std::uint32_t offset) :
-        clang::CodeCompleteConsumer({}), offset(offset),
+    CodeCompletionCollector(const config::CodeCompletionOption& option, std::uint32_t offset) :
+        clang::CodeCompleteConsumer({}), option(option), offset(offset),
         info(std::make_shared<clang::GlobalCodeCompletionAllocator>()) {}
 
     void initCompletionInfo(clang::Sema& sema) {
@@ -118,6 +121,18 @@ public:
         if(candidates_count == 0) {
             return;
         }
+
+        /// For qualified name
+        /// auto specifier = context.getCXXScopeSpecifier();
+        /// auto NNS = specifier.value()->getScopeRep();
+
+        /// For member access like a.c
+        /// auto base = context.getBaseType();
+
+        /// Preferred type.
+        /// auto type = context.getPreferredType();
+
+        /// TODO: Handle dependent template name.
 
         initCompletionInfo(sema);
         /// FIXME: check Sema may run multiple times.
@@ -188,6 +203,7 @@ private:
     std::optional<FuzzyMatcher> macther;
     std::vector<CompletionItem> completions;
     clang::CodeCompletionTUInfo info;
+    const config::CodeCompletionOption& option;
 };
 
 }  // namespace
@@ -195,7 +211,7 @@ private:
 std::vector<CompletionItem> code_complete(CompilationParams& params,
                                           const config::CodeCompletionOption& option) {
     auto& [file, offset] = params.completion;
-    auto consumer = new CodeCompletionCollector(offset);
+    auto consumer = new CodeCompletionCollector(option, offset);
     if(auto info = complete(params, consumer)) {
         return consumer->dump();
         /// TODO: Handle error here.
