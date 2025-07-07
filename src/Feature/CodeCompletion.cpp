@@ -12,98 +12,377 @@ namespace clice::feature {
 namespace {
 
 struct CompletionPrefix {
-    /// The spelled scope qualifier, such as Foo::.
-    /// If there is none, begin() == end() == name.begin().
-    llvm::StringRef qualifier;
+    /// The range that will replaced.
+    LocalSourceRange range;
 
     /// The unqualified partial name.
     /// If there is none, begin() == end() == completion position.
-    llvm::StringRef name;
+    llvm::StringRef spelling;
 
-    /// FIXME: Get the suffix after the name to cutoff extra completion result.
-    llvm::StringRef suffix;
+    /// The spelled scope qualifier, such as Foo::.
+    /// If there is none, begin() == end() == name.begin().
+    /// FIXME: llvm::StringRef qualifier;
 
     static CompletionPrefix from(llvm::StringRef content, std::uint32_t offset) {
         assert(offset <= content.size());
-        CompletionPrefix prefix;
 
-        llvm::StringRef rest = content.take_front(offset);
+        assert(offset <= content.size());
 
-        // Consume the unqualified name. We only handle ASCII characters.
-        // isAsciiIdentifierContinue will let us match "0invalid", but we don't mind.
-        while(!rest.empty() && clang::isAsciiIdentifierContinue(rest.back())) {
-            rest = rest.drop_back();
+        auto start = offset;
+        while(start > 0 && clang::isAsciiIdentifierStart(content[start - 1])) {
+            --start;
         }
 
-        prefix.name = content.slice(rest.size(), offset);
+        auto end = offset;
+        while(end < content.size() && clang::isAsciiIdentifierStart(content[end])) {
+            ++end;
+        }
 
-        // Consume qualifiers.
-        while(rest.consume_back("::") && !rest.ends_with(":")) {
-            // reject ::::
-            while(!rest.empty() && clang::isAsciiIdentifierContinue(rest.back())) {
-                rest = rest.drop_back();
+        return CompletionPrefix{
+            LocalSourceRange{start, end},
+            content.substr(start, offset - start),
+        };
+    }
+};
+
+/// Get the code completion kind of named declaration.
+CompletionItemKind completion_kind(const clang::NamedDecl* decl) {
+    switch(decl->getKind()) {
+        case clang::Decl::Namespace:
+        case clang::Decl::NamespaceAlias: {
+            /// TODO: Extend `namespace` kind.
+            return CompletionItemKind::Module;
+        }
+
+        case clang::Decl::Function:
+        case clang::Decl::FunctionTemplate: {
+            return CompletionItemKind::Function;
+        }
+
+        case clang::Decl::CXXMethod:
+        case clang::Decl::CXXConversion:
+        case clang::Decl::CXXDestructor:
+        case clang::Decl::CXXDeductionGuide: {
+            return CompletionItemKind::Method;
+        }
+
+        case clang::Decl::CXXConstructor: {
+            return CompletionItemKind::Constructor;
+        }
+
+        case clang::Decl::Var:
+        case clang::Decl::ParmVar:
+        case clang::Decl::ImplicitParam:
+        case clang::Decl::Binding:
+        case clang::Decl::Decomposition:
+        case clang::Decl::VarTemplate:
+        case clang::Decl::VarTemplateSpecialization:
+        case clang::Decl::VarTemplatePartialSpecialization:
+        case clang::Decl::NonTypeTemplateParm: {
+            return CompletionItemKind::Variable;
+        }
+
+        case clang::Decl::Label: {
+            return CompletionItemKind::Variable;
+        }
+
+        case clang::Decl::Enum: {
+            return CompletionItemKind::Enum;
+        }
+
+        case clang::Decl::EnumConstant: {
+            return CompletionItemKind::EnumMember;
+        }
+
+        case clang::Decl::Field:
+        case clang::Decl::IndirectField: {
+            return CompletionItemKind::Field;
+        }
+
+        case clang::Decl::Record:
+        case clang::Decl::CXXRecord:
+        case clang::Decl::ClassTemplate:
+        case clang::Decl::ClassTemplateSpecialization:
+        case clang::Decl::ClassTemplatePartialSpecialization: {
+            return CompletionItemKind::Class;
+        }
+
+        case clang::Decl::Typedef:
+        case clang::Decl::TypeAlias:
+        case clang::Decl::TemplateTypeParm:
+        case clang::Decl::TemplateTemplateParm:
+        case clang::Decl::TypeAliasTemplate:
+        case clang::Decl::Concept:
+        case clang::Decl::BuiltinTemplate: {
+            return CompletionItemKind::TypeParameter;
+        }
+
+        case clang::Decl::UnresolvedUsingValue:
+        case clang::Decl::UnnamedGlobalConstant:
+        case clang::Decl::TemplateParamObject: {
+            return CompletionItemKind::Constant;
+        }
+
+        case clang::Decl::MSGuid:
+        case clang::Decl::MSProperty:
+        case clang::Decl::Using:
+        case clang::Decl::UsingPack:
+        case clang::Decl::UsingEnum:
+        case clang::Decl::UsingShadow:
+        case clang::Decl::UsingDirective:
+        case clang::Decl::UnresolvedUsingIfExists:
+        case clang::Decl::UnresolvedUsingTypename:
+        case clang::Decl::ConstructorUsingShadow: {
+            /// FIXME: Is it possible that above kinds occur in
+            /// code completion result?
+            llvm_unreachable("Unexpected declaration");
+        }
+
+        /// The following kinds are not `NamedDecl`, we just ignore them.
+        case clang::Decl::TranslationUnit:
+        case clang::Decl::PragmaComment:
+        case clang::Decl::PragmaDetectMismatch:
+        case clang::Decl::ExternCContext:
+        case clang::Decl::ImplicitConceptSpecialization:
+        case clang::Decl::LinkageSpec:
+        case clang::Decl::Export:
+        case clang::Decl::FileScopeAsm:
+        case clang::Decl::TopLevelStmt:
+        case clang::Decl::AccessSpec:
+        case clang::Decl::Friend:
+        case clang::Decl::FriendTemplate:
+        case clang::Decl::StaticAssert:
+        case clang::Decl::Block:
+        case clang::Decl::OutlinedFunction:
+        case clang::Decl::Captured:
+        case clang::Decl::Import:
+        case clang::Decl::Empty:
+        case clang::Decl::RequiresExprBody:
+        case clang::Decl::LifetimeExtendedTemporary:
+
+        case clang::Decl::OMPAllocate:
+        case clang::Decl::OMPRequires:
+        case clang::Decl::OMPDeclareMapper:
+        case clang::Decl::OMPCapturedExpr:
+        case clang::Decl::OMPThreadPrivate:
+        case clang::Decl::OMPDeclareReduction:
+
+        case clang::Decl::ObjCIvar:
+        case clang::Decl::ObjCMethod:
+        case clang::Decl::ObjCProtocol:
+        case clang::Decl::ObjCProperty:
+        case clang::Decl::ObjCCategory:
+        case clang::Decl::ObjCInterface:
+        case clang::Decl::ObjCTypeParam:
+        case clang::Decl::ObjCAtDefsField:
+        case clang::Decl::ObjCPropertyImpl:
+        case clang::Decl::ObjCCategoryImpl:
+        case clang::Decl::ObjCImplementation:
+        case clang::Decl::ObjCCompatibleAlias:
+
+        case clang::Decl::HLSLBuffer: {
+            llvm_unreachable("Invalid code completion item, NamedDecl is expected");
+        }
+    }
+}
+
+/// Calculate the final code completion result.
+class CompletionRender {
+public:
+    CompletionRender(clang::Sema& sema,
+                     std::uint32_t offset,
+                     llvm::StringRef content,
+                     std::vector<CompletionItem>& items,
+                     clang::CodeCompletionContext& cc_context,
+                     const config::CodeCompletionOption& option) :
+        sema(sema), context(sema.getASTContext()), content(content),
+        prefix(CompletionPrefix::from(content, offset)), items(items), macther(prefix.spelling),
+        cc_context(cc_context), option(option) {}
+
+    struct OverloadSet {
+        /// The first declaration of this overload set.
+        const clang::NamedDecl* first;
+
+        /// The score of the overload name.
+        float score;
+
+        /// The count of functions in this overload set.
+        std::uint32_t count;
+    };
+
+    /// Render edit text for declaration.
+    std::string render(const clang::NamedDecl* decl) {
+        return decl->getName().str();
+    }
+
+    void process_candidate(clang::CodeCompletionResult& candidate) {
+        feature::CompletionItem item;
+
+        item.edit.range = prefix.range;
+
+        /// Check whether the name matchs, if so, set the item.
+        auto check_name = [&](llvm::StringRef name) {
+            auto score = macther.match(name);
+            if(!score) {
+                return false;
+            }
+
+            item.label = name;
+            item.score = *score;
+            item.edit.text = item.label;
+            return true;
+        };
+
+        switch(candidate.Kind) {
+            case clang::CodeCompletionResult::RK_Keyword: {
+                if(!check_name(candidate.Keyword)) {
+                    return;
+                }
+
+                item.edit.text = item.label;
+                item.kind = feature::CompletionItemKind::Keyword;
+                item.edit.text = item.label;
+                break;
+            }
+
+            case clang::CodeCompletionResult::RK_Pattern: {
+                auto text = candidate.Pattern->getAllTypedText();
+                if(!check_name(text)) {
+                    return;
+                }
+
+                item.kind = CompletionItemKind::Snippet;
+                item.edit.text = item.label;
+                break;
+            }
+
+            case clang::CodeCompletionResult::RK_Macro: {
+                if(!check_name(candidate.Macro->getName())) {
+                    return;
+                }
+
+                item.kind = feature::CompletionItemKind::Unit;
+                item.edit.text = item.label;
+                break;
+            }
+
+            case clang::CodeCompletionResult::RK_Declaration: {
+                auto declaration = candidate.Declaration;
+                /// if(declaration)
+                ///  auto name = getDeclName();
+                if(!check_name(getDeclName(declaration))) {
+                    return;
+                }
+
+                /// Otherwise just add this declaration.
+                item.kind = completion_kind(declaration);
+
+                /// If bundle_overloads is enabled and this is a function, just
+                /// increase the overload count.
+                if(option.bundle_overloads && item.kind == CompletionItemKind::Function) {
+                    llvm::SmallString<256> qualfied_name;
+                    llvm::raw_svector_ostream os(qualfied_name);
+                    declaration->printQualifiedName(os);
+
+                    auto hash = llvm::xxh3_64bits(qualfied_name);
+                    OverloadSet set{declaration, item.score, 1};
+                    auto [it, success] = overloads.try_emplace(hash, set);
+                    if(!success) {
+                        it->second.count += 1;
+                    }
+                    return;
+                }
+
+                item.edit.text = render(declaration);
             }
         }
 
-        prefix.qualifier = content.slice(rest.size(), prefix.name.begin() - content.begin());
-        return prefix;
+        items.emplace_back(std::move(item));
     }
+
+    /// TODO: Handle dependent name with `TemplateResolver`.
+    void handle_dependent() {
+        /// For qualified name
+        /// auto specifier = context.getCXXScopeSpecifier();
+        /// auto NNS = specifier.value()->getScopeRep();
+
+        /// For member access like a.c
+        /// auto base = context.getBaseType();
+
+        /// Preferred type.
+        /// auto type = context.getPreferredType();
+    }
+
+    ~CompletionRender() {
+        /// Add overload set.
+        for(auto& [_, overload_set]: overloads) {
+            CompletionItem item;
+            item.label = getDeclName(overload_set.first);
+            item.kind = CompletionItemKind::Function;
+            item.score = overload_set.score;
+            item.edit.range = prefix.range;
+
+            if(overload_set.count == 1) {
+                item.edit.text = render(overload_set.first);
+                /// TODO: Render function signature.
+                item.description = "";
+            } else {
+                item.edit.text = item.label;
+                item.description = "(...)";
+            }
+
+            items.emplace_back(std::move(item));
+        }
+    }
+
+private:
+    /// clang `Sema` ref.
+    clang::Sema& sema;
+
+    /// clang `Sema` ref.
+    clang::ASTContext& context;
+
+    /// The content of current completion file.
+    llvm::StringRef content;
+
+    /// The completion prefix.
+    CompletionPrefix prefix;
+
+    /// The fuzzy matcher to score results.
+    FuzzyMatcher macther;
+
+    /// The code completion results.
+    std::vector<CompletionItem>& items;
+
+    /// The code completion context.
+    clang::CodeCompletionContext& cc_context;
+
+    /// A map between overload identifier hash and overloads count.
+    llvm::DenseMap<std::uint64_t, OverloadSet> overloads;
+
+    /// The code completion option.
+    const config::CodeCompletionOption& option;
 };
 
 class CodeCompletionCollector final : public clang::CodeCompleteConsumer {
 public:
-    CodeCompletionCollector(const config::CodeCompletionOption& option, std::uint32_t offset) :
-        clang::CodeCompleteConsumer({}), option(option), offset(offset),
-        info(std::make_shared<clang::GlobalCodeCompletionAllocator>()) {}
+    CodeCompletionCollector(std::uint32_t offset,
+                            std::vector<CompletionItem>& items,
+                            const config::CodeCompletionOption& option) :
+        clang::CodeCompleteConsumer({}), offset(offset),
+        info(std::make_shared<clang::GlobalCodeCompletionAllocator>()), items(items),
+        option(option) {}
 
-    void initCompletionInfo(clang::Sema& sema) {
-        if(init) {
-            return;
-        }
-
-        auto& PP = sema.getPreprocessor();
-        auto& SM = sema.getSourceManager();
-        auto loc = PP.getCodeCompletionLoc();
-        auto content = SM.getBufferData(SM.getFileID(loc));
-
-        prefix = CompletionPrefix::from(content, offset);
-        println("{} {}", prefix.qualifier, prefix.name);
-
-        macther = FuzzyMatcher(prefix.name);
-
-        editRange = {offset, offset};
-
-        /// FIXME: consume the prefix of completion prefix, because we may complete
-        /// full qualified name.
-        assert(editRange.begin > 0);
-
-        while(clang::isAsciiIdentifierContinue(content[editRange.begin - 1])) {
-            editRange.begin -= 1;
-        }
-
-        if(editRange.end < content.size()) {
-            while(clang::isAsciiIdentifierContinue(content[editRange.end])) {
-                editRange.end += 1;
-            }
-        }
-
-        init = true;
+    clang::CodeCompletionAllocator& getAllocator() final {
+        return info.getAllocator();
     }
 
-    bool filter(clang::CodeCompletionResult& result) {
-        // Class members that are shadowed by subclasses are usually noise.
-        if(result.Hidden && result.Declaration && result.Declaration->isCXXClassMember()) {
-            return true;
-        }
-
-        /// TODO: Skip some rarely use functions like destructors?
-
-        /// TODO: Skip injected class name.
-        return false;
+    clang::CodeCompletionTUInfo& getCodeCompletionTUInfo() final {
+        return info;
     }
 
     void ProcessCodeCompleteResults(clang::Sema& sema,
-                                    clang::CodeCompletionContext context,
+                                    clang::CodeCompletionContext cc_context,
                                     clang::CodeCompletionResult* candidates,
                                     unsigned candidates_count) final {
         // Results from recovery mode are generally useless, and the callback after
@@ -114,7 +393,7 @@ public:
         // FIXME: in case there is no future sema completion callback after the
         // recovery mode, we might still want to provide some results (e.g. trivial
         // identifier-based completion).
-        if(context.getKind() == clang::CodeCompletionContext::CCC_Recovery) {
+        if(cc_context.getKind() == clang::CodeCompletionContext::CCC_Recovery) {
             return;
         }
 
@@ -122,87 +401,21 @@ public:
             return;
         }
 
-        /// For qualified name
-        /// auto specifier = context.getCXXScopeSpecifier();
-        /// auto NNS = specifier.value()->getScopeRep();
-
-        /// For member access like a.c
-        /// auto base = context.getBaseType();
-
-        /// Preferred type.
-        /// auto type = context.getPreferredType();
-
-        /// TODO: Handle dependent template name.
-
-        initCompletionInfo(sema);
         /// FIXME: check Sema may run multiple times.
+        auto& src_mgr = sema.getSourceManager();
+        auto content = src_mgr.getBufferData(src_mgr.getMainFileID());
+
+        CompletionRender render(sema, offset, content, items, cc_context, option);
 
         for(auto& candidate: llvm::make_range(candidates, candidates + candidates_count)) {
-            CompletionItem item;
-
-            switch(candidate.Kind) {
-                case clang::CodeCompletionResult::RK_Keyword: {
-                    item.label = candidate.Keyword;
-                    item.kind = CompletionItemKind::Keyword;
-                    break;
-                }
-                case clang::CodeCompletionResult::RK_Pattern: {
-                    item.label = candidate.Pattern->getAllTypedText();
-                    item.kind = CompletionItemKind::Snippet;
-
-                    /// FIXME: Add an option to enable snippet or not.
-                    /// If enable snippet we will render placeholders in CodeCompletionString
-                    /// ourselves. e.g. delete <#expression#>. But for label and ranking
-                    /// we just use all typed text.
-                    break;
-                }
-                case clang::CodeCompletionResult::RK_Macro: {
-                    item.label = candidate.Macro->getName();
-                    item.kind = CompletionItemKind::Unit;
-                    break;
-                }
-                case clang::CodeCompletionResult::RK_Declaration: {
-                    auto decl = candidate.Declaration;
-                    item.label = getDeclName(decl);
-                    item.kind = CompletionItemKind::Function;
-                    break;
-                }
-            }
-
-            /// Fliter rubbish candidates.
-            if(auto score = macther->match(item.label)) {
-                item.score = *score;
-                item.deprecated = false;
-                item.edit.text = item.label;
-                item.edit.range = editRange;
-                completions.emplace_back(item);
-            } else {
-                println("filter {}", item.label);
-            }
+            render.process_candidate(candidate);
         }
     }
 
-    clang::CodeCompletionAllocator& getAllocator() final {
-        return info.getAllocator();
-    }
-
-    clang::CodeCompletionTUInfo& getCodeCompletionTUInfo() final {
-        return info;
-    }
-
-    auto dump() {
-        return std::move(completions);
-    }
-
 private:
-    clang::ASTContext* Ctx;
-    bool init = false;
     std::uint32_t offset;
-    LocalSourceRange editRange;
-    CompletionPrefix prefix;
-    std::optional<FuzzyMatcher> macther;
-    std::vector<CompletionItem> completions;
     clang::CodeCompletionTUInfo info;
+    std::vector<CompletionItem>& items;
     const config::CodeCompletionOption& option;
 };
 
@@ -210,14 +423,15 @@ private:
 
 std::vector<CompletionItem> code_complete(CompilationParams& params,
                                           const config::CodeCompletionOption& option) {
+    std::vector<CompletionItem> items;
     auto& [file, offset] = params.completion;
-    auto consumer = new CodeCompletionCollector(option, offset);
+    auto consumer = new CodeCompletionCollector(offset, items, option);
+
     if(auto info = complete(params, consumer)) {
-        return consumer->dump();
         /// TODO: Handle error here.
-    } else {
-        return {};
     }
+
+    return items;
 }
 
 }  // namespace clice::feature

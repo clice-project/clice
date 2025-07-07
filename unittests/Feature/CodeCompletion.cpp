@@ -65,6 +65,35 @@ void bar() {
     /// or traverse AST to collect interesting names.
 }
 
+TEST_F(CodeCompletion, Functor) {
+
+    code_complete(R"cpp(
+    struct X {
+        void operator() () {}
+    };
+    
+void bar() {
+    X foo;
+    fo$(pos);
+}
+)cpp");
+
+    /// TODO:
+    /// complete lambda as it is a variable.
+}
+
+TEST_F(CodeCompletion, Lambda) {
+    code_complete(R"cpp(
+void bar() {
+    auto foo = [](int x){ };
+    fo$(pos);
+}
+)cpp");
+
+    /// TODO:
+    /// complete lambda as it is a function.
+}
+
 }  // namespace
 
 }  // namespace clice::testing

@@ -63,32 +63,43 @@ enum class CompletionItemKind {
     TypeParameter
 };
 
+/// Represents a single code completion item to be presented to the user.
 struct CompletionItem {
-    /// The label displayed when user select the item.
+    /// The primary label displayed in the completion list.
     std::string label;
 
+    /// Additional details, like a function signature, shown next to the label.
     std::string detail;
 
-    /// TODO:
-    /// std::string sortText;
+    /// A short description of the item, typically its type or namespace.
+    std::string description;
 
+    /// Full documentation for the item, shown on selection or hover.
+    std::string document;
+
+    /// The kind of item (function, class, etc.), used for an icon.
     CompletionItemKind kind;
 
-    bool deprecated;
-
+    /// A score for ranking this item against others. Higher is better.
     float score;
 
+    /// Whether this item is deprecated (often rendered with a strikethrough).
+    bool deprecated;
+
+    /// The text edit to be applied when this item is accepted.
     struct Edit {
+        /// The new text to insert, which may be a snippet.
         std::string text;
 
+        /// The source range to be replaced by the new text.
         LocalSourceRange range;
     } edit;
 };
 
 using CodeCompletionResult = std::vector<CompletionItem>;
 
-CodeCompletionResult code_complete(CompilationParams& params,
-                                   const config::CodeCompletionOption& option);
+std::vector<CompletionItem> code_complete(CompilationParams& params,
+                                          const config::CodeCompletionOption& option);
 
 }  // namespace feature
 
