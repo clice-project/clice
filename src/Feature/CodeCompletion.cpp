@@ -153,7 +153,7 @@ CompletionItemKind completion_kind(const clang::NamedDecl* decl) {
         case clang::Decl::FriendTemplate:
         case clang::Decl::StaticAssert:
         case clang::Decl::Block:
-        case clang::Decl::OutlinedFunction:
+        /// case clang::Decl::OutlinedFunction:
         case clang::Decl::Captured:
         case clang::Decl::Import:
         case clang::Decl::Empty:

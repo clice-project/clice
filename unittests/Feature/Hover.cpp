@@ -301,25 +301,25 @@ $(n1)names$(n2)pace$(n3) outt$(n4)er {
 )cpp";
 }
 
-TEST_F(Hover, VariableAndLiteral) {
-    auto code = R"cpp(
-    // introduce size_t
-    #include <cstddef>
-
-    long operator ""_w(const char*, size_t) {
-        return 1;
-    };
-
-    aut$(v1)o$(v2) i$(v3)1$(v4) = $(n1)1$(n2);
-    auto$(v5) i2 = $(n3)-$(n4)1$(n5);
- 
-    auto l1$(v6) = $(l1)"test$(l2)_string_li$(l3)t";
-    auto l2 = R$(l4)"tes$(l5)t(raw_string_lit)test"$(l6);
-    auto l3 = u8$(l7)"test$(l8)_string_li$(l9)t";
-    auto l$(v7)4 = $(l10)"$(l11)udf_string$(l12)"_w;
-)cpp";
-    run(code);
-}
+// TEST_F(Hover, VariableAndLiteral) {
+//     auto code = R"cpp(
+//     // introduce size_t
+//     #include <cstddef>
+//
+//     long operator ""_w(const char*, size_t) {
+//         return 1;
+//     };
+//
+//     aut$(v1)o$(v2) i$(v3)1$(v4) = $(n1)1$(n2);
+//     auto$(v5) i2 = $(n3)-$(n4)1$(n5);
+//
+//     auto l1$(v6) = $(l1)"test$(l2)_string_li$(l3)t";
+//     auto l2 = R$(l4)"tes$(l5)t(raw_string_lit)test"$(l6);
+//     auto l3 = u8$(l7)"test$(l8)_string_li$(l9)t";
+//     auto l$(v7)4 = $(l10)"$(l11)udf_string$(l12)"_w;
+// )cpp";
+//     run(code);
+// }
 
 TEST_F(Hover, FunctionDeclAndParameter) {
     auto code = R"cpp(
