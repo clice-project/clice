@@ -36,6 +36,9 @@ async::Task<json::Value> Scheduler::semanticToken(std::string path) {
     openFile = &openFiles[path];
     auto content = openFile->content;
     auto AST = openFile->AST;
+    if(!AST) {
+        co_return json::Value(nullptr);
+    }
 
     auto tokens = co_await async::submit([&] { return feature::semanticTokens(*AST); });
 
@@ -106,14 +109,26 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
                                             std::string content) -> async::Task<> {
         CompilationParams params;
         params.arguments = scheduler.database.get_command(path);
-        params.outPath = path::join(config::index.dir, path::filename(path) + ".pch");
+        params.outPath = path::join(config::cache.dir, path::filename(path) + ".pch");
         params.add_remapped_file(path, content, bound);
 
         PCHInfo info;
-        auto result = co_await async::submit([&] { return compile(params, info); });
-        if(!result) {
-            /// FIXME: Fails needs cancel waiting tasks.
-            log::warn("Building PCH fails for {}", path);
+
+        /// PCH file is written until destructing, Add a single block
+        /// for it.
+        bool cond = co_await async::submit([&] {
+            auto result = compile(params, info);
+            if(!result) {
+                log::warn("Building PCH fails for {}, Because: {}", path, result.error());
+                return false;
+            }
+
+            /// TODO: index PCH.
+
+            return true;
+        });
+
+        if(!cond) {
             co_return;
         }
 
@@ -167,19 +182,19 @@ async::Task<> Scheduler::buildAST(std::string path, std::string content) {
     params.pch = {PCH->path, PCH->preamble.size()};
 
     /// Check result
-    auto info = co_await async::submit([&] { return compile(params); });
-    if(!info) {
+    auto AST = co_await async::submit([&] { return compile(params); });
+    if(!AST) {
         /// FIXME: Fails needs cancel waiting tasks.
-        log::warn("Building AST fails for {}", path);
+        log::warn("Building AST fails for {}, Beacuse: {}", path, AST.error());
         co_return;
     }
 
     /// Index the source file.
-    co_await indexer.index(*info);
+    co_await indexer.index(*AST);
 
     file = &openFiles[path];
     /// Update built AST info.
-    file->AST = std::make_shared<CompilationUnit>(std::move(*info));
+    file->AST = std::make_shared<CompilationUnit>(std::move(*AST));
     /// Dispose the task so that it will destroyed when task complete.
     file->ASTBuild.dispose();
 

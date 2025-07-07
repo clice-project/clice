@@ -212,7 +212,7 @@ public:
 
     /// Render edit text for declaration.
     std::string render(const clang::NamedDecl* decl) {
-        return decl->getName().str();
+        return getDeclName(decl);
     }
 
     void process_candidate(clang::CodeCompletionResult& candidate) {

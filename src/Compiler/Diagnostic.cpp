@@ -114,7 +114,7 @@ void dumpArg(clang::DiagnosticsEngine::ArgumentKind kind, std::uint64_t value) {
 bool locationInRange(clang::SourceLocation L,
                      clang::CharSourceRange R,
                      const clang::SourceManager& M) {
-    assert(R.isCharRange());
+    /// assert(R.isCharRange());
     if(!R.isValid() || M.getFileID(R.getBegin()) != M.getFileID(R.getEnd()) ||
        M.getFileID(R.getBegin()) != M.getFileID(L))
         return false;
