@@ -408,13 +408,14 @@ json::Value LSPConverter::convert(llvm::StringRef content,
     json::Array result;
     for(auto& item: items) {
         json::Object object{
-            {"label",    item.label                 },
-            {"kind",     static_cast<int>(item.kind)},
+            {"label", item.label},
+            {"kind", static_cast<int>(item.kind)},
             {"textEdit",
              json::Object{
                  {"newText", item.edit.text},
                  {"range", json::serialize(converter.lookup(item.edit.range))},
-             }                                      },
+             }},
+            {"sortText", std::format("{}", item.score)},
         };
         result.emplace_back(std::move(object));
     }

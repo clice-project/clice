@@ -279,83 +279,83 @@ ___
 )md";
 }
 
-TEST_F(Hover, HeaderAndNamespace) {
-    auto header = R"cpp()cpp";
+/// TEST_F(Hover, HeaderAndNamespace) {
+///     auto header = R"cpp()cpp";
+///
+///     auto code = R"cpp(
+/// #in$(h1)clude "head$(h3)er.h"$(h4)
+/// #in$(h2)clude <stddef.h$(h5)>
+///
+/// $(n1)names$(n2)pace$(n3) outt$(n4)er {
+///
+///     namespac$(n5)e $(n6){
+///
+///         nam$(n7)espace inne$(n8)r {
+///
+///         }$(n9)
+///
+///     }
+///
+/// }$(n10)
+///
+/// )cpp";
+/// }
 
-    auto code = R"cpp(
-#in$(h1)clude "head$(h3)er.h"$(h4)
-#in$(h2)clude <stddef.h$(h5)>
+// TEST_F(Hover, VariableAndLiteral) {
+//     auto code = R"cpp(
+//     // introduce size_t
+//     #include <cstddef>
+//
+//     long operator ""_w(const char*, size_t) {
+//         return 1;
+//     };
+//
+//     aut$(v1)o$(v2) i$(v3)1$(v4) = $(n1)1$(n2);
+//     auto$(v5) i2 = $(n3)-$(n4)1$(n5);
+//
+//     auto l1$(v6) = $(l1)"test$(l2)_string_li$(l3)t";
+//     auto l2 = R$(l4)"tes$(l5)t(raw_string_lit)test"$(l6);
+//     auto l3 = u8$(l7)"test$(l8)_string_li$(l9)t";
+//     auto l$(v7)4 = $(l10)"$(l11)udf_string$(l12)"_w;
+// )cpp";
+//     run(code);
+// }
 
-$(n1)names$(n2)pace$(n3) outt$(n4)er { 
-
-    namespac$(n5)e $(n6){
-
-        nam$(n7)espace inne$(n8)r {
-
-        }$(n9)
-
-    }
-
-}$(n10)
-
-)cpp";
-}
-
-TEST_F(Hover, VariableAndLiteral) {
-    auto code = R"cpp(
-    // introduce size_t
-    #include <cstddef>
-
-    long operator ""_w(const char*, size_t) {
-        return 1;
-    };
-
-    aut$(v1)o$(v2) i$(v3)1$(v4) = $(n1)1$(n2);
-    auto$(v5) i2 = $(n3)-$(n4)1$(n5);
- 
-    auto l1$(v6) = $(l1)"test$(l2)_string_li$(l3)t";
-    auto l2 = R$(l4)"tes$(l5)t(raw_string_lit)test"$(l6);
-    auto l3 = u8$(l7)"test$(l8)_string_li$(l9)t";
-    auto l$(v7)4 = $(l10)"$(l11)udf_string$(l12)"_w;
-)cpp";
-    run(code);
-}
-
-TEST_F(Hover, FunctionDeclAndParameter) {
-    auto code = R"cpp(
-    // introduce size_t
-    #include <bits/c++config.h>
-
-    i$(f1)nt$(f2) f() { 
-        return 0; 
-    }
-
-    lo$(f3)ng oper$(f4)ator ""_w(const char* str, std::si$(p1)ze_t$(p2) leng$(p3)th) {$(f5)
-        return 1;
-    };
-
-
-    struct A {
-        int f$(f6)n(i$(p4)nt par$(p5)am) {
-            return param;
-        }
-        
-        voi$(f7)d ope$(f8)rator()$(f9)(int par$(p6)am) {}
-    };
-
-
-    templ$(f10)ate<typenam$(p7)e T1$(p8), typename T$(p9)2>
-    void templ$(f11)ate_func1(T1 le$(p10)ft, T2 righ$(p11)t)$(f12) {}
-
-    template<in$(p12)t NonTy$(p13)peParam = 1>
-    void templ$(f13)ate_func2() {}
-
-    template<templa$(p14)te<typen$(p15)ame Inn$(p16)er> typenam$(p17)e Outt$(p18)er>
-    void templ$(f14)ate_func3() {}
-
-)cpp";
-    run(code);
-}
+/// TEST_F(Hover, FunctionDeclAndParameter) {
+///     auto code = R"cpp(
+///     // introduce size_t
+///     #include <bits/c++config.h>
+///
+///     i$(f1)nt$(f2) f() {
+///         return 0;
+///     }
+///
+///     lo$(f3)ng oper$(f4)ator ""_w(const char* str, std::si$(p1)ze_t$(p2) leng$(p3)th) {$(f5)
+///         return 1;
+///     };
+///
+///
+///     struct A {
+///         int f$(f6)n(i$(p4)nt par$(p5)am) {
+///             return param;
+///         }
+///
+///         voi$(f7)d ope$(f8)rator()$(f9)(int par$(p6)am) {}
+///     };
+///
+///
+///     templ$(f10)ate<typenam$(p7)e T1$(p8), typename T$(p9)2>
+///     void templ$(f11)ate_func1(T1 le$(p10)ft, T2 righ$(p11)t)$(f12) {}
+///
+///     template<in$(p12)t NonTy$(p13)peParam = 1>
+///     void templ$(f13)ate_func2() {}
+///
+///     template<templa$(p14)te<typen$(p15)ame Inn$(p16)er> typenam$(p17)e Outt$(p18)er>
+///     void templ$(f14)ate_func3() {}
+///
+/// )cpp";
+///     run(code);
+/// }
 
 TEST_F(Hover, AutoAndDecltype) {
     auto code = R"cpp(

@@ -168,6 +168,10 @@ void CompilationDatabase::add_command(this Self& self,
     auto path_ = self.save_string(path);
     auto new_args = self.save_args(args);
 
+    /// FIXME: Use a better way to handle resource dir.
+    /// new_args.push_back(self.save_string(std::format("-resource-dir={}",
+    /// fs::resource_dir)).data());
+
     auto it = self.commands.find(path_.data());
     if(it == self.commands.end()) {
         self.commands.try_emplace(path_.data(),

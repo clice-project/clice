@@ -141,6 +141,11 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
         return std::unexpected(std::format("Failed to execute action, because {} ", error));
     }
 
+    if(instance->getDiagnostics().hasFatalErrorOccurred()) {
+        action->EndSourceFile();
+        return report_diagnostics("Fetal error occured!!!", *diagnostics);
+    }
+
     std::optional<clang::syntax::TokenBuffer> tokBuf;
     if(tokCollector) {
         tokBuf = std::move(*tokCollector).consume();
