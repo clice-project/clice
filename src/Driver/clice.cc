@@ -16,6 +16,7 @@ cl::opt<std::string>
     mode("mode",
          cl::cat(category),
          cl::value_desc("pipe|socket|indexer"),
+         cl::init("pipe"),
          cl::desc("The mode of clice, default is pipe, socket is usually used for debugging"));
 
 cl::opt<std::string> config_path(
