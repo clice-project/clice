@@ -32,7 +32,7 @@ public:
     class Guard {
     public:
         Guard(Lock* lock) : lock(lock) {
-            assert(lock->locked && "Guard: already locked");
+            assert(lock->locked && "Guard: should be locked");
         }
 
         Guard(Guard&& other) : lock(other.lock) {

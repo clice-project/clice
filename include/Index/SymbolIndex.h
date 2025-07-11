@@ -10,7 +10,7 @@
 
 namespace clice::index {
 
-class Symbol;
+struct Symbol;
 
 struct Relation : Relative {
     /// Return the relation kind.
@@ -22,7 +22,7 @@ struct Relation : Relative {
     /// Return the definition range.
     LocalSourceRange sourceRange() const;
 
-    /// The the target symbol.
+    /// The target symbol.
     Symbol target() const;
 };
 

@@ -59,12 +59,7 @@ struct Occurrence {
 struct RawIndex {
 public:
     Symbol& get_symbol(SymbolID ID) {
-        if(auto it = symbols.find(ID); it != symbols.end()) {
-            return it->second;
-        }
-
         /// If not found, create a new symbol and return it.
-        auto symbol_ref = symbols.size();
         auto [it, _] = symbols.try_emplace(ID, Symbol{.id = ID});
         return it->second;
     }
