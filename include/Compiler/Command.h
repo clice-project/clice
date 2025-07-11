@@ -15,6 +15,8 @@ class CompilationDatabase {
 public:
     using Self = CompilationDatabase;
 
+    CompilationDatabase();
+
     /// Update the compile commands with the given file.
     void update_commands(this Self& self, llvm::StringRef file);
 
@@ -38,7 +40,10 @@ public:
                      llvm::StringRef command,
                      Style style = Style::GNU);
 
-    llvm::ArrayRef<const char*> get_command(this Self& self, llvm::StringRef path);
+    std::vector<const char*> get_command(this Self& self,
+                                         llvm::StringRef path,
+                                         bool query_driver = false,
+                                         bool append_resource_dir = false);
 
 private:
     /// Save a string into memory pool. Make sure end with `\0`.
@@ -54,6 +59,9 @@ private:
     /// **Note that** this only includes module interface unit, for module
     /// implementation unit, the scan could be delayed until compiling it.
     llvm::StringMap<std::string> moduleMap;
+
+    /// An opt to add resource dir, like `-resource-dir=xxx`.
+    llvm::StringRef resource_dir_opt;
 
     /// Memory pool for command arguments.
     llvm::BumpPtrAllocator memory_pool;

@@ -6,7 +6,10 @@
 
 namespace clice {
 
-/// Update the compile commands with the given file.
+CompilationDatabase::CompilationDatabase() {
+    resource_dir_opt = save_string(std::format("-resource-dir={}", fs::resource_dir));
+}
+
 void CompilationDatabase::update_commands(this Self& self, llvm::StringRef filename) {
     auto path = path::real_path(filename);
     filename = path;
@@ -97,12 +100,10 @@ void CompilationDatabase::update_commands(this Self& self, llvm::StringRef filen
     log::info("Successfully built module map, total {0} modules", self.moduleMap.size());
 }
 
-/// Update the module map with the given file and module name.
 void CompilationDatabase::update_module(llvm::StringRef file, llvm::StringRef name) {
     moduleMap[path::real_path(file)] = file;
 }
 
-/// Lookup the module interface unit file path of the given module name.
 llvm::StringRef CompilationDatabase::get_module_file(llvm::StringRef name) {
     auto iter = moduleMap.find(name);
     if(iter == moduleMap.end()) {
@@ -181,15 +182,24 @@ void CompilationDatabase::add_command(this Self& self,
     }
 }
 
-llvm::ArrayRef<const char*> CompilationDatabase::get_command(this Self& self,
-                                                             llvm::StringRef path) {
+std::vector<const char*> CompilationDatabase::get_command(this Self& self,
+                                                          llvm::StringRef path,
+                                                          bool query_driver,
+                                                          bool append_resource_dir) {
+    std::vector<const char*> result;
     auto path_ = self.save_string(path);
     auto it = self.commands.find(path_.data());
     if(it != self.commands.end()) {
-        return *it->second;
-    } else {
-        return {};
+        result = *it->second;
     }
+
+    if(append_resource_dir) {
+        result.emplace_back(self.resource_dir_opt.data());
+    }
+
+    /// TODO: query driver.
+
+    return result;
 }
 
 }  // namespace clice

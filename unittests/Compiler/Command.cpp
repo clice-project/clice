@@ -37,6 +37,19 @@ TEST(Command, Reuse) {
     EXPECT_EQ(command2[2], "test2.cpp"sv);
 }
 
+TEST(Command, ResourceDir) {
+    CompilationDatabase database;
+    database.add_command("test.cpp", "clang++ -std=c++23 test.cpp");
+    auto command = database.get_command("test.cpp", false, true);
+    ASSERT_EQ(command.size(), 4);
+
+    using namespace std::literals;
+    EXPECT_EQ(command[0], "clang++"sv);
+    EXPECT_EQ(command[1], "-std=c++23"sv);
+    EXPECT_EQ(command[2], "test.cpp"sv);
+    EXPECT_EQ(command[3], std::format("-resource-dir={}", fs::resource_dir));
+}
+
 TEST(Command, Merge) {}
 
 TEST(Command, Filter) {}
