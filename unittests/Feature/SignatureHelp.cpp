@@ -19,9 +19,7 @@ int main() {
 )cpp";
 
     CompilationParams params;
-    std::vector<const char*> arguments = {"clang++", "-std=c++20", "main.cpp"};
-    params.arguments = arguments;
-
+    params.arguments = {"clang++", "-std=c++20", "main.cpp"};
     params.add_remapped_file("main.cpp", code);
     /// params.completion = {"main.cpp", 9, 10};
 

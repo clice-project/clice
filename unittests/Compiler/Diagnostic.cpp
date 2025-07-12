@@ -9,26 +9,17 @@ namespace {
 using namespace clice;
 
 TEST(Diagnostic, CommandError) {
-    std::vector<const char*> arguments = {
-        "clang++",
-    };
-
     CompilationParams params;
     /// miss input file.
-    params.arguments = arguments;
+    params.arguments = {"clang++"};
     params.add_remapped_file("main.cpp", "int main() { return 0; }");
     auto unit = compile(params);
     ASSERT_FALSE(unit);
 }
 
 TEST(Diagnostic, Error) {
-    std::vector<const char*> arguments = {
-        "clang++",
-        "main.cpp",
-    };
-
     CompilationParams params;
-    params.arguments = arguments;
+    params.arguments = {"clang++", "main.cpp"};
     params.add_remapped_file("main.cpp", "int main() { return 0 }");
     auto unit = compile(params);
     ASSERT_TRUE(unit);

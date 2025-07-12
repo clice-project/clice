@@ -9,9 +9,7 @@ struct CodeCompletion : TestFixture {
     auto code_complete(llvm::StringRef code) {
         Annotation annotation = {code};
         CompilationParams params;
-        std::vector<const char*> arguments = {"clang++", "-std=c++20", "main.cpp"};
-        params.arguments = arguments;
-
+        params.arguments = {"clang++", "-std=c++20", "main.cpp"};
         params.completion = {"main.cpp", annotation.offset("pos")};
         params.add_remapped_file("main.cpp", annotation.source());
 
