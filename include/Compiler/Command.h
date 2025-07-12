@@ -4,8 +4,54 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Allocator.h"
+#include <deque>
 
 namespace clice {
+
+// Removes args from a command-line in a semantically-aware way.
+//
+// Internally this builds a large (0.5MB) table of clang options on first use.
+// Both strip() and process() are fairly cheap after that.
+//
+// FIXME: this reimplements much of OptTable, it might be nice to expose more.
+// The table-building strategy may not make sense outside clangd.
+class ArgStripper {
+public:
+    ArgStripper() = default;
+    ArgStripper(ArgStripper&&) = default;
+    ArgStripper(const ArgStripper&) = delete;
+    ArgStripper& operator= (ArgStripper&&) = default;
+    ArgStripper& operator= (const ArgStripper&) = delete;
+
+    // Adds the arg to the set which should be removed.
+    //
+    // Recognized clang flags are stripped semantically. When "-I" is stripped:
+    //  - so is its value (either as -Ifoo or -I foo)
+    //  - aliases like --include-directory=foo are also stripped
+    //  - CL-style /Ifoo will be removed if the args indicate MS-compatible mode
+    // Compile args not recognized as flags are removed literally, except:
+    //  - strip("ABC*") will remove any arg with an ABC prefix.
+    //
+    // In either case, the -Xclang prefix will be dropped if present.
+    void strip(llvm::StringRef arg);
+    // Remove the targets from a compile command, in-place.
+    void process(std::vector<const char*>& args) const;
+
+private:
+    // Deletion rules, to be checked for each arg.
+    struct Rule {
+        llvm::StringRef text;      // Rule applies only if arg begins with Text.
+        unsigned char modes = 0;   // Rule applies only in specified driver modes.
+        uint16_t priority = 0;     // Lower is better.
+        uint16_t exact_args = 0;   // Num args consumed when Arg == Text.
+        uint16_t prefix_args = 0;  // Num args consumed when Arg starts with Text.
+    };
+
+    static llvm::ArrayRef<Rule> rulesFor(llvm::StringRef arg);
+    const Rule* matching_rule(llvm::StringRef arg, unsigned mode, unsigned& arg_count) const;
+    llvm::SmallVector<Rule> rules;
+    std::deque<std::string> storage;  // Store strings not found in option table.
+};
 
 /// `CompilationDatabase` is responsible for managing the compile commands.
 ///
@@ -44,6 +90,8 @@ public:
                                          llvm::StringRef path,
                                          bool query_driver = false,
                                          bool append_resource_dir = false);
+
+    struct Rule {};
 
 private:
     /// Save a string into memory pool. Make sure end with `\0`.

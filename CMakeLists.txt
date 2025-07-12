@@ -93,6 +93,7 @@ if(NOT WIN32)
     target_link_libraries(clice-core PUBLIC
         LLVMSupport
         LLVMFrontendOpenMP
+        LLVMOption
         clangAST
         clangASTMatchers
         clangBasic
@@ -135,7 +136,7 @@ if(CLICE_ENABLE_TEST)
     )
     FetchContent_MakeAvailable(googletest)
 
-    target_link_libraries(unit_tests PRIVATE  gtest_main clice-core)
+    target_link_libraries(unit_tests PRIVATE gtest_main clice-core)
 
     # integration_tests
     add_executable(integration_tests "${CMAKE_SOURCE_DIR}/src/Driver/integration_tests.cc")
