@@ -72,10 +72,6 @@ public:
     /// Lookup the module interface unit file path of the given module name.
     llvm::StringRef get_module_file(llvm::StringRef name);
 
-    auto size() const {
-        return commands.size();
-    }
-
     enum class Style {
         GNU = 0,
         MSVC,
@@ -100,6 +96,8 @@ private:
     std::vector<const char*> save_args(this Self& self, llvm::ArrayRef<const char*> args);
 
 private:
+    ArgStripper stripper;
+
     /// For C++20 module, we only can got dependent module name
     /// in source context. But we need dependent module file path
     /// to build PCM. So we will scan(preprocess) all project files

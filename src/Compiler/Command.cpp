@@ -287,6 +287,10 @@ void ArgStripper::process(std::vector<const char*>& args) const {
 
 CompilationDatabase::CompilationDatabase() {
     resource_dir_opt = save_string(std::format("-resource-dir={}", fs::resource_dir));
+
+    /// Add arguments that we want to remove.
+    stripper.strip("-o");
+    stripper.strip("-c");
 }
 
 void CompilationDatabase::update_commands(this Self& self, llvm::StringRef filename) {
@@ -451,6 +455,8 @@ void CompilationDatabase::add_command(this Self& self,
     /// FIXME: Use a better way to handle resource dir.
     /// new_args.push_back(self.save_string(std::format("-resource-dir={}",
     /// fs::resource_dir)).data());
+
+    self.stripper.process(new_args);
 
     auto it = self.commands.find(path_.data());
     if(it == self.commands.end()) {
