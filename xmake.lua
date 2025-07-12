@@ -62,6 +62,7 @@ target("clice-core")
             links = {
                 "LLVMSupport",
                 "LLVMFrontendOpenMP",
+                "LLVMOption",
                 "clangAST",
                 "clangASTMatchers",
                 "clangBasic",
