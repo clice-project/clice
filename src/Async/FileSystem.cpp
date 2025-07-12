@@ -73,6 +73,7 @@ struct stat : fs<stat, Stats> {
     auto result() {
         Stats stats;
         stats.mtime = std::chrono::milliseconds(request.statbuf.st_mtim.tv_sec * 1000);
+        stats.size = request.statbuf.st_size;
         return stats;
     }
 };
@@ -141,6 +142,12 @@ Result<ssize_t> read(const handle& handle, char* buffer, std::size_t size) {
 }
 
 Result<std::string> read(std::string path, Mode mode) {
+    /// First stat the file to check if it exists, and to get the size
+    auto stats = co_await stat(path);
+    if(!stats) {
+        co_return std::unexpected(stats.error());
+    }
+
     /// Open the file.
     auto file = co_await open(path, mode);
     if(!file) {
@@ -149,6 +156,7 @@ Result<std::string> read(std::string path, Mode mode) {
 
     /// Read the file content.
     std::string content;
+    content.reserve(stats->size + 1);
 
     char buffer[4096];
     while(true) {

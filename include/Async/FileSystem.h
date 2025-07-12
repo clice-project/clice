@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 
 #include "libuv.h"
 #include "Task.h"
@@ -85,6 +86,7 @@ Result<void> write(std::string path,
 
 struct Stats {
     std::chrono::milliseconds mtime;
+    size_t size;
 };
 
 Result<Stats> stat(std::string path);
