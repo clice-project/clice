@@ -58,11 +58,6 @@ public:
     /// Get an the option for specific argument.
     static std::optional<std::uint32_t> get_option_id(llvm::StringRef argument);
 
-    void add_filter(this Self& self, std::uint32_t id);
-
-    /// Add a filter.
-    void add_filter(this Self& self, llvm::StringRef arg);
-
     /// Update with arguments.
     auto update_command(this Self& self,
                         llvm::StringRef dictionary,

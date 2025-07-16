@@ -93,30 +93,6 @@ std::optional<std::uint32_t> CompilationDatabase::get_option_id(llvm::StringRef 
     }
 }
 
-void CompilationDatabase::add_filter(this Self& self, std::uint32_t id) {
-    self.filtered_options.insert(id);
-}
-
-void CompilationDatabase::add_filter(this Self& self, llvm::StringRef arg) {
-    auto& table = clang::driver::getDriverOptTable();
-
-    llvm::SmallString<64> buffer = arg;
-
-    if(arg.ends_with("=")) {
-        buffer += "placeholder";
-    }
-
-    unsigned index = 0;
-    std::array arguments = {buffer.c_str(), "placeholder"};
-    llvm::opt::InputArgList arg_list(arguments.begin(), arguments.end());
-
-    if(auto arg = table.ParseOneArg(arg_list, index)) {
-        self.filtered_options.insert(arg->getOption().getID());
-    } else {
-        llvm::errs() << "Fail to parse argument" << "\n";
-    }
-}
-
 auto CompilationDatabase::update_command(this Self& self,
                                          llvm::StringRef dictionary,
                                          llvm::StringRef file,
