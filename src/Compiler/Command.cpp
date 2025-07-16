@@ -118,9 +118,9 @@ void CompilationDatabase::add_filter(this Self& self, llvm::StringRef arg) {
 }
 
 auto CompilationDatabase::update_command(this Self& self,
-                                          llvm::StringRef dictionary,
-                                          llvm::StringRef file,
-                                          llvm::ArrayRef<const char*> arguments) -> UpdateInfo {
+                                         llvm::StringRef dictionary,
+                                         llvm::StringRef file,
+                                         llvm::ArrayRef<const char*> arguments) -> UpdateInfo {
     file = self.save_string(file);
     dictionary = self.save_string(dictionary);
 
@@ -234,9 +234,9 @@ auto CompilationDatabase::update_command(this Self& self,
 }
 
 auto CompilationDatabase::update_command(this Self& self,
-                                          llvm::StringRef dictionary,
-                                          llvm::StringRef file,
-                                          llvm::StringRef command) -> UpdateInfo {
+                                         llvm::StringRef dictionary,
+                                         llvm::StringRef file,
+                                         llvm::StringRef command) -> UpdateInfo {
     llvm::BumpPtrAllocator local;
     llvm::StringSaver saver(local);
 

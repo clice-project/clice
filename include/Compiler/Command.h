@@ -112,11 +112,11 @@ struct DenseMapInfo<llvm::ArrayRef<const char*>> {
     using T = llvm::ArrayRef<const char*>;
 
     inline static T getEmptyKey() {
-        return T(reinterpret_cast<T::const_pointer>(~0), std::uint32_t(0));
+        return T(reinterpret_cast<T::const_pointer>(~0), T::size_type(0));
     }
 
     inline static T getTombstoneKey() {
-        return T(reinterpret_cast<T::const_pointer>(~1), std::uint32_t(0));
+        return T(reinterpret_cast<T::const_pointer>(~1), T::size_type(0));
     }
 
     static unsigned getHashValue(const T& value) {
