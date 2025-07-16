@@ -4,121 +4,128 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Allocator.h"
+#include "llvm/ADT/ArrayRef.h"
 #include <deque>
 
 namespace clice {
 
-// Removes args from a command-line in a semantically-aware way.
-//
-// Internally this builds a large (0.5MB) table of clang options on first use.
-// Both strip() and process() are fairly cheap after that.
-//
-// FIXME: this reimplements much of OptTable, it might be nice to expose more.
-// The table-building strategy may not make sense outside clangd.
-class ArgStripper {
-public:
-    ArgStripper() = default;
-    ArgStripper(ArgStripper&&) = default;
-    ArgStripper(const ArgStripper&) = delete;
-    ArgStripper& operator= (ArgStripper&&) = default;
-    ArgStripper& operator= (const ArgStripper&) = delete;
-
-    // Adds the arg to the set which should be removed.
-    //
-    // Recognized clang flags are stripped semantically. When "-I" is stripped:
-    //  - so is its value (either as -Ifoo or -I foo)
-    //  - aliases like --include-directory=foo are also stripped
-    //  - CL-style /Ifoo will be removed if the args indicate MS-compatible mode
-    // Compile args not recognized as flags are removed literally, except:
-    //  - strip("ABC*") will remove any arg with an ABC prefix.
-    //
-    // In either case, the -Xclang prefix will be dropped if present.
-    void strip(llvm::StringRef arg);
-    // Remove the targets from a compile command, in-place.
-    void process(std::vector<const char*>& args) const;
-
-private:
-    // Deletion rules, to be checked for each arg.
-    struct Rule {
-        llvm::StringRef text;      // Rule applies only if arg begins with Text.
-        unsigned char modes = 0;   // Rule applies only in specified driver modes.
-        uint16_t priority = 0;     // Lower is better.
-        uint16_t exact_args = 0;   // Num args consumed when Arg == Text.
-        uint16_t prefix_args = 0;  // Num args consumed when Arg starts with Text.
-    };
-
-    static llvm::ArrayRef<Rule> rulesFor(llvm::StringRef arg);
-    const Rule* matching_rule(llvm::StringRef arg, unsigned mode, unsigned& arg_count) const;
-    llvm::SmallVector<Rule> rules;
-    std::deque<std::string> storage;  // Store strings not found in option table.
-};
-
-/// `CompilationDatabase` is responsible for managing the compile commands.
-///
-/// FIXME: currently we assume that a file only occurs once in the CDB.
-/// This is not always correct, but it is enough for now.
 class CompilationDatabase {
 public:
     using Self = CompilationDatabase;
 
-    CompilationDatabase();
-
-    /// Update the compile commands with the given file.
-    void update_commands(this Self& self, llvm::StringRef file);
-
-    /// Update the module map with the given file and module name.
-    void update_module(llvm::StringRef file, llvm::StringRef name);
-
-    /// Lookup the module interface unit file path of the given module name.
-    llvm::StringRef get_module_file(llvm::StringRef name);
-
-    enum class Style {
-        GNU = 0,
-        MSVC,
+    enum class UpdateKind : std::uint8_t {
+        Unchange,
+        Create,
+        Update,
+        Delete,
     };
 
-    void add_command(this Self& self,
-                     llvm::StringRef path,
-                     llvm::StringRef command,
-                     Style style = Style::GNU);
+    struct CommandInfo {
+        /// TODO: add sysroot or no stdinc command info.
+        llvm::StringRef dictionary;
 
-    std::vector<const char*> get_command(this Self& self,
-                                         llvm::StringRef path,
-                                         bool query_driver = false,
-                                         bool append_resource_dir = false);
+        /// The canonical command list.
+        llvm::ArrayRef<const char*> arguments;
+    };
 
-    struct Rule {};
+    struct DriverInfo {};
+
+    struct UpdateInfo {
+        /// The kind of update.
+        UpdateKind kind;
+
+        llvm::StringRef file;
+
+        /// The info of updated command.
+        CommandInfo cmd_info;
+    };
+
+    struct LookupInfo {
+        llvm::StringRef dictionary;
+
+        std::vector<const char*> arguments;
+    };
 
 private:
-    /// Save a string into memory pool. Make sure end with `\0`.
-    llvm::StringRef save_string(this Self& self, llvm::StringRef string);
+    auto save_string(this Self& self, llvm::StringRef string) -> llvm::StringRef;
 
-    std::vector<const char*> save_args(this Self& self, llvm::ArrayRef<const char*> args);
+    auto save_arguments(this Self& self, llvm::ArrayRef<const char*> arguments)
+        -> llvm::ArrayRef<const char*>;
+
+public:
+    CompilationDatabase();
+
+    /// Get an the option for specific argument.
+    static std::optional<std::uint32_t> get_option_id(llvm::StringRef argument);
+
+    void add_filter(this Self& self, std::uint32_t id);
+
+    /// Add a filter.
+    void add_filter(this Self& self, llvm::StringRef arg);
+
+    /// Update with arguments.
+    auto update_command(this Self& self,
+                        llvm::StringRef dictionary,
+                        llvm::StringRef file,
+                        llvm::ArrayRef<const char*> arguments) -> UpdateInfo;
+
+    /// Update with full command.
+    auto update_command(this Self& self,
+                        llvm::StringRef dictionary,
+                        llvm::StringRef file,
+                        llvm::StringRef command) -> UpdateInfo;
+
+    /// Update commands from json file and return all updated file.
+    auto load_commands(this Self& self, llvm::StringRef json_content)
+        -> std::expected<std::vector<UpdateInfo>, std::string>;
+
+    auto get_command(this Self& self, llvm::StringRef file) -> LookupInfo;
 
 private:
-    ArgStripper stripper;
+    /// The memory pool to hold all cstring and command list.
+    llvm::BumpPtrAllocator allocator;
 
-    /// For C++20 module, we only can got dependent module name
-    /// in source context. But we need dependent module file path
-    /// to build PCM. So we will scan(preprocess) all project files
-    /// to build a module map between module name and module file path.
-    /// **Note that** this only includes module interface unit, for module
-    /// implementation unit, the scan could be delayed until compiling it.
-    llvm::StringMap<std::string> moduleMap;
+    /// A cache between input string and its cache cstring
+    /// in the allocator, make sure end with `\0`.
+    llvm::DenseSet<llvm::StringRef> string_cache;
 
-    /// An opt to add resource dir, like `-resource-dir=xxx`.
-    llvm::StringRef resource_dir_opt;
+    /// A cache between input command and its cache array
+    /// in the allocator.
+    llvm::DenseSet<llvm::ArrayRef<const char*>> arguments_cache;
 
-    /// Memory pool for command arguments.
-    llvm::BumpPtrAllocator memory_pool;
+    /// The clang options we want to filter in all cases, like -c and -o.
+    llvm::DenseSet<std::uint32_t> filtered_options;
 
-    /// For lookup whether we already have the key.
-    llvm::DenseSet<llvm::StringRef> unique;
+    /// A map between file path and its canonical command list.
+    llvm::DenseMap<const void*, CommandInfo> command_infos;
 
-    // A map between file path and compile commands.
-    /// TODO: Path cannot represent unique file, we should use better, like inode ...
-    llvm::DenseMap<const char*, std::unique_ptr<std::vector<const char*>>> commands;
+    /// A map between driver path and its query driver info.
+    llvm::DenseMap<const void*, DriverInfo> driver_infos;
 };
 
 }  // namespace clice
 
+namespace llvm {
+
+template <>
+struct DenseMapInfo<llvm::ArrayRef<const char*>> {
+    using T = llvm::ArrayRef<const char*>;
+
+    inline static T getEmptyKey() {
+        return T(reinterpret_cast<T::const_pointer>(~0), std::uint32_t(0));
+    }
+
+    inline static T getTombstoneKey() {
+        return T(reinterpret_cast<T::const_pointer>(~1), std::uint32_t(0));
+    }
+
+    static unsigned getHashValue(const T& value) {
+        return llvm::hash_combine_range(value.begin(), value.end());
+    }
+
+    static bool isEqual(const T& lhs, const T& rhs) {
+        return lhs == rhs;
+    }
+};
+
+}  // namespace llvm

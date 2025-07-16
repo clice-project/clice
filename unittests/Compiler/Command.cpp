@@ -1,5 +1,7 @@
 #include "Test/Test.h"
 #include "Compiler/Command.h"
+#include "clang/Driver/Driver.h"
+#include "llvm/Support/CommandLine.h"
 
 namespace clice::testing {
 
@@ -25,170 +27,122 @@ std::string printArgv(llvm::ArrayRef<const char*> args) {
     return std::move(os.str());
 }
 
-std::string strip(llvm::StringRef arg, llvm::StringRef argv) {
-    llvm::SmallVector<llvm::StringRef> parts;
-    llvm::SplitString(argv, parts);
-    std::vector<const char*> args;
-    std::deque<std::string> args_storage;
-    for(auto part: parts) {
-        args_storage.emplace_back(part);
-        args.emplace_back(args_storage.back().c_str());
-    }
-    ArgStripper S;
-    S.strip(arg);
-    S.process(args);
-    return printArgv(args);
-}
+void parse_and_dump(llvm::StringRef command) {
+    llvm::BumpPtrAllocator local;
+    llvm::StringSaver saver(local);
 
-TEST(Command, Strip) {
-    // May use alternate prefixes.
-    EXPECT_EQ(strip("-pedantic", "clang -pedantic foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("-pedantic", "clang --pedantic foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("--pedantic", "clang -pedantic foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("--pedantic", "clang --pedantic foo.cc"), "clang foo.cc");
-    // May use alternate names.
-    EXPECT_EQ(strip("-x", "clang -x c++ foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("-x", "clang --language=c++ foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("--language=", "clang -x c++ foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("--language=", "clang --language=c++ foo.cc"), "clang foo.cc");
+    llvm::SmallVector<const char*, 32> arguments;
+    auto [driver, _] = command.split(' ');
+    driver = path::filename(driver);
 
-    /// UnknownFlag.
-    EXPECT_EQ(strip("-xyzzy", "clang -xyzzy foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("-xyz*", "clang -xyzzy foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("-xyzzy", "clang -Xclang -xyzzy foo.cc"), "clang foo.cc");
-
-    // Flags may be -Xclang escaped.
-    EXPECT_EQ(strip("-ast-dump", "clang -Xclang -ast-dump foo.cc"), "clang foo.cc");
-    // args may be -Xclang escaped.
-    EXPECT_EQ(strip("-add-plugin", "clang -Xclang -add-plugin -Xclang z foo.cc"), "clang foo.cc");
-
-    // /I is a synonym for -I in clang-cl mode only.
-    // Not stripped by default.
-    EXPECT_EQ(strip("-I", "clang -I /usr/inc /Interesting/file.cc"), "clang /Interesting/file.cc");
-    // Stripped when invoked as clang-cl.
-    EXPECT_EQ(strip("-I", "clang-cl -I /usr/inc /Interesting/file.cc"), "clang-cl");
-    // Stripped when invoked as CL.EXE
-    EXPECT_EQ(strip("-I", "CL.EXE -I /usr/inc /Interesting/file.cc"), "CL.EXE");
-    // Stripped when passed --driver-mode=cl.
-    EXPECT_EQ(strip("-I", "cc -I /usr/inc /Interesting/file.cc --driver-mode=cl"),
-              "cc --driver-mode=cl");
-
-    // Flag
-    EXPECT_EQ(strip("-Qn", "clang -Qn foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("-Qn", "clang -QnZ foo.cc"), "clang -QnZ foo.cc");
-    // Joined
-    EXPECT_EQ(strip("-std=", "clang -std= foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("-std=", "clang -std=c++11 foo.cc"), "clang foo.cc");
-    // Separate
-    EXPECT_EQ(strip("-mllvm", "clang -mllvm X foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("-mllvm", "clang -mllvmX foo.cc"), "clang -mllvmX foo.cc");
-    // RemainingArgsJoined
-    EXPECT_EQ(strip("/link", "clang-cl /link b c d foo.cc"), "clang-cl");
-    EXPECT_EQ(strip("/link", "clang-cl /linka b c d foo.cc"), "clang-cl");
-    // CommaJoined
-    EXPECT_EQ(strip("-Wl,", "clang -Wl,x,y foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("-Wl,", "clang -Wl, foo.cc"), "clang foo.cc");
-    // MultiArg
-    EXPECT_EQ(strip("-segaddr", "clang -segaddr a b foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("-segaddr", "clang -segaddra b foo.cc"), "clang -segaddra b foo.cc");
-    // JoinedOrSeparate
-    EXPECT_EQ(strip("-G", "clang -GX foo.cc"), "clang foo.cc");
-    EXPECT_EQ(strip("-G", "clang -G X foo.cc"), "clang foo.cc");
-    // JoinedAndSeparate
-    EXPECT_EQ(strip("-plugin-arg-", "clang -cc1 -plugin-arg-X Y foo.cc"), "clang -cc1 foo.cc");
-    EXPECT_EQ(strip("-plugin-arg-", "clang -cc1 -plugin-arg- Y foo.cc"), "clang -cc1 foo.cc");
-
-    // When we hit the end-of-args prematurely, we don't crash.
-    // We consume the incomplete args if we've matched the target option.
-    EXPECT_EQ(strip("-I", "clang -Xclang"), "clang -Xclang");
-    EXPECT_EQ(strip("-I", "clang -Xclang -I"), "clang");
-    EXPECT_EQ(strip("-I", "clang -I -Xclang"), "clang");
-    EXPECT_EQ(strip("-I", "clang -I"), "clang");
-
-    {
-        ArgStripper s;
-        s.strip("-o");
-        s.strip("-c");
-        std::vector<const char*> args = {"clang", "-o", "foo.o", "foo.cc", "-c"};
-        s.process(args);
-        EXPECT_EQ(args, std::vector{"clang", "foo.cc"});
+    /// FIXME: Use a better to handle this.
+    if(driver.starts_with("cl") || driver.starts_with("clang-cl")) {
+        llvm::cl::TokenizeWindowsCommandLineFull(command, saver, arguments);
+    } else {
+        llvm::cl::TokenizeGNUCommandLine(command, saver, arguments);
     }
 
-    {
-        // -W is a flag name
-        ArgStripper s;
-        s.strip("-W");
-        std::vector<const char*> args = {"clang", "-Wfoo", "-Wno-bar", "-Werror", "foo.cc"};
-        s.process(args);
-        EXPECT_EQ(args, std::vector{"clang", "foo.cc"});
-    }
-    {
-        // -Wfoo is not a flag name, matched literally.
-        ArgStripper S;
-        S.strip("-Wunused");
-        std::vector<const char*> args = {"clang", "-Wunused", "-Wno-unused", "foo.cc"};
-        S.process(args);
-        EXPECT_EQ(args, std::vector{"clang", "-Wno-unused", "foo.cc"});
-    }
+    auto& table = clang::driver::getDriverOptTable();
+    std::uint32_t count = 0;
+    std::uint32_t index = 0;
+    auto list = table.ParseArgs(arguments, count, index);
 
-    {
-        // -D is a flag name
-        ArgStripper S;
-        S.strip("-D");
-        std::vector<const char*> args = {"clang", "-Dfoo", "-Dbar=baz", "foo.cc"};
-        S.process(args);
-        EXPECT_EQ(args, std::vector{"clang", "foo.cc"});
-    }
-    {
-        // -Dbar is not: matched literally
-        ArgStripper S;
-        S.strip("-Dbar");
-        std::vector<const char*> args = {"clang", "-Dfoo", "-Dbar=baz", "foo.cc"};
-        S.process(args);
-        EXPECT_EQ(args, std::vector{"clang", "-Dfoo", "-Dbar=baz", "foo.cc"});
-        S.strip("-Dfoo");
-        S.process(args);
-        EXPECT_EQ(args, std::vector{"clang", "-Dbar=baz", "foo.cc"});
-        S.strip("-Dbar=*");
-        S.process(args);
-        EXPECT_EQ(args, std::vector{"clang", "foo.cc"});
-    }
-
-    {
-        ArgStripper S;
-        // If -include is stripped first, we see -pch as its arg and foo.pch remains.
-        // To get this case right, we must process -include-pch first.
-        S.strip("-include");
-        S.strip("-include-pch");
-        std::vector<const char*> args = {"clang", "-include-pch", "foo.pch", "foo.cc"};
-        S.process(args);
-        EXPECT_EQ(args, std::vector{"clang", "foo.cc"});
+    for(auto arg: list.getArgs()) {
+        arg->dump();
     }
 }
 
-TEST(Command, SimpleAddGet) {
+TEST(Command, GetOptionID) {
+    auto GET_OPTION_ID = CompilationDatabase::get_option_id;
+    namespace option = clang::driver::options;
+
+    /// GroupClass
+    EXPECT_EQ(GET_OPTION_ID("-g"), option::OPT_g_Flag);
+
+    /// InputClass
+    EXPECT_EQ(GET_OPTION_ID("main.cpp"), option::OPT_INPUT);
+
+    /// UnknownClass
+    EXPECT_EQ(GET_OPTION_ID("--clice"), option::OPT_UNKNOWN);
+
+    /// FlagClass
+    EXPECT_EQ(GET_OPTION_ID("-v"), option::OPT_v);
+    EXPECT_EQ(GET_OPTION_ID("-c"), option::OPT_c);
+    EXPECT_EQ(GET_OPTION_ID("-pedantic"), option::OPT_pedantic);
+    EXPECT_EQ(GET_OPTION_ID("--pedantic"), option::OPT_pedantic);
+
+    /// JoinedClass
+    EXPECT_EQ(GET_OPTION_ID("-Wno-unused-variable"), option::OPT_W_Joined);
+    EXPECT_EQ(GET_OPTION_ID("-W*"), option::OPT_W_Joined);
+    EXPECT_EQ(GET_OPTION_ID("-W"), option::OPT_W_Joined);
+
+    /// ValuesClass
+
+    /// SeparateClass
+    EXPECT_EQ(GET_OPTION_ID("-Xclang"), option::OPT_Xclang);
+    /// EXPECT_EQ(GET_ID("-Xclang -ast-dump"), option::OPT_Xclang);
+
+    /// RemainingArgsClass
+
+    /// RemainingArgsJoinedClass
+
+    /// CommaJoinedClass
+    EXPECT_EQ(GET_OPTION_ID("-Wl,"), option::OPT_Wl_COMMA);
+
+    /// MultiArgClass
+
+    /// JoinedOrSeparateClass
+    EXPECT_EQ(GET_OPTION_ID("-o"), option::OPT_o);
+    EXPECT_EQ(GET_OPTION_ID("-I"), option::OPT_I);
+    EXPECT_EQ(GET_OPTION_ID("--include-directory="), option::OPT_I);
+    EXPECT_EQ(GET_OPTION_ID("-x"), option::OPT_x);
+    EXPECT_EQ(GET_OPTION_ID("--language="), option::OPT_x);
+
+    /// JoinedAndSeparateClass
+}
+
+void EXPECT_STRIP(llvm::StringRef argv,
+                  llvm::StringRef result,
+                  LocationChain chain = LocationChain()) {
     CompilationDatabase database;
-    database.add_command("test.cpp", "clang++ -std=c++23 test.cpp");
-    auto command = database.get_command("test.cpp");
-    ASSERT_EQ(command.size(), 3);
+    database.update_command("fake/", "main.cpp", argv);
+    EXPECT_EQ(printArgv(database.get_command("main.cpp").arguments), result, chain);
+};
 
-    using namespace std::literals;
-    EXPECT_EQ(command[0], "clang++"sv);
-    EXPECT_EQ(command[1], "-std=c++23"sv);
-    EXPECT_EQ(command[2], "test.cpp"sv);
+TEST(Command, DefaultFilters) {
+    /// Filter -c, -o and input file.
+    EXPECT_STRIP("g++ main.cc", "g++ main.cpp");
+    EXPECT_STRIP("clang++ -c main.cpp", "clang++ main.cpp");
+    EXPECT_STRIP("clang++ -o main.o main.cpp", "clang++ main.cpp");
+    EXPECT_STRIP("clang++ -c -o main.o main.cc", "clang++ main.cpp");
+    EXPECT_STRIP("cl.exe /c /Fomain.cpp.o main.cpp", "cl.exe main.cpp");
+
+    /// Filter PCH related.
+
+    /// CMake
+    EXPECT_STRIP("g++ -std=gnu++20 -Winvalid-pch -include cmake_pch.hxx -o main.cpp.o -c main.cpp",
+                 "g++ -std=gnu++20 -Winvalid-pch -include cmake_pch.hxx main.cpp");
+    EXPECT_STRIP(
+        "clang++ -Winvalid-pch -Xclang -include-pch -Xclang cmake_pch.hxx.pch -Xclang -include -Xclang cmake_pch.hxx -o main.cpp.o -c main.cpp",
+        "clang++ -Winvalid-pch -Xclang -include -Xclang cmake_pch.hxx main.cpp");
+    EXPECT_STRIP("cl.exe /Yufoo.h /FIfoo.h /Fpfoo.h_v143.pch /c /Fomain.cpp.o main.cpp",
+                 "cl.exe -include foo.h main.cpp");
+
+    /// TODO: Test more commands from other build system.
 }
 
 TEST(Command, Reuse) {
-    CompilationDatabase database;
-    database.add_command("test.cpp", "clang++ -std=c++23 test.cpp");
-    database.add_command("test2.cpp", "clang++ -std=c++23 test2.cpp");
+    using namespace std::literals;
 
-    auto command1 = database.get_command("test.cpp");
-    auto command2 = database.get_command("test2.cpp");
+    CompilationDatabase database;
+    database.update_command("fake", "test.cpp", "clang++ -std=c++23 test.cpp"sv);
+    database.update_command("fake", "test2.cpp", "clang++ -std=c++23 test2.cpp"sv);
+
+    auto command1 = database.get_command("test.cpp").arguments;
+    auto command2 = database.get_command("test2.cpp").arguments;
     ASSERT_EQ(command1.size(), 3);
     ASSERT_EQ(command2.size(), 3);
 
-    using namespace std::literals;
     EXPECT_EQ(command1[0], "clang++"sv);
     EXPECT_EQ(command1[1], "-std=c++23"sv);
     EXPECT_EQ(command1[2], "test.cpp"sv);
@@ -198,41 +152,22 @@ TEST(Command, Reuse) {
     EXPECT_EQ(command2[2], "test2.cpp"sv);
 }
 
+TEST(Command, Module) {}
+
 TEST(Command, ResourceDir) {
-    CompilationDatabase database;
-    database.add_command("test.cpp", "clang++ -std=c++23 test.cpp");
-    auto command = database.get_command("test.cpp", false, true);
-    ASSERT_EQ(command.size(), 4);
-
-    using namespace std::literals;
-    EXPECT_EQ(command[0], "clang++"sv);
-    EXPECT_EQ(command[1], "-std=c++23"sv);
-    EXPECT_EQ(command[2], "test.cpp"sv);
-    EXPECT_EQ(command[3], std::format("-resource-dir={}", fs::resource_dir));
+    /// CompilationDatabase database;
+    /// database.update_command("test.cpp", "clang++ -std=c++23 test.cpp");
+    /// auto command = database.get_command("test.cpp", false, true);
+    /// ASSERT_EQ(command.size(), 4);
+    ///
+    /// using namespace std::literals;
+    /// EXPECT_EQ(command[0], "clang++"sv);
+    /// EXPECT_EQ(command[1], "-std=c++23"sv);
+    /// EXPECT_EQ(command[2], "test.cpp"sv);
+    /// EXPECT_EQ(command[3], std::format("-resource-dir={}", fs::resource_dir));
 }
-
-TEST(Command, Filter) {
-    CompilationDatabase database;
-    database.add_command("test.cpp", "clang++ -c -o test.o test.cpp");
-    auto command = database.get_command("test.cpp");
-
-    using namespace std::literals;
-    EXPECT_EQ(command.size(), 2);
-    EXPECT_EQ(command[0], "clang++"sv);
-    EXPECT_EQ(command[1], "test.cpp"sv);
-
-    database.add_command("test1.cpp", "clang++ -c -otest1.o test1.cpp");
-    command = database.get_command("test1.cpp");
-    EXPECT_EQ(command.size(), 2);
-    EXPECT_EQ(command[0], "clang++"sv);
-    EXPECT_EQ(command[1], "test1.cpp"sv);
-}
-
-TEST(Command, Merge) {}
 
 TEST(Command, QueryDriver) {}
-
-TEST(Command, Module) {}
 
 }  // namespace
 
