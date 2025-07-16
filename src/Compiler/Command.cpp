@@ -84,7 +84,7 @@ std::optional<std::uint32_t> CompilationDatabase::get_option_id(llvm::StringRef 
 
     unsigned index = 0;
     std::array arguments = {buffer.c_str(), "placeholder"};
-    llvm::opt::InputArgList arg_list(arguments.begin(), arguments.end());
+    llvm::opt::InputArgList arg_list(arguments.data(), arguments.data() + arguments.size());
 
     if(auto arg = table.ParseOneArg(arg_list, index)) {
         return arg->getOption().getID();
