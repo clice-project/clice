@@ -79,6 +79,11 @@ struct SelectionBuilder {
 
     template <typename Node, typename Callback>
     bool hook(const Node* node, const Callback& callback) {
+
+        if(!node) {
+            return true;
+        }
+
         if constexpr(requires { node->isImplicit(); })
             if(node->isImplicit())
                 return true;

@@ -30,10 +30,7 @@ const std::error_category& category() {
 void uv_check_result(const int result, const std::source_location location) {
     if(result < 0) {
         log::warn("libuv error: {}", uv_strerror(result));
-        log::warn("At {}:{}:{}", 
-                  location.file_name(), 
-                  location.line(),
-                  location.function_name());
+        log::warn("At {}:{}:{}", location.file_name(), location.line(), location.function_name());
     }
 }
 

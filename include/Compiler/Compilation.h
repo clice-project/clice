@@ -32,7 +32,6 @@ struct CompilationParams {
     /// The memory buffers for all remapped file.
     llvm::StringMap<std::unique_ptr<llvm::MemoryBuffer>> buffers;
 
-    
     void add_remapped_file(llvm::StringRef path,
                            llvm::StringRef content,
                            std::uint32_t bound = -1) {

@@ -59,7 +59,8 @@ T* uv_cast(U& u) {
     return reinterpret_cast<T*>(&u);
 }
 
-void uv_check_result(const int result, const std::source_location location = std::source_location::current());
+void uv_check_result(const int result,
+                     const std::source_location location = std::source_location::current());
 
 template <typename T>
 class Task;

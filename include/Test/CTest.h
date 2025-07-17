@@ -82,7 +82,7 @@ public:
         auto command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
         database.add_command(src_path, command);
         params.arguments = database.get_command(src_path);
-        
+
         auto info = clice::compile(params);
         ASSERT_TRUE(info);
         this->unit.emplace(std::move(*info));

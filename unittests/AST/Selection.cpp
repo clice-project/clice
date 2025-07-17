@@ -75,64 +75,174 @@ std::array<ASTNodeKind, sizeof...(Ts)> makeNodeSequence() {
 }
 
 TEST(Selection, VarDeclSelectionBoundary) {
-    const char* code = R"cpp(
-$(b1)int xxx$(b2)yyy$(e1) = 1$(e2);$(e3)
-)cpp";
+    {
+        const char* code = R"cpp(
+            $(b1)int xxx$(b2)yyy$(e1) = 1$(e2);$(e3)
+        )cpp";
 
-    SelectionTester tx("main.cpp", code);
-    tx.compile();
+        SelectionTester tx("main.cpp", code);
+        tx.compile();
 
-    std::vector<SelectionBuilder::OffsetPair> selects;
-    for(int begin = 1; begin <= 2; begin++) {
-        for(int end = 1; end <= 3; end++) {
-            uint32_t bp = tx.offset(std::format("b{}", begin));
-            uint32_t ep = tx.offset(std::format("e{}", end));
-            selects.push_back({bp, ep});
+        std::vector<SelectionBuilder::OffsetPair> selects;
+        for(int begin = 1; begin <= 2; begin++) {
+            for(int end = 1; end <= 3; end++) {
+                uint32_t bp = tx.offset(std::format("b{}", begin));
+                uint32_t ep = tx.offset(std::format("e{}", end));
+                selects.push_back({bp, ep});
+            }
+        }
+
+        auto& unit = *tx.unit;
+        auto tokens = unit.spelled_tokens(unit.interested_file());
+        for(auto& [begin, end]: selects) {
+            auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
+
+            SelectionBuilder builder(left, right, unit.context(), unit);
+            auto tree = builder.build();
+            // debug(tree);
+
+            auto kinds = makeNodeSequence<VarDecl>();
+            tx.expectPreorderSequence(tree, kinds);
         }
     }
 
-    auto& unit = *tx.unit;
-    auto tokens = unit.spelled_tokens(unit.interested_file());
-    for(auto& [begin, end]: selects) {
-        auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
+    {
+        const char* code = R"cpp(
+            int $(b1)x$(e1) = 114, $(b2)y$(e2) = 514, $(b3)z$(e3);
+        )cpp";
 
-        SelectionBuilder builder(left, right, unit.context(), unit);
+        SelectionTester tx("main.cpp", code);
+        tx.compile();
+
+        std::vector<SelectionBuilder::OffsetPair> selects;
+        for(int i = 1; i <= 3; ++i) {
+            uint32_t bp = tx.offset(std::format("b{}", i));
+            uint32_t ep = tx.offset(std::format("e{}", i));
+            selects.push_back({bp, ep});
+        }
+
+        auto& unit = *tx.unit;
+        auto tokens = unit.spelled_tokens(unit.interested_file());
+        for(auto& [begin, end]: selects) {
+            auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
+
+            SelectionBuilder builder(left, right, unit.context(), unit);
+            auto tree = builder.build();
+
+            auto kinds = makeNodeSequence<VarDecl>();
+            tx.expectPreorderSequence(tree, kinds);
+        }
+    }
+
+    {
+        const char* code = R"cpp(
+            $(b1)const$(b2) static$(b3) char $(b4)x$(e1) = 'c';$(e2)
+        )cpp";
+
+        SelectionTester tx("main.cpp", code);
+        tx.compile();
+
+        std::vector<SelectionBuilder::OffsetPair> selects;
+        for(int i = 1; i <= 4; ++i) {
+            for(int j = 1; j <= 2; ++j) {
+                uint32_t bp = tx.offset(std::format("b{}", i));
+                uint32_t ep = tx.offset(std::format("e{}", j));
+                selects.push_back({bp, ep});
+            }
+        }
+
+        auto& unit = *tx.unit;
+        auto tokens = unit.spelled_tokens(unit.interested_file());
+        for(auto& [begin, end]: selects) {
+            auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
+
+            SelectionBuilder builder(left, right, unit.context(), unit);
+            auto tree = builder.build();
+
+            auto kinds = makeNodeSequence<VarDecl>();
+            tx.expectPreorderSequence(tree, kinds);
+        }
+    }
+
+    {
+        const char* code = R"cpp(
+            struct A {
+                int a;
+                int b;
+            };
+
+            int main(int argc, char **argv) {
+                $(b)auto$(e) a = A{114, 514};
+                return 0;
+            }
+        )cpp";
+
+        SelectionTester tx("main.cpp", code);
+        tx.compile();
+
+        uint32_t bp = tx.offset("b");
+        uint32_t ep = tx.offset("e");
+
+        auto& unit = *tx.unit;
+        auto tokens = unit.spelled_tokens(unit.interested_file());
+        auto [left, right] = SelectionBuilder::selectionBound(tokens, {bp, ep}, unit);
+        SelectionBuilder builder{left, right, unit.context(), unit};
         auto tree = builder.build();
-        // debug(tree);
-
         auto kinds = makeNodeSequence<VarDecl>();
         tx.expectPreorderSequence(tree, kinds);
     }
 }
 
 TEST(Selection, ParmVarDeclBoundary) {
-    const char* code = R"cpp(
-void f($(b1)int xxx$(b2)yyy$(e1) = 1$(e2)) {}
-)cpp";
+    {
+        const char* code = R"cpp(
+            void f($(b1)int xxx$(b2)yyy$(e1) = 1$(e2)) {}
+        )cpp";
 
-    SelectionTester tx("main.cpp", code);
-    tx.compile();
+        SelectionTester tx("main.cpp", code);
+        tx.compile();
 
-    std::vector<SelectionBuilder::OffsetPair> selects;
-    for(int begin = 1; begin <= 2; begin++) {
-        for(int end = 1; end <= 2; end++) {
-            uint32_t bp = tx.offset(std::format("b{}", begin));
-            uint32_t ep = tx.offset(std::format("e{}", end));
-            selects.push_back({bp, ep});
+        std::vector<SelectionBuilder::OffsetPair> selects;
+        for(int begin = 1; begin <= 2; begin++) {
+            for(int end = 1; end <= 2; end++) {
+                uint32_t bp = tx.offset(std::format("b{}", begin));
+                uint32_t ep = tx.offset(std::format("e{}", end));
+                selects.push_back({bp, ep});
+            }
+        }
+
+        auto& unit = *tx.unit;
+        auto tokens = unit.spelled_tokens(unit.interested_file());
+        for(auto& [begin, end]: selects) {
+            auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
+
+            SelectionBuilder builder(left, right, unit.context(), unit);
+            auto tree = builder.build();
+            // debug(tree);
+
+            auto kinds = makeNodeSequence<ParmVarDecl>();
+            tx.expectPreorderSequence(tree, kinds);
         }
     }
 
-    auto& unit = *tx.unit;
-    auto tokens = unit.spelled_tokens(unit.interested_file());
-    for(auto& [begin, end]: selects) {
-        auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
+    {
+        const char* code = R"cpp(
+            int foo() { return 42; }$(b1);$(e1)
+        )cpp";
 
-        SelectionBuilder builder(left, right, unit.context(), unit);
+        SelectionTester tx("main.cpp", code);
+        tx.compile();
+
+        auto bp = tx.offset("b1");
+        auto ep = tx.offset("e1");
+
+        auto& unit = *tx.unit;
+        auto tokens = unit.spelled_tokens(unit.interested_file());
+        auto [left, right] = SelectionBuilder::selectionBound(tokens, {bp, ep}, unit);
+        SelectionBuilder builder{left, right, unit.context(), unit};
         auto tree = builder.build();
-        // debug(tree);
 
-        auto kinds = makeNodeSequence<ParmVarDecl>();
-        tx.expectPreorderSequence(tree, kinds);
+        tx.expectPreorderSequence(tree, {});
     }
 }
 
@@ -350,8 +460,7 @@ class Test {
         auto& unit = *tx.unit;
         auto tokens = unit.spelled_tokens(unit.interested_file());
         for(auto& [begin, end]: b12_e123) {
-            auto [left, right] =
-                SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
+            auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
             SelectionBuilder builder(left, right, unit.context(), unit);
             auto tree = builder.build();
@@ -379,8 +488,7 @@ class Test {
         auto& unit = *tx.unit;
         auto tokens = unit.spelled_tokens(unit.interested_file());
         for(auto& [begin, end]: b3_e123) {
-            auto [left, right] =
-                SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
+            auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
 
             SelectionBuilder builder(left, right, unit.context(), unit);
             auto tree = builder.build();
