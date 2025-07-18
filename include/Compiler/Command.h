@@ -28,16 +28,19 @@ public:
         llvm::ArrayRef<const char*> arguments;
     };
 
-    struct DriverInfo {};
+    struct DriverInfo {
+        /// The target of this driver.
+        llvm::StringRef target;
+
+        /// The default system includes of this driver.
+        llvm::ArrayRef<const char*> system_includes;
+    };
 
     struct UpdateInfo {
         /// The kind of update.
         UpdateKind kind;
 
         llvm::StringRef file;
-
-        /// The info of updated command.
-        CommandInfo cmd_info;
     };
 
     struct LookupInfo {
@@ -46,17 +49,19 @@ public:
         std::vector<const char*> arguments;
     };
 
-private:
+    CompilationDatabase();
+
     auto save_string(this Self& self, llvm::StringRef string) -> llvm::StringRef;
 
-    auto save_arguments(this Self& self, llvm::ArrayRef<const char*> arguments)
+    auto save_cstring_list(this Self& self, llvm::ArrayRef<const char*> arguments)
         -> llvm::ArrayRef<const char*>;
-
-public:
-    CompilationDatabase();
 
     /// Get an the option for specific argument.
     static std::optional<std::uint32_t> get_option_id(llvm::StringRef argument);
+
+    /// Query the compiler driver and return its driver info.
+    auto query_driver(this Self& self, llvm::StringRef driver)
+        -> std::expected<DriverInfo, std::string>;
 
     /// Update with arguments.
     auto update_command(this Self& self,

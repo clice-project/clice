@@ -2,6 +2,8 @@
 #include "Compiler/Command.h"
 #include "clang/Driver/Driver.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Program.h"
+#include "llvm/ADT/ScopeExit.h"
 
 namespace clice::testing {
 
@@ -154,6 +156,25 @@ TEST(Command, Reuse) {
 
 TEST(Command, Module) {}
 
+TEST(Command, QueryDriver) {
+#if __linux__
+    using namespace std::literals;
+
+    CompilationDatabase database;
+    auto info = database.query_driver("/usr/bin/g++");
+    ASSERT_TRUE(info);
+
+    EXPECT_EQ(info->target, "x86_64-linux-gnu");
+    EXPECT_EQ(info->system_includes.size(), 6);
+    EXPECT_EQ(info->system_includes[0], "/usr/include/c++/13"sv);
+    EXPECT_EQ(info->system_includes[1], "/usr/include/x86_64-linux-gnu/c++/13"sv);
+    EXPECT_EQ(info->system_includes[2], "/usr/include/c++/13/backward"sv);
+    EXPECT_EQ(info->system_includes[3], "/usr/local/include"sv);
+    EXPECT_EQ(info->system_includes[4], "/usr/include/x86_64-linux-gnu"sv);
+    EXPECT_EQ(info->system_includes[5], "/usr/include"sv);
+#endif
+}
+
 TEST(Command, ResourceDir) {
     /// CompilationDatabase database;
     /// database.update_command("test.cpp", "clang++ -std=c++23 test.cpp");
@@ -166,8 +187,6 @@ TEST(Command, ResourceDir) {
     /// EXPECT_EQ(command[2], "test.cpp"sv);
     /// EXPECT_EQ(command[3], std::format("-resource-dir={}", fs::resource_dir));
 }
-
-TEST(Command, QueryDriver) {}
 
 }  // namespace
 

@@ -1,52 +1,12 @@
-#include "Support/Logger.h"
 #include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
 #include "Support/FileSystem.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Program.h"
 #include "clang/Driver/Driver.h"
 
 namespace clice {
-
-auto CompilationDatabase::save_string(this Self& self, llvm::StringRef string) -> llvm::StringRef {
-    assert(!string.empty() && "expected non empty string");
-    auto it = self.string_cache.find(string);
-
-    /// If we already store the argument, reuse it.
-    if(it != self.string_cache.end()) {
-        return *it;
-    }
-
-    /// Allocate for new string.
-    const auto size = string.size();
-    auto ptr = self.allocator.Allocate<char>(size + 1);
-    std::memcpy(ptr, string.data(), size);
-    ptr[size] = '\0';
-
-    /// Insert it to cache.
-    auto result = llvm::StringRef(ptr, size);
-    self.string_cache.insert(result);
-    return result;
-}
-
-auto CompilationDatabase::save_arguments(this Self& self, llvm::ArrayRef<const char*> arguments)
-    -> llvm::ArrayRef<const char*> {
-    auto it = self.arguments_cache.find(arguments);
-
-    /// If we already store the argument, reuse it.
-    if(it != self.arguments_cache.end()) {
-        return *it;
-    }
-
-    /// Allocate for new array.
-    const auto size = arguments.size();
-    auto ptr = self.allocator.Allocate<const char*>(size);
-    ranges::copy(arguments, ptr);
-
-    /// Insert it to cache.
-    auto result = llvm::ArrayRef<const char*>(ptr, size);
-    self.arguments_cache.insert(result);
-    return result;
-}
 
 CompilationDatabase::CompilationDatabase() {
     using opions = clang::driver::options::ID;
@@ -73,6 +33,47 @@ CompilationDatabase::CompilationDatabase() {
     filtered_options.insert(opions::OPT_fprebuilt_module_path);
 }
 
+auto CompilationDatabase::save_string(this Self& self, llvm::StringRef string) -> llvm::StringRef {
+    assert(!string.empty() && "expected non empty string");
+    auto it = self.string_cache.find(string);
+
+    /// If we already store the argument, reuse it.
+    if(it != self.string_cache.end()) {
+        return *it;
+    }
+
+    /// Allocate for new string.
+    const auto size = string.size();
+    auto ptr = self.allocator.Allocate<char>(size + 1);
+    std::memcpy(ptr, string.data(), size);
+    ptr[size] = '\0';
+
+    /// Insert it to cache.
+    auto result = llvm::StringRef(ptr, size);
+    self.string_cache.insert(result);
+    return result;
+}
+
+auto CompilationDatabase::save_cstring_list(this Self& self, llvm::ArrayRef<const char*> arguments)
+    -> llvm::ArrayRef<const char*> {
+    auto it = self.arguments_cache.find(arguments);
+
+    /// If we already store the argument, reuse it.
+    if(it != self.arguments_cache.end()) {
+        return *it;
+    }
+
+    /// Allocate for new array.
+    const auto size = arguments.size();
+    auto ptr = self.allocator.Allocate<const char*>(size);
+    ranges::copy(arguments, ptr);
+
+    /// Insert it to cache.
+    auto result = llvm::ArrayRef<const char*>(ptr, size);
+    self.arguments_cache.insert(result);
+    return result;
+}
+
 std::optional<std::uint32_t> CompilationDatabase::get_option_id(llvm::StringRef argument) {
     auto& table = clang::driver::getDriverOptTable();
 
@@ -91,6 +92,113 @@ std::optional<std::uint32_t> CompilationDatabase::get_option_id(llvm::StringRef 
     } else {
         return {};
     }
+}
+
+auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
+    -> std::expected<DriverInfo, std::string> {
+    driver = self.save_string(driver);
+
+    auto it = self.driver_infos.find(driver.data());
+    if(it != self.driver_infos.end()) {
+        return it->second;
+    }
+
+    auto driver_name = path::filename(driver);
+
+    llvm::SmallString<128> output_path;
+    if(auto error = llvm::sys::fs::createTemporaryFile("system-includes", "clangd", output_path)) {
+        return std::unexpected(std::format("{}", error));
+    }
+
+    auto clean_up = llvm::make_scope_exit([&output_path]() { fs::remove(output_path); });
+
+    bool is_std_err = true;
+
+    std::optional<llvm::StringRef> redirects[] = {{""}, {""}, {""}};
+    redirects[is_std_err ? 2 : 1] = output_path.str();
+
+    llvm::StringRef argv[] = {driver, "-E", "-v", "-xc++", "/dev/null"};
+
+    std::string message;
+    if(int RC = llvm::sys::ExecuteAndWait(driver,
+                                          argv,
+                                          /*Env=*/std::nullopt,
+                                          redirects,
+                                          /*SecondsToWait=*/0,
+                                          /*MemoryLimit=*/0,
+                                          &message)) {
+        return std::unexpected(std::format("{}", message));
+    }
+
+    auto file = llvm::MemoryBuffer::getFile(output_path);
+    if(!file) {
+        return std::unexpected(std::format("{}", file.getError()));
+    }
+
+    llvm::StringRef content = file.get()->getBuffer();
+
+    const char* TS = "Target: ";
+    const char* SIS = "#include <...> search starts here:";
+    const char* SIE = "End of search list.";
+
+    llvm::SmallVector<llvm::StringRef> lines;
+    content.split(lines, '\n', -1, false);
+
+    bool in_includes_block = false;
+    bool found_start_marker = false;
+
+    llvm::StringRef target;
+    llvm::SmallVector<llvm::StringRef, 8> system_includes;
+
+    for(const auto& line_ref: lines) {
+        auto line = line_ref.trim();
+
+        if(line.starts_with(TS)) {
+            line.consume_front(TS);
+            target = line;
+            continue;
+        }
+
+        if(line == SIS) {
+            found_start_marker = true;
+            in_includes_block = true;
+            continue;
+        }
+
+        if(line == SIE) {
+            if(in_includes_block) {
+                in_includes_block = false;
+            }
+            continue;
+        }
+
+        if(in_includes_block) {
+            if(line.contains("lib/gcc")) {
+                continue;
+            }
+
+            system_includes.push_back(line);
+        }
+    }
+
+    if(!found_start_marker) {
+        return std::unexpected("Start marker not found...");
+    }
+
+    if(in_includes_block) {
+        return std::unexpected("End marker not found...");
+    }
+
+    llvm::SmallVector<const char*, 8> includes;
+    for(auto include: system_includes) {
+        includes.emplace_back(self.save_string(include).data());
+    }
+
+    DriverInfo info;
+    info.target = self.save_string(target);
+    info.system_includes = self.save_cstring_list(includes);
+    self.driver_infos.try_emplace(driver.data(), info);
+    return info;
 }
 
 auto CompilationDatabase::update_command(this Self& self,
@@ -189,7 +297,7 @@ auto CompilationDatabase::update_command(this Self& self,
     }
 
     /// Save arguments.
-    arguments = self.save_arguments(filtered_arguments);
+    arguments = self.save_cstring_list(filtered_arguments);
 
     UpdateKind kind = UpdateKind::Unchange;
     CommandInfo info = {dictionary, arguments};
@@ -206,7 +314,7 @@ auto CompilationDatabase::update_command(this Self& self,
         }
     }
 
-    return UpdateInfo{kind, file, info};
+    return UpdateInfo{kind, file};
 }
 
 auto CompilationDatabase::update_command(this Self& self,
