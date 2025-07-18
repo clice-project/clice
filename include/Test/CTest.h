@@ -80,6 +80,7 @@ public:
 
     Tester& compile(llvm::StringRef standard = "-std=c++20") {
         auto command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
+
         database.update_command("fake", src_path, command);
         params.arguments = database.get_command(src_path).arguments;
 

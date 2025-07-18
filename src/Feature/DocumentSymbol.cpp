@@ -50,7 +50,8 @@ public:
         }
 
         auto ND = llvm::cast<clang::NamedDecl>(decl);
-        auto [fid, selectionRange] = unit.decompose_range(unit.expansion_location(ND->getLocation()));
+        auto [fid, selectionRange] =
+            unit.decompose_range(unit.expansion_location(ND->getLocation()));
 
         auto& frame = interestedOnly ? result : sharedResult[fid];
         auto cursor = frame.cursor;

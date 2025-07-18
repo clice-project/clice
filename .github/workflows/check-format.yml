@@ -1,0 +1,35 @@
+name: format
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install clang-format
+      run: |
+        wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc
+        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm20.list
+        echo "deb-src http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee -a /etc/apt/sources.list.d/llvm20.list
+        sudo apt-get update && sudo apt-get install -y clang-format-20
+        clang-format-20 --version
+
+    - name: Run clang-format check
+      run: |
+        FILES=$(find ./ -type f | grep -P '^\.\/(src|include)(\/[^\/]+)*\/[^\/]+\.(h|cpp|cc)$')
+
+        UNFORMATTED=$(clang-format-20 --dry-run --Werror $FILES)
+
+        if [ $? -ne 0 ]; then
+          echo "× Some files are not properly formatted. Run clang-format to fix them."
+          exit 1
+        else
+          echo "✓ All files are properly formatted."
+        fi

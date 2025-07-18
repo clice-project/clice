@@ -4,7 +4,6 @@
 
 namespace clice::async {
 
-
 /// The default event loop.
 uv_loop_t* loop = nullptr;
 

@@ -108,7 +108,7 @@ public:
         }
 
         auto [fid, range] = unit.decompose_range(location);
-        if(fid != unit.interested_file()){
+        if(fid != unit.interested_file()) {
             /// FIXME: Use a better way to handle this.
             return;
         }

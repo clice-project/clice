@@ -28,7 +28,6 @@ struct LocalSourceRange {
     }
 };
 
-
 /// Get the content of the file with the given file ID.
 llvm::StringRef getFileContent(const clang::SourceManager& SM, clang::FileID fid);
 
