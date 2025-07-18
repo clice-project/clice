@@ -108,6 +108,11 @@ public:
         }
 
         auto [fid, range] = unit.decompose_range(location);
+        if(fid != unit.interested_file()){
+            /// FIXME: Use a better way to handle this.
+            return;
+        }
+
         auto& tokens = interestedOnly ? result : sharedResult[fid];
         tokens.emplace_back(range, kind, modifiers);
     }

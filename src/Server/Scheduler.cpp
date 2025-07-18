@@ -57,7 +57,7 @@ async::Task<json::Value> Scheduler::completion(std::string path, std::uint32_t o
 
     /// Set compilation params ... .
     CompilationParams params;
-    params.arguments = database.get_command(path);
+    params.arguments = database.get_command(path, true).arguments;
     params.add_remapped_file(path, openFile->content);
     params.pch = {PCH->path, PCH->preamble.size()};
     params.completion = {path, offset};
@@ -77,7 +77,7 @@ async::Task<bool> Scheduler::isPCHOutdated(llvm::StringRef path, llvm::StringRef
     }
 
     /// Check command and preamble matchs.
-    auto command = database.get_command(path);
+    auto command = database.get_command(path, true).arguments;
     /// FIXME: check command. openFile->PCH->command != command
     if(openFile->PCH->preamble != preamble) {
         co_return true;
@@ -108,7 +108,7 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
                                             std::uint32_t bound,
                                             std::string content) -> async::Task<> {
         CompilationParams params;
-        params.arguments = scheduler.database.get_command(path);
+        params.arguments = scheduler.database.get_command(path, true).arguments;
         params.outPath = path::join(config::cache.dir, path::filename(path) + ".pch");
         params.add_remapped_file(path, content, bound);
 
@@ -177,7 +177,7 @@ async::Task<> Scheduler::buildAST(std::string path, std::string content) {
     }
 
     CompilationParams params;
-    params.arguments = database.get_command(path);
+    params.arguments = database.get_command(path, true).arguments;
     params.add_remapped_file(path, content);
     params.pch = {PCH->path, PCH->preamble.size()};
 

@@ -1,195 +1,421 @@
-#include "Support/Logger.h"
 #include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
 #include "Support/FileSystem.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Program.h"
+#include "clang/Driver/Driver.h"
 
 namespace clice {
 
-/// Update the compile commands with the given file.
-void CompilationDatabase::update_commands(this Self& self, llvm::StringRef filename) {
-    auto path = path::real_path(filename);
-    filename = path;
+CompilationDatabase::CompilationDatabase() {
+    using opions = clang::driver::options::ID;
 
-    /// Read the compile commands from the file.
-    json::Value json = nullptr;
+    /// Remove the input file, we will add input file ourselves.
+    filtered_options.insert(opions::OPT_INPUT);
 
-    if(auto buffer = llvm::MemoryBuffer::getFile(filename)) {
-        if(auto result = json::parse(buffer->get()->getBuffer())) {
-            /// llvm::json::Value will hold on string buffer.
-            /// Do not worry about the lifetime of the buffer.
-            /// Release buffer to save memory.
-            json = std::move(result.get());
-        } else {
-            log::warn("Failed to parse json file at {0}, because {1}",
-                      filename,
-                      result.takeError());
-            return;
-        }
-    } else {
-        log::warn("Failed to read file {0}", filename);
-        return;
-    }
+    /// -c and -o are meaningless for frontend.
+    filtered_options.insert(opions::OPT_c);
+    filtered_options.insert(opions::OPT_o);
+    filtered_options.insert(opions::OPT_dxc_Fc);
+    filtered_options.insert(opions::OPT_dxc_Fo);
 
-    assert(json.kind() != json::Value::Null && "json is nullptr");
+    /// Remove all options related to PCH building.
+    filtered_options.insert(opions::OPT_emit_pch);
+    filtered_options.insert(opions::OPT_include_pch);
+    filtered_options.insert(opions::OPT__SLASH_Yu);
+    filtered_options.insert(opions::OPT__SLASH_Fp);
 
-    if(json.kind() != json::Value::Array) {
-        log::warn(
-            "Compilation CompilationDatabase requires a array of object, but get {0}, input file: {1}",
-            refl::enum_name(json.kind()),
-            filename);
-        return;
-    }
-
-    auto elements = json.getAsArray();
-    assert(elements && "json is not an array");
-
-    for(auto& element: *elements) {
-        auto object = element.getAsObject();
-        if(!object) {
-            log::warn(
-                "Compilation CompilationDatabase requires an array of object, but get a array of {0}, input file: {1}",
-                refl::enum_name(element.kind()),
-                filename);
-            continue;
-        }
-
-        /// FIXME: currently we assume all path here is absolute.
-        /// Add `directory` field in the future.
-
-        llvm::SmallString<128> path;
-
-        if(auto file = object->getString("file")) {
-            if(auto error = fs::real_path(*file, path)) {
-                log::warn("Failed to get real path of {0}, because {1}", *file, error.message());
-                continue;
-            }
-        } else {
-            log::warn("The element does not have a file field, input file: {0}", filename);
-            continue;
-        }
-
-        auto command = object->getString("command");
-        if(!command) {
-            log::warn("The key:{0} does not have a command field, input file: {1}", path, filename);
-            continue;
-        }
-
-        self.add_command(path, *command);
-    }
-
-    log::info("Successfully loaded compile commands from {0}, total {1} commands",
-              filename,
-              self.commands.size());
-
-    /// Scan all files to build module map.
-    // CompilationParams params;
-    // for(auto& [path, command]: commands) {
-    //     params.srcPath = path;
-    //     params.command = command;
-    //
-    //    auto name = scanModuleName(params);
-    //    if(!name.empty()) {
-    //        moduleMap[name] = path;
-    //    }
-    //}
-
-    log::info("Successfully built module map, total {0} modules", self.moduleMap.size());
+    /// Remove all options related to C++ module, we will
+    /// build module and set deps ourselves.
+    filtered_options.insert(opions::OPT_fmodule_file);
+    filtered_options.insert(opions::OPT_fmodule_output);
+    filtered_options.insert(opions::OPT_fprebuilt_module_path);
 }
 
-/// Update the module map with the given file and module name.
-void CompilationDatabase::update_module(llvm::StringRef file, llvm::StringRef name) {
-    moduleMap[path::real_path(file)] = file;
-}
-
-/// Lookup the module interface unit file path of the given module name.
-llvm::StringRef CompilationDatabase::get_module_file(llvm::StringRef name) {
-    auto iter = moduleMap.find(name);
-    if(iter == moduleMap.end()) {
-        return "";
-    }
-    return iter->second;
-}
-
-llvm::StringRef CompilationDatabase::save_string(this Self& self, llvm::StringRef string) {
-    auto it = self.unique.find(string);
-
-    /// FIXME: arg may be empty?
+auto CompilationDatabase::save_string(this Self& self, llvm::StringRef string) -> llvm::StringRef {
+    assert(!string.empty() && "expected non empty string");
+    auto it = self.string_cache.find(string);
 
     /// If we already store the argument, reuse it.
-    if(it != self.unique.end()) {
+    if(it != self.string_cache.end()) {
         return *it;
     }
 
-    /// Allocate new argument.
+    /// Allocate for new string.
     const auto size = string.size();
-    auto ptr = self.memory_pool.Allocate<char>(size + 1);
+    auto ptr = self.allocator.Allocate<char>(size + 1);
     std::memcpy(ptr, string.data(), size);
     ptr[size] = '\0';
 
-    /// Insert new argument.
+    /// Insert it to cache.
     auto result = llvm::StringRef(ptr, size);
-    self.unique.insert(result);
+    self.string_cache.insert(result);
     return result;
 }
 
-std::vector<const char*> CompilationDatabase::save_args(this Self& self,
-                                                        llvm::ArrayRef<const char*> args) {
-    std::vector<const char*> result;
-    result.reserve(args.size());
+auto CompilationDatabase::save_cstring_list(this Self& self, llvm::ArrayRef<const char*> arguments)
+    -> llvm::ArrayRef<const char*> {
+    auto it = self.arguments_cache.find(arguments);
 
-    for(auto i = 0; i < args.size(); i++) {
-        result.emplace_back(self.save_string(args[i]).data());
+    /// If we already store the argument, reuse it.
+    if(it != self.arguments_cache.end()) {
+        return *it;
     }
 
+    /// Allocate for new array.
+    const auto size = arguments.size();
+    auto ptr = self.allocator.Allocate<const char*>(size);
+    ranges::copy(arguments, ptr);
+
+    /// Insert it to cache.
+    auto result = llvm::ArrayRef<const char*>(ptr, size);
+    self.arguments_cache.insert(result);
     return result;
 }
 
-void CompilationDatabase::add_command(this Self& self,
-                                      llvm::StringRef path,
-                                      llvm::StringRef command,
-                                      Style style) {
-    llvm::SmallVector<const char*> args;
+std::optional<std::uint32_t> CompilationDatabase::get_option_id(llvm::StringRef argument) {
+    auto& table = clang::driver::getDriverOptTable();
 
-    /// temporary allocator to meet the argument requirements of tokenize.
-    llvm::BumpPtrAllocator allocator;
-    llvm::StringSaver saver(allocator);
+    llvm::SmallString<64> buffer = argument;
 
-    /// FIXME: we may want to check the first argument of command to
-    /// make sure its mode.
-    if(style == Style::GNU) {
-        llvm::cl::TokenizeGNUCommandLine(command, saver, args);
-    } else if(style == Style::MSVC) {
-        llvm::cl::TokenizeWindowsCommandLineFull(command, saver, args);
-    } else {
-        std::abort();
+    if(argument.ends_with("=")) {
+        buffer += "placeholder";
     }
 
-    auto path_ = self.save_string(path);
-    auto new_args = self.save_args(args);
+    unsigned index = 0;
+    std::array arguments = {buffer.c_str(), "placeholder"};
+    llvm::opt::InputArgList arg_list(arguments.data(), arguments.data() + arguments.size());
 
-    /// FIXME: Use a better way to handle resource dir.
-    /// new_args.push_back(self.save_string(std::format("-resource-dir={}",
-    /// fs::resource_dir)).data());
-
-    auto it = self.commands.find(path_.data());
-    if(it == self.commands.end()) {
-        self.commands.try_emplace(path_.data(),
-                                  std::make_unique<std::vector<const char*>>(std::move(new_args)));
-    } else {
-        *it->second = std::move(new_args);
-    }
-}
-
-llvm::ArrayRef<const char*> CompilationDatabase::get_command(this Self& self,
-                                                             llvm::StringRef path) {
-    auto path_ = self.save_string(path);
-    auto it = self.commands.find(path_.data());
-    if(it != self.commands.end()) {
-        return *it->second;
+    if(auto arg = table.ParseOneArg(arg_list, index)) {
+        return arg->getOption().getID();
     } else {
         return {};
     }
+}
+
+auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
+    -> std::expected<DriverInfo, std::string> {
+    driver = self.save_string(driver);
+
+    auto it = self.driver_infos.find(driver.data());
+    if(it != self.driver_infos.end()) {
+        return it->second;
+    }
+
+    auto driver_name = path::filename(driver);
+
+    llvm::SmallString<128> output_path;
+    if(auto error = llvm::sys::fs::createTemporaryFile("system-includes", "clangd", output_path)) {
+        return std::unexpected(std::format("{}", error));
+    }
+
+    auto clean_up = llvm::make_scope_exit([&output_path]() { fs::remove(output_path); });
+
+    bool is_std_err = true;
+
+    std::optional<llvm::StringRef> redirects[] = {{""}, {""}, {""}};
+    redirects[is_std_err ? 2 : 1] = output_path.str();
+
+    llvm::StringRef argv[] = {driver, "-E", "-v", "-xc++", "/dev/null"};
+
+    std::string message;
+    if(int RC = llvm::sys::ExecuteAndWait(driver,
+                                          argv,
+                                          /*Env=*/std::nullopt,
+                                          redirects,
+                                          /*SecondsToWait=*/0,
+                                          /*MemoryLimit=*/0,
+                                          &message)) {
+        return std::unexpected(std::format("{}", message));
+    }
+
+    auto file = llvm::MemoryBuffer::getFile(output_path);
+    if(!file) {
+        return std::unexpected(std::format("{}", file.getError()));
+    }
+
+    llvm::StringRef content = file.get()->getBuffer();
+
+    const char* TS = "Target: ";
+    const char* SIS = "#include <...> search starts here:";
+    const char* SIE = "End of search list.";
+
+    llvm::SmallVector<llvm::StringRef> lines;
+    content.split(lines, '\n', -1, false);
+
+    bool in_includes_block = false;
+    bool found_start_marker = false;
+
+    llvm::StringRef target;
+    llvm::SmallVector<llvm::StringRef, 8> system_includes;
+
+    for(const auto& line_ref: lines) {
+        auto line = line_ref.trim();
+
+        if(line.starts_with(TS)) {
+            line.consume_front(TS);
+            target = line;
+            continue;
+        }
+
+        if(line == SIS) {
+            found_start_marker = true;
+            in_includes_block = true;
+            continue;
+        }
+
+        if(line == SIE) {
+            if(in_includes_block) {
+                in_includes_block = false;
+            }
+            continue;
+        }
+
+        if(in_includes_block) {
+            if(line.contains("lib/gcc")) {
+                continue;
+            }
+
+            system_includes.push_back(line);
+        }
+    }
+
+    if(!found_start_marker) {
+        return std::unexpected("Start marker not found...");
+    }
+
+    if(in_includes_block) {
+        return std::unexpected("End marker not found...");
+    }
+
+    llvm::SmallVector<const char*, 8> includes;
+    for(auto include: system_includes) {
+        includes.emplace_back(self.save_string(include).data());
+    }
+
+    DriverInfo info;
+    info.target = self.save_string(target);
+    info.system_includes = self.save_cstring_list(includes);
+    self.driver_infos.try_emplace(driver.data(), info);
+    return info;
+}
+
+auto CompilationDatabase::update_command(this Self& self,
+                                         llvm::StringRef dictionary,
+                                         llvm::StringRef file,
+                                         llvm::ArrayRef<const char*> arguments) -> UpdateInfo {
+    file = self.save_string(file);
+    dictionary = self.save_string(dictionary);
+
+    llvm::SmallVector<const char*, 16> filtered_arguments;
+
+    /// Append
+    auto add_argument = [&](llvm::StringRef argument) {
+        auto saved = self.save_string(argument);
+        filtered_arguments.emplace_back(saved.data());
+    };
+
+    /// Append driver sperately.
+    add_argument(arguments.front());
+
+    unsigned missing_arg_index = 0;
+    unsigned missing_arg_count = 0;
+    auto& table = clang::driver::getDriverOptTable();
+
+    /// The driver should be discarded.
+    auto list = table.ParseArgs(arguments.drop_front(), missing_arg_index, missing_arg_count);
+
+    bool remove_pch = false;
+
+    /// Append and filter useless arguments.
+    for(auto arg: list.getArgs()) {
+        auto& opt = arg->getOption();
+        auto id = opt.getID();
+
+        /// Filter options we don't need.
+        if(self.filtered_options.contains(id)) {
+            continue;
+        }
+
+        /// A workaround to remove extra PCH when cmake
+        /// generate PCH flags for clang.
+        if(id == clang::driver::options::OPT_Xclang) {
+            if(arg->getNumValues() == 1) {
+                if(remove_pch) {
+                    remove_pch = false;
+                    continue;
+                }
+
+                llvm::StringRef value = arg->getValue(0);
+                if(value == "-include-pch") {
+                    remove_pch = true;
+                    continue;
+                }
+            }
+        }
+
+        /// Rewrite the argument to filter arguments, we basically reimplement
+        /// the logic of `Arg::render` to use our allocator to allocate memory.
+        switch(opt.getRenderStyle()) {
+            case llvm::opt::Option::RenderValuesStyle: {
+                for(auto value: arg->getValues()) {
+                    add_argument(value);
+                }
+                break;
+            }
+
+            case llvm::opt::Option::RenderSeparateStyle: {
+                add_argument(arg->getSpelling());
+                for(auto value: arg->getValues()) {
+                    add_argument(value);
+                }
+                break;
+            }
+
+            case llvm::opt::Option::RenderJoinedStyle: {
+                llvm::SmallString<256> first = {arg->getSpelling(), arg->getValue(0)};
+                add_argument(first);
+                for(auto value: llvm::ArrayRef(arg->getValues()).drop_front()) {
+                    add_argument(value);
+                }
+                break;
+            }
+
+            case llvm::opt::Option::RenderCommaJoinedStyle: {
+                llvm::SmallString<256> buffer = arg->getSpelling();
+                for(auto i = 0; i < arg->getNumValues(); i++) {
+                    if(i) {
+                        buffer += ',';
+                    }
+                    buffer += arg->getValue(i);
+                }
+                add_argument(buffer);
+                break;
+            }
+        }
+    }
+
+    /// Save arguments.
+    arguments = self.save_cstring_list(filtered_arguments);
+
+    UpdateKind kind = UpdateKind::Unchange;
+    CommandInfo info = {dictionary, arguments};
+    auto [it, success] = self.command_infos.try_emplace(file.data(), info);
+    if(success) {
+        kind = UpdateKind::Create;
+    } else {
+        auto& info = it->second;
+        if(info.dictionary.data() != dictionary.data() ||
+           info.arguments.data() != arguments.data()) {
+            kind = UpdateKind::Update;
+            info.dictionary = dictionary;
+            info.arguments = arguments;
+        }
+    }
+
+    return UpdateInfo{kind, file};
+}
+
+auto CompilationDatabase::update_command(this Self& self,
+                                         llvm::StringRef dictionary,
+                                         llvm::StringRef file,
+                                         llvm::StringRef command) -> UpdateInfo {
+    llvm::BumpPtrAllocator local;
+    llvm::StringSaver saver(local);
+
+    llvm::SmallVector<const char*, 32> arguments;
+    auto [driver, _] = command.split(' ');
+    driver = path::filename(driver);
+
+    /// FIXME: Use a better to handle this.
+    if(driver.starts_with("cl") || driver.starts_with("clang-cl")) {
+        llvm::cl::TokenizeWindowsCommandLineFull(command, saver, arguments);
+    } else {
+        llvm::cl::TokenizeGNUCommandLine(command, saver, arguments);
+    }
+
+    return self.update_command(dictionary, file, arguments);
+}
+
+auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_content)
+    -> std::expected<std::vector<UpdateInfo>, std::string> {
+    std::vector<UpdateInfo> infos;
+
+    auto json = json::parse(json_content);
+    if(!json) {
+        return std::unexpected(std::format("Fail to parse json: {}", json.takeError()));
+    }
+
+    if(json->kind() != json::Value::Array) {
+        return std::unexpected("Compilation Database must be an array of object");
+    }
+
+    /// FIXME: warn illegal item.
+    for(auto& item: *json->getAsArray()) {
+        /// Ignore non-object item.
+        if(item.kind() != json::Value::Object) {
+            continue;
+        }
+
+        auto& object = *item.getAsObject();
+
+        auto file = object.getString("file");
+        auto directory = object.getString("directory");
+        if(!file || !directory) {
+            continue;
+        }
+
+        if(auto arguments = object.getArray("arguments")) {
+            /// Construct cstring array.
+            llvm::BumpPtrAllocator local;
+            llvm::StringSaver saver(local);
+            llvm::SmallVector<const char*, 32> carguments;
+
+            for(auto& argument: *arguments) {
+                if(argument.kind() == json::Value::String) {
+                    carguments.emplace_back(saver.save(*argument.getAsString()).data());
+                }
+            }
+
+            auto info = self.update_command(*directory, *file, carguments);
+            if(info.kind != UpdateKind::Unchange) {
+                infos.emplace_back(info);
+            }
+        } else if(auto command = object.getString("command")) {
+            auto info = self.update_command(*directory, *file, *command);
+            if(info.kind != UpdateKind::Unchange) {
+                infos.emplace_back(info);
+            }
+        }
+    }
+
+    return infos;
+}
+
+auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, bool resource_dir)
+    -> LookupInfo {
+    LookupInfo info;
+
+    file = self.save_string(file);
+    auto it = self.command_infos.find(file.data());
+    if(it != self.command_infos.end()) {
+        info.dictionary = it->second.dictionary;
+        info.arguments = it->second.arguments;
+    } else {
+        /// FIXME: Use a better way to handle fallback command.
+        info.dictionary = {};
+        info.arguments = {"clang++", "-std=c++20"};
+    }
+
+    if(resource_dir) {
+        info.arguments.emplace_back(
+            self.save_string(std::format("-resource-dir={}", fs::resource_dir)).data());
+    }
+
+    info.arguments.emplace_back(file.data());
+
+    return info;
 }
 
 }  // namespace clice
