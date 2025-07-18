@@ -79,7 +79,7 @@ public:
     auto load_commands(this Self& self, llvm::StringRef json_content)
         -> std::expected<std::vector<UpdateInfo>, std::string>;
 
-    auto get_command(this Self& self, llvm::StringRef file) -> LookupInfo;
+    auto get_command(this Self& self, llvm::StringRef file, bool resource_dir = false) -> LookupInfo;
 
 private:
     /// The memory pool to hold all cstring and command list.

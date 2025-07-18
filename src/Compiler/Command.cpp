@@ -393,7 +393,8 @@ auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_co
     return infos;
 }
 
-auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file) -> LookupInfo {
+auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, bool resource_dir)
+    -> LookupInfo {
     LookupInfo info;
 
     file = self.save_string(file);
@@ -401,8 +402,18 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file) -> 
     if(it != self.command_infos.end()) {
         info.dictionary = it->second.dictionary;
         info.arguments = it->second.arguments;
-        info.arguments.emplace_back(file.data());
+    } else {
+        /// FIXME: Use a better way to handle fallback command.
+        info.dictionary = {};
+        info.arguments = {"clang++", "-std=c++20"};
     }
+
+    if(resource_dir) {
+        info.arguments.emplace_back(
+            self.save_string(std::format("-resource-dir={}", fs::resource_dir)).data());
+    }
+
+    info.arguments.emplace_back(file.data());
 
     return info;
 }
