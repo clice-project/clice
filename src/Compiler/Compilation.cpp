@@ -46,6 +46,10 @@ auto create_invocation(CompilationParams& params,
     clang::CreateInvocationOptions options = {
         .Diags = diagnostic_engine,
         .VFS = params.vfs,
+
+        /// Avoid replacing -include with -include-pch, also
+        /// see https://github.com/clangd/clangd/issues/856.
+        .ProbePrecompiled = false,
     };
 
     auto invocation = clang::createInvocation(params.arguments, options);

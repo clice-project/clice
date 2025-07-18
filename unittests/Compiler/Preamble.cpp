@@ -79,19 +79,18 @@ void EXPECT_BUILD_PCH(llvm::StringRef main_file,
     auto bound = computePreambleBound(content);
     params.add_remapped_file(main_file, content, bound);
 
-    std::vector<const char*> arguments = {
+    params.arguments = {
         "clang++",
         "-xc++",
         "-std=c++20",
     };
 
     if(!preamble.empty()) {
-        arguments.emplace_back("--include=preamble.h");
+        params.arguments.emplace_back("--include=preamble.h");
     }
 
     std::string buffer = main_file.str();
-    arguments.emplace_back(buffer.c_str());
-    params.arguments = arguments;
+    params.arguments.emplace_back(buffer.c_str());
 
     for(auto& [path, content]: files) {
         params.add_remapped_file(path::join(".", path), content);
@@ -210,9 +209,7 @@ int foo();
 
         CompilationParams params;
         params.add_remapped_file("main.cpp", content);
-
-        std::vector<const char*> arguments = {"clang++", "-std=c++20", "main.cpp"};
-        params.arguments = arguments;
+        params.arguments = {"clang++", "-std=c++20", "main.cpp"};
 
         for(auto& [path, file]: files) {
             params.add_remapped_file(path::join(".", path), file);
@@ -263,9 +260,7 @@ int y = foo();
     auto bounds = computePreambleBounds(content);
 
     CompilationParams params;
-
-    std::vector<const char*> arguments = {"clang++", "-std=c++20", "main.cpp"};
-    params.arguments = arguments;
+    params.arguments = {"clang++", "-std=c++20", "main.cpp"};
 
     PCHInfo info;
     std::uint32_t last_bound = 0;

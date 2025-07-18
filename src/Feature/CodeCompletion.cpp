@@ -3,6 +3,7 @@
 #include "Compiler/Compilation.h"
 #include "Feature/CodeCompletion.h"
 #include "Support/FuzzyMatcher.h"
+#include "clang/Basic/CharInfo.h"
 #include "clang/Sema/Sema.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
@@ -26,15 +27,13 @@ struct CompletionPrefix {
     static CompletionPrefix from(llvm::StringRef content, std::uint32_t offset) {
         assert(offset <= content.size());
 
-        assert(offset <= content.size());
-
         auto start = offset;
-        while(start > 0 && clang::isAsciiIdentifierStart(content[start - 1])) {
+        while(start > 0 && clang::isAsciiIdentifierContinue(content[start - 1])) {
             --start;
         }
 
         auto end = offset;
-        while(end < content.size() && clang::isAsciiIdentifierStart(content[end])) {
+        while(end < content.size() && clang::isAsciiIdentifierContinue(content[end])) {
             ++end;
         }
 

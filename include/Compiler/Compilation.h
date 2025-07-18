@@ -15,8 +15,10 @@ struct CompilationParams {
     /// Output file path.
     llvm::SmallString<128> outPath;
 
+    std::string directory;
+
     /// Responsible for storing the arguments.
-    llvm::ArrayRef<const char*> arguments;
+    std::vector<const char*> arguments;
 
     llvm::IntrusiveRefCntPtr<vfs::FileSystem> vfs = new ThreadSafeFS();
 
@@ -35,8 +37,8 @@ struct CompilationParams {
     void add_remapped_file(llvm::StringRef path,
                            llvm::StringRef content,
                            std::uint32_t bound = -1) {
-        if(bound != -1) {
-            assert(bound < content.size());
+        if(bound != 0 && bound != -1) {
+            assert(bound <= content.size());
             content = content.substr(0, bound);
         }
         buffers.try_emplace(path, llvm::MemoryBuffer::getMemBufferCopy(content));
