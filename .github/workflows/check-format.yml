@@ -1,4 +1,4 @@
-name: Check code formatting
+name: format
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  format-check:
+  check:
     runs-on: ubuntu-latest
 
     steps:
