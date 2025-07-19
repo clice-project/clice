@@ -91,19 +91,10 @@ target("clice")
 
     add_deps("clice-core")
 
-target("integration_tests")
-    set_default(false)
-    set_kind("binary")
-    add_files("src/Driver/integration_tests.cc")
-
-    add_deps("clice-core")
-    -- TODO
-    -- add_tests("integration_tests")
-
 target("unit_tests")
     set_default(false)
     set_kind("binary")
-    add_files("src/Driver/unit_tests.cc", "unittests/**.cpp")
+    add_files("src/Driver/unit_tests.cc", "tests/unit/**.cpp")
     add_includedirs(".", {public = true})
 
     add_deps("clice-core")
@@ -113,7 +104,7 @@ target("unit_tests")
 
     on_config(function (target)
         target:set("runargs", 
-            "--test-dir=" .. path.absolute("tests"),
+            "--test-dir=" .. path.absolute("tests/data"),
             "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
         )
     end)

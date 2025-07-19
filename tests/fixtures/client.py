@@ -1,5 +1,5 @@
 from pathlib import Path
-from transport import LSPTransport
+from .transport import LSPTransport
 
 
 class LSPClient(LSPTransport):
