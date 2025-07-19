@@ -195,7 +195,7 @@ public:
                      clang::CodeCompletionContext& cc_context,
                      const config::CodeCompletionOption& option) :
         sema(sema), context(sema.getASTContext()), content(content),
-        prefix(CompletionPrefix::from(content, offset)), items(items), macther(prefix.spelling),
+        prefix(CompletionPrefix::from(content, offset)), items(items), matcher(prefix.spelling),
         cc_context(cc_context), option(option) {}
 
     struct OverloadSet {
@@ -221,7 +221,7 @@ public:
 
         /// Check whether the name matchs, if so, set the item.
         auto check_name = [&](llvm::StringRef name) {
-            auto score = macther.match(name);
+            auto score = matcher.match(name);
             if(!score) {
                 return false;
             }
@@ -348,7 +348,7 @@ private:
     CompletionPrefix prefix;
 
     /// The fuzzy matcher to score results.
-    FuzzyMatcher macther;
+    FuzzyMatcher matcher;
 
     /// The code completion results.
     std::vector<CompletionItem>& items;
