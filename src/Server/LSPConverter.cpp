@@ -492,6 +492,10 @@ json::Value LSPConverter::initialize(json::Value value) {
         kind = PositionEncodingKind::UTF32;
     }
 
+    if(params.workspaceFolders.empty()) {
+        log::fatal("The server must provide at least one workspace folder");
+    }
+
     workspacePath = fs::toPath(params.workspaceFolders[0].uri);
 
     proto::InitializeResult result{
