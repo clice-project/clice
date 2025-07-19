@@ -38,4 +38,4 @@ temp/
 .xmake/
 .vscode/
 unittests/Local/
-
+__pycache__/

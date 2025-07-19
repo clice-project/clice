@@ -145,6 +145,9 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
         return std::unexpected(std::format("Failed to execute action, because {} ", error));
     }
 
+    /// FIXME: PCH building is very very strict, any error in compilation will
+    /// result in fail, but for main file building, it is relatively relaxed.
+    /// We should have a better way to handle this.
     if(instance->getDiagnostics().hasFatalErrorOccurred()) {
         action->EndSourceFile();
         return report_diagnostics("Fetal error occured!!!", *diagnostics);
