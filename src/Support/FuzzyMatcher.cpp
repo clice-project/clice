@@ -117,7 +117,7 @@ std::optional<float> FuzzyMatcher::match(llvm::StringRef word) {
 
 // We get CharTypes from a lookup table. Each is 2 bits, 4 fit in each byte.
 // The top 6 bits of the char select the byte, the bottom 2 select the offset.
-// e.g. 'q' = 010100 01 = byte 28 (55), bits 3-2 (01) -> Lower.
+// e.g. 'q' = 011100 01 = byte 28 (55), bits 3-2 (01) -> Lower.
 constexpr static uint8_t CharTypes[] = {
     0x00, 0x00, 0x00, 0x00,                          // Control characters
     0x00, 0x00, 0x00, 0x00,                          // Control characters
