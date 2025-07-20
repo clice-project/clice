@@ -37,5 +37,7 @@ temp/
 .llvm*/
 .xmake/
 .vscode/
-unittests/Local/
 __pycache__/
+.pytest_cache/
+tests/unit/Local/
+
