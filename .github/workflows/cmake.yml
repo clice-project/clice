@@ -99,4 +99,6 @@ jobs:
 
       - name: Run tests
         run: |
-          ./build/bin/unit_tests --test-dir="./tests" --resource-dir="./.llvm/lib/clang/20"
+          ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="./.llvm/lib/clang/20"
+          pip install pytest pytest-asyncio pytest-xdist
+          pytest -s tests/integration --executable=./build/bin/clice

@@ -5,14 +5,12 @@ from ..fixtures.client import LSPClient
 
 
 @pytest.mark.asyncio
-async def test_initialize():
+async def test_initialize(executable, test_data_dir):
     client = LSPClient([
-        "/home/ykiko/C++/clice/build/bin/clice",
-        "--resource-dir=/home/ykiko/C++/llvm-project/build-debug-install/lib/clang/20",
-        "--mode=pipe",
+        executable, "--mode=pipe"
     ])
     await client.start()
-    result = await client.initialize("/home/ykiko/C++/clice")
+    result = await client.initialize(test_data_dir)
     assert "serverInfo" in result
     assert result["serverInfo"]["name"] == "clice"
     await client.exit()
