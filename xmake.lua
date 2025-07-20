@@ -127,7 +127,7 @@ target("integration_tests")
             "-m", "pytest",
             "-s", "tests/integration",
             "--executable=" .. target:dep("clice"):targetfile(),
-        }, {envs = opt.runenvs, timeout = opt.run_timeout})
+        }, {envs = opt.runenvs, timeout = opt.run_timeout, curdir = os.projectdir()})
 
         if errors then
             return false, errors
