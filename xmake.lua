@@ -92,6 +92,13 @@ target("clice")
 
     add_deps("clice-core")
 
+target("helper")
+    set_default(false)
+    set_kind("binary")
+    add_files("src/Driver/helper.cc")
+
+    add_deps("clice-core")
+
 target("unit_tests")
     set_default(false)
     set_kind("binary")
@@ -115,25 +122,34 @@ target("integration_tests")
     set_kind("phony")
 
     add_deps("clice")
-    add_packages("python")
+    add_packages("python", "llvm")
 
     add_tests("default", {run_timeout = 1000 * 10})
 
     on_test(function (target, opt)
+        import("private.action.run.runenvs")
+
+        local envs = opt.runenvs
+        if not envs then
+            local addenvs, setenvs = runenvs.make(target)
+            envs = runenvs.join(addenvs, setenvs)
+        end
+
         local python = path.join(target:pkg("python"):installdir(), "bin/python")
         os.vrunv(python, {"-m", "pip", "install", "pytest", "pytest-asyncio", "pytest-xdist"})
 
-        local outputs, errors = os.iorunv(python, {
+        os.vcp(
+            path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
+            path.join(path.directory(target:targetdir()), "lib/clang/20")
+        )
+
+        os.vrunv(python, {
             "-m", "pytest",
             "-s", "tests/integration",
             "--executable=" .. target:dep("clice"):targetfile(),
-        }, {envs = opt.runenvs, timeout = opt.run_timeout, curdir = os.projectdir()})
+        }, {envs = envs, timeout = opt.run_timeout, curdir = os.projectdir()})
 
-        if errors then
-            return false, errors
-        else
-            return true
-        end
+        return true
     end)
 
 rule("clice_build_config")
