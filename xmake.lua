@@ -24,6 +24,7 @@ if has_config("dev") then
 
     if has_config("enable_test") then
         add_requires("gtest[main]")
+        add_requires("python 3.12.x", {kind = "binary", system = false})
     end
 end
 
@@ -107,6 +108,32 @@ target("unit_tests")
             "--test-dir=" .. path.absolute("tests/data"),
             "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
         )
+    end)
+
+target("integration_tests")
+    set_default(false)
+    set_kind("phony")
+
+    add_deps("clice")
+    add_packages("python")
+
+    add_tests("default", {run_timeout = 1000 * 10})
+
+    on_test(function (target, opt)
+        local python = path.join(target:pkg("python"):installdir(), "bin/python")
+        os.vrunv(python, {"-m", "pip", "install", "pytest", "pytest-asyncio", "pytest-xdist"})
+
+        local outputs, errors = os.iorunv(python, {
+            "-m", "pytest",
+            "-s", "tests/integration",
+            "--executable=" .. target:dep("clice"):targetfile(),
+        }, {envs = opt.runenvs, timeout = opt.run_timeout})
+
+        if errors then
+            return false, errors
+        else
+            return true
+        end
     end)
 
 rule("clice_build_config")
