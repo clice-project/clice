@@ -53,6 +53,13 @@ jobs:
         run: |
           brew install llvm@20 lld@20
 
+      - name: Set up Python
+        if: matrix.os == 'windows-2025'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -97,8 +104,10 @@ jobs:
           cmake --preset release
           cmake --build --preset release
 
+      - name: Install Python dependencies
+        run: pip install pytest pytest-asyncio pytest-xdist
+
       - name: Run tests
         run: |
           ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="./.llvm/lib/clang/20"
-          pip install pytest pytest-asyncio pytest-xdist
           pytest -s tests/integration --executable=./build/bin/clice
