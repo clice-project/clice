@@ -24,7 +24,7 @@ if has_config("dev") then
 
     if has_config("enable_test") then
         add_requires("gtest[main]")
---        add_requires("python 3.12.x", {kind = "binary", system = false})
+        add_requires("python >=3.9")
     end
 end
 
@@ -117,40 +117,53 @@ target("unit_tests")
         )
     end)
 
--- target("integration_tests")
---     set_default(false)
---     set_kind("phony")
--- 
---     add_deps("clice")
---     add_packages("python", "llvm")
--- 
---     add_tests("default", {run_timeout = 1000 * 10})
--- 
---     on_test(function (target, opt)
---         import("private.action.run.runenvs")
--- 
---         local envs = opt.runenvs
---         if not envs then
---             local addenvs, setenvs = runenvs.make(target)
---             envs = runenvs.join(addenvs, setenvs)
---         end
--- 
---         local python = path.join(target:pkg("python"):installdir(), "bin/python")
---         os.vrunv(python, {"-m", "pip", "install", "pytest", "pytest-asyncio", "pytest-xdist"})
--- 
---         os.vcp(
---             path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
---             path.join(path.directory(target:targetdir()), "lib/clang/20")
---         )
--- 
---         os.vrunv(python, {
---             "-m", "pytest",
---             "-s", "tests/integration",
---             "--executable=" .. target:dep("clice"):targetfile(),
---         }, {envs = envs, timeout = opt.run_timeout, curdir = os.projectdir()})
--- 
---         return true
---     end)
+target("integration_tests")
+    set_default(false)
+    set_kind("phony")
+
+    add_deps("clice")
+    add_packages("python", "llvm")
+
+    add_tests("default", {run_timeout = 1000 * 10})
+
+    on_test(function (target, opt)
+        import("private.action.run.runenvs")
+
+        local envs = opt.runenvs
+        if not envs then
+            local addenvs, setenvs = runenvs.make(target)
+            envs = runenvs.join(addenvs, setenvs)
+        end
+
+        local python
+        local py_pkg = target:pkg("python")
+        if py_pkg:installdir() then
+            python = path.join(py_pkg:installdir(), "bin/python")
+        else
+            python = "python3"
+        end
+
+        local ok = try { function()
+            os.vrunv(python, { "-c", "import pytest" })
+            return true
+        end }
+        if not ok then
+            os.vrunv(python, {"-m", "pip", "install", "pytest", "pytest-asyncio", "pytest-xdist"})
+        end
+
+        os.vcp(
+            path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
+            path.join(path.directory(target:targetdir()), "lib/clang/20")
+        )
+
+        os.vrunv(python, {
+            "-m", "pytest",
+            "-s", "tests/integration",
+            "--executable=" .. target:dep("clice"):targetfile(),
+        }, {envs = envs, timeout = opt.run_timeout, curdir = os.projectdir()})
+
+        return true
+    end)
 
 rule("clice_build_config")
     on_load(function (target)
