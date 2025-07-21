@@ -139,15 +139,13 @@ target("integration_tests")
             envs = runenvs.join(addenvs, setenvs)
         end
 
-        local python
-        local installdir = target:pkg("python"):installdir()
-        if installdir then
-            python = path.join(installdir, "bin/python")
-        else
-            python = "python3"
-        end
-
+        local python = "python3"
         if not (has_config("ci") and is_plat("macosx")) then
+            local installdir = target:pkg("python"):installdir()
+            if installdir then
+                python = path.join(installdir, "bin/python")
+            end
+
             local ok = try { function()
                 os.vrunv(python, { "-c", "import pytest" })
                 return true
