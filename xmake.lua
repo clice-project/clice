@@ -24,6 +24,7 @@ if has_config("dev") then
 
     if has_config("enable_test") then
         add_requires("gtest[main]")
+--        add_requires("python 3.12.x", {kind = "binary", system = false})
     end
 end
 
@@ -91,19 +92,17 @@ target("clice")
 
     add_deps("clice-core")
 
-target("integration_tests")
+target("helper")
     set_default(false)
     set_kind("binary")
-    add_files("src/Driver/integration_tests.cc")
+    add_files("src/Driver/helper.cc")
 
     add_deps("clice-core")
-    -- TODO
-    -- add_tests("integration_tests")
 
 target("unit_tests")
     set_default(false)
     set_kind("binary")
-    add_files("src/Driver/unit_tests.cc", "unittests/**.cpp")
+    add_files("src/Driver/unit_tests.cc", "tests/unit/**.cpp")
     add_includedirs(".", {public = true})
 
     add_deps("clice-core")
@@ -113,10 +112,45 @@ target("unit_tests")
 
     on_config(function (target)
         target:set("runargs", 
-            "--test-dir=" .. path.absolute("tests"),
+            "--test-dir=" .. path.absolute("tests/data"),
             "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
         )
     end)
+
+-- target("integration_tests")
+--     set_default(false)
+--     set_kind("phony")
+-- 
+--     add_deps("clice")
+--     add_packages("python", "llvm")
+-- 
+--     add_tests("default", {run_timeout = 1000 * 10})
+-- 
+--     on_test(function (target, opt)
+--         import("private.action.run.runenvs")
+-- 
+--         local envs = opt.runenvs
+--         if not envs then
+--             local addenvs, setenvs = runenvs.make(target)
+--             envs = runenvs.join(addenvs, setenvs)
+--         end
+-- 
+--         local python = path.join(target:pkg("python"):installdir(), "bin/python")
+--         os.vrunv(python, {"-m", "pip", "install", "pytest", "pytest-asyncio", "pytest-xdist"})
+-- 
+--         os.vcp(
+--             path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
+--             path.join(path.directory(target:targetdir()), "lib/clang/20")
+--         )
+-- 
+--         os.vrunv(python, {
+--             "-m", "pytest",
+--             "-s", "tests/integration",
+--             "--executable=" .. target:dep("clice"):targetfile(),
+--         }, {envs = envs, timeout = opt.run_timeout, curdir = os.projectdir()})
+-- 
+--         return true
+--     end)
 
 rule("clice_build_config")
     on_load(function (target)

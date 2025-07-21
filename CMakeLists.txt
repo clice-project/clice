@@ -1,13 +1,21 @@
 cmake_minimum_required(VERSION 3.20)
-project(CLICE_PROJECT)
+project(CLICE_PROJECT LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
+# set LLVM install path
 if(NOT DEFINED LLVM_INSTALL_PATH OR LLVM_INSTALL_PATH STREQUAL "")
     message(FATAL_ERROR "Error: The variable LLVM_INSTALL_PATH is not set. Please specify it with -DLLVM_INSTALL_PATH=<value>.")
 endif()
+get_filename_component(LLVM_INSTALL_PATH "${LLVM_INSTALL_PATH}" ABSOLUTE)
+
+if(NOT EXISTS "${LLVM_INSTALL_PATH}")
+    message(FATAL_ERROR "Error: The specified LLVM_INSTALL_PATH does not exist: ${LLVM_INSTALL_PATH}")
+endif()
+message(STATUS "Found LLVM ${LLVM_INSTALL_PATH}")
 
 set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
 
@@ -19,57 +27,50 @@ else()
     find_package(Clang REQUIRED CONFIG)
 endif()
 
-message(STATUS "Found LLVM ${LLVM_INCLUDE_DIRS}")
-
-if(CLICE_DEV)
-    include(FetchContent)
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-        # libuv option
-        set(ASAN ON CACHE BOOL "" FORCE)
-    endif()
-
-    FetchContent_Declare(
-        tomlplusplus   
-        GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
-    )
-    FetchContent_Declare(
-        libuv
-        GIT_REPOSITORY https://github.com/libuv/libuv.git
-        GIT_TAG v1.x
-    )
-    FetchContent_MakeAvailable(tomlplusplus libuv)
-
-    if(WIN32)
-        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
-    endif()
-else()
-    find_package(tomlplusplus REQUIRED CONFIG)
-    find_package(libuv REQUIRED CONFIG)
+# install dependencies
+include(FetchContent)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # libuv option
+    set(ASAN ON CACHE BOOL "" FORCE)
 endif()
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -g -O0 -fsanitize=address -Wno-deprecated-declarations")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld -fsanitize=address")
-elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -fsanitize=thread -Wno-deprecated-declarations")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fsanitize=thread -fuse-ld=lld")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=thread -fuse-ld=lld")
-else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -O3 -Wno-deprecated-declarations")
-    if(WIN32)
-        set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_LINKER_FLAGS} -fuse-ld=lld-link")
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld-link")
-    else()
-        set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_LINKER_FLAGS} -fuse-ld=lld")
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld")
-    endif()
-endif()
+FetchContent_Declare(
+    tomlplusplus   
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+)
+FetchContent_Declare(
+    libuv
+    GIT_REPOSITORY https://github.com/libuv/libuv.git
+    GIT_TAG v1.x
+)
+FetchContent_MakeAvailable(tomlplusplus libuv)
 
 if(WIN32)
-    set(CLICE_BUILD_TYPE STATIC)
-else ()
-    set(CLICE_BUILD_TYPE STATIC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+endif()
+
+set(CLICE_CXX_FLAGS "-fno-rtti;-fno-exceptions;-Wno-deprecated-declarations")
+set(CLICE_LINKER_FLAGS "")
+
+# Build-type specific flags
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Debug build: Enabling -g -O0 -fsanitize=address")
+    list(APPEND CLICE_CXX_FLAGS "-g;-O0;-fsanitize=address")
+    list(APPEND CLICE_LINKER_FLAGS "-fsanitize=address")
+elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    message(STATUS "RelWithDebInfo build: Enabling -fsanitize=thread")
+    list(APPEND CLICE_CXX_FLAGS "-fsanitize=thread")
+    list(APPEND CLICE_LINKER_FLAGS "-fsanitize=thread")
+else()
+    message(STATUS "Release/Default build: Enabling -O3")
+    list(APPEND CLICE_CXX_FLAGS "-O3")
+endif()
+
+# Linker flags for LLD
+if(WIN32)
+    list(APPEND CLICE_LINKER_FLAGS "-fuse-ld=lld-link")
+else()
+    list(APPEND CLICE_LINKER_FLAGS "-fuse-ld=lld")
 endif()
 
 # build clice core part as library
@@ -83,11 +84,13 @@ file(GLOB_RECURSE CLICE_SOURCES
     "${CMAKE_SOURCE_DIR}/src/Server/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/Support/*.cpp"
 )
-add_library(clice-core "${CLICE_BUILD_TYPE}" "${CLICE_SOURCES}")
+add_library(clice-core STATIC "${CLICE_SOURCES}")
 
 # set llvm include and lib path
 target_include_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/include")
 target_link_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/lib")
+target_compile_options(clice-core PUBLIC ${CLICE_CXX_FLAGS})
+target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
 
 if(NOT WIN32)
     target_link_libraries(clice-core PUBLIC
@@ -122,10 +125,21 @@ target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus)
 # clice executable
 add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")
 target_link_libraries(clice PRIVATE clice-core)
+target_compile_options(clice PUBLIC ${CLICE_CXX_FLAGS})
+target_link_options(clice PUBLIC ${CLICE_LINKER_FLAGS})
+
+# copying resource dir
+add_custom_command(
+    TARGET clice
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${LLVM_INSTALL_PATH}/lib/clang/20/"  
+        "${CMAKE_BINARY_DIR}/lib/clang/20/"
+)
 
 # clice tests
 if(CLICE_ENABLE_TEST)
-    file(GLOB_RECURSE CLICE_TEST_SOURCES "${CMAKE_SOURCE_DIR}/unittests/*/*.cpp")
+    file(GLOB_RECURSE CLICE_TEST_SOURCES "${CMAKE_SOURCE_DIR}/tests/unit/*/*.cpp")
     add_executable(unit_tests "${CLICE_TEST_SOURCES}" "${CMAKE_SOURCE_DIR}/src/Driver/unit_tests.cc")
     target_include_directories(unit_tests PUBLIC "${CMAKE_SOURCE_DIR}")
 
@@ -137,10 +151,8 @@ if(CLICE_ENABLE_TEST)
     FetchContent_MakeAvailable(googletest)
 
     target_link_libraries(unit_tests PRIVATE gtest_main clice-core)
-
-    # integration_tests
-    add_executable(integration_tests "${CMAKE_SOURCE_DIR}/src/Driver/integration_tests.cc")
-    target_link_libraries(integration_tests PRIVATE clice-core)
+    target_compile_options(unit_tests PUBLIC ${CLICE_CXX_FLAGS})
+    target_link_options(unit_tests PUBLIC ${CLICE_LINKER_FLAGS})
 
     add_executable(helper "${CMAKE_SOURCE_DIR}/src/Driver/helper.cc")
     target_link_libraries(helper PRIVATE clice-core)

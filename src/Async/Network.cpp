@@ -41,6 +41,8 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     /// Parse the LSP message header.
     llvm::StringRef message = buffer;
     std::size_t length = 0;
+
+    /// FIXME: Handle Content-Type If any.
     if(message.consume_front("Content-Length: ") && !message.consumeInteger(10, length) &&
        message.consume_front("\r\n\r\n") && message.size() >= length) {
         auto result = message.substr(0, length);
