@@ -8,6 +8,7 @@ option("enable_test", {default = true})
 option("dev", {default = true})
 option("release", {default = false})
 option("llvm", {default = nil, description = "Specify pre-compiled llvm binary directory."})
+option("ci", {default = false})
 
 if has_config("dev") then
     set_policy("compatibility.version", "3.0")
@@ -24,7 +25,10 @@ if has_config("dev") then
 
     if has_config("enable_test") then
         add_requires("gtest[main]")
-        add_requires("python >=3.12", {kind = "binary"})
+        -- TODO: fix python fetch on mac (from xmake-repo python fetch)
+        if not (has_config("ci") and is_plat("macosx")) then
+            add_requires("python >=3.12", {kind = "binary"})
+        end
     end
 end
 
@@ -136,19 +140,21 @@ target("integration_tests")
         end
 
         local python
-        local py_pkg = target:pkg("python")
-        if py_pkg:installdir() then
-            python = path.join(py_pkg:installdir(), "bin/python")
+        local installdir = target:pkg("python"):installdir()
+        if installdir then
+            python = path.join(installdir, "bin/python")
         else
             python = "python3"
         end
 
-        local ok = try { function()
-            os.vrunv(python, { "-c", "import pytest" })
-            return true
-        end }
-        if not ok then
-            os.vrunv(python, {"-m", "pip", "install", "pytest", "pytest-asyncio", "pytest-xdist"})
+        if not (has_config("ci") and is_plat("macosx")) then
+            local ok = try { function()
+                os.vrunv(python, { "-c", "import pytest" })
+                return true
+            end }
+            if not ok then
+                os.vrunv(python, {"-m", "pip", "install", "pytest", "pytest-asyncio", "pytest-xdist"})
+            end
         end
 
         os.vcp(
