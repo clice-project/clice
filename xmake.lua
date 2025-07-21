@@ -24,7 +24,7 @@ if has_config("dev") then
 
     if has_config("enable_test") then
         add_requires("gtest[main]")
-        add_requires("python >=3.9")
+        add_requires("python >=3.12", {kind = "binary"})
     end
 end
 
