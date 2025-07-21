@@ -136,9 +136,6 @@ jobs:
         run: |
           xmake build --verbose --diagnosis --all
 
-      - name: Install Python dependencies
-        run: pip install pytest pytest-asyncio pytest-xdist
-
       - name: Run tests
         run: |
           xmake test --verbose
