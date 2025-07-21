@@ -117,6 +117,10 @@ jobs:
         run: |
           brew install llvm@20
 
+      - name: Setup pytest
+        run: |
+          brew install pytest
+
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:
