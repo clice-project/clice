@@ -130,7 +130,7 @@ jobs:
 
       - name: Xmake configure
         run: |
-          xmake config --yes --mode=${{ matrix.build_type }} --toolchain=clang --sdk=/opt/homebrew/opt/llvm@20
+          xmake config --yes --ci=y --mode=${{ matrix.build_type }} --toolchain=clang --sdk=/opt/homebrew/opt/llvm@20
 
       - name: Build clice
         run: |
