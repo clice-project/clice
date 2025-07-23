@@ -200,8 +200,6 @@ async::Task<> Scheduler::buildAST(std::string path, std::string content) {
     /// Index the source file.
     co_await indexer.index(*AST);
 
-    AST->context().getTranslationUnitDecl()->dump();
-
     file = &openFiles[path];
     /// Update built AST info.
     file->AST = std::make_shared<CompilationUnit>(std::move(*AST));
