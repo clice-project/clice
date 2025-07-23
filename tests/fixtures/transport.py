@@ -11,7 +11,6 @@ class LSPTransport:
         self.mode = mode
         self.host = host
         self.port = port
-        self.workspace = ""
 
         self.process: asyncio.subprocess.Process = None
         self.reader: asyncio.StreamReader = None

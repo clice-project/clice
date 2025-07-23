@@ -109,6 +109,14 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
                                             std::string content) -> async::Task<> {
         CompilationParams params;
         params.arguments = scheduler.database.get_command(path, true).arguments;
+        if(!fs::exists(config::cache.dir)) {
+            auto error = fs::create_directories(config::cache.dir);
+            if(error) {
+                log::warn("Fail to create directory for PCH building: {}", config::cache.dir);
+                co_return;
+            }
+        }
+        
         params.outPath = path::join(config::cache.dir, path::filename(path) + ".pch");
         params.add_remapped_file(path, content, bound);
 

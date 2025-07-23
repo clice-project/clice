@@ -34,6 +34,7 @@
 temp/
 *build*/
 .cache/
+.clice/
 .llvm*/
 .xmake/
 .vscode/
