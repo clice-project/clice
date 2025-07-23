@@ -7,11 +7,11 @@ namespace clice {
 /// Base class of structed text
 class Block {
 public:
-    virtual void renderMarkdown(llvm::raw_ostream& os) const = 0;
+    virtual void render_markdown(llvm::raw_ostream& os) const = 0;
     virtual std::unique_ptr<Block> clone() const = 0;
-    std::string asMarkdown() const;
+    std::string as_markdown() const;
 
-    virtual bool isRuler() const {
+    virtual bool is_ruler() const {
         return false;
     }
 
@@ -28,15 +28,15 @@ public:
         InlineCode,
         Strikethough,
     };
-    void renderMarkdown(llvm::raw_ostream& os) const override;
+    void render_markdown(llvm::raw_ostream& os) const override;
 
     std::unique_ptr<Block> clone() const override {
         return std::make_unique<Paragraph>(*this);
     }
 
-    Paragraph& appendText(std::string text, Kind kind = Kind::PlainText);
+    Paragraph& append_text(std::string text, Kind kind = Kind::PlainText);
 
-    Paragraph& appendNewlineChar(unsigned cnt = 1);
+    Paragraph& append_newline_char(unsigned cnt = 1);
 
 private:
     struct Chunk {
@@ -56,11 +56,11 @@ class BulletList : public Block {
 public:
     BulletList();
     ~BulletList();
-    void renderMarkdown(llvm::raw_ostream& os) const override;
+    void render_markdown(llvm::raw_ostream& os) const override;
 
     std::unique_ptr<Block> clone() const override;
 
-    StructedText& addItem();
+    StructedText& add_item();
 
 private:
     std::vector<StructedText> items;
@@ -88,17 +88,17 @@ public:
 
     void append(StructedText& doc);
 
-    Paragraph& addParagraph();
+    Paragraph& add_paragraph();
 
-    void addRuler();
+    void add_ruler();
 
-    void addCodeBlock(std::string code, std::string lang = "");
+    void add_code_block(std::string code, std::string lang = "");
 
-    Paragraph& addHeading(unsigned level);
+    Paragraph& add_heading(unsigned level);
 
-    BulletList& addBulletList();
+    BulletList& add_bullet_list();
 
-    std::string asMarkdown() const;
+    std::string as_markdown() const;
 
 private:
     std::vector<std::unique_ptr<Block>> blocks;
