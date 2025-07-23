@@ -19,7 +19,7 @@ def executable(request):
             "Error: You must specify the 'clice' executable path using "
             "'--executable=<path/to/clice>' in pytest arguments, "
             "or configure it in your pytest.ini/conftest.py.",
-            returncode=os.EX_USAGE
+            returncode=64
         )
 
     path = Path(executable)
@@ -27,7 +27,7 @@ def executable(request):
         pytest.exit(
             f"Error: 'clice' executable not found at '{executable}'. "
             "Please ensure the path is correct and the file exists.",
-            returncode=os.EX_USAGE
+            returncode=64
         )
 
     return path.resolve()

@@ -116,7 +116,7 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
                 co_return;
             }
         }
-        
+
         params.outPath = path::join(config::cache.dir, path::filename(path) + ".pch");
         params.add_remapped_file(path, content, bound);
 
@@ -199,6 +199,8 @@ async::Task<> Scheduler::buildAST(std::string path, std::string content) {
 
     /// Index the source file.
     co_await indexer.index(*AST);
+
+    AST->context().getTranslationUnitDecl()->dump();
 
     file = &openFiles[path];
     /// Update built AST info.
