@@ -11,7 +11,7 @@ struct CompilationUnit::Impl {
     /// The interested file ID.
     clang::FileID interested;
 
-    clang::SourceManager& SM;
+    clang::SourceManager& src_mgr;
 
     /// The frontend action used to build the unit.
     std::unique_ptr<clang::FrontendAction> action;

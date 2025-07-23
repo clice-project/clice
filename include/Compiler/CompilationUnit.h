@@ -50,65 +50,89 @@ public:
     ~CompilationUnit();
 
 public:
-    clang::FileID file_id(llvm::StringRef file);
+    /// Get the file id for given file. If such file doesn't exist, the result
+    /// will be invalid file id. If the the content of the file doesn't have
+    /// `#pragma once` or guard macro, each inclusion of the file will generate
+    /// a new file id, return the first one.
+    auto file_id(llvm::StringRef file) -> clang::FileID;
 
-    clang::FileID file_id(clang::SourceLocation location);
-
-    std::uint32_t file_offset(clang::SourceLocation location);
-
-    /// Get the file path of a file ID. If the file exists the path
-    /// will be real path, otherwise it will be virtual path. The result
-    /// makes sure the path is ended with '/0'.
-    llvm::StringRef file_path(clang::FileID fid);
-
-    /// Get the content of a file ID.
-    llvm::StringRef file_content(clang::FileID fid);
-
-    /// The interested file ID. For file without header context, it is the main file ID.
-    /// For file with header context, it is the file ID of header file.
-    clang::FileID interested_file();
-
-    llvm::StringRef interested_content();
-
-    /// Check if a file is a builtin file.
-    bool is_builtin_file(clang::FileID fid);
-
-    clang::SourceLocation start_location(clang::FileID fid);
-
-    clang::SourceLocation end_location(clang::FileID fid);
-
-    clang::SourceLocation include_location(clang::FileID fid);
-
-    /// Given a macro location, return its top level spelling location(the location
-    // of the token that the result token is expanded from, may from macro argument
-    // or macro definition).
-    clang::SourceLocation spelling_location(clang::SourceLocation location);
-
-    /// Given a macro location, return its top level expansion location(the location of
-    // macro expansion).
-    clang::SourceLocation expansion_location(clang::SourceLocation location);
-
-    std::pair<clang::FileID, std::uint32_t> decompose_location(clang::SourceLocation location);
+    /// If the location represents file location, it is composed of a file id
+    /// and an offset relative to the file begin, decompose it.
+    auto decompose_location(clang::SourceLocation location)
+        -> std::pair<clang::FileID, std::uint32_t>;
 
     /// Decompose a source range into file ID and local source range. The begin and end
     /// of the input source range both should be `FileID`. If the range is cross multiple
     /// files, we cut off the range at the end of the first file.
-    std::pair<clang::FileID, LocalSourceRange> decompose_range(clang::SourceRange range);
+    auto decompose_range(clang::SourceRange range) -> std::pair<clang::FileID, LocalSourceRange>;
 
-    /// Same as `toLocalRange`, but will translate range to expansion range.
-    std::pair<clang::FileID, LocalSourceRange> decompose_expansion_range(clang::SourceRange range);
+    /// Same as `decompose_range`, but will translate range to expansion range.
+    auto decompose_expansion_range(clang::SourceRange range)
+        -> std::pair<clang::FileID, LocalSourceRange>;
 
-    clang::PresumedLoc presumed_location(clang::SourceLocation location);
+    /// Get the file id of the file location.
+    auto file_id(clang::SourceLocation location) -> clang::FileID;
 
-    llvm::ArrayRef<clang::syntax::Token> spelled_tokens(clang::FileID fid);
+    /// Get the file offset of the file location.
+    auto file_offset(clang::SourceLocation location) -> std::uint32_t;
 
-    llvm::ArrayRef<clang::syntax::Token> expanded_tokens(clang::SourceRange range);
+    /// Get the file path of the file ID. If the file exists the path
+    /// will be real path, otherwise it will be virtual path. The result
+    /// makes sure the path is ended with '/0'.
+    auto file_path(clang::FileID fid) -> llvm::StringRef;
 
-    llvm::StringRef token_spelling(clang::SourceLocation location);
+    /// Get the file content of the file ID.
+    auto file_content(clang::FileID fid) -> llvm::StringRef;
 
-    llvm::StringRef module_name();
+    /// Get the interested file ID. Currently, it is the same as the main
+    /// file id，i.e. the file id of source file.
+    auto interested_file() -> clang::FileID;
 
+    /// Get the content of interested file.
+    auto interested_content() -> llvm::StringRef;
+
+    /// Check if a file is a builtin file.
+    bool is_builtin_file(clang::FileID fid);
+
+    /// Get the location of the file start of the file id.
+    auto start_location(clang::FileID fid) -> clang::SourceLocation;
+
+    /// Get the location of file end of the file id.
+    auto end_location(clang::FileID fid) -> clang::SourceLocation;
+
+    /// Get the include location of the file id, i.e. where the file
+    /// was introduced by `#include`.
+    auto include_location(clang::FileID fid) -> clang::SourceLocation;
+
+    /// Given a macro location, return its top level spelling location(the location
+    /// of the token that the result token is expanded from, may from macro argument
+    /// or macro definition).
+    auto spelling_location(clang::SourceLocation location) -> clang::SourceLocation;
+
+    /// Given a macro location, return its top level expansion location(the location of
+    /// macro expansion).
+    auto expansion_location(clang::SourceLocation location) -> clang::SourceLocation;
+
+    /// FIXME: Do we really need this function?
+    auto presumed_location(clang::SourceLocation location) -> clang::PresumedLoc;
+
+    /// Get the spelled tokens(raw token) of the file id.
+    auto spelled_tokens(clang::FileID fid) -> llvm::ArrayRef<clang::syntax::Token>;
+
+    /// Get the expanded tokens(after preprocessing) of the file id.
+    auto expanded_tokens(clang::SourceRange range) -> llvm::ArrayRef<clang::syntax::Token>;
+
+    /// Get the spelling of the token corresponding to the location.
+    auto token_spelling(clang::SourceLocation location) -> llvm::StringRef;
+
+    /// Get the C++20 named module name if any.
+    auto module_name() -> llvm::StringRef;
+
+    /// Return whether this unit it module interface unit.
     bool is_module_interface_unit();
+
+    /// Return all diagnostics in the process of compilation.
+    auto diagnostics() -> llvm::ArrayRef<Diagnostic>;
 
     clang::LangOptions& lang_options();
 
@@ -119,8 +143,6 @@ public:
     llvm::DenseMap<clang::FileID, Directive>& directives();
 
     clang::TranslationUnitDecl* tu();
-
-    const std::vector<Diagnostic>& diagnostics();
 
     /// All files involved in building the unit.
     const llvm::DenseSet<clang::FileID>& files();
