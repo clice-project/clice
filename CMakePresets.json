@@ -15,7 +15,6 @@
             "binaryDir": "${sourceDir}/build",
             "toolchainFile": "${sourceDir}/cmake/toolchain.cmake",
             "cacheVariables": {
-                "CLICE_DEV": "ON",
                 "CLICE_ENABLE_TEST": "ON",
                 "LLVM_INSTALL_PATH": "./.llvm"
             }

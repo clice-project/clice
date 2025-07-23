@@ -42,3 +42,6 @@ __pycache__/
 .pytest_cache/
 tests/unit/Local/
 
+**/node_modules
+docs/.vitepress/dist
+docs/.vitepress/cache

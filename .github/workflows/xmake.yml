@@ -2,21 +2,21 @@ name: xmake
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths-ignore:
-          - 'docs'
-          - 'scripts'
-          - '.clang-format'
-          - '.clangd'
-          - '.gitignore'
-          - 'LICENSE'
-          - 'README.md'
-          - '.github/workflows/cmake.yml'
-          - 'CMakeLists.txt'
-          - 'CMakePresets.json'
-          - 'cmake'
+      - "docs"
+      - "scripts"
+      - ".clang-format"
+      - ".clangd"
+      - ".gitignore"
+      - "LICENSE"
+      - "README.md"
+      - ".github/workflows/cmake.yml"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "cmake"
 
 jobs:
   linux:
@@ -50,7 +50,7 @@ jobs:
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: branch@master
-          actions-cache-folder: '.xmake-cache'
+          actions-cache-folder: ".xmake-cache"
           actions-cache-key: ${{ matrix.os }}
           package-cache: true
           package-cache-key: ${{ matrix.os }}
@@ -83,7 +83,7 @@ jobs:
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: branch@master
-          actions-cache-folder: '.xmake-cache'
+          actions-cache-folder: ".xmake-cache"
           actions-cache-key: ${{ matrix.os }}
           package-cache: true
           package-cache-key: ${{ matrix.os }}
@@ -104,7 +104,7 @@ jobs:
   macos:
     strategy:
       matrix:
-        os: [ macos-15 ]
+        os: [macos-15]
         build_type: [release, debug]
 
     runs-on: ${{ matrix.os }}
@@ -121,7 +121,7 @@ jobs:
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: branch@master
-          actions-cache-folder: '.xmake-cache'
+          actions-cache-folder: ".xmake-cache"
           actions-cache-key: ${{ matrix.os }}
           package-cache: true
           package-cache-key: ${{ matrix.os }}

@@ -43,8 +43,6 @@ xmake l scripts/fetch-clang-headers.lua
 
 We use CMake `find_package` in CONFIG mode for dependency resolution.
 
-The CMake option `-DCLICE_DEV=ON` will automatically fetch `tomlplusplus` and `libuv` via FetchContent. If you prefer system-provided dependencies, do not enable this option.
-
 LLVM precompiled binaries must be installed at `-DLLVM_INSTALL_PATH=path/to/llvm`.
 
 ```bash
@@ -64,7 +62,7 @@ $ 7z x x64-windows-msvc-release.7z "-o.llvm"
 ```
 
 ```bash
-$ cmake -B build -DCLICE_DEV=ON -DCLICE_ENABLE_TEST=OFF -DLLVM_INSTALL_PATH=.llvm
+$ cmake -B build -DCLICE_ENABLE_TEST=OFF -DLLVM_INSTALL_PATH=.llvm
 $ cmake --build build
 ```
 

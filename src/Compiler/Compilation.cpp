@@ -168,7 +168,7 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
 
     auto impl = new CompilationUnit::Impl{
         .interested = pp.getSourceManager().getMainFileID(),
-        .SM = instance->getSourceManager(),
+        .src_mgr = instance->getSourceManager(),
         .action = std::move(action),
         .instance = std::move(instance),
         .m_resolver = std::move(resolver),
