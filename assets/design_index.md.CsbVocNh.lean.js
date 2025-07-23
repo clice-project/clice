@@ -1,0 +1,1 @@
+import{_ as e,c as t,o as n}from"./chunks/framework.CMh-eHm7.js";const m=JSON.parse('{"title":"","description":"","frontmatter":{},"headers":[],"relativePath":"design/index.md","filePath":"en/design/index.md"}'),a={name:"design/index.md"};function s(r,d,i,o,c,p){return n(),t("div")}const f=e(a,[["render",s]]);export{m as __pageData,f as default};
