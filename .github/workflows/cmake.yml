@@ -2,19 +2,19 @@ name: cmake
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths-ignore:
-          - 'docs'
-          - 'scripts'
-          - '.clang-format'
-          - '.clangd'
-          - '.gitignore'
-          - 'LICENSE'
-          - 'README.md'
-          - '.github/workflows/xmake.yml'
-          - 'xmake.lua'
+      - "docs"
+      - "scripts"
+      - ".clang-format"
+      - ".clangd"
+      - ".gitignore"
+      - "LICENSE"
+      - "README.md"
+      - ".github/workflows/xmake.yml"
+      - "xmake.lua"
 
 jobs:
   build:
@@ -57,7 +57,7 @@ jobs:
         if: matrix.os == 'windows-2025'
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -67,7 +67,7 @@ jobs:
         run: |
           curl -O -L "https://github.com/clice-project/llvm-binary/releases/download/20.0.0/x64-windows-msvc-release.7z"
           7z x x64-windows-msvc-release.7z "-o.llvm"
-                  
+
       - name: Setup llvm binary
         if: matrix.os == 'ubuntu-24.04'
         run: |
@@ -89,7 +89,7 @@ jobs:
         run: |
           cmake --preset release
           cmake --build --preset release
-                  
+
       - name: Build clice (debug)
         if: matrix.os == 'ubuntu-24.04'
         run: |

@@ -5,7 +5,7 @@ permissions:
 
 on:
   push:
-    branches: [ non-existent-branch ]
+    branches: [non-existent-branch]
 
 jobs:
   package:
@@ -65,7 +65,7 @@ jobs:
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: branch@master
-          actions-cache-folder: '.xmake-cache'
+          actions-cache-folder: ".xmake-cache"
           actions-cache-key: ${{ matrix.os }}
 
       - name: Package
