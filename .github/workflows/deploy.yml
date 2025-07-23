@@ -1,4 +1,4 @@
-name: deploy docs
+name: deploy
 
 on:
   push:
@@ -8,8 +8,6 @@ on:
 
   pull_request:
     branches: [main]
-    paths:
-      - "docs/**"
 
 jobs:
   deploy:
@@ -22,26 +20,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 8
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "pnpm"
+          cache: "npm"
+          cache-dependency-path: docus/package-lock.json
 
       - name: Install dependencies in docus
         run: |
           cd docus
-          pnpm install
+          npm install
 
       - name: Build docs
         run: |
           cd docus
-          pnpm run docs:build
+          npm run docs:build
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
