@@ -4,7 +4,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "clice",
   description: "a powerful and modern C++ language server",
-  base: process.env.NODE_ENV === 'production' ? "/clice/" : '/',
+  base: '/',
   rewrites: {
     'en/:rest*': ':rest*',
   },
