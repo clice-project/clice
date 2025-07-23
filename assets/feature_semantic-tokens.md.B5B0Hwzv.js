@@ -1,0 +1,1 @@
+import{_ as e,c as t,o as a}from"./chunks/framework.U1Gow_7P.js";const _=JSON.parse('{"title":"","description":"","frontmatter":{},"headers":[],"relativePath":"feature/semantic-tokens.md","filePath":"en/feature/semantic-tokens.md"}'),n={name:"feature/semantic-tokens.md"};function s(o,r,c,i,m,f){return a(),t("div")}const d=e(n,[["render",s]]);export{_ as __pageData,d as default};
