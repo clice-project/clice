@@ -8,4 +8,4 @@
 6. Array index for elements in initialize list expression.
 7. Value of `sizeof` and `alignof` in `struct/class` defination. 
 
-There is a configurable option, and some examples for above cases, see [struct clice::config::InlayHintOption](../../include/Feature/InlayHint.h) for more infomation. 
+There is a configurable option, and some examples.
