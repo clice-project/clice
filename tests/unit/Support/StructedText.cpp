@@ -40,72 +40,72 @@ char *longestPalindrome_solv2(const char *s) {
 }
 )c";
     StructedText st;
-    st.addParagraph().appendText("CodeBlock Example:").appendNewlineChar();
-    st.addCodeBlock(cb, "c");
-    auto& para = st.addParagraph();
-    para.appendText("para1").appendNewlineChar();
-    std::print("{}", st.asMarkdown());
+    st.add_paragraph().append_text("CodeBlock Example:").append_newline_char();
+    st.add_code_block(cb, "c");
+    auto& para = st.add_paragraph();
+    para.append_text("para1").append_newline_char();
+    std::print("{}", st.as_markdown());
 }
 
 TEST(StructedText, BulletList) {
     StructedText st;
-    st.addBulletList().addItem().addParagraph().appendText("Item1");
-    st.addBulletList().addItem().addParagraph().appendText("Item2", Paragraph::Kind::InlineCode);
-    st.addBulletList().addItem().addParagraph().appendText("Item3", Paragraph::Kind::Bold);
-    st.addBulletList().addItem().addParagraph().appendText("Item4", Paragraph::Kind::Italic);
-    st.addBulletList().addItem().addParagraph().appendText("Item5", Paragraph::Kind::Strikethough);
-    std::print("{}", st.asMarkdown());
+    st.add_bullet_list().add_item().add_paragraph().append_text("Item1");
+    st.add_bullet_list().add_item().add_paragraph().append_text("Item2", Paragraph::Kind::InlineCode);
+    st.add_bullet_list().add_item().add_paragraph().append_text("Item3", Paragraph::Kind::Bold);
+    st.add_bullet_list().add_item().add_paragraph().append_text("Item4", Paragraph::Kind::Italic);
+    st.add_bullet_list().add_item().add_paragraph().append_text("Item5", Paragraph::Kind::Strikethough);
+    std::print("{}", st.as_markdown());
 }
 
 TEST(StructedText, FullText) {
     StructedText st;
-    st.addHeading(3)
-        .appendText("function")
-        .appendText("test_bar", Paragraph::Kind::InlineCode)
-        .appendNewlineChar()
-        .appendText("Provided by:")
-        .appendText("`foo/bar/baz.h`");
-    st.addRuler();
-    st.addParagraph()
-        .appendText("→")
-        .appendText("int", Paragraph::Kind::InlineCode)
-        .appendNewlineChar();
-    st.addParagraph().appendText("Paramaters:", Paragraph::Kind::Bold).appendNewlineChar();
-    auto& params = st.addBulletList();
-    params.addItem()
-        .addParagraph()
-        .appendText("int foo", Paragraph::Kind::InlineCode)
-        .appendText("doc for foo\ndoc for foo line2");
-    params.addItem()
-        .addParagraph()
-        .appendText("char** bar", Paragraph::Kind::InlineCode)
-        .appendText("doc for bar");
-    params.addItem()
-        .addParagraph()
-        .appendText("char** baz", Paragraph::Kind::InlineCode)
-        .appendText("doc for baz");
-    st.addParagraph().appendText(R"md(
+    st.add_heading(3)
+        .append_text("function")
+        .append_text("test_bar", Paragraph::Kind::InlineCode)
+        .append_newline_char()
+        .append_text("Provided by:")
+        .append_text("`foo/bar/baz.h`");
+    st.add_ruler();
+    st.add_paragraph()
+        .append_text("→")
+        .append_text("int", Paragraph::Kind::InlineCode)
+        .append_newline_char();
+    st.add_paragraph().append_text("Paramaters:", Paragraph::Kind::Bold).append_newline_char();
+    auto& params = st.add_bullet_list();
+    params.add_item()
+        .add_paragraph()
+        .append_text("int foo", Paragraph::Kind::InlineCode)
+        .append_text("doc for foo\ndoc for foo line2");
+    params.add_item()
+        .add_paragraph()
+        .append_text("char** bar", Paragraph::Kind::InlineCode)
+        .append_text("doc for bar");
+    params.add_item()
+        .add_paragraph()
+        .append_text("char** baz", Paragraph::Kind::InlineCode)
+        .append_text("doc for baz");
+    st.add_paragraph().append_text(R"md(
 brief block
 brief line2
   a b c d e f
   ~~~~^
 This is *Italic* **Bold** ~~Striketough~~, `InlineCode` 
 )md");
-    st.addRuler();
-    st.addParagraph().appendText("Details:", Paragraph::Kind::Bold).appendNewlineChar();
-    auto& details = st.addBulletList();
-    details.addItem().addParagraph().appendText("Detail1: blah blah...");
-    details.addItem().addParagraph().appendText("Detail2: blah blah...\n    Line2: ......");
-    details.addItem().addParagraph().appendText("Detail3: blah blah...");
-    st.addRuler();
-    st.addParagraph().appendText("Details:", Paragraph::Kind::Bold).appendNewlineChar();
-    auto& warnings = st.addBulletList();
-    warnings.addItem().addParagraph().appendText("warnings1: blah blah...");
-    warnings.addItem().addParagraph().appendText("warnings2: blah blah...\n    Line2: ......");
-    warnings.addItem().addParagraph().appendText("warnings3: blah blah...");
-    st.addRuler();
-    st.addCodeBlock("int test_bar(int foo, char **bar, char **baz);\n", "cpp");
-    std::print("{}", st.asMarkdown());
+    st.add_ruler();
+    st.add_paragraph().append_text("Details:", Paragraph::Kind::Bold).append_newline_char();
+    auto& details = st.add_bullet_list();
+    details.add_item().add_paragraph().append_text("Detail1: blah blah...");
+    details.add_item().add_paragraph().append_text("Detail2: blah blah...\n    Line2: ......");
+    details.add_item().add_paragraph().append_text("Detail3: blah blah...");
+    st.add_ruler();
+    st.add_paragraph().append_text("Details:", Paragraph::Kind::Bold).append_newline_char();
+    auto& warnings = st.add_bullet_list();
+    warnings.add_item().add_paragraph().append_text("warnings1: blah blah...");
+    warnings.add_item().add_paragraph().append_text("warnings2: blah blah...\n    Line2: ......");
+    warnings.add_item().add_paragraph().append_text("warnings3: blah blah...");
+    st.add_ruler();
+    st.add_code_block("int test_bar(int foo, char **bar, char **baz);\n", "cpp");
+    std::print("{}", st.as_markdown());
 }
 
 }  // namespace clice::testing

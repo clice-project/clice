@@ -4,10 +4,10 @@
 
 namespace clice {
 
-std::string Block::asMarkdown() const {
+std::string Block::as_markdown() const {
     std::string md;
     llvm::raw_string_ostream os(md);
-    renderMarkdown(os);
+    render_markdown(os);
     return llvm::StringRef(os.str()).trim().str();
 }
 
@@ -18,13 +18,13 @@ std::unique_ptr<Block> BulletList::clone() const {
     return std::make_unique<BulletList>(*this);
 }
 
-void BulletList::renderMarkdown(llvm::raw_ostream& os) const {
+void BulletList::render_markdown(llvm::raw_ostream& os) const {
     for(auto& item: items) {
-        os << "- " << item.asMarkdown() << '\n';
+        os << "- " << item.as_markdown() << '\n';
     }
 }
 
-StructedText& BulletList::addItem() {
+StructedText& BulletList::add_item() {
     return items.emplace_back();
 }
 
@@ -33,7 +33,7 @@ StructedText& BulletList::addItem() {
 // on editors
 // We do nothing on it. All the left comments are regarded as markdown rather
 // than plain text
-void Paragraph::renderMarkdown(llvm::raw_ostream& os) const {
+void Paragraph::render_markdown(llvm::raw_ostream& os) const {
     bool need_space = false;
     bool has_chunks = false;
     for(auto& chunk: chunks) {
@@ -68,7 +68,7 @@ void Paragraph::renderMarkdown(llvm::raw_ostream& os) const {
     }
 }
 
-Paragraph& Paragraph::appendText(std::string text, Kind kind) {
+Paragraph& Paragraph::append_text(std::string text, Kind kind) {
     if(kind == Kind::PlainText) {
         llvm::StringRef s{text};
         // s = s.trim(" \t\v\f\r");
@@ -91,7 +91,7 @@ Paragraph& Paragraph::appendText(std::string text, Kind kind) {
     return *this;
 }
 
-Paragraph& Paragraph::appendNewlineChar(unsigned cnt) {
+Paragraph& Paragraph::append_newline_char(unsigned cnt) {
     auto& chunk = chunks.emplace_back();
     chunk.kind = Kind::PlainText;
     chunk.content = std::string(cnt, '\n');
@@ -102,9 +102,9 @@ class Heading : public Paragraph {
 public:
     Heading(unsigned level) : level(level) {}
 
-    void renderMarkdown(llvm::raw_ostream& os) const override {
+    void render_markdown(llvm::raw_ostream& os) const override {
         os << std::string(level, '#') << ' ';
-        Paragraph::renderMarkdown(os);
+        Paragraph::render_markdown(os);
     }
 
 private:
@@ -113,11 +113,11 @@ private:
 
 class Ruler : public Block {
 public:
-    void renderMarkdown(llvm::raw_ostream& os) const override {
+    void render_markdown(llvm::raw_ostream& os) const override {
         os << "\n---\n";
     }
 
-    bool isRuler() const override {
+    bool is_ruler() const override {
         return true;
     }
 
@@ -128,7 +128,7 @@ public:
 
 class CodeBlock : public Block {
 public:
-    void renderMarkdown(llvm::raw_ostream& os) const override {
+    void render_markdown(llvm::raw_ostream& os) const override {
         os << "```" << lang << '\n' << code << "```\n";
     }
 
@@ -149,19 +149,19 @@ static std::string render_blocks(llvm::ArrayRef<std::unique_ptr<Block>> blocks) 
     llvm::raw_string_ostream os(md);
 
     // Trim rulers.
-    blocks = blocks.drop_while([](const std::unique_ptr<Block>& C) { return C->isRuler(); });
+    blocks = blocks.drop_while([](const std::unique_ptr<Block>& C) { return C->is_ruler(); });
     auto last = llvm::find_if(llvm::reverse(blocks),
-                              [](const std::unique_ptr<Block>& C) { return !C->isRuler(); });
+                              [](const std::unique_ptr<Block>& C) { return !C->is_ruler(); });
     blocks = blocks.drop_back(blocks.end() - last.base());
 
     bool last_block_was_ruler = true;
     // render
     for(const auto& b: blocks) {
-        if(b->isRuler() && last_block_was_ruler) {
+        if(b->is_ruler() && last_block_was_ruler) {
             continue;
         }
-        last_block_was_ruler = b->isRuler();
-        b->renderMarkdown(os);
+        last_block_was_ruler = b->is_ruler();
+        b->render_markdown(os);
     }
 
     // Get rid of redundant empty lines introduced in plaintext while imitating
@@ -185,30 +185,30 @@ void StructedText::append(StructedText& other) {
     std::move(other.blocks.begin(), other.blocks.end(), std::back_inserter(blocks));
 }
 
-Paragraph& StructedText::addParagraph() {
+Paragraph& StructedText::add_paragraph() {
     blocks.emplace_back(std::make_unique<Paragraph>());
     return *static_cast<Paragraph*>(blocks.back().get());
 }
 
-void StructedText::addRuler() {
+void StructedText::add_ruler() {
     blocks.push_back(std::make_unique<Ruler>());
 }
 
-void StructedText::addCodeBlock(std::string code, std::string lang) {
+void StructedText::add_code_block(std::string code, std::string lang) {
     blocks.emplace_back(std::make_unique<CodeBlock>(std::move(code), std::move(lang)));
 }
 
-Paragraph& StructedText::addHeading(unsigned level) {
+Paragraph& StructedText::add_heading(unsigned level) {
     blocks.emplace_back(std::make_unique<Heading>(level));
     return *static_cast<Paragraph*>(blocks.back().get());
 }
 
-BulletList& StructedText::addBulletList() {
+BulletList& StructedText::add_bullet_list() {
     blocks.push_back(std::make_unique<BulletList>());
     return *static_cast<BulletList*>(blocks.back().get());
 }
 
-std::string StructedText::asMarkdown() const {
+std::string StructedText::as_markdown() const {
     return render_blocks(blocks);
 }
 
