@@ -8,11 +8,11 @@
 
 namespace clice {
 
-void Scheduler::addDocument(std::string path, std::string content) {
-    auto& openFile = openFiles[path];
+async::Task<> Scheduler::add_document(std::string path, std::string content) {
+    auto& openFile = opening_files[path];
     openFile.content = content;
 
-    auto& task = openFile.ASTBuild;
+    auto& task = openFile.ast_build_task;
 
     /// If there is already an AST build task, cancel it.
     if(!task.empty()) {
@@ -21,65 +21,65 @@ void Scheduler::addDocument(std::string path, std::string content) {
     }
 
     /// Create and schedule a new task.
-    task = buildAST(std::move(path), std::move(content));
-    task.schedule();
+    task = build_ast(std::move(path), std::move(content));
+    co_await task;
 }
 
 llvm::StringRef Scheduler::getDocumentContent(llvm::StringRef path) {
-    return openFiles[path].content;
+    return opening_files[path].content;
 }
 
-async::Task<json::Value> Scheduler::semanticToken(std::string path) {
-    auto openFile = &openFiles[path];
-    auto guard = co_await openFile->ASTBuiltLock.try_lock();
+async::Task<json::Value> Scheduler::semantic_tokens(std::string path) {
+    auto openFile = &opening_files[path];
+    auto guard = co_await openFile->ast_built_lock.try_lock();
 
-    openFile = &openFiles[path];
+    openFile = &opening_files[path];
     auto content = openFile->content;
-    auto AST = openFile->AST;
-    if(!AST) {
+    auto ast = openFile->ast;
+    if(!ast) {
         co_return json::Value(nullptr);
     }
 
-    auto tokens = co_await async::submit([&] { return feature::semanticTokens(*AST); });
+    auto tokens = co_await async::submit([&] { return feature::semanticTokens(*ast); });
 
     co_return converter.convert(content, tokens);
 }
 
 async::Task<json::Value> Scheduler::completion(std::string path, std::uint32_t offset) {
     /// Wait for PCH building.
-    auto openFile = &openFiles[path];
-    if(!openFile->PCHBuild.empty()) {
-        co_await openFile->PCHBuiltEvent;
+    auto openFile = &opening_files[path];
+    if(!openFile->pch_build_task.empty()) {
+        co_await openFile->pch_built_event;
     }
 
-    openFile = &openFiles[path];
-    auto& PCH = openFile->PCH;
+    openFile = &opening_files[path];
+    auto& pch = openFile->pch;
 
     /// Set compilation params ... .
     CompilationParams params;
     params.arguments = database.get_command(path, true).arguments;
     params.add_remapped_file(path, openFile->content);
-    params.pch = {PCH->path, PCH->preamble.size()};
+    params.pch = {pch->path, pch->preamble.size()};
     params.completion = {path, offset};
 
     auto result = co_await async::submit([&] { return feature::code_complete(params, {}); });
 
-    openFile = &openFiles[path];
+    openFile = &opening_files[path];
     co_return converter.convert(openFile->content, result);
 }
 
 async::Task<bool> Scheduler::isPCHOutdated(llvm::StringRef path, llvm::StringRef preamble) {
-    auto openFile = &openFiles[path];
+    auto openFile = &opening_files[path];
 
     /// If there is not PCH, directly build it.
-    if(!openFile->PCH) {
+    if(!openFile->pch) {
         co_return true;
     }
 
     /// Check command and preamble matchs.
     auto command = database.get_command(path, true).arguments;
     /// FIXME: check command. openFile->PCH->command != command
-    if(openFile->PCH->preamble != preamble) {
+    if(openFile->pch->preamble != preamble) {
         co_return true;
     }
 
@@ -88,12 +88,12 @@ async::Task<bool> Scheduler::isPCHOutdated(llvm::StringRef path, llvm::StringRef
     co_return false;
 }
 
-async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
+async::Task<> Scheduler::build_pch(std::string path, std::string content) {
     auto bound = computePreambleBound(content);
 
-    auto openFile = &openFiles[path];
+    auto openFile = &opening_files[path];
     bool outdated = true;
-    if(openFile->PCH) {
+    if(openFile->pch) {
         outdated = co_await isPCHOutdated(path, llvm::StringRef(content).substr(0, bound));
     }
 
@@ -140,22 +140,22 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
             co_return;
         }
 
-        auto& openFile = scheduler.openFiles[path];
+        auto& openFile = scheduler.opening_files[path];
         /// Update the built PCH info.
-        openFile.PCH = std::move(info);
+        openFile.pch = std::move(info);
         /// Dispose the task so that it will destroyed when task complete.
-        openFile.PCHBuild.dispose();
+        openFile.pch_build_task.dispose();
         /// Resume waiters on this event.
-        openFile.PCHBuiltEvent.set();
-        openFile.PCHBuiltEvent.clear();
+        openFile.pch_built_event.set();
+        openFile.pch_built_event.clear();
 
         log::info("Building PCH successfully for {}", path);
     };
 
-    openFile = &openFiles[path];
+    openFile = &opening_files[path];
 
     /// If there is already an PCH build task, cancel it.
-    auto& task = openFile->PCHBuild;
+    auto& task = openFile->pch_build_task;
     if(!task.empty()) {
         task.cancel();
         task.dispose();
@@ -163,48 +163,45 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
 
     /// Schedule the new building task.
     task = PCHBuildTask(*this, std::move(path), bound, std::move(content));
-    task.schedule();
-
-    /// Waiting for PCH building.
-    co_await openFile->PCHBuiltEvent;
+    co_await task;
 }
 
-async::Task<> Scheduler::buildAST(std::string path, std::string content) {
-    auto file = &openFiles[path];
+async::Task<> Scheduler::build_ast(std::string path, std::string content) {
+    auto file = &opening_files[path];
 
     /// Try get the lock, the waiter on the lock will be resumed when
     /// guard is destroyed.
-    auto guard = co_await file->ASTBuiltLock.try_lock();
+    auto guard = co_await file->ast_built_lock.try_lock();
 
     /// PCH is already updated.
-    co_await buildPCH(path, content);
+    co_await build_pch(path, content);
 
-    auto PCH = openFiles[path].PCH;
-    if(!PCH) {
+    auto pch = opening_files[path].pch;
+    if(!pch) {
         log::fatal("Expected PCH built at this point");
     }
 
     CompilationParams params;
     params.arguments = database.get_command(path, true).arguments;
     params.add_remapped_file(path, content);
-    params.pch = {PCH->path, PCH->preamble.size()};
+    params.pch = {pch->path, pch->preamble.size()};
 
     /// Check result
-    auto AST = co_await async::submit([&] { return compile(params); });
-    if(!AST) {
+    auto ast = co_await async::submit([&] { return compile(params); });
+    if(!ast) {
         /// FIXME: Fails needs cancel waiting tasks.
         /// log::warn("Building AST fails for {}, Beacuse: {}", path, AST.error());
         co_return;
     }
 
     /// Index the source file.
-    co_await indexer.index(*AST);
+    co_await indexer.index(*ast);
 
-    file = &openFiles[path];
+    file = &opening_files[path];
     /// Update built AST info.
-    file->AST = std::make_shared<CompilationUnit>(std::move(*AST));
+    file->ast = std::make_shared<CompilationUnit>(std::move(*ast));
     /// Dispose the task so that it will destroyed when task complete.
-    file->ASTBuild.dispose();
+    file->ast_build_task.dispose();
 
     log::info("Building AST successfully for {}", path);
 }

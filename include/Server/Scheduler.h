@@ -19,14 +19,14 @@ struct OpenFile {
     std::string content;
 
     /// We build PCH for every opened file.
-    std::optional<PCHInfo> PCH;
-    async::Task<> PCHBuild;
-    async::Event PCHBuiltEvent;
+    std::optional<PCHInfo> pch;
+    async::Task<> pch_build_task;
+    async::Event pch_built_event;
 
     /// For each opened file, we would like to build an AST for it.
-    std::shared_ptr<CompilationUnit> AST;
-    async::Task<> ASTBuild;
-    async::Lock ASTBuiltLock;
+    std::shared_ptr<CompilationUnit> ast;
+    async::Task<> ast_build_task;
+    async::Lock ast_built_lock;
 
     /// For header with context, it may have multiple ASTs, use
     /// an chain to store them.
@@ -39,24 +39,24 @@ public:
         indexer(indexer), converter(converter), database(database) {}
 
     /// Add or update a document.
-    void addDocument(std::string path, std::string content);
+    async::Task<> add_document(std::string path, std::string content);
 
     /// Close a document.
-    void closeDocument(std::string path);
+    void close_document(std::string path);
 
     llvm::StringRef getDocumentContent(llvm::StringRef path);
 
     /// Get the specific AST of given file.
-    async::Task<json::Value> semanticToken(std::string path);
+    async::Task<json::Value> semantic_tokens(std::string path);
 
     async::Task<json::Value> completion(std::string path, std::uint32_t offset);
 
 private:
     async::Task<bool> isPCHOutdated(llvm::StringRef file, llvm::StringRef preamble);
 
-    async::Task<> buildPCH(std::string file, std::string preamble);
+    async::Task<> build_pch(std::string file, std::string preamble);
 
-    async::Task<> buildAST(std::string file, std::string content);
+    async::Task<> build_ast(std::string file, std::string content);
 
 private:
     Indexer& indexer;
@@ -68,7 +68,7 @@ private:
     /// guaranteed to remain valid.
     std::vector<async::Task<>> running;
 
-    llvm::StringMap<OpenFile> openFiles;
+    llvm::StringMap<OpenFile> opening_files;
 };
 
 }  // namespace clice

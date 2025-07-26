@@ -42,6 +42,6 @@ std::string scanModuleName(CompilationParams& params);
 
 /// Run the preprocessor to scan the given module unit to
 /// collect its module name and dependencies.
-std::expected<ModuleInfo, std::vector<Diagnostic>> scanModule(CompilationParams& params);
+std::expected<ModuleInfo, std::string> scanModule(CompilationParams& params);
 
 }  // namespace clice

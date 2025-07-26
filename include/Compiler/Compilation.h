@@ -34,6 +34,14 @@ struct CompilationParams {
     /// The memory buffers for all remapped file.
     llvm::StringMap<std::unique_ptr<llvm::MemoryBuffer>> buffers;
 
+    /// A flag to inform to stop compilation, this is very useful
+    /// to cancel old compilation task.
+    std::shared_ptr<std::atomic_bool> stop;
+
+    /// Store all compilation errors in the process.
+    std::shared_ptr<std::vector<Diagnostic>> diagnostics =
+        std::make_shared<std::vector<Diagnostic>>();
+
     void add_remapped_file(llvm::StringRef path,
                            llvm::StringRef content,
                            std::uint32_t bound = -1) {
@@ -45,7 +53,7 @@ struct CompilationParams {
     }
 };
 
-using CompilationResult = std::expected<CompilationUnit, std::vector<Diagnostic>>;
+using CompilationResult = std::expected<CompilationUnit, std::string>;
 
 /// Only preprocess ths source flie.
 CompilationResult preprocess(CompilationParams& params);
