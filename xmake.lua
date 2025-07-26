@@ -192,7 +192,9 @@ rule("clice_build_config")
     end)
 
 package("llvm")
-    set_policy("package.install_locally", true)
+    if not has_config("ci") then
+        set_policy("package.install_locally", true)
+    end
     if has_config("llvm") then
         set_sourcedir(get_config("llvm"))
     else
