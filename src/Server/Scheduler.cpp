@@ -135,7 +135,7 @@ async::Task<> Scheduler::build_pch(std::string path, std::string content) {
         bool cond = co_await async::submit([&] {
             auto result = compile(params, info);
             if(!result) {
-                /// log::warn("Building PCH fails for {}, Because: {}", path, result.error());
+                log::warn("Building PCH fails for {}, Because: {}", path, result.error());
                 return false;
             }
 
