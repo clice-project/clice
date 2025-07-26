@@ -139,11 +139,6 @@ target("integration_tests")
             envs = runenvs.join(addenvs, setenvs)
         end
 
-        os.vcp(
-            path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
-            path.join(path.directory(target:targetdir()), "lib/clang/20")
-        )
-
         if has_config("ci") and is_plat("macosx") then
             os.vrun("pip install pytest pytest-asyncio pytest-xdist")
             os.vrunv("pytest", {
@@ -171,6 +166,7 @@ target("integration_tests")
                 "-m", "pytest",
                 "-s", "tests/integration",
                 "--executable=" .. target:dep("clice"):targetfile(),
+                "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20"),
             }, {envs = envs, timeout = opt.run_timeout, curdir = os.projectdir()})
         end
 
