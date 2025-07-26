@@ -156,8 +156,6 @@ async::Task<> Scheduler::build_pch(std::string path, std::string content) {
         /// Resume waiters on this event.
         openFile.pch_built_event.set();
         openFile.pch_built_event.clear();
-
-        log::info("Building PCH successfully for {}", path);
     };
 
     openFile = &opening_files[path];
@@ -170,8 +168,13 @@ async::Task<> Scheduler::build_pch(std::string path, std::string content) {
     }
 
     /// Schedule the new building task.
-    task = PCHBuildTask(*this, std::move(path), bound, std::move(content), openFile->diagnostics);
+    task = PCHBuildTask(*this, path, bound, std::move(content), openFile->diagnostics);
+
+    log::info("Start building PCH for {}", path);
+
     co_await task;
+
+    log::info("Building PCH successfully for {}", path);
 }
 
 async::Task<> Scheduler::build_ast(std::string path, std::string content) {
