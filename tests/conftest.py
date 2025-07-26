@@ -9,6 +9,11 @@ def pytest_addoption(parser):
         action="store",
         help="Path to the of the clice executable."
     )
+    parser.addoption(
+        "--resource-dir",
+        action="store",
+        help="Path to the of the clang resource directory."
+    )
 
 
 @pytest.fixture(scope="session")
@@ -31,6 +36,12 @@ def executable(request):
         )
 
     return path.resolve()
+
+
+@pytest.fixture(scope="session")
+def resource_dir(request):
+    path = request.config.getoption("--resource-dir")
+    return Path(path).resolve()
 
 
 @pytest.fixture(scope="session")

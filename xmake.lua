@@ -139,17 +139,16 @@ target("integration_tests")
             envs = runenvs.join(addenvs, setenvs)
         end
 
-        os.vcp(
-            path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
-            path.join(path.directory(target:targetdir()), "lib/clang/20")
-        )
+        local test_argv = {
+            "-s", "tests/integration",
+            "--executable=" .. target:dep("clice"):targetfile(),
+            "--resource-dir=" .. path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
+        }
+        local opt = {envs = envs, timeout = opt.run_timeout, curdir = os.projectdir()}
 
         if has_config("ci") and is_plat("macosx") then
             os.vrun("pip install pytest pytest-asyncio pytest-xdist")
-            os.vrunv("pytest", {
-                "-s", "tests/integration",
-                "--executable=" .. target:dep("clice"):targetfile(),
-            }, {envs = envs, timeout = opt.run_timeout, curdir = os.projectdir()})
+            os.vrunv("pytest", test_argv, opt)
         else
             local python
             local installdir = target:pkg("python"):installdir()
@@ -167,11 +166,7 @@ target("integration_tests")
                 os.vrunv(python, {"-m", "pip", "install", "pytest", "pytest-asyncio", "pytest-xdist"})
             end
 
-            os.vrunv(python, {
-                "-m", "pytest",
-                "-s", "tests/integration",
-                "--executable=" .. target:dep("clice"):targetfile(),
-            }, {envs = envs, timeout = opt.run_timeout, curdir = os.projectdir()})
+            os.vrunv(python, {"-m", "pytest", table.unpack(test_argv)}, opt)
         end
 
         return true
@@ -197,7 +192,9 @@ rule("clice_build_config")
     end)
 
 package("llvm")
-    set_policy("package.install_locally", true)
+    if not has_config("ci") then
+        set_policy("package.install_locally", true)
+    end
     if has_config("llvm") then
         set_sourcedir(get_config("llvm"))
     else

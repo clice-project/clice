@@ -5,9 +5,9 @@ from ..fixtures.client import LSPClient
 
 
 @pytest.mark.asyncio
-async def test_did_open(executable, test_data_dir):
+async def test_did_open(executable, test_data_dir, resource_dir):
     client = LSPClient([
-        executable, "--mode=pipe"
+        executable, "--mode=pipe", f"--resource-dir={resource_dir}"
     ])
     await client.start()
 

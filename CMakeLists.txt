@@ -128,15 +128,6 @@ target_link_libraries(clice PRIVATE clice-core)
 target_compile_options(clice PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice PUBLIC ${CLICE_LINKER_FLAGS})
 
-# copying resource dir
-add_custom_command(
-    TARGET clice
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${LLVM_INSTALL_PATH}/lib/clang/20/"  
-        "${CMAKE_BINARY_DIR}/lib/clang/20/"
-)
-
 # clice tests
 if(CLICE_ENABLE_TEST)
     file(GLOB_RECURSE CLICE_TEST_SOURCES "${CMAKE_SOURCE_DIR}/tests/unit/*/*.cpp")
