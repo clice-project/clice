@@ -25,7 +25,10 @@ if has_config("dev") then
 
     if has_config("enable_test") then
         add_requires("gtest[main]")
-        add_requires("python >=3.12", {kind = "binary"})
+        -- TODO: fix python fetch on mac (from xmake-repo python fetch)
+        if not (has_config("ci") and is_plat("macosx")) then
+            add_requires("python >=3.12", {kind = "binary"})
+        end
     end
 end
 
@@ -136,8 +139,16 @@ target("integration_tests")
             envs = runenvs.join(addenvs, setenvs)
         end
 
+        local test_argv = {
+            "-s", "tests/integration",
+            "--executable=" .. target:dep("clice"):targetfile(),
+            "--resource-dir=" .. path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
+        }
+        local opt = {envs = envs, timeout = opt.run_timeout, curdir = os.projectdir()}
+
         if has_config("ci") and is_plat("macosx") then
             os.vrun("pip install pytest pytest-asyncio pytest-xdist")
+            os.vrunv("pytest", test_argv, opt)
         else
             local python
             local installdir = target:pkg("python"):installdir()
@@ -154,14 +165,9 @@ target("integration_tests")
             if not ok then
                 os.vrunv(python, {"-m", "pip", "install", "pytest", "pytest-asyncio", "pytest-xdist"})
             end
-        end
 
-        os.vrunv(python, {
-            "-m", "pytest",
-            "-s", "tests/integration",
-            "--executable=" .. target:dep("clice"):targetfile(),
-            "--resource-dir=" .. path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
-        }, {envs = envs, timeout = opt.run_timeout, curdir = os.projectdir()})
+            os.vrunv(python, {"-m", "pytest", table.unpack(test_argv)}, opt)
+        end
 
         return true
     end)
