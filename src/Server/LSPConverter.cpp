@@ -422,6 +422,12 @@ json::Value LSPConverter::convert(llvm::StringRef content,
     return result;
 }
 
+json::Value LSPConverter::convert(llvm::StringRef content,
+                                  const std::vector<Diagnostic>& diagnostics) {
+    /// PositionConverter converter(content, encoding());
+    /// converter.toPositions(diagnostics, [](auto& item) { return item.range; });
+}
+
 namespace proto {
 
 struct InitializeParams {

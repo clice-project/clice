@@ -30,6 +30,35 @@ TEST(Diagnostic, Error) {
     }
 }
 
+TEST(Diagnostic, PCHError) {
+    /// Any error in compilation will result in failure on generating PCH or PCM.
+    CompilationParams params;
+    params.arguments = {"clang++", "main.cpp"};
+    params.outPath = "fake.pch";
+    params.add_remapped_file("main.cpp", R"(
+void foo() {}
+void foo() {}
+)");
+
+    PCHInfo info;
+    auto unit = compile(params, info);
+    ASSERT_FALSE(unit);
+}
+
+TEST(Diagnostic, ASTError) {
+    /// Event fatal error may generate incomplete AST, but it is fine.
+    CompilationParams params;
+    params.arguments = {"clang++", "main.cpp"};
+    params.add_remapped_file("main.cpp", R"(
+void foo() {}
+void foo() {}
+)");
+
+    PCHInfo info;
+    auto unit = compile(params);
+    ASSERT_TRUE(unit);
+}
+
 }  // namespace
 
 }  // namespace clice::testing

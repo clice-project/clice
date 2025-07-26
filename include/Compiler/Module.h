@@ -4,6 +4,7 @@
 #include <vector>
 #include <expected>
 
+#include "Diagnostic.h"
 #include "Support/Struct.h"
 
 namespace clice {

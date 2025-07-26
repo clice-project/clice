@@ -134,8 +134,10 @@ async::Task<> Server::onDidOpen(json::Value value) {
 
     auto params = json::deserialize<DidOpenTextDocumentParams>(value);
     auto path = converter.convert(params.textDocument.uri);
-    scheduler.addDocument(std::move(path), std::move(params.textDocument.text));
-    co_return;
+    auto file =
+        co_await scheduler.add_document(std::move(path), std::move(params.textDocument.text));
+
+    if(file->diagnostics) {}
 }
 
 async::Task<> Server::onDidChange(json::Value value) {
@@ -151,9 +153,7 @@ async::Task<> Server::onDidChange(json::Value value) {
 
     auto params = json::deserialize<DidChangeTextDocumentParams>(value);
     auto path = converter.convert(params.textDocument.uri);
-    scheduler.addDocument(std::move(path), std::move(params.contentChanges[0].text));
-
-    co_return;
+    co_await scheduler.add_document(std::move(path), std::move(params.contentChanges[0].text));
 }
 
 async::Task<> Server::onDidSave(json::Value value) {
@@ -171,7 +171,7 @@ async::Task<json::Value> Server::onSemanticToken(json::Value value) {
 
     auto params = json::deserialize<SemanticTokensParams>(value);
     auto path = converter.convert(params.textDocument.uri);
-    co_return co_await scheduler.semanticToken(std::move(path));
+    co_return co_await scheduler.semantic_tokens(std::move(path));
 }
 
 async::Task<json::Value> Server::onCodeCompletion(json::Value value) {
