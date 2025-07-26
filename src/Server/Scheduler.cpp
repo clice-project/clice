@@ -8,7 +8,7 @@
 
 namespace clice {
 
-async::Task<> Scheduler::add_document(std::string path, std::string content) {
+async::Task<OpenFile*> Scheduler::add_document(std::string path, std::string content) {
     auto& openFile = opening_files[path];
     openFile.content = content;
 
@@ -23,6 +23,8 @@ async::Task<> Scheduler::add_document(std::string path, std::string content) {
     /// Create and schedule a new task.
     task = build_ast(std::move(path), std::move(content));
     co_await task;
+
+    co_return &opening_files[path];
 }
 
 llvm::StringRef Scheduler::getDocumentContent(llvm::StringRef path) {
@@ -103,12 +105,12 @@ async::Task<> Scheduler::build_pch(std::string path, std::string content) {
     }
 
     /// The actual PCH build task.
-    constexpr static auto PCHBuildTask = [](Scheduler& scheduler,
-                                            std::string path,
-                                            std::uint32_t bound,
-                                            std::string content) -> async::Task<> {
-        CompilationParams params;
-        params.arguments = scheduler.database.get_command(path, true).arguments;
+    constexpr static auto PCHBuildTask =
+        [](Scheduler& scheduler,
+           std::string path,
+           std::uint32_t bound,
+           std::string content,
+           std::shared_ptr<std::vector<Diagnostic>> diagnostics) -> async::Task<> {
         if(!fs::exists(config::cache.dir)) {
             auto error = fs::create_directories(config::cache.dir);
             if(error) {
@@ -117,7 +119,13 @@ async::Task<> Scheduler::build_pch(std::string path, std::string content) {
             }
         }
 
+        /// Everytime we build a new pch, the old diagnostics should be discarded.
+        diagnostics->clear();
+
+        CompilationParams params;
         params.outPath = path::join(config::cache.dir, path::filename(path) + ".pch");
+        params.arguments = scheduler.database.get_command(path, true).arguments;
+        params.diagnostics = diagnostics;
         params.add_remapped_file(path, content, bound);
 
         PCHInfo info;
@@ -162,7 +170,7 @@ async::Task<> Scheduler::build_pch(std::string path, std::string content) {
     }
 
     /// Schedule the new building task.
-    task = PCHBuildTask(*this, std::move(path), bound, std::move(content));
+    task = PCHBuildTask(*this, std::move(path), bound, std::move(content), openFile->diagnostics);
     co_await task;
 }
 
@@ -181,10 +189,12 @@ async::Task<> Scheduler::build_ast(std::string path, std::string content) {
         log::fatal("Expected PCH built at this point");
     }
 
+    file = &opening_files[path];
     CompilationParams params;
     params.arguments = database.get_command(path, true).arguments;
     params.add_remapped_file(path, content);
     params.pch = {pch->path, pch->preamble.size()};
+    params.diagnostics = file->diagnostics;
 
     /// Check result
     auto ast = co_await async::submit([&] { return compile(params); });

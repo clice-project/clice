@@ -134,7 +134,10 @@ async::Task<> Server::onDidOpen(json::Value value) {
 
     auto params = json::deserialize<DidOpenTextDocumentParams>(value);
     auto path = converter.convert(params.textDocument.uri);
-    co_await scheduler.add_document(std::move(path), std::move(params.textDocument.text));
+    auto file =
+        co_await scheduler.add_document(std::move(path), std::move(params.textDocument.text));
+
+    if(file->diagnostics) {}
 }
 
 async::Task<> Server::onDidChange(json::Value value) {

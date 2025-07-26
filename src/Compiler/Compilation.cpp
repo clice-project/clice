@@ -61,7 +61,8 @@ auto create_invocation(CompilationParams& params,
 
 template <typename Action, typename Adjuster>
 CompilationResult run_clang(CompilationParams& params, const Adjuster& adjuster) {
-    auto diagnostics = params.diagnostics;
+    auto diagnostics = params.diagnostics ? std::move(params.diagnostics)
+                                          : std::make_shared<std::vector<Diagnostic>>();
     auto diagnostic_engine =
         clang::CompilerInstance::createDiagnostics(*params.vfs,
                                                    new clang::DiagnosticOptions(),

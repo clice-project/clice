@@ -39,8 +39,7 @@ struct CompilationParams {
     std::shared_ptr<std::atomic_bool> stop;
 
     /// Store all compilation errors in the process.
-    std::shared_ptr<std::vector<Diagnostic>> diagnostics =
-        std::make_shared<std::vector<Diagnostic>>();
+    std::shared_ptr<std::vector<Diagnostic>> diagnostics;
 
     void add_remapped_file(llvm::StringRef path,
                            llvm::StringRef content,

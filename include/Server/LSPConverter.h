@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "Protocol.h"
 #include "Async/Async.h"
+#include "Compiler/Diagnostic.h"
 #include "Feature/Hover.h"
 #include "Feature/InlayHint.h"
 #include "Feature/FoldingRange.h"
@@ -55,6 +56,8 @@ public:
     json::Value convert(llvm::StringRef content, const feature::SemanticTokens& tokens);
 
     json::Value convert(llvm::StringRef content, const std::vector<feature::CompletionItem>& items);
+
+    json::Value convert(llvm::StringRef content, const std::vector<Diagnostic>& diagnostics);
 
 private:
     PositionEncodingKind kind;
