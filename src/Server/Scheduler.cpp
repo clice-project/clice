@@ -127,7 +127,7 @@ async::Task<> Scheduler::buildPCH(std::string path, std::string content) {
         bool cond = co_await async::submit([&] {
             auto result = compile(params, info);
             if(!result) {
-                log::warn("Building PCH fails for {}, Because: {}", path, result.error());
+                /// log::warn("Building PCH fails for {}, Because: {}", path, result.error());
                 return false;
             }
 
@@ -193,7 +193,7 @@ async::Task<> Scheduler::buildAST(std::string path, std::string content) {
     auto AST = co_await async::submit([&] { return compile(params); });
     if(!AST) {
         /// FIXME: Fails needs cancel waiting tasks.
-        log::warn("Building AST fails for {}, Beacuse: {}", path, AST.error());
+        /// log::warn("Building AST fails for {}, Beacuse: {}", path, AST.error());
         co_return;
     }
 

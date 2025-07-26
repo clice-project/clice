@@ -35,12 +35,14 @@ std::unexpected<std::string> report_diagnostics(llvm::StringRef message,
     return std::unexpected(std::move(error));
 }
 
+using CompilerInvocation = std::unique_ptr<clang::CompilerInvocation>;
+
 /// create a `clang::CompilerInvocation` for compilation, it set and reset
 /// all necessary arguments and flags for clice compilation.
 auto create_invocation(CompilationParams& params,
                        std::shared_ptr<std::vector<Diagnostic>>& diagnostics,
                        llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine>& diagnostic_engine)
-    -> std::expected<std::unique_ptr<clang::CompilerInvocation>, std::string> {
+    -> std::expected<CompilerInvocation, std::string> {
 
     /// Create clang invocation.
     clang::CreateInvocationOptions options = {
@@ -87,8 +89,7 @@ auto create_invocation(CompilationParams& params,
 }
 
 template <typename Action, typename Adjuster>
-std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& params,
-                                                          const Adjuster& adjuster) {
+CompilationResult run_clang(CompilationParams& params, const Adjuster& adjuster) {
     auto diagnostics = std::make_shared<std::vector<Diagnostic>>();
     auto diagnostic_engine =
         clang::CompilerInstance::createDiagnostics(*params.vfs,
@@ -96,7 +97,9 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
                                                    Diagnostic::create(diagnostics));
 
     auto invocation = create_invocation(params, diagnostics, diagnostic_engine);
-    TRY_OR_RETURN(invocation);
+    if(!invocation) {
+        return std::unexpected(std::move(*diagnostics));
+    }
 
     auto instance = std::make_unique<clang::CompilerInstance>();
     instance->setInvocation(std::move(*invocation));
@@ -109,7 +112,11 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
     }
 
     if(!instance->createTarget()) {
-        return std::unexpected("fail to create target");
+        diagnostics->emplace_back(Diagnostic{
+            .level = DiagnosticLevel::Fatal,
+            .message = "Fail to create target",
+        });
+        return std::unexpected(std::move(*diagnostics));
     }
 
     /// Adjust the compiler instance, for example, set preamble or modules.
@@ -118,8 +125,11 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
     auto action = std::make_unique<Action>();
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
-        /// TODO: collect error message from diagnostics.
-        return report_diagnostics("Failed to begin source file", *diagnostics);
+        diagnostics->emplace_back(Diagnostic{
+            .level = DiagnosticLevel::Fatal,
+            .message = "Fail to begin source file",
+        });
+        return std::unexpected(std::move(*diagnostics));
     }
 
     auto& pp = instance->getPreprocessor();
@@ -142,7 +152,11 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
     }
 
     if(auto error = action->Execute()) {
-        return std::unexpected(std::format("Failed to execute action, because {} ", error));
+        diagnostics->emplace_back(Diagnostic{
+            .level = DiagnosticLevel::Fatal,
+            .message = std::format("Failed to execute action, because {} ", error),
+        });
+        return std::unexpected(std::move(*diagnostics));
     }
 
     /// FIXME: PCH building is very very strict, any error in compilation will
@@ -150,7 +164,7 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
     /// We should have a better way to handle this.
     if(instance->getDiagnostics().hasFatalErrorOccurred()) {
         action->EndSourceFile();
-        return report_diagnostics("Fetal error occured!!!", *diagnostics);
+        return std::unexpected(std::move(*diagnostics));
     }
 
     std::optional<clang::syntax::TokenBuffer> tokBuf;
@@ -184,16 +198,49 @@ std::expected<CompilationUnit, std::string> clang_compile(CompilationParams& par
 
 }  // namespace
 
-std::expected<CompilationUnit, std::string> preprocess(CompilationParams& params) {
-    return clang_compile<clang::PreprocessOnlyAction>(params, [](auto&) {});
+CompilationResult preprocess(CompilationParams& params) {
+    return run_clang<clang::PreprocessOnlyAction>(params, [](auto&) {});
 }
 
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params) {
-    return clang_compile<clang::SyntaxOnlyAction>(params, [](auto&) {});
+CompilationResult compile(CompilationParams& params) {
+    return run_clang<clang::SyntaxOnlyAction>(params, [](auto&) {});
 }
 
-std::expected<CompilationUnit, std::string> complete(CompilationParams& params,
-                                                     clang::CodeCompleteConsumer* consumer) {
+CompilationResult compile(CompilationParams& params, PCHInfo& out) {
+    /// assert(params.bound.has_value() && "Preamble bounds is required to build PCH");
+
+    out.path = params.outPath.str();
+    /// out.preamble = params.content.substr(0, *params.bound);
+    /// out.command = params.arguments.str();
+    /// FIXME: out.deps = info->deps();
+
+    return run_clang<clang::GeneratePCHAction>(params, [&](clang::CompilerInstance& instance) {
+        /// Set options to generate PCH.
+        instance.getFrontendOpts().OutputFile = params.outPath.str();
+        instance.getFrontendOpts().ProgramAction = clang::frontend::GeneratePCH;
+        instance.getPreprocessorOpts().GeneratePreamble = true;
+        instance.getLangOpts().CompilingPCH = true;
+    });
+}
+
+CompilationResult compile(CompilationParams& params, PCMInfo& out) {
+    for(auto& [name, path]: params.pcms) {
+        out.mods.emplace_back(name);
+    }
+    out.path = params.outPath.str();
+
+    return run_clang<clang::GenerateReducedModuleInterfaceAction>(
+        params,
+        [&](clang::CompilerInstance& instance) {
+            /// Set options to generate PCH.
+            instance.getFrontendOpts().OutputFile = params.outPath.str();
+            instance.getFrontendOpts().ProgramAction =
+                clang::frontend::GenerateReducedModuleInterface;
+            out.srcPath = instance.getFrontendOpts().Inputs[0].getFile();
+        });
+}
+
+CompilationResult complete(CompilationParams& params, clang::CodeCompleteConsumer* consumer) {
 
     auto& [file, offset] = params.completion;
 
@@ -214,47 +261,13 @@ std::expected<CompilationUnit, std::string> complete(CompilationParams& params,
         column += 1;
     }
 
-    return clang_compile<clang::SyntaxOnlyAction>(params, [&](clang::CompilerInstance& instance) {
+    return run_clang<clang::SyntaxOnlyAction>(params, [&](clang::CompilerInstance& instance) {
         /// Set options to run code completion.
         instance.getFrontendOpts().CodeCompletionAt.FileName = std::move(file);
         instance.getFrontendOpts().CodeCompletionAt.Line = line;
         instance.getFrontendOpts().CodeCompletionAt.Column = column;
         instance.setCodeCompletionConsumer(consumer);
     });
-}
-
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params, PCHInfo& out) {
-    /// assert(params.bound.has_value() && "Preamble bounds is required to build PCH");
-
-    out.path = params.outPath.str();
-    /// out.preamble = params.content.substr(0, *params.bound);
-    /// out.command = params.arguments.str();
-    /// FIXME: out.deps = info->deps();
-
-    return clang_compile<clang::GeneratePCHAction>(params, [&](clang::CompilerInstance& instance) {
-        /// Set options to generate PCH.
-        instance.getFrontendOpts().OutputFile = params.outPath.str();
-        instance.getFrontendOpts().ProgramAction = clang::frontend::GeneratePCH;
-        instance.getPreprocessorOpts().GeneratePreamble = true;
-        instance.getLangOpts().CompilingPCH = true;
-    });
-}
-
-std::expected<CompilationUnit, std::string> compile(CompilationParams& params, PCMInfo& out) {
-    for(auto& [name, path]: params.pcms) {
-        out.mods.emplace_back(name);
-    }
-    out.path = params.outPath.str();
-
-    return clang_compile<clang::GenerateReducedModuleInterfaceAction>(
-        params,
-        [&](clang::CompilerInstance& instance) {
-            /// Set options to generate PCH.
-            instance.getFrontendOpts().OutputFile = params.outPath.str();
-            instance.getFrontendOpts().ProgramAction =
-                clang::frontend::GenerateReducedModuleInterface;
-            out.srcPath = instance.getFrontendOpts().Inputs[0].getFile();
-        });
 }
 
 }  // namespace clice

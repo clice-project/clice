@@ -45,7 +45,7 @@ struct CompilationParams {
     }
 };
 
-using CompilationResult = std::expected<CompilationUnit, std::string>;
+using CompilationResult = std::expected<CompilationUnit, std::vector<Diagnostic>>;
 
 /// Only preprocess ths source flie.
 CompilationResult preprocess(CompilationParams& params);

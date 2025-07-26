@@ -101,7 +101,7 @@ std::string scanModuleName(CompilationParams& params) {
     return info->name;
 }
 
-std::expected<ModuleInfo, std::string> scanModule(CompilationParams& params) {
+std::expected<ModuleInfo, std::vector<Diagnostic>> scanModule(CompilationParams& params) {
     ModuleInfo info;
     auto unit = preprocess(params);
     if(!unit) {
