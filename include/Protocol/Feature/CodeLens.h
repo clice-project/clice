@@ -9,4 +9,3 @@ struct CodeLensClientCapabilities {};
 struct CodeLensOptions {};
 
 }  // namespace clice::proto
- 
