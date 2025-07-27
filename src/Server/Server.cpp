@@ -113,25 +113,7 @@ async::Task<> Server::onReceive(json::Value value) {
     co_return;
 }
 
-async::Task<std::string> Server::onInitialize(json::Value value) {
-    // auto result = converter.initialize(std::move(value));
-    // config::init(converter.workspace());
-    //
-    // for(auto& dir: config::server.compile_commands_dirs) {
-    //    auto content = fs::read(dir + "/compile_commands.json");
-    //    if(content) {
-    //        auto updated = database.load_commands(*content);
-    //    }
-    //}
-
-    co_return "";
-}
-
 async::Task<> Server::onDidOpen(json::Value value) {
-    struct DidOpenTextDocumentParams {
-        proto::TextDocumentItem textDocument;
-    };
-
     // auto params = json::deserialize<DidOpenTextDocumentParams>(value);
     // auto path = converter.convert(params.textDocument.uri);
     // auto file =
@@ -142,16 +124,6 @@ async::Task<> Server::onDidOpen(json::Value value) {
 }
 
 async::Task<> Server::onDidChange(json::Value value) {
-    struct DidChangeTextDocumentParams {
-        proto::VersionedTextDocumentIdentifier textDocument;
-
-        struct TextDocumentContentChangeEvent {
-            std::string text;
-        };
-
-        std::vector<TextDocumentContentChangeEvent> contentChanges;
-    };
-
     // auto params = json::deserialize<DidChangeTextDocumentParams>(value);
     // auto path = converter.convert(params.textDocument.uri);
     // co_await scheduler.add_document(std::move(path), std::move(params.contentChanges[0].text));
@@ -166,7 +138,7 @@ async::Task<> Server::onDidClose(json::Value value) {
     co_return;
 }
 
-async::Task<std::string> Server::onSemanticToken(json::Value value) {
+async::Task<json::Value> Server::onSemanticToken(json::Value value) {
     struct SemanticTokensParams {
         proto::TextDocumentIdentifier textDocument;
     };
@@ -174,10 +146,10 @@ async::Task<std::string> Server::onSemanticToken(json::Value value) {
     // auto params = json::deserialize<SemanticTokensParams>(value);
     // auto path = converter.convert(params.textDocument.uri);
     // co_return co_await scheduler.semantic_tokens(std::move(path));
-    co_return "";
+    co_return json::Value(nullptr);
 }
 
-async::Task<std::string> Server::onCodeCompletion(json::Value value) {
+async::Task<json::Value> Server::onCodeCompletion(json::Value value) {
     // using CompletionParams = proto::TextDocumentPositionParams;
     // auto params = json::deserialize<CompletionParams>(value);
     //
@@ -185,7 +157,7 @@ async::Task<std::string> Server::onCodeCompletion(json::Value value) {
     // auto content = scheduler.getDocumentContent(path);
     // auto offset = converter.convert(content, params.position);
     // co_return co_await scheduler.completion(std::move(path), offset);
-    co_return "";
+    co_return json::Value(nullptr);
 }
 
 }  // namespace clice

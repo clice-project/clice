@@ -320,8 +320,13 @@ struct Serde<T> {
         if constexpr(!std::is_empty_v<T>) {
             assert(value.kind() == json::Value::Object && "Expect an object");
             refl::foreach(t, [&](std::string_view name, auto&& member) {
+                using Field = std::remove_cvref_t<decltype(member)>;
                 if(auto v = value.getAsObject()->get(llvm::StringRef(name))) {
-                    member = json::deserialize<std::remove_cvref_t<decltype(member)>>(*v);
+                    if constexpr(is_optional_v<Field>) {
+                        member.emplace(json::deserialize<typename Field::value_type>(*v));
+                    } else {
+                        member = json::deserialize<Field>(*v);
+                    }
                 }
             });
         }

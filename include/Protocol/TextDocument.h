@@ -1,0 +1,143 @@
+#pragma once
+
+#include "Basic.h"
+#include "Feature/CallHierarchy.h"
+#include "Feature/CodeAction.h"
+#include "Feature/CodeLens.h"
+#include "Feature/Diagnostic.h"
+#include "Feature/DocumentLink.h"
+#include "Feature/Declaration.h"
+#include "Feature/Definition.h"
+#include "Feature/FoldingRange.h"
+#include "Feature/Formatting.h"
+#include "Feature/Hover.h"
+#include "Feature/InlayHint.h"
+#include "Feature/Reference.h"
+#include "Feature/Rename.h"
+#include "Feature/SemanticTokens.h"
+#include "Feature/SignatureHelp.h"
+#include "Feature/Implementation.h"
+#include "Feature/CodeCompletion.h"
+#include "Feature/TypeDefinition.h"
+#include "Feature/TypeHierarchy.h"
+#include "Feature/DocumentSymbol.h"
+#include "Feature/DocumentHighlight.h"
+
+namespace clice::proto {
+
+struct TextDocumentSyncClientCapabilities {};
+
+struct TextDocumentClientCapabilities {
+    optional<TextDocumentSyncClientCapabilities> synchronization;
+
+    /// Capabilities specific to the `textDocument/completion` request.
+    optional<CompletionClientCapabilities> completion;
+
+    /// Capabilities specific to the `textDocument/hover` request.
+    optional<HoverClientCapabilities> hover;
+
+    /// Capabilities specific to the `textDocument/signatureHelp` request.
+    optional<SignatureHelpClientCapabilities> signatureHelp;
+
+    /// Capabilities specific to the `textDocument/declaration` request.
+    optional<DeclarationClientCapabilities> declaration;
+
+    /// Capabilities specific to the `textDocument/definition` request.
+    optional<DefinitionClientCapabilities> definition;
+
+    /// Capabilities specific to the `textDocument/typeDefinition` request.
+    optional<TypeDefinitionClientCapabilities> typeDefinition;
+
+    /// Capabilities specific to the `textDocument/implementation` request.
+    optional<ImplementationClientCapabilities> implementation;
+
+    /// Capabilities specific to the `textDocument/references` request.
+    optional<ReferenceClientCapabilities> references;
+
+    /// Capabilities specific to the `textDocument/documentHighlight` request.
+    optional<DocumentHighlightClientCapabilities> documentHighlight;
+
+    /// Capabilities specific to the `textDocument/documentSymbol` request.
+    optional<DocumentSymbolClientCapabilities> documentSymbol;
+
+    /// Capabilities specific to the `textDocument/codeAction` request.
+    optional<CodeActionClientCapabilities> codeAction;
+
+    /// Capabilities specific to the `textDocument/codeLens` request.
+    optional<CodeLensClientCapabilities> codeLens;
+
+    /// Capabilities specific to the `textDocument/documentLink` request.
+    optional<DocumentLinkClientCapabilities> documentLink;
+
+    /// Capabilities specific to the `textDocument/documentColor` and the
+    /// `textDocument/colorPresentation` request.
+    /// FIXME: optional<DocumentColorClientCapabilities> colorProvider;
+
+    /// Capabilities specific to the `textDocument/formatting` request.
+    optional<DocumentFormattingClientCapabilities> formatting;
+
+    /// Capabilities specific to the `textDocument/rangeFormatting` request.
+    optional<DocumentRangeFormattingClientCapabilities> rangeFormatting;
+
+    /// Capabilities specific to the `textDocument/onTypeFormatting` request.
+    optional<DocumentOnTypeFormattingClientCapabilities> onTypeFormatting;
+
+    /// Capabilities specific to the `textDocument/rename` request.
+    optional<RenameClientCapabilities> rename;
+
+    /// Capabilities specific to the `textDocument/publishDiagnostics` notification.
+    optional<PublishDiagnosticsClientCapabilities> publishDiagnostics;
+
+    /// Capabilities specific to the `textDocument/foldingRange` request.
+    optional<FoldingRangeClientCapabilities> foldingRange;
+
+    /// Capabilities specific to the `textDocument/selectionRange` request.
+    /// FIXME: optional<SelectionRangeClientCapabilities> selectionRange;
+
+    /// Capabilities specific to the `textDocument/linkedEditingRange` request.
+    /// FIXME: optional<LinkedEditingRangeClientCapabilities> linkedEditingRange;
+
+    /// Capabilities specific to the various call hierarchy requests.
+    optional<CallHierarchyClientCapabilities> callHierarchy;
+
+    /// Capabilities specific to the various semantic token requests.
+    optional<SemanticTokensClientCapabilities> semanticTokens;
+
+    /// Capabilities specific to the `textDocument/moniker` request.
+    /// FIXME: optional<MonikerClientCapabilities> moniker;
+
+    /// Capabilities specific to the various type hierarchy requests.
+    optional<TypeHierarchyClientCapabilities> typeHierarchy;
+
+    /// Capabilities specific to the `textDocument/inlineValue` request.
+    /// FIXME: optional<InlineValueClientCapabilities> inlineValue;
+
+    /// Capabilities specific to the `textDocument/inlayHint` request.
+    optional<InlayHintClientCapabilities> inlayHint;
+
+    /// Capabilities specific to the diagnostic pull model.
+    optional<DiagnosticClientCapabilities> diagnostic;
+};
+
+enum class TextDocumentSyncKind : std::uint8_t {
+    /// Documents should not be synced at all.
+    None = 0,
+
+    /// Documents are synced by always sending the full content of the document.
+    Full = 1,
+
+    /// Documents are synced by sending the full content on open. After that
+    /// only incremental updates to the document are sent.
+    Incremental = 2,
+};
+
+struct TextDocumentSyncOptions {
+    /// Open and close notifications are sent to the server. If omitted open
+    /// close notifications should not be sent.
+    bool openClose = true;
+
+    /// Change notifications are sent to the server.
+    TextDocumentSyncKind kind = TextDocumentSyncKind::Incremental;
+};
+
+}  // namespace clice::proto

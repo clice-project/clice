@@ -1,5 +1,5 @@
 #include "Server/Convert.h"
-#include "Server/Protocol.h"
+#include "Protocol/Protocol.h"
 #include "Support/Ranges.h"
 #include "Support/JSON.h"
 #include "Support/Format.h"
@@ -87,12 +87,12 @@ std::uint32_t toOffset(llvm::StringRef content,
         return offset;
     }
 
-    if(kind == PositionEncodingKind::UTF8) {
+    if(kind == "utf-8") {
         offset += position.character;
         return offset;
     }
 
-    if(kind == PositionEncodingKind::UTF16) {
+    if(kind == "utf-16") {
         iterateCodepoints(content, [&](std::uint32_t utf8Length, std::uint32_t utf16Length) {
             assert(position.character >= utf16Length && "Character value is out of range");
             position.character -= utf16Length;
@@ -102,7 +102,7 @@ std::uint32_t toOffset(llvm::StringRef content,
         return offset;
     }
 
-    if(kind == PositionEncodingKind::UTF32) {
+    if(kind == "utf-32") {
         iterateCodepoints(content, [&](std::uint32_t utf8Length, std::uint32_t) {
             assert(position.character >= 1 && "Character value is out of range");
             position.character -= 1;
@@ -117,11 +117,11 @@ std::uint32_t toOffset(llvm::StringRef content,
 
 /// Remeasure the length (character count) of the content with the specified encoding kind.
 std::uint32_t remeasure(llvm::StringRef content, PositionEncodingKind kind) {
-    if(kind == PositionEncodingKind::UTF8) {
+    if(kind == "utf-8") {
         return content.size();
     }
 
-    if(kind == PositionEncodingKind::UTF16) {
+    if(kind == "utf-16") {
         std::uint32_t length = 0;
         iterateCodepoints(content, [&](std::uint32_t, std::uint32_t utf16Length) {
             length += utf16Length;
@@ -130,7 +130,7 @@ std::uint32_t remeasure(llvm::StringRef content, PositionEncodingKind kind) {
         return length;
     }
 
-    if(kind == PositionEncodingKind::UTF32) {
+    if(kind == "utf-32") {
         std::uint32_t length = 0;
         iterateCodepoints(content, [&](std::uint32_t, std::uint32_t) {
             length += 1;

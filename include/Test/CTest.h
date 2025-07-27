@@ -2,7 +2,7 @@
 
 #include "Test.h"
 #include "Annotation.h"
-#include "Server/Protocol.h"
+#include "Protocol/Protocol.h"
 #include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
 
