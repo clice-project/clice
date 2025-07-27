@@ -1,6 +1,6 @@
 #include "Server/Config.h"
+#include "Server/Convert.h"
 #include "Server/Scheduler.h"
-#include "Server/LSPConverter.h"
 #include "Support/Logger.h"
 #include "Support/FileSystem.h"
 #include "Compiler/Command.h"
@@ -31,7 +31,7 @@ llvm::StringRef Scheduler::getDocumentContent(llvm::StringRef path) {
     return opening_files[path].content;
 }
 
-async::Task<json::Value> Scheduler::semantic_tokens(std::string path) {
+async::Task<std::string> Scheduler::semantic_tokens(std::string path) {
     auto openFile = &opening_files[path];
     auto guard = co_await openFile->ast_built_lock.try_lock();
 
@@ -39,15 +39,16 @@ async::Task<json::Value> Scheduler::semantic_tokens(std::string path) {
     auto content = openFile->content;
     auto ast = openFile->ast;
     if(!ast) {
-        co_return json::Value(nullptr);
+        co_return "";
     }
 
-    auto tokens = co_await async::submit([&] { return feature::semanticTokens(*ast); });
-
-    co_return converter.convert(content, tokens);
+    co_return co_await async::submit([kind = this->kind, &ast] {
+        auto tokens = feature::semanticTokens(*ast);
+        return proto::to_json(kind, ast->interested_content(), tokens);
+    });
 }
 
-async::Task<json::Value> Scheduler::completion(std::string path, std::uint32_t offset) {
+async::Task<std::string> Scheduler::completion(std::string path, std::uint32_t offset) {
     /// Wait for PCH building.
     auto openFile = &opening_files[path];
     if(!openFile->pch_build_task.empty()) {
@@ -64,10 +65,10 @@ async::Task<json::Value> Scheduler::completion(std::string path, std::uint32_t o
     params.pch = {pch->path, pch->preamble.size()};
     params.completion = {path, offset};
 
-    auto result = co_await async::submit([&] { return feature::code_complete(params, {}); });
-
-    openFile = &opening_files[path];
-    co_return converter.convert(openFile->content, result);
+    co_return co_await async::submit([kind = this->kind, content = openFile->content, &params] {
+        auto items = feature::code_complete(params, {});
+        return proto::to_json(kind, content, items);
+    });
 }
 
 async::Task<bool> Scheduler::isPCHOutdated(llvm::StringRef path, llvm::StringRef preamble) {

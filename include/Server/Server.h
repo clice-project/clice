@@ -4,7 +4,6 @@
 #include "Indexer.h"
 #include "Protocol.h"
 #include "Scheduler.h"
-#include "LSPConverter.h"
 #include "Async/Async.h"
 #include "Compiler/Command.h"
 
@@ -34,7 +33,7 @@ private:
                                    json::Value registerOptions);
 
 private:
-    async::Task<json::Value> onInitialize(json::Value value);
+    async::Task<std::string> onInitialize(json::Value value);
 
     async::Task<> onDidOpen(json::Value value);
 
@@ -44,19 +43,19 @@ private:
 
     async::Task<> onDidClose(json::Value value);
 
-    async::Task<json::Value> onSemanticToken(json::Value value);
+    async::Task<std::string> onSemanticToken(json::Value value);
 
-    async::Task<json::Value> onCodeCompletion(json::Value value);
+    async::Task<std::string> onCodeCompletion(json::Value value);
 
 private:
     std::uint32_t id = 0;
     Indexer indexer;
     Scheduler scheduler;
-    LSPConverter converter;
     CompilationDatabase database;
 
-    using OnRequest = async::Task<json::Value> (Server::*)(json::Value);
+    using OnRequest = async::Task<std::string> (Server::*)(json::Value);
     using OnNotification = async::Task<> (Server::*)(json::Value);
+
     llvm::StringMap<OnRequest> onRequests;
     llvm::StringMap<OnNotification> onNotifications;
 };

@@ -2,13 +2,13 @@
 
 #include "Indexer.h"
 #include "Async/Async.h"
-#include "Compiler/CompilationUnit.h"
 #include "Compiler/Module.h"
 #include "Compiler/Preamble.h"
+#include "Compiler/CompilationUnit.h"
+#include "Server/Convert.h"
 
 namespace clice {
 
-class LSPConverter;
 class CompilationDatabase;
 
 struct OpenFile {
@@ -39,8 +39,8 @@ struct OpenFile {
 
 class Scheduler {
 public:
-    Scheduler(Indexer& indexer, LSPConverter& converter, CompilationDatabase& database) :
-        indexer(indexer), converter(converter), database(database) {}
+    Scheduler(Indexer& indexer, CompilationDatabase& database) :
+        indexer(indexer), database(database) {}
 
     /// Add or update a document.
     async::Task<OpenFile*> add_document(std::string path, std::string content);
@@ -51,9 +51,9 @@ public:
     llvm::StringRef getDocumentContent(llvm::StringRef path);
 
     /// Get the specific AST of given file.
-    async::Task<json::Value> semantic_tokens(std::string path);
+    async::Task<std::string> semantic_tokens(std::string path);
 
-    async::Task<json::Value> completion(std::string path, std::uint32_t offset);
+    async::Task<std::string> completion(std::string path, std::uint32_t offset);
 
 private:
     async::Task<bool> isPCHOutdated(llvm::StringRef file, llvm::StringRef preamble);
@@ -64,9 +64,9 @@ private:
 
 private:
     Indexer& indexer;
-    LSPConverter& converter;
     CompilationDatabase& database;
 
+    PositionEncodingKind kind;
     /// The task that runs in the thread pool. The number of tasks is fixed,
     /// and we won't attempt to expand the vector, so the references are
     /// guaranteed to remain valid.
