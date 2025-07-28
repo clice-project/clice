@@ -19,7 +19,7 @@ struct OpenFile {
 
     /// We build PCH for every opened file.
     std::optional<PCHInfo> pch;
-    async::Task<> pch_build_task;
+    async::Task<bool> pch_build_task;
     async::Event pch_built_event;
 
     /// For each opened file, we would like to build an AST for it.

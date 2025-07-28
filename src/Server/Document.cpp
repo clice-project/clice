@@ -44,12 +44,12 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
            std::string path,
            std::uint32_t bound,
            std::string content,
-           std::shared_ptr<std::vector<Diagnostic>> diagnostics) -> async::Task<> {
+           std::shared_ptr<std::vector<Diagnostic>> diagnostics) -> async::Task<bool> {
         if(!fs::exists(config::cache.dir)) {
             auto error = fs::create_directories(config::cache.dir);
             if(error) {
                 log::warn("Fail to create directory for PCH building: {}", config::cache.dir);
-                co_return;
+                co_return false;
             }
         }
 
@@ -70,6 +70,9 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
             auto result = compile(params, info);
             if(!result) {
                 log::warn("Building PCH fails for {}, Because: {}", path, result.error());
+                for(auto& diagnostic: *diagnostics) {
+                    log::warn("{}", diagnostic.message);
+                }
                 return false;
             }
 
@@ -79,7 +82,7 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
         });
 
         if(!cond) {
-            co_return;
+            co_return false;
         }
 
         auto& openFile = server.opening_files[path];
@@ -90,6 +93,8 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
         /// Resume waiters on this event.
         openFile.pch_built_event.set();
         openFile.pch_built_event.clear();
+
+        co_return true;
     };
 
     openFile = &opening_files[path];
@@ -106,9 +111,9 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
 
     log::info("Start building PCH for {}", path);
 
-    co_await task;
-
-    log::info("Building PCH successfully for {}", path);
+    if(co_await task) {
+        log::info("Building PCH successfully for {}", path);
+    }
 }
 
 async::Task<> Server::build_ast(std::string path, std::string content) {
