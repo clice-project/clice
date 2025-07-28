@@ -1,17 +1,10 @@
 #pragma once
 
+#include "Protocol/Protocol.h"
 #include "Feature/SemanticToken.h"
 #include "Feature/CodeCompletion.h"
 
-namespace clice {
-
-enum class PositionEncodingKind : std::uint8_t {
-    UTF8 = 0,
-    UTF16,
-    UTF32,
-};
-
-namespace proto {
+namespace clice::proto {
 
 std::string to_json(PositionEncodingKind kind,
                     llvm::StringRef content,
@@ -21,6 +14,4 @@ std::string to_json(PositionEncodingKind kind,
                     llvm::StringRef content,
                     llvm::ArrayRef<feature::CompletionItem> items);
 
-}  // namespace proto
-
-}  // namespace clice
+}  // namespace clice::proto

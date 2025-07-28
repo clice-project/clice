@@ -55,7 +55,7 @@ async::Task<> Server::registerCapacity(llvm::StringRef id,
     });
 }
 
-Server::Server() : indexer(database), scheduler(indexer, database) {
+Server::Server() {
     register_callback<&Server::on_initialize>("initialize");
 
     register_callback<&Server::on_did_open>("textDocument/didOpen");

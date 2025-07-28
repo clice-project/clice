@@ -3,6 +3,14 @@
 namespace clice {
 
 async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
+    log::info("Initialize from client: {}, version: {}",
+              params.clientInfo.name,
+              params.clientInfo.verion);
+
+    if(params.workspaceFolders.empty()) {
+        log::fatal("The client should provide one workspace folder at least!");
+    }
+
     // auto result = converter.initialize(std::move(value));
     // config::init(converter.workspace());
     //
