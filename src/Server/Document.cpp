@@ -27,8 +27,9 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
     auto bound = computePreambleBound(content);
 
     auto openFile = &opening_files[path];
-    bool outdated = false;
+    bool outdated = true;
     if(openFile->pch) {
+        /// FIXME:
         /// outdated = co_await isPCHOutdated(path, llvm::StringRef(content).substr(0, bound));
     }
 
@@ -136,7 +137,7 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     auto ast = co_await async::submit([&] { return compile(params); });
     if(!ast) {
         /// FIXME: Fails needs cancel waiting tasks.
-        /// log::warn("Building AST fails for {}, Beacuse: {}", path, AST.error());
+        log::warn("Building AST fails for {}, Beacuse: {}", path, ast.error());
         co_return;
     }
 
@@ -153,25 +154,27 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
 }
 
 async::Task<> Server::on_did_open(proto::DidOpenTextDocumentParams params) {
-    // auto path = converter.convert(params.textDocument.uri);
-    // auto file =
-    //     co_await scheduler.add_document(std::move(path), std::move(params.textDocument.text));
-    //
-    // if(file->diagnostics) {}
+    auto path = mapping.to_path(params.textDocument.uri);
+    auto file = co_await add_document(std::move(path), std::move(params.textDocument.text));
+    if(file->diagnostics) {
+        /// Publish diagnostics here ...
+    }
     co_return;
 }
 
 async::Task<> Server::on_did_change(proto::DidChangeTextDocumentParams params) {
-    // auto path = converter.convert(params.textDocument.uri);
-    // co_await scheduler.add_document(std::move(path), std::move(params.contentChanges[0].text));
+    auto path = mapping.to_path(params.textDocument.uri);
+    co_await add_document(std::move(path), std::move(params.contentChanges[0].text));
     co_return;
 }
 
 async::Task<> Server::on_did_save(proto::DidSaveTextDocumentParams params) {
+    auto path = mapping.to_path(params.textDocument.uri);
     co_return;
 }
 
 async::Task<> Server::on_did_close(proto::DidCloseTextDocumentParams params) {
+    auto path = mapping.to_path(params.textDocument.uri);
     co_return;
 }
 

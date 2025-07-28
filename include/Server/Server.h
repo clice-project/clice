@@ -36,9 +36,23 @@ struct OpenFile {
     std::unique_ptr<OpenFile> next;
 };
 
+struct PathMapping {
+    std::string to_path(llvm::StringRef uri) {
+        /// FIXME: Path mapping.
+        return fs::toPath(uri);
+    }
+
+    std::string to_uri(llvm::StringRef path) {
+        /// FIXME: Path mapping.
+        return fs::toURI(path);
+    }
+};
+
 class Server {
 public:
     Server();
+
+    using Self = Server;
 
     using Callback = async::Task<json::Value> (*)(Server&, json::Value);
 
@@ -113,11 +127,15 @@ private:
 
     proto::PositionEncodingKind kind;
 
+    std::string workspace;
+
     /// The compilation database.
     CompilationDatabase database;
 
     /// All opening files, TODO: use a LRU cache.
     llvm::StringMap<OpenFile> opening_files;
+
+    PathMapping mapping;
 };
 
 }  // namespace clice

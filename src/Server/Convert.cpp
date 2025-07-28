@@ -66,55 +66,6 @@ bool iterateCodepoints(llvm::StringRef content, const Callback& callback) {
     return false;
 }
 
-/// Convert a proto::Position to a file offset in the content with the specified encoding kind.
-std::uint32_t toOffset(llvm::StringRef content,
-                       PositionEncodingKind kind,
-                       proto::Position position) {
-    std::uint32_t offset = 0;
-    for(auto i = 0; i < position.line; i++) {
-        auto pos = content.find('\n');
-        assert(pos != llvm::StringRef::npos && "Line value is out of range");
-
-        offset += pos + 1;
-        content = content.substr(pos + 1);
-    }
-
-    /// Drop the content after the line.
-    content = content.take_until([](char c) { return c == '\n'; });
-    assert(position.character <= content.size() && "Character value is out of range");
-
-    if(position.character == 0) {
-        return offset;
-    }
-
-    if(kind == "utf-8") {
-        offset += position.character;
-        return offset;
-    }
-
-    if(kind == "utf-16") {
-        iterateCodepoints(content, [&](std::uint32_t utf8Length, std::uint32_t utf16Length) {
-            assert(position.character >= utf16Length && "Character value is out of range");
-            position.character -= utf16Length;
-            offset += utf8Length;
-            return position.character != 0;
-        });
-        return offset;
-    }
-
-    if(kind == "utf-32") {
-        iterateCodepoints(content, [&](std::uint32_t utf8Length, std::uint32_t) {
-            assert(position.character >= 1 && "Character value is out of range");
-            position.character -= 1;
-            offset += utf8Length;
-            return position.character != 0;
-        });
-        return offset;
-    }
-
-    std::unreachable();
-}
-
 /// Remeasure the length (character count) of the content with the specified encoding kind.
 std::uint32_t remeasure(llvm::StringRef content, PositionEncodingKind kind) {
     if(kind == "utf-8") {
@@ -236,7 +187,55 @@ private:
 
 }  // namespace
 
-std::string to_json(PositionEncodingKind kind,
+std::uint32_t to_offset(PositionEncodingKind kind,
+                        llvm::StringRef content,
+                        proto::Position position) {
+    std::uint32_t offset = 0;
+    for(auto i = 0; i < position.line; i++) {
+        auto pos = content.find('\n');
+        assert(pos != llvm::StringRef::npos && "Line value is out of range");
+
+        offset += pos + 1;
+        content = content.substr(pos + 1);
+    }
+
+    /// Drop the content after the line.
+    content = content.take_until([](char c) { return c == '\n'; });
+    assert(position.character <= content.size() && "Character value is out of range");
+
+    if(position.character == 0) {
+        return offset;
+    }
+
+    if(kind == "utf-8") {
+        offset += position.character;
+        return offset;
+    }
+
+    if(kind == "utf-16") {
+        iterateCodepoints(content, [&](std::uint32_t utf8Length, std::uint32_t utf16Length) {
+            assert(position.character >= utf16Length && "Character value is out of range");
+            position.character -= utf16Length;
+            offset += utf8Length;
+            return position.character != 0;
+        });
+        return offset;
+    }
+
+    if(kind == "utf-32") {
+        iterateCodepoints(content, [&](std::uint32_t utf8Length, std::uint32_t) {
+            assert(position.character >= 1 && "Character value is out of range");
+            position.character -= 1;
+            offset += utf8Length;
+            return position.character != 0;
+        });
+        return offset;
+    }
+
+    std::unreachable();
+}
+
+json::Value to_json(PositionEncodingKind kind,
                     llvm::StringRef content,
                     llvm::ArrayRef<feature::SemanticToken> tokens) {
     std::vector<std::uint32_t> groups;
@@ -317,10 +316,10 @@ std::string to_json(PositionEncodingKind kind,
         /// The actual tokens.
         {"data", json::serialize(groups)}
     };
-    return std::format("{}", json::Value(std::move(object)));
+    return json::Value(std::move(object));
 }
 
-std::string to_json(PositionEncodingKind kind,
+json::Value to_json(PositionEncodingKind kind,
                     llvm::StringRef content,
                     llvm::ArrayRef<feature::CompletionItem> items) {
     PositionConverter converter(content, kind);
@@ -342,7 +341,7 @@ std::string to_json(PositionEncodingKind kind,
         result.emplace_back(std::move(object));
     }
 
-    return std::format("{}", json::Value(std::move(result)));
+    return json::Value(std::move(result));
 }
 
 }  // namespace clice::proto

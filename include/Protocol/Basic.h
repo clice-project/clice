@@ -111,7 +111,8 @@ struct VersionedTextDocumentIdentifier {
     /// The text document's URI.
     DocumentUri uri;
 
-    std::uint32_t version;
+    /// The version of document.
+    integer version;
 };
 
 struct TextDocumentPositionParams {

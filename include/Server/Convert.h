@@ -3,14 +3,19 @@
 #include "Protocol/Protocol.h"
 #include "Feature/SemanticToken.h"
 #include "Feature/CodeCompletion.h"
+#include "Support/JSON.h"
 
 namespace clice::proto {
 
-std::string to_json(PositionEncodingKind kind,
+/// Convert a proto::Position to a file offset in the content with the specified encoding kind.
+std::uint32_t to_offset(PositionEncodingKind kind,
+                        llvm::StringRef content,
+                        proto::Position position);
+
+json::Value to_json(PositionEncodingKind kind,
                     llvm::StringRef content,
                     llvm::ArrayRef<feature::SemanticToken> tokens);
-
-std::string to_json(PositionEncodingKind kind,
+json::Value to_json(PositionEncodingKind kind,
                     llvm::StringRef content,
                     llvm::ArrayRef<feature::CompletionItem> items);
 
