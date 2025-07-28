@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include "Config.h"
 #include "Indexer.h"
 #include "Scheduler.h"
@@ -35,21 +36,43 @@ private:
                             json::Value registerOptions);
 
 private:
-    Task<json::Value> onInitialize(json::Value value);
+    Task<json::Value> on_initialize(proto::InitializeParams params);
 
-    Task<> onDidOpen(json::Value value);
+    Task<> on_did_open(proto::DidOpenTextDocumentParams params);
 
-    Task<> onDidChange(json::Value value);
+    Task<> on_did_change(proto::DidChangeTextDocumentParams params);
 
-    Task<> onDidSave(json::Value value);
+    Task<> on_did_save(proto::DidSaveTextDocumentParams params);
 
-    Task<> onDidClose(json::Value value);
+    Task<> on_did_close(proto::DidCloseTextDocumentParams params);
 
-    Task<json::Value> onSemanticToken(json::Value value);
+    Task<json::Value> on_semantic_token(proto::SemanticTokensParams params);
 
-    Task<json::Value> onCodeCompletion(json::Value value);
+    Task<json::Value> on_completion(proto::CompletionParams params);
 
 private:
+    using Callback = async::Task<json::Value> (*)(Server&, json::Value);
+
+    template <auto method>
+    void register_callback(llvm::StringRef name) {
+        using MF = decltype(method);
+        static_assert(std::is_member_function_pointer_v<MF>, "");
+        using F = member_type_t<MF>;
+        using Ret = function_return_t<F>;
+        using Params = std::tuple_element_t<0, function_args_t<F>>;
+
+        Callback callback = [](Server& server, json::Value value) -> async::Task<json::Value> {
+            if constexpr(std::is_same_v<Ret, async::Task<>>) {
+                co_await (server.*method)(json::deserialize<Params>(value));
+                co_return json::Value(nullptr);
+            } else {
+                co_return co_await (server.*method)(json::deserialize<Params>(value));
+            }
+        };
+
+        callbacks.try_emplace(name, callback);
+    }
+
     std::uint32_t id = 0;
 
     Indexer indexer;
@@ -58,11 +81,7 @@ private:
 
     CompilationDatabase database;
 
-    using OnRequest = async::Task<json::Value> (Server::*)(json::Value);
-    using OnNotification = async::Task<> (Server::*)(json::Value);
-
-    llvm::StringMap<OnRequest> onRequests;
-    llvm::StringMap<OnNotification> onNotifications;
+    llvm::StringMap<Callback> callbacks;
 };
 
 }  // namespace clice

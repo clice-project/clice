@@ -140,4 +140,15 @@ struct TextDocumentSyncOptions {
     TextDocumentSyncKind kind = TextDocumentSyncKind::Incremental;
 };
 
+struct DidOpenTextDocumentParams {
+    /// The document that was opened.
+    TextDocumentItem textDocument;
+};
+
+struct DidChangeTextDocumentParams {};
+
+struct DidSaveTextDocumentParams {};
+
+struct DidCloseTextDocumentParams {};
+
 }  // namespace clice::proto

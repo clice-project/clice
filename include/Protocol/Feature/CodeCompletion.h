@@ -8,4 +8,6 @@ struct CompletionClientCapabilities {};
 
 struct CompletionOptions {};
 
+using CompletionParams = TextDocumentPositionParams;
+
 }  // namespace clice::proto

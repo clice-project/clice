@@ -2,7 +2,7 @@
 
 namespace clice {
 
-async::Task<json::Value> Server::onInitialize(json::Value value) {
+async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     // auto result = converter.initialize(std::move(value));
     // config::init(converter.workspace());
     //

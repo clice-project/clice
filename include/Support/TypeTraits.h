@@ -109,4 +109,49 @@ concept integral =
 template <typename T>
 concept floating_point = std::is_floating_point_v<T>;
 
+// traits for function types
+template <typename Fn>
+struct function_traits {
+    static_assert(dependent_false<Fn>, "unsupported function type");
+};
+
+#define FUNCTION_TRAITS_SPECIALIZE(...)                                                            \
+    template <typename R, typename... Args>                                                        \
+    struct function_traits<R(Args...) __VA_ARGS__> {                                               \
+        using return_type = R;                                                                     \
+        using args_type = std::tuple<Args...>;                                                     \
+    };
+
+FUNCTION_TRAITS_SPECIALIZE()
+FUNCTION_TRAITS_SPECIALIZE(&)
+FUNCTION_TRAITS_SPECIALIZE(const)
+FUNCTION_TRAITS_SPECIALIZE(const&)
+FUNCTION_TRAITS_SPECIALIZE(noexcept)
+FUNCTION_TRAITS_SPECIALIZE(& noexcept)
+FUNCTION_TRAITS_SPECIALIZE(const noexcept)
+FUNCTION_TRAITS_SPECIALIZE(const& noexcept)
+
+#undef FUNCTION_TRAITS_SPECIALIZE
+
+template <typename T>
+using function_return_t = typename function_traits<T>::return_type;
+
+template <typename T>
+using function_args_t = typename function_traits<T>::args_type;
+
+template <typename T>
+struct member_traits;
+
+template <typename M, typename C>
+struct member_traits<M C::*> {
+    using member_type = M;
+    using class_type = C;
+};
+
+template <typename T>
+using member_type_t = typename member_traits<T>::member_type;
+
+template <typename T>
+using class_type_t = typename member_traits<T>::class_type;
+
 }  // namespace clice
