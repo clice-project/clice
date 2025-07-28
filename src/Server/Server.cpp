@@ -67,7 +67,7 @@ Server::Server() : indexer(database), scheduler(indexer, database) {
     register_callback<&Server::on_semantic_token>("textDocument/semanticTokens/full");
 }
 
-async::Task<> Server::onReceive(json::Value value) {
+async::Task<> Server::on_receive(json::Value value) {
     auto object = value.getAsObject();
     if(!object) [[unlikely]] {
         log::fatal("Invalid LSP message, not an object: {}", value);
@@ -114,29 +114,6 @@ async::Task<> Server::onReceive(json::Value value) {
         log::info("Handled notification: {}", method);
     }
 
-    co_return;
-}
-
-async::Task<> Server::on_did_open(proto::DidOpenTextDocumentParams params) {
-    // auto path = converter.convert(params.textDocument.uri);
-    // auto file =
-    //     co_await scheduler.add_document(std::move(path), std::move(params.textDocument.text));
-    //
-    // if(file->diagnostics) {}
-    co_return;
-}
-
-async::Task<> Server::on_did_change(proto::DidChangeTextDocumentParams params) {
-    // auto path = converter.convert(params.textDocument.uri);
-    // co_await scheduler.add_document(std::move(path), std::move(params.contentChanges[0].text));
-    co_return;
-}
-
-async::Task<> Server::on_did_save(proto::DidSaveTextDocumentParams params) {
-    co_return;
-}
-
-async::Task<> Server::on_did_close(proto::DidCloseTextDocumentParams params) {
     co_return;
 }
 

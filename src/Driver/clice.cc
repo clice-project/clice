@@ -106,7 +106,7 @@ int main(int argc, const char** argv) {
     /// The global server instance.
     static Server instance;
     auto loop = [&](json::Value value) -> async::Task<> {
-        co_await instance.onReceive(value);
+        co_await instance.on_receive(value);
     };
 
     if(mode == "pipe") {

@@ -16,7 +16,7 @@ class Server {
 public:
     Server();
 
-    Task<> onReceive(json::Value value);
+    Task<> on_receive(json::Value value);
 
 private:
     /// Send a request to the client.
