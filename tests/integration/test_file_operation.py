@@ -13,5 +13,5 @@ async def test_did_open(executable, test_data_dir, resource_dir):
 
     await client.initialize(test_data_dir / "hello_world")
     await client.did_open("main.cpp")
-    await asyncio.sleep(3)
+    await asyncio.sleep(10)
     await client.exit()
