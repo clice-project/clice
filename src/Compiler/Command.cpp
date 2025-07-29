@@ -5,6 +5,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Program.h"
 #include "clang/Driver/Driver.h"
+#include "Support/Logger.h"
 
 namespace clice {
 
@@ -436,15 +437,19 @@ auto CompilationDatabase::get_command(this Self& self,
     };
 
     if(query_driver) {
-        auto driver_info = self.query_driver(info.arguments[0]);
-        append_argument("-nostdlibinc");
+        if(auto driver_info = self.query_driver(info.arguments[0])) {
+            append_argument("-nostdlibinc");
 
-        /// FIXME: Use target information here, this is useful for cross compilation.
+            /// FIXME: Use target information here, this is useful for cross compilation.
 
-        /// FIXME: Cache -I so that we can append directly, avoid duplicate lookup.
-        for(auto& system_header: driver_info->system_includes) {
-            append_argument("-I");
-            append_argument(system_header);
+            /// FIXME: Cache -I so that we can append directly, avoid duplicate lookup.
+            for(auto& system_header: driver_info->system_includes) {
+                append_argument("-I");
+                append_argument(system_header);
+            }
+        } else {
+            /// FIXME: Error handle here.
+            log::warn("Fail query info for {}, because", info.arguments[0], driver_info.error());
         }
     }
 
