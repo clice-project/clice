@@ -161,10 +161,30 @@ TEST(Command, QueryDriver) {
     using namespace std::literals;
 
     CompilationDatabase database;
-    auto info = database.query_driver("/usr/bin/g++");
+    auto info = database.query_driver("g++");
     ASSERT_TRUE(info);
 
     EXPECT_EQ(info->target, "x86_64-linux-gnu");
+    EXPECT_EQ(info->system_includes.size(), 6);
+
+    if(_GLIBCXX_RELEASE == 13) {
+        EXPECT_EQ(info->system_includes[0], "/usr/include/c++/13"sv);
+        EXPECT_EQ(info->system_includes[1], "/usr/include/x86_64-linux-gnu/c++/13"sv);
+        EXPECT_EQ(info->system_includes[2], "/usr/include/c++/13/backward"sv);
+    } else if(_GLIBCXX_RELEASE == 14) {
+        EXPECT_EQ(info->system_includes[0], "/usr/include/c++/14"sv);
+        EXPECT_EQ(info->system_includes[1], "/usr/include/x86_64-linux-gnu/c++/14"sv);
+        EXPECT_EQ(info->system_includes[2], "/usr/include/c++/14/backward"sv);
+    }
+
+    EXPECT_EQ(info->system_includes[3], "/usr/local/include"sv);
+    EXPECT_EQ(info->system_includes[4], "/usr/include/x86_64-linux-gnu"sv);
+    EXPECT_EQ(info->system_includes[5], "/usr/include"sv);
+
+    info = database.query_driver("clang++");
+    ASSERT_TRUE(info);
+
+    EXPECT_EQ(info->target, "x86_64-unknown-linux-gnu");
     EXPECT_EQ(info->system_includes.size(), 6);
 
     if(_GLIBCXX_RELEASE == 13) {

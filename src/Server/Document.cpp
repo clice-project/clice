@@ -58,11 +58,19 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
 
         CompilationParams params;
         params.outPath = path::join(config::cache.dir, path::filename(path) + ".pch");
-        params.arguments = server.database.get_command(path, true).arguments;
+        params.arguments = server.database.get_command(path, true, true).arguments;
         params.diagnostics = diagnostics;
         params.add_remapped_file(path, content, bound);
 
         PCHInfo info;
+
+        std::string command;
+        for(auto argument: params.arguments) {
+            command += " ";
+            command += argument;
+        }
+
+        log::info("Start building PCH for {}, command: [{}]", path, command);
 
         /// PCH file is written until destructing, Add a single block
         /// for it.
@@ -70,6 +78,7 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
             auto result = compile(params, info);
             if(!result) {
                 log::warn("Building PCH fails for {}, Because: {}", path, result.error());
+
                 for(auto& diagnostic: *diagnostics) {
                     log::warn("{}", diagnostic.message);
                 }
@@ -88,8 +97,6 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
         auto& openFile = server.opening_files[path];
         /// Update the built PCH info.
         openFile.pch = std::move(info);
-        /// Dispose the task so that it will destroyed when task complete.
-        openFile.pch_build_task.dispose();
         /// Resume waiters on this event.
         openFile.pch_built_event.set();
         openFile.pch_built_event.clear();
@@ -109,10 +116,11 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
     /// Schedule the new building task.
     task = PCHBuildTask(*this, path, bound, std::move(content), openFile->diagnostics);
 
-    log::info("Start building PCH for {}", path);
-
     if(co_await task) {
         log::info("Building PCH successfully for {}", path);
+
+        /// Dispose the task so that it will destroyed when task complete.
+        task.dispose();
     }
 }
 
@@ -133,7 +141,7 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
 
     file = &opening_files[path];
     CompilationParams params;
-    params.arguments = database.get_command(path, true).arguments;
+    params.arguments = database.get_command(path, true, true).arguments;
     params.add_remapped_file(path, content);
     params.pch = {pch->path, pch->preamble.size()};
     params.diagnostics = file->diagnostics;

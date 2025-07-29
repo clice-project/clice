@@ -96,7 +96,19 @@ std::optional<std::uint32_t> CompilationDatabase::get_option_id(llvm::StringRef 
 
 auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
     -> std::expected<DriverInfo, std::string> {
-    driver = self.save_string(driver);
+    llvm::SmallString<128> buffer;
+
+    /// FIXME: Should we use a better way?
+    if(auto error = fs::real_path(driver, buffer)) {
+        auto result = llvm::sys::findProgramByName(driver);
+        if(!result) {
+            return std::unexpected(std::format("{}", result.getError()));
+        } else {
+            buffer = *result;
+        }
+    }
+
+    driver = self.save_string(buffer);
 
     auto it = self.driver_infos.find(driver.data());
     if(it != self.driver_infos.end()) {
@@ -106,7 +118,7 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
     auto driver_name = path::filename(driver);
 
     llvm::SmallString<128> output_path;
-    if(auto error = llvm::sys::fs::createTemporaryFile("system-includes", "clangd", output_path)) {
+    if(auto error = llvm::sys::fs::createTemporaryFile("system-includes", "clice", output_path)) {
         return std::unexpected(std::format("{}", error));
     }
 
@@ -173,10 +185,6 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
         }
 
         if(in_includes_block) {
-            if(line.contains("lib/gcc")) {
-                continue;
-            }
-
             system_includes.push_back(line);
         }
     }
@@ -191,7 +199,20 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
 
     llvm::SmallVector<const char*, 8> includes;
     for(auto include: system_includes) {
-        includes.emplace_back(self.save_string(include).data());
+        llvm::SmallString<64> buffer;
+
+        /// Make sure the path is absolute, otherwise it may be
+        /// "/usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13", which
+        /// interferes with our determination of the resource directory
+        auto err = fs::real_path(include, buffer);
+        include = buffer;
+
+        /// Remove resource dir of the driver.
+        if(err || include.contains("lib/gcc") || include.contains("lib/clang")) {
+            continue;
+        }
+
+        includes.emplace_back(self.save_string(buffer).data());
     }
 
     DriverInfo info;
@@ -393,8 +414,10 @@ auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_co
     return infos;
 }
 
-auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, bool resource_dir)
-    -> LookupInfo {
+auto CompilationDatabase::get_command(this Self& self,
+                                      llvm::StringRef file,
+                                      bool resource_dir,
+                                      bool query_driver) -> LookupInfo {
     LookupInfo info;
 
     file = self.save_string(file);
@@ -408,9 +431,25 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, boo
         info.arguments = {"clang++", "-std=c++20"};
     }
 
+    auto append_argument = [&](llvm::StringRef argument) {
+        info.arguments.emplace_back(self.save_string(argument).data());
+    };
+
+    if(query_driver) {
+        auto driver_info = self.query_driver(info.arguments[0]);
+        append_argument("-nostdlibinc");
+
+        /// FIXME: Use target information here, this is useful for cross compilation.
+
+        /// FIXME: Cache -I so that we can append directly, avoid duplicate lookup.
+        for(auto& system_header: driver_info->system_includes) {
+            append_argument("-I");
+            append_argument(system_header);
+        }
+    }
+
     if(resource_dir) {
-        info.arguments.emplace_back(
-            self.save_string(std::format("-resource-dir={}", fs::resource_dir)).data());
+        append_argument(std::format("-resource-dir={}", fs::resource_dir));
     }
 
     info.arguments.emplace_back(file.data());
