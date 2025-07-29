@@ -138,4 +138,6 @@ jobs:
 
       - name: Run tests
         run: |
+          # Workaround for MacOS
+          export PATH="/opt/homebrew/opt/llvm@20/bin:/opt/homebrew/opt/lld@20/bin:$PATH"
           xmake test --verbose
