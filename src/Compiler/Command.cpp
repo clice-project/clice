@@ -209,7 +209,7 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
         include = buffer;
 
         /// Remove resource dir of the driver.
-        if(err || include.contains("lib/gcc") || include.contains("lib/clang")) {
+        if(err || include.contains("lib/gcc")) {
             continue;
         }
 
