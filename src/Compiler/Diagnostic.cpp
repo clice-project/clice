@@ -11,7 +11,7 @@
 
 namespace clice {
 
-llvm::StringRef DiagnosticID::diagnostic_code() {
+llvm::StringRef DiagnosticID::diagnostic_code() const {
     switch(value) {
 #define DIAG(ENUM,                                                                                 \
              CLASS,                                                                                \
@@ -41,7 +41,7 @@ llvm::StringRef DiagnosticID::diagnostic_code() {
     }
 }
 
-std::optional<std::string> DiagnosticID::diagnostic_document_uri() {
+std::optional<std::string> DiagnosticID::diagnostic_document_uri() const {
     switch(source) {
         case DiagnosticSource::Unknown:
         case DiagnosticSource::Clang: {
@@ -73,9 +73,8 @@ std::optional<std::string> DiagnosticID::diagnostic_document_uri() {
     }
 }
 
-void set_tags(Diagnostic& diagnostic) {
+bool DiagnosticID::is_deprecated() const {
     namespace diag = clang::diag;
-
     static llvm::DenseSet<std::uint32_t> deprecated_diags{
         diag::warn_access_decl_deprecated,
         diag::warn_atl_uuid_deprecated,
@@ -102,6 +101,12 @@ void set_tags(Diagnostic& diagnostic) {
         diag::warn_vector_mode_deprecated,
     };
 
+    /// TODO: Add clang tidy
+    return source == DiagnosticSource::Clang && deprecated_diags.contains(value);
+}
+
+bool DiagnosticID::is_unused() const {
+    namespace diag = clang::diag;
     static llvm::DenseSet<std::uint32_t> unused_diags = {
         diag::warn_opencl_attr_deprecated_ignored,
         diag::warn_pragma_attribute_unused,
@@ -122,27 +127,8 @@ void set_tags(Diagnostic& diagnostic) {
         diag::warn_unused_variable,
     };
 
-    if(deprecated_diags.contains(diagnostic.id.value)) {
-        /// TODO: Add deprecated.
-    } else if(unused_diags.contains(diagnostic.id.value)) {
-        /// TODO: Add unused.
-    }
-
-    /// TODO: see clang tidy.
-}
-
-// Checks whether a location is within a half-open range.
-// Note that clang also uses closed source ranges, which this can't handle!
-bool location_in_range(clang::SourceLocation L,
-                       clang::CharSourceRange R,
-                       const clang::SourceManager& M) {
-    /// assert(R.isCharRange());
-    if(!R.isValid() || M.getFileID(R.getBegin()) != M.getFileID(R.getEnd()) ||
-       M.getFileID(R.getBegin()) != M.getFileID(L)) {
-        return false;
-    }
-
-    return L != R.getEnd() && M.isPointWithin(L, R.getBegin(), R.getEnd());
+    /// TODO: Add clang tidy
+    return source == DiagnosticSource::Clang && unused_diags.contains(value);
 }
 
 static DiagnosticLevel diagnostic_level(clang::DiagnosticsEngine::Level level) {
@@ -157,12 +143,64 @@ static DiagnosticLevel diagnostic_level(clang::DiagnosticsEngine::Level level) {
     }
 }
 
+/// Get the range for given diagnostic.
+/// FIXME: I would like to use `CompilationUnit`.
+auto diagnostic_range(const clang::Diagnostic& diagnostic, const clang::LangOptions& options)
+    -> std::optional<std::pair<clang::FileID, LocalSourceRange>> {
+    /// If location is invalid, it represents the diagnostic is
+    /// from the command line.
+    auto location = diagnostic.getLocation();
+    if(location.isInvalid()) {
+        return std::nullopt;
+    }
+
+    /// If the location is valid, the `SourceManager` is valid too.
+    auto& src_mgr = diagnostic.getDiags()->getSourceManager();
+
+    /// Make sure the location is file location.
+    location = src_mgr.getFileLoc(location);
+    assert(location.isFileID());
+
+    auto [fid, offset] = src_mgr.getDecomposedLoc(location);
+
+    /// Select a proper range for the diagnostic.
+    for(auto range: diagnostic.getRanges()) {
+        range = clang::Lexer::makeFileCharRange(range, src_mgr, options);
+
+        auto [begin, end] = range.getAsRange();
+        auto [begin_fid, begin_offset] = src_mgr.getDecomposedLoc(begin);
+        if(begin_fid != fid || begin_offset <= offset) {
+            continue;
+        }
+
+        auto [end_fid, end_offset] = src_mgr.getDecomposedLoc(end);
+        if(range.isTokenRange()) {
+            end_offset += getTokenLength(src_mgr, end);
+        }
+
+        if(end_fid == fid && end_offset >= offset) {
+            return std::pair{
+                fid,
+                LocalSourceRange{begin_offset, end_offset}
+            };
+        }
+    }
+
+    /// Use token range.
+    auto end_offset = offset + getTokenLength(src_mgr, location);
+    return std::pair{
+        fid,
+        LocalSourceRange{offset, end_offset}
+    };
+}
+
 class DiagnosticCollector : public clang::DiagnosticConsumer {
 public:
     DiagnosticCollector(std::shared_ptr<std::vector<Diagnostic>> diagnostics) :
         diagnostics(diagnostics) {}
 
     void BeginSourceFile(const clang::LangOptions& Opts, const clang::Preprocessor* PP) override {
+        options = &Opts;
         src_mgr = &PP->getSourceManager();
     }
 
@@ -185,19 +223,13 @@ public:
         raw_diagnostic.FormatDiagnostic(message);
         diagnostic.message = message.str();
 
-        auto location = raw_diagnostic.getLocation();
-        if(location.isInvalid()) {
-            return;
+        if(auto pair = diagnostic_range(raw_diagnostic, *options)) {
+            auto [fid, range] = *pair;
+            diagnostic.fid = fid;
+            diagnostic.range = range;
         }
 
-        for(auto& range: raw_diagnostic.getRanges()) {
-            if(location_in_range(raw_diagnostic.getLocation(), range, *src_mgr)) {
-                diagnostic.range = range.getAsRange();
-                break;
-            }
-        }
-
-        /// TODO: handle FixIt
+        /// TODO: handle FixIts
         /// raw_diagnostic.getFixItHints();
     }
 
@@ -205,6 +237,7 @@ public:
 
 private:
     std::shared_ptr<std::vector<Diagnostic>> diagnostics;
+    const clang::LangOptions* options;
     clang::SourceManager* src_mgr;
 };
 

@@ -114,7 +114,7 @@ private:
     /// All registered LSP callbacks.
     llvm::StringMap<Callback> callbacks;
 
-    proto::PositionEncodingKind kind;
+    PositionEncodingKind kind;
 
     std::string workspace;
 

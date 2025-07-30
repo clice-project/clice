@@ -40,19 +40,28 @@ struct DiagnosticID {
     llvm::StringRef name;
 
     /// Get the diagnostic code.
-    llvm::StringRef diagnostic_code();
+    llvm::StringRef diagnostic_code() const;
 
     /// Get help diagnostic uri for the diagnostic.
-    std::optional<std::string> diagnostic_document_uri();
+    std::optional<std::string> diagnostic_document_uri() const;
+
+    /// Whether this diagnostic represents an deprecated diagnostic.
+    bool is_deprecated() const;
+
+    /// Whether this diagnostic represents an unused diagnostic.
+    bool is_unused() const;
 };
 
 struct Diagnostic {
     /// The diagnostic id.
     DiagnosticID id;
 
+    /// The file location of this diagnostic.
+    clang::FileID fid;
+
     /// The source range of this diagnostic(may be invalid, if this diagnostic
     /// is from command line. e.g. unknown command line argument).
-    clang::SourceRange range;
+    LocalSourceRange range;
 
     /// The error message of this diagnostic.
     std::string message;

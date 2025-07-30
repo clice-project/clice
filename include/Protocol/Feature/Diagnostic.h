@@ -62,7 +62,7 @@ struct Diagnostic {
     string code;
 
     /// An optional property to describe the error code.
-    CodeDescription codeDescription;
+    optional<CodeDescription> codeDescription;
 
     /// A human-readable string describing the source of this
     /// diagnostic, e.g. 'typescript' or 'super lint'.

@@ -1,6 +1,7 @@
 #include "Support/Logger.h"
 #include "Server/Server.h"
 #include "Compiler/Compilation.h"
+#include "Feature/Diagnostic.h"
 
 namespace clice {
 
@@ -122,6 +123,8 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
         /// Dispose the task so that it will destroyed when task complete.
         task.dispose();
     }
+
+    /// TODO: report diagnostics in the preamble.
 }
 
 async::Task<> Server::build_ast(std::string path, std::string content) {
@@ -144,6 +147,7 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     params.arguments = database.get_command(path, true, true).arguments;
     params.add_remapped_file(path, content);
     params.pch = {pch->path, pch->preamble.size()};
+    file->diagnostics->clear();
     params.diagnostics = file->diagnostics;
 
     /// Check result
@@ -168,16 +172,33 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
 
 async::Task<> Server::on_did_open(proto::DidOpenTextDocumentParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
-    auto file = co_await add_document(std::move(path), std::move(params.textDocument.text));
+    auto file = co_await add_document(path, std::move(params.textDocument.text));
     if(file->diagnostics) {
-        /// Publish diagnostics here ...
+        auto guard = co_await file->ast_built_lock.try_lock();
+        file = &opening_files[path];
+        auto diagnostics = feature::diagnostics(kind, mapping, *file->ast);
+        co_await notify("textDocument/publishDiagnostics",
+                        json::Object{
+                            {"uri",         mapping.to_uri(path)  },
+                            {"diagnostics", std::move(diagnostics)},
+        });
     }
     co_return;
 }
 
 async::Task<> Server::on_did_change(proto::DidChangeTextDocumentParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
-    co_await add_document(std::move(path), std::move(params.contentChanges[0].text));
+    auto file = co_await add_document(path, std::move(params.contentChanges[0].text));
+    if(file->diagnostics) {
+        auto guard = co_await file->ast_built_lock.try_lock();
+        file = &opening_files[path];
+        auto diagnostics = feature::diagnostics(kind, mapping, *file->ast);
+        co_await notify("textDocument/publishDiagnostics",
+                        json::Object{
+                            {"uri",         mapping.to_uri(path)  },
+                            {"diagnostics", std::move(diagnostics)},
+        });
+    }
     co_return;
 }
 

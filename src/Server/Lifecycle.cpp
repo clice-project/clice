@@ -11,7 +11,8 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
         log::fatal("The client should provide one workspace folder at least!");
     }
 
-    kind = "utf-16";
+    /// FIXME: adjust position encoding.
+    kind = PositionEncodingKind::UTF16;
     workspace = mapping.to_path(params.workspaceFolders[0].uri);
 
     /// Initialize configuration.
@@ -30,7 +31,7 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     info.name = "clice";
     info.verion = "0.0.1";
 
-    capabilities.positionEncoding = kind;
+    capabilities.positionEncoding = "utf-16";
 
     /// TextDocument synchronization.
     capabilities.textDocumentSync.openClose = true;

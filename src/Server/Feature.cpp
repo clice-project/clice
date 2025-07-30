@@ -26,7 +26,7 @@ async::Task<json::Value> Server::on_semantic_token(proto::SemanticTokensParams p
 async::Task<json::Value> Server::on_completion(proto::CompletionParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = &opening_files[path];
-    auto offset = proto::to_offset(kind, opening_file->content, params.position);
+    auto offset = to_offset(kind, opening_file->content, params.position);
 
     if(!opening_file->pch_build_task.empty()) {
         co_await opening_file->pch_built_event;
