@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Config.h"
+#include "Convert.h"
 #include "Indexer.h"
 #include "Async/Async.h"
 #include "Compiler/Command.h"
@@ -34,18 +35,6 @@ struct OpenFile {
     /// For header with context, it may have multiple ASTs, use
     /// an chain to store them.
     std::unique_ptr<OpenFile> next;
-};
-
-struct PathMapping {
-    std::string to_path(llvm::StringRef uri) {
-        /// FIXME: Path mapping.
-        return fs::toPath(uri);
-    }
-
-    std::string to_uri(llvm::StringRef path) {
-        /// FIXME: Path mapping.
-        return fs::toURI(path);
-    }
 };
 
 class Server {

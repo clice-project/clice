@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Directive.h"
-#include "Diagnostic.h"
+#include "Compiler/Diagnostic.h"
 #include "AST/SymbolID.h"
 #include "AST/SourceCode.h"
 #include "AST/Resolver.h"

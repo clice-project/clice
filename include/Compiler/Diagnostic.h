@@ -20,12 +20,35 @@ enum class DiagnosticLevel : std::uint8_t {
     Invalid,
 };
 
-struct Diagnostic {
-    /// The diagnostic id.
-    std::uint32_t id;
+enum class DiagnosticSource : std::uint8_t {
+    Unknown,
+    Clang,
+    ClangTidy,
+    Clice,
+};
+
+struct DiagnosticID {
+    /// The diagnostic id value.
+    std::uint32_t value;
 
     /// The level of this diagnostic.
     DiagnosticLevel level;
+
+    /// The source of diagnostic.
+    DiagnosticSource source;
+
+    llvm::StringRef name;
+
+    /// Get the diagnostic code.
+    llvm::StringRef diagnostic_code();
+
+    /// Get help diagnostic uri for the diagnostic.
+    std::optional<std::string> diagnostic_document_uri();
+};
+
+struct Diagnostic {
+    /// The diagnostic id.
+    DiagnosticID id;
 
     /// The source range of this diagnostic(may be invalid, if this diagnostic
     /// is from command line. e.g. unknown command line argument).
@@ -33,10 +56,6 @@ struct Diagnostic {
 
     /// The error message of this diagnostic.
     std::string message;
-
-    /// TODO: Collect fix it of diagnostics.
-
-    static llvm::StringRef diagnostic_code(std::uint32_t id);
 
     static clang::DiagnosticConsumer* create(std::shared_ptr<std::vector<Diagnostic>> diagnostics);
 };
