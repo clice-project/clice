@@ -161,7 +161,7 @@ TEST(Command, QueryDriver) {
     using namespace std::literals;
 
     CompilationDatabase database;
-    auto info = database.query_driver("/usr/bin/g++");
+    auto info = database.query_driver("g++");
     ASSERT_TRUE(info);
 
     EXPECT_EQ(info->target, "x86_64-linux-gnu");
@@ -180,6 +180,10 @@ TEST(Command, QueryDriver) {
     EXPECT_EQ(info->system_includes[3], "/usr/local/include"sv);
     EXPECT_EQ(info->system_includes[4], "/usr/include/x86_64-linux-gnu"sv);
     EXPECT_EQ(info->system_includes[5], "/usr/include"sv);
+
+    info = database.query_driver("clang++");
+    ASSERT_TRUE(info);
+
 #endif
 }
 

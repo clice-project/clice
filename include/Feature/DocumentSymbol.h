@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Server/Protocol.h"
 #include "AST/SourceCode.h"
 #include "AST/SymbolKind.h"
 #include "Index/Shared.h"

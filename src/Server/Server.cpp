@@ -55,17 +55,19 @@ async::Task<> Server::registerCapacity(llvm::StringRef id,
     });
 }
 
-Server::Server() : indexer(database), scheduler(indexer, converter, database) {
-    onRequests.try_emplace("initialize", &Server::onInitialize);
-    onRequests.try_emplace("textDocument/semanticTokens/full", &Server::onSemanticToken);
-    onRequests.try_emplace("textDocument/completion", &Server::onCodeCompletion);
-    onNotifications.try_emplace("textDocument/didOpen", &Server::onDidOpen);
-    onNotifications.try_emplace("textDocument/didChange", &Server::onDidChange);
-    onNotifications.try_emplace("textDocument/didSave", &Server::onDidSave);
-    onNotifications.try_emplace("textDocument/didClose", &Server::onDidClose);
+Server::Server() {
+    register_callback<&Server::on_initialize>("initialize");
+
+    register_callback<&Server::on_did_open>("textDocument/didOpen");
+    register_callback<&Server::on_did_change>("textDocument/didChange");
+    register_callback<&Server::on_did_save>("textDocument/didSave");
+    register_callback<&Server::on_did_close>("textDocument/didClose");
+
+    register_callback<&Server::on_completion>("textDocument/completion");
+    register_callback<&Server::on_semantic_token>("textDocument/semanticTokens/full");
 }
 
-async::Task<> Server::onReceive(json::Value value) {
+async::Task<> Server::on_receive(json::Value value) {
     auto object = value.getAsObject();
     if(!object) [[unlikely]] {
         log::fatal("Invalid LSP message, not an object: {}", value);
@@ -95,93 +97,24 @@ async::Task<> Server::onReceive(json::Value value) {
 
     /// Handle request and notification separately.
     /// TODO: Record the time of handling request and notification.
+    auto it = callbacks.find(method);
+    if(it == callbacks.end()) {
+        log::info("Ignore unhandled method: {}", method);
+        co_return;
+    }
+
     if(id) {
         log::info("Handling request: {}", method);
-        if(auto iter = onRequests.find(method); iter != onRequests.end()) {
-            auto result = co_await (this->*(iter->second))(std::move(params));
-            co_await response(std::move(*id), std::move(result));
-        }
+        auto result = co_await it->second(*this, std::move(params));
+        co_await response(std::move(*id), std::move(result));
         log::info("Handled request: {}", method);
     } else {
         log::info("Handling notification: {}", method);
-        if(auto iter = onNotifications.find(method); iter != onNotifications.end()) {
-            co_await (this->*(iter->second))(std::move(params));
-        }
+        auto result = co_await it->second(*this, std::move(params));
         log::info("Handled notification: {}", method);
     }
 
     co_return;
-}
-
-async::Task<json::Value> Server::onInitialize(json::Value value) {
-    auto result = converter.initialize(std::move(value));
-    config::init(converter.workspace());
-
-    for(auto& dir: config::server.compile_commands_dirs) {
-        auto content = fs::read(dir + "/compile_commands.json");
-        if(content) {
-            auto updated = database.load_commands(*content);
-        }
-    }
-
-    co_return result;
-}
-
-async::Task<> Server::onDidOpen(json::Value value) {
-    struct DidOpenTextDocumentParams {
-        proto::TextDocumentItem textDocument;
-    };
-
-    auto params = json::deserialize<DidOpenTextDocumentParams>(value);
-    auto path = converter.convert(params.textDocument.uri);
-    scheduler.addDocument(std::move(path), std::move(params.textDocument.text));
-    co_return;
-}
-
-async::Task<> Server::onDidChange(json::Value value) {
-    struct DidChangeTextDocumentParams {
-        proto::VersionedTextDocumentIdentifier textDocument;
-
-        struct TextDocumentContentChangeEvent {
-            std::string text;
-        };
-
-        std::vector<TextDocumentContentChangeEvent> contentChanges;
-    };
-
-    auto params = json::deserialize<DidChangeTextDocumentParams>(value);
-    auto path = converter.convert(params.textDocument.uri);
-    scheduler.addDocument(std::move(path), std::move(params.contentChanges[0].text));
-
-    co_return;
-}
-
-async::Task<> Server::onDidSave(json::Value value) {
-    co_return;
-}
-
-async::Task<> Server::onDidClose(json::Value value) {
-    co_return;
-}
-
-async::Task<json::Value> Server::onSemanticToken(json::Value value) {
-    struct SemanticTokensParams {
-        proto::TextDocumentIdentifier textDocument;
-    };
-
-    auto params = json::deserialize<SemanticTokensParams>(value);
-    auto path = converter.convert(params.textDocument.uri);
-    co_return co_await scheduler.semanticToken(std::move(path));
-}
-
-async::Task<json::Value> Server::onCodeCompletion(json::Value value) {
-    using CompletionParams = proto::TextDocumentPositionParams;
-    auto params = json::deserialize<CompletionParams>(value);
-
-    auto path = converter.convert(params.textDocument.uri);
-    auto content = scheduler.getDocumentContent(path);
-    auto offset = converter.convert(content, params.position);
-    co_return co_await scheduler.completion(std::move(path), offset);
 }
 
 }  // namespace clice

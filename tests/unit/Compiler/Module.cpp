@@ -44,7 +44,7 @@ ModuleInfo scan(llvm::StringRef content) {
     params.add_remapped_file("./test.h", "export module A");
     auto info = scanModule(params);
     if(!info) {
-        clice::println("Fail to scan module: {}", info.error());
+        /// clice::println("Fail to scan module: {}", info.error());
         std::abort();
     }
     return std::move(*info);
