@@ -14,28 +14,51 @@ namespace {
 class ProxyASTConsumer : public clang::MultiplexConsumer {
 public:
     ProxyASTConsumer(std::unique_ptr<clang::ASTConsumer> consumer,
+                     clang::CompilerInstance& instance,
                      std::shared_ptr<std::atomic_bool> stop) :
-        clang::MultiplexConsumer(std::move(consumer)), stop(stop) {}
+        clang::MultiplexConsumer(std::move(consumer)), instance(instance),
+        src_mgr(instance.getSourceManager()), stop(stop) {
+        /// FIXME: We may want to use a more explicit way to judge this.
+        need_collect = instance.getFrontendOpts().OutputFile.empty();
+    }
+
+    void collect_decl(clang::Decl* decl) {
+        auto location = decl->getLocation();
+        if(location.isInvalid()) {
+            return;
+        }
+
+        location = src_mgr.getExpansionLoc(location);
+        auto fid = src_mgr.getFileID(location);
+        if(fid == src_mgr.getPreambleFileID() || fid == src_mgr.getMainFileID()) {
+            top_level_decls.push_back(decl);
+        }
+    }
 
     auto HandleTopLevelDecl(clang::DeclGroupRef group) -> bool override {
-        if(group.isDeclGroup()) {
-            for(auto decl: group) {
-                top_level_decls.push_back(decl);
+        if(need_collect) {
+            if(group.isDeclGroup()) {
+                for(auto decl: group) {
+                    collect_decl(decl);
+                }
+            } else {
+                collect_decl(group.getSingleDecl());
             }
-        } else {
-            top_level_decls.push_back(group.getSingleDecl());
         }
 
         /// TODO: check atomic variable after the parse of each declaration
         /// may result in performance issue, benchmark in the future.
-        if(stop && !stop->load()) {
-            return clang::MultiplexConsumer::HandleTopLevelDecl(group);
+        if(stop && stop->load()) {
+            return false;
         }
 
-        return false;
+        return clang::MultiplexConsumer::HandleTopLevelDecl(group);
     }
 
 private:
+    clang::CompilerInstance& instance;
+    clang::SourceManager& src_mgr;
+    bool need_collect;
     std::vector<clang::Decl*> top_level_decls;
     std::shared_ptr<std::atomic_bool> stop;
 };
@@ -49,8 +72,11 @@ public:
     auto CreateASTConsumer(clang::CompilerInstance& instance, llvm::StringRef file)
         -> std::unique_ptr<clang::ASTConsumer> override {
 
+        bool need_collect = instance.getFrontendOpts().OutputFile.empty();
+
         return std::make_unique<ProxyASTConsumer>(
             WrapperFrontendAction::CreateASTConsumer(instance, file),
+            instance,
             std::move(stop));
     }
 
@@ -185,7 +211,7 @@ CompilationResult run_clang(CompilationParams& params, const Adjuster& adjuster)
 
     /// Check whether the compilation is canceled, if so we think
     /// it is an error.
-    if(!params.stop || params.stop->load()) {
+    if(params.stop && params.stop->load()) {
         action->EndSourceFile();
         return std::unexpected("Compilation is canceled.");
     }

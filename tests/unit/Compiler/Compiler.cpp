@@ -6,11 +6,7 @@ namespace clice::testing {
 
 namespace {
 
-TEST(Compiler, buildAST) {}
-
-TEST(Compiler, buildPCM) {}
-
-TEST(Compiler, codeCompleteAt) {}
+TEST(Compiler, TopLevelDecls) {}
 
 }  // namespace
 
