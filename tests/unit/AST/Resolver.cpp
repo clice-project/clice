@@ -38,7 +38,7 @@ struct InputFinder : clang::RecursiveASTVisitor<InputFinder> {
 
 struct TemplateResolver : TestFixture {
     void run(llvm::StringRef code, LocationChain chain = LocationChain()) {
-        addMain("main.cpp", code);
+        add_main("main.cpp", code);
         compile();
 
         InputFinder finder(*unit);

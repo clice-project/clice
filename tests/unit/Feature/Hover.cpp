@@ -23,7 +23,7 @@ struct Hover : TestFixture {
     llvm::StringMap<const clang::Decl*> decls;
 
     void run(llvm::StringRef code, LocalSourceRange range = {}) {
-        addMain("main.cpp", code);
+        add_main("main.cpp", code);
         compile();
         DeclCollector collector;
         collector.TraverseTranslationUnitDecl(unit->tu());

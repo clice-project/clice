@@ -109,15 +109,15 @@ TEST_F(Directive, Include) {
 #$(5)include "guard_macro.h"
 )cpp";
 
-    addMain("main.cpp", main);
+    add_main("main.cpp", main);
 
     auto ptest = path::join(".", "test.h");
     auto ppragma_once = path::join(".", "pragma_once.h");
     auto pguard_macro = path::join(".", "guard_macro.h");
 
-    addFile(ptest, test);
-    addFile(ppragma_once, pragma_once);
-    addFile(pguard_macro, guard_macro);
+    add_file(ptest, test);
+    add_file(ppragma_once, pragma_once);
+    add_file(pguard_macro, guard_macro);
     run();
 
     EXPECT_EQ(includes.size(), 6);
@@ -142,10 +142,10 @@ TEST_F(Directive, HasInclude) {
 #endif
 )cpp";
 
-    addMain("main.cpp", main);
+    add_main("main.cpp", main);
 
     auto path = path::join(".", "test.h");
-    addFile(path, test);
+    add_file(path, test);
 
     run();
 
@@ -173,7 +173,7 @@ TEST_F(Directive, Condition) {
 #$(7)endif
 )cpp";
 
-    addMain("main.cpp", code);
+    add_main("main.cpp", code);
     run("-std=c++23");
 
     EXPECT_EQ(conditions.size(), 8);
@@ -207,7 +207,7 @@ int y = $(6)expr($(7)expr(1));
 
 )cpp";
 
-    addMain("main.cpp", code);
+    add_main("main.cpp", code);
     run();
 
     EXPECT_EQ(macros.size(), 9);
@@ -229,7 +229,7 @@ $(1)#pragma region
 $(2)#pragma endregion
 )cpp";
 
-    addMain("main.cpp", code);
+    add_main("main.cpp", code);
     run();
 
     EXPECT_EQ(3, pragmas.size());

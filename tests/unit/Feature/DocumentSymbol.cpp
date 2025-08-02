@@ -9,7 +9,7 @@ struct DocumentSymbol : TestFixture {
 
 protected:
     auto run(llvm::StringRef code) {
-        addMain("main.cpp", code);
+        add_main("main.cpp", code);
         Tester::compile();
         EXPECT_TRUE(unit.has_value());
 
@@ -216,8 +216,8 @@ int y = 2;
 )cpp";
 
     Tester tx;
-    tx.addFile(path::join(".", "header.h"), header);
-    tx.addMain("main.cpp", main);
+    tx.add_file(path::join(".", "header.h"), header);
+    tx.add_main("main.cpp", main);
     tx.compile();
 
     auto& info = tx.unit;

@@ -9,7 +9,7 @@ struct FoldingRange : TestFixture {
     std::vector<feature::FoldingRange> result;
 
     void run(llvm::StringRef source) {
-        addMain("main.cpp", source);
+        add_main("main.cpp", source);
         TestFixture::compile();
         result = feature::foldingRanges(*unit);
     }

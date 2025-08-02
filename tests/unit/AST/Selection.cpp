@@ -48,7 +48,9 @@ void debug(const SelectionTree& tree) {
 }
 
 struct SelectionTester : public Tester {
-    SelectionTester(llvm::StringRef file, llvm::StringRef content) : Tester(file, content) {}
+    SelectionTester(llvm::StringRef file, llvm::StringRef content) {
+        add_main(file, content);
+    }
 
     void expectPreorderSequence(const SelectionTree& tree,
                                 llvm::ArrayRef<clang::ASTNodeKind> kinds) {

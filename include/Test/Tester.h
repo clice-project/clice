@@ -17,20 +17,12 @@ struct Tester {
     /// All sources file in the compilation.
     AnnotatedSources sources;
 
-public:
-    Tester() = default;
-
-    Tester(llvm::StringRef file, llvm::StringRef content) {
+    void add_main(llvm::StringRef file, llvm::StringRef content) {
         src_path = file;
         sources.add_source(file, content);
     }
 
-    void addMain(llvm::StringRef file, llvm::StringRef content) {
-        src_path = file;
-        sources.add_source(file, content);
-    }
-
-    void addFile(llvm::StringRef name, llvm::StringRef content) {
+    void add_file(llvm::StringRef name, llvm::StringRef content) {
         sources.add_source(name, content);
     }
 

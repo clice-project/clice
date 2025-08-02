@@ -45,10 +45,11 @@ struct GetUSRVisitor : public clang::RecursiveASTVisitor<GetUSRVisitor> {
     std::map<std::uint32_t, USRInfo> USRs;
 };
 
-class USRTester : public Tester {
-    using Tester::Tester;
+struct USRTester : public Tester {
+    USRTester(llvm::StringRef file, llvm::StringRef content) {
+        add_main(file, content);
+    }
 
-public:
     void run(llvm::StringRef standard = "-std=c++20") {
         Tester::compile(standard);
 

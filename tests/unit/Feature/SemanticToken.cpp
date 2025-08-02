@@ -11,7 +11,7 @@ struct SemanticToken : TestFixture {
     using Self = SemanticToken;
 
     void run(llvm::StringRef code) {
-        addMain("main.cpp", code);
+        add_main("main.cpp", code);
         Tester::compile();
         result = feature::indexSemanticToken(*unit);
     }

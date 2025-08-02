@@ -11,7 +11,7 @@ struct DocumentLink : TestFixture {
     using Self = DocumentLink;
 
     void run(llvm::StringRef code) {
-        addMain("main.cpp", code);
+        add_main("main.cpp", code);
         Tester::compile();
         result = feature::indexDocumentLink(*unit);
     }
@@ -63,9 +63,9 @@ TEST_F(DocumentLink, Include) {
     auto ppragma_once = path::join(".", "pragma_once.h");
     auto pguard_macro = path::join(".", "guard_macro.h");
 
-    addFile(ptest, test);
-    addFile(ppragma_once, pragma_once);
-    addFile(pguard_macro, guard_macro);
+    add_file(ptest, test);
+    add_file(ppragma_once, pragma_once);
+    add_file(pguard_macro, guard_macro);
     run(main);
 
     auto& links = result[unit->interested_file()];
@@ -90,7 +90,7 @@ TEST_F(DocumentLink, HasInclude) {
 )cpp";
 
     auto path = path::join(".", "test.h");
-    addFile(path, test);
+    add_file(path, test);
 
     run(main);
 

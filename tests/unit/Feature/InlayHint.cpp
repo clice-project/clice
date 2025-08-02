@@ -449,8 +449,8 @@ namespace _2 {
 )cpp";
 
     Tester tx;
-    tx.addFile(path::join(".", "header.h"), header);
-    tx.addMain("main.cpp", source);
+    tx.add_file(path::join(".", "header.h"), header);
+    tx.add_main("main.cpp", source);
     tx.compile();
 
     auto& info = tx.unit;
