@@ -10,13 +10,14 @@ namespace {
 void EXPECT_BOUNDS(std::vector<llvm::StringRef> marks,
                    llvm::StringRef content,
                    LocationChain chain = LocationChain()) {
-    Annotation annotation{content};
-    auto bounds = computePreambleBounds(annotation.source());
+    auto annotation = AnnotatedSource::from(content);
+
+    auto bounds = computePreambleBounds(annotation.content);
 
     ASSERT_EQ(bounds.size(), marks.size(), chain);
 
     for(std::uint32_t i = 0; i < bounds.size(); i++) {
-        EXPECT_EQ(bounds[i], annotation.offset(marks[i]), chain);
+        EXPECT_EQ(bounds[i], annotation.offsets[marks[i]], chain);
     }
 }
 

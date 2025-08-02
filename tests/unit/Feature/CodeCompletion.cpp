@@ -7,11 +7,11 @@ namespace {
 
 struct CodeCompletion : TestFixture {
     auto code_complete(llvm::StringRef code) {
-        Annotation annotation = {code};
         CompilationParams params;
+        auto annotation = AnnotatedSource::from(code);
         params.arguments = {"clang++", "-std=c++20", "main.cpp"};
-        params.completion = {"main.cpp", annotation.offset("pos")};
-        params.add_remapped_file("main.cpp", annotation.source());
+        params.completion = {"main.cpp", annotation.offsets["pos"]};
+        params.add_remapped_file("main.cpp", annotation.content);
 
         config::CodeCompletionOption options = {};
         auto result = feature::code_complete(params, options);
