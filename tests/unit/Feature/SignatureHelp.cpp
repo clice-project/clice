@@ -1,4 +1,4 @@
-#include "Test/CTest.h"
+#include "Test/Tester.h"
 #include "Feature/SignatureHelp.h"
 
 namespace clice::testing {

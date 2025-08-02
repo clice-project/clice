@@ -5,7 +5,6 @@
 #include "Support/Format.h"
 #include "Support/Compare.h"
 #include "Support/FileSystem.h"
-#include "Annotation.h"
 #include "Test/LocationChain.h"
 
 namespace clice::testing {

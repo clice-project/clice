@@ -1,4 +1,4 @@
-#include "Test/CTest.h"
+#include "Test/Tester.h"
 #include "Feature/SemanticToken.h"
 
 namespace clice::testing {

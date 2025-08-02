@@ -1,6 +1,7 @@
 #include "Test/Test.h"
 #include "Compiler/Preamble.h"
 #include "Compiler/Compilation.h"
+#include "Test/Annotation.h"
 
 namespace clice::testing {
 

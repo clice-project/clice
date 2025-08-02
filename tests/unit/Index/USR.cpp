@@ -1,5 +1,5 @@
 #include "Support/Logger.h"
-#include "Test/CTest.h"
+#include "Test/Tester.h"
 #include "Index/USR.h"
 #include "clang/AST/DeclBase.h"
 #include "clang/AST/RecursiveASTVisitor.h"

@@ -6,7 +6,9 @@ namespace clice::testing {
 
 namespace {
 
-TEST(Compiler, TopLevelDecls) {}
+TEST(Compiler, TopLevelDecls) {
+    
+}
 
 }  // namespace
 

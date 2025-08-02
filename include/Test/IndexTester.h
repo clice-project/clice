@@ -1,4 +1,4 @@
-#include "Test/CTest.h"
+#include "Test/Tester.h"
 #include "Index/SymbolIndex.h"
 
 namespace clice::testing {

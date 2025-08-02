@@ -1,4 +1,4 @@
-#include "Test/CTest.h"
+#include "Test/Tester.h"
 #include "Feature/Hover.h"
 
 #include "clang/AST/RecursiveASTVisitor.h"
