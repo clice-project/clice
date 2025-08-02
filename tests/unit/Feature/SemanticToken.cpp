@@ -19,7 +19,7 @@ struct SemanticToken : TestFixture {
                       uint32_t length,
                       LocationChain chain = LocationChain()) {
         bool visited = false;
-        auto offset = offsets[pos];
+        auto offset = this->offset(pos);
         auto& tokens = result[unit->interested_file()];
 
         for(auto& token: tokens) {
@@ -40,7 +40,7 @@ struct SemanticToken : TestFixture {
                       uint32_t length,
                       LocationChain chain = LocationChain()) {
         bool visited = false;
-        auto offset = offsets[pos];
+        auto offset = this->offset(pos);
         auto& tokens = result[unit->interested_file()];
 
         for(auto& token: tokens) {
@@ -75,9 +75,9 @@ using enum SymbolModifiers::Kind;
 /// $(2)#include $(3)"stddef.h"
 /// $(4)# $(5)include $(6)"stddef.h"
 /// )cpp");
-/// 
+///
 ///     /// FIXME: Included file could be macro.
-/// 
+///
 ///     EXPECT_TOKEN("0", Directive, 8);
 ///     EXPECT_TOKEN("1", Header, 10);
 ///     EXPECT_TOKEN("2", Directive, 8);
