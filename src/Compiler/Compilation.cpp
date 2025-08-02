@@ -4,10 +4,59 @@
 #include "Compiler/Diagnostic.h"
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
+#include "clang/Frontend/MultiplexConsumer.h"
 
 namespace clice {
 
 namespace {
+
+/// A wrapper ast consumer, so that we can cancel the ast parse
+class ProxyASTConsumer : public clang::MultiplexConsumer {
+public:
+    ProxyASTConsumer(std::unique_ptr<clang::ASTConsumer> consumer,
+                     std::shared_ptr<std::atomic_bool> stop) :
+        clang::MultiplexConsumer(std::move(consumer)), stop(stop) {}
+
+    auto HandleTopLevelDecl(clang::DeclGroupRef group) -> bool override {
+        if(group.isDeclGroup()) {
+            for(auto decl: group) {
+                top_level_decls.push_back(decl);
+            }
+        } else {
+            top_level_decls.push_back(group.getSingleDecl());
+        }
+
+        /// TODO: check atomic variable after the parse of each declaration
+        /// may result in performance issue, benchmark in the future.
+        if(stop && !stop->load()) {
+            return clang::MultiplexConsumer::HandleTopLevelDecl(group);
+        }
+
+        return false;
+    }
+
+private:
+    std::vector<clang::Decl*> top_level_decls;
+    std::shared_ptr<std::atomic_bool> stop;
+};
+
+class ProxyAction : public clang::WrapperFrontendAction {
+public:
+    ProxyAction(std::unique_ptr<clang::FrontendAction> action,
+                std::shared_ptr<std::atomic_bool> stop) :
+        clang::WrapperFrontendAction(std::move(action)), stop(std::move(stop)) {}
+
+    auto CreateASTConsumer(clang::CompilerInstance& instance, llvm::StringRef file)
+        -> std::unique_ptr<clang::ASTConsumer> override {
+
+        return std::make_unique<ProxyASTConsumer>(
+            WrapperFrontendAction::CreateASTConsumer(instance, file),
+            std::move(stop));
+    }
+
+private:
+    std::shared_ptr<std::atomic_bool> stop;
+};
 
 /// create a `clang::CompilerInvocation` for compilation, it set and reset
 /// all necessary arguments and flags for clice compilation.
@@ -43,6 +92,10 @@ auto create_invocation(CompilationParams& params,
     if(bound != 0) {
         pp_opts.PrecompiledPreambleBytes = {bound, false};
     }
+
+    // We don't want to write comment locations into PCM. They are racy and slow
+    // to read back. We rely on dynamic index for the comments instead.
+    pp_opts.WriteCommentListToPCH = false;
 
     auto& header_search_opts = invocation->getHeaderSearchOpts();
     for(auto& [name, path]: params.pcms) {
@@ -90,7 +143,8 @@ CompilationResult run_clang(CompilationParams& params, const Adjuster& adjuster)
     /// Adjust the compiler instance, for example, set preamble or modules.
     adjuster(*instance);
 
-    std::unique_ptr<clang::FrontendAction> action = std::make_unique<Action>();
+    std::unique_ptr<clang::FrontendAction> action =
+        std::make_unique<ProxyAction>(std::make_unique<Action>(), params.stop);
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         return std::unexpected("Fail to begin source file");
@@ -127,6 +181,13 @@ CompilationResult run_clang(CompilationParams& params, const Adjuster& adjuster)
        instance->getDiagnostics().hasErrorOccurred()) {
         action->EndSourceFile();
         return std::unexpected("Fail to build PCH or PCM, error occurs in compilation.");
+    }
+
+    /// Check whether the compilation is canceled, if so we think
+    /// it is an error.
+    if(!params.stop || params.stop->load()) {
+        action->EndSourceFile();
+        return std::unexpected("Compilation is canceled.");
     }
 
     std::optional<clang::syntax::TokenBuffer> tok_buf;
@@ -169,41 +230,47 @@ CompilationResult compile(CompilationParams& params) {
 }
 
 CompilationResult compile(CompilationParams& params, PCHInfo& out) {
-    assert(!params.outPath.empty() && "PCH file path cannot be empty");
+    assert(!params.output_file.empty() && "PCH file path cannot be empty");
 
-    out.path = params.outPath.str();
+    out.path = params.output_file.str();
     /// out.preamble = params.content.substr(0, *params.bound);
     /// out.command = params.arguments.str();
     /// FIXME: out.deps = info->deps();
 
     return run_clang<clang::GeneratePCHAction>(params, [&](clang::CompilerInstance& instance) {
         /// Set options to generate PCH.
-        instance.getFrontendOpts().OutputFile = params.outPath.str();
+        instance.getFrontendOpts().OutputFile = params.output_file.str();
         instance.getFrontendOpts().ProgramAction = clang::frontend::GeneratePCH;
         instance.getPreprocessorOpts().GeneratePreamble = true;
+
+        // We don't want to write comment locations into PCH. They are racy and slow
+        // to read back. We rely on dynamic index for the comments instead.
+        instance.getPreprocessorOpts().WriteCommentListToPCH = false;
+
         instance.getLangOpts().CompilingPCH = true;
     });
 }
 
 CompilationResult compile(CompilationParams& params, PCMInfo& out) {
+    assert(!params.output_file.empty() && "PCM file path cannot be empty");
+
+    using GeneratePCMAction = clang::GenerateReducedModuleInterfaceAction;
+
     for(auto& [name, path]: params.pcms) {
         out.mods.emplace_back(name);
     }
-    out.path = params.outPath.str();
+    out.path = params.output_file.str();
 
-    return run_clang<clang::GenerateReducedModuleInterfaceAction>(
-        params,
-        [&](clang::CompilerInstance& instance) {
-            /// Set options to generate PCH.
-            instance.getFrontendOpts().OutputFile = params.outPath.str();
-            instance.getFrontendOpts().ProgramAction =
-                clang::frontend::GenerateReducedModuleInterface;
-            out.srcPath = instance.getFrontendOpts().Inputs[0].getFile();
-        });
+    return run_clang<GeneratePCMAction>(params, [&](clang::CompilerInstance& instance) {
+        /// Set options to generate PCH.
+        instance.getFrontendOpts().OutputFile = params.output_file.str();
+        instance.getFrontendOpts().ProgramAction = clang::frontend::GenerateReducedModuleInterface;
+
+        out.srcPath = instance.getFrontendOpts().Inputs[0].getFile();
+    });
 }
 
 CompilationResult complete(CompilationParams& params, clang::CodeCompleteConsumer* consumer) {
-
     auto& [file, offset] = params.completion;
 
     /// The location of clang is 1-1 based.

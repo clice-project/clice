@@ -75,7 +75,7 @@ void EXPECT_BUILD_PCH(llvm::StringRef main_file,
     files.erase(main_file);
 
     CompilationParams params;
-    params.outPath = outPath;
+    params.output_file = outPath;
     auto bound = computePreambleBound(content);
     params.add_remapped_file(main_file, content, bound);
 
@@ -270,11 +270,11 @@ int y = foo();
         std::string outPath = std::move(*tmp);
 
         params.add_remapped_file("main.cpp", content, bound);
-        if(params.outPath.empty()) {
-            params.pch = {params.outPath.str().str(), last_bound};
+        if(params.output_file.empty()) {
+            params.pch = {params.output_file.str().str(), last_bound};
         }
 
-        params.outPath = outPath;
+        params.output_file = outPath;
         last_bound = bound;
 
         for(auto& [path, content]: files) {
