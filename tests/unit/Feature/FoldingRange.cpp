@@ -14,16 +14,19 @@ struct FoldingRange : TestFixture {
         result = feature::foldingRanges(*unit);
     }
 
-    void EXPECT_RANGE(std::size_t index,
+    using Self = FoldingRange;
+
+    void EXPECT_RANGE(this Self& self,
+                      std::size_t index,
                       llvm::StringRef begin,
                       llvm::StringRef end,
                       feature::FoldingRangeKind kind,
                       LocationChain chain = LocationChain()) {
-        auto& folding = result[index];
-        auto begOff = offset(begin);
-        EXPECT_EQ(begOff, folding.range.begin, chain);
-        auto endOff = offset(end);
-        EXPECT_EQ(endOff, folding.range.end, chain);
+        auto& folding = self.result[index];
+        auto begin_offset = self["main.cpp", begin];
+        EXPECT_EQ(begin_offset, folding.range.begin, chain);
+        auto end_offset = self["main.cpp", end];
+        EXPECT_EQ(end_offset, folding.range.end, chain);
     }
 };
 

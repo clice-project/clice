@@ -11,6 +11,8 @@ struct Directive : ::testing::Test, Tester {
     llvm::ArrayRef<MacroRef> macros;
     llvm::ArrayRef<Pragma> pragmas;
 
+    using Self = Directive;
+
     void run(const char* standard = "-std=c++20") {
         Tester::compile("-std=c++23");
         auto fid = unit->interested_file();
@@ -21,56 +23,63 @@ struct Directive : ::testing::Test, Tester {
         pragmas = unit->directives()[fid].pragmas;
     }
 
-    void EXPECT_INCLUDE(std::size_t index,
+    void EXPECT_INCLUDE(this Self& self,
+                        std::size_t index,
                         llvm::StringRef position,
                         llvm::StringRef path,
                         LocationChain chain = LocationChain()) {
-        auto& include = includes[index];
-        auto [_, offset] = unit->decompose_location(include.location);
-        EXPECT_EQ(offset, this->offset(position), chain);
-        EXPECT_EQ(include.skipped ? "" : unit->file_path(include.fid), path, chain);
+        auto& include = self.includes[index];
+        auto [_, offset] = self.unit->decompose_location(include.location);
+        EXPECT_EQ(offset, self["main.cpp", position], chain);
+        EXPECT_EQ(include.skipped ? "" : self.unit->file_path(include.fid), path, chain);
     }
 
-    void EXPECT_HAS_INCLUDE(std::size_t index,
+    void EXPECT_HAS_INCLUDE(this Self& self,
+                            std::size_t index,
                             llvm::StringRef position,
                             llvm::StringRef path,
                             LocationChain chain = LocationChain()) {
-        auto& hasInclude = hasIncludes[index];
-        auto [_, offset] = unit->decompose_location(hasInclude.location);
-        EXPECT_EQ(offset, this->offset(position), chain);
-        EXPECT_EQ(hasInclude.fid.isValid() ? unit->file_path(hasInclude.fid) : "", path, chain);
+        auto& hasInclude = self.hasIncludes[index];
+        auto [_, offset] = self.unit->decompose_location(hasInclude.location);
+        EXPECT_EQ(offset, self["main.cpp", position], chain);
+        EXPECT_EQ(hasInclude.fid.isValid() ? self.unit->file_path(hasInclude.fid) : "",
+                  path,
+                  chain);
     }
 
-    void EXPECT_CON(std::size_t index,
+    void EXPECT_CON(this Self& self,
+                    std::size_t index,
                     Condition::BranchKind kind,
                     llvm::StringRef position,
                     LocationChain chain = LocationChain()) {
-        auto& condition = conditions[index];
-        auto [_, offset] = unit->decompose_location(condition.loc);
+        auto& condition = self.conditions[index];
+        auto [_, offset] = self.unit->decompose_location(condition.loc);
         EXPECT_EQ(condition.kind, kind, chain);
-        EXPECT_EQ(offset, this->offset(position), chain);
+        EXPECT_EQ(offset, self["main.cpp", position], chain);
     }
 
-    void EXPECT_MACRO(std::size_t index,
+    void EXPECT_MACRO(this Self& self,
+                      std::size_t index,
                       MacroRef::Kind kind,
                       llvm::StringRef position,
                       LocationChain chain = LocationChain()) {
-        auto& macro = macros[index];
-        auto [_, offset] = unit->decompose_location(macro.loc);
+        auto& macro = self.macros[index];
+        auto [_, offset] = self.unit->decompose_location(macro.loc);
         EXPECT_EQ(macro.kind, kind, chain);
-        EXPECT_EQ(offset, this->offset(position), chain);
+        EXPECT_EQ(offset, self["main.cpp", position], chain);
     }
 
-    void EXPECT_PRAGMA(std::size_t index,
+    void EXPECT_PRAGMA(this Self& self,
+                       std::size_t index,
                        Pragma::Kind kind,
                        llvm::StringRef position,
                        llvm::StringRef text,
                        LocationChain chain = LocationChain()) {
-        auto& pragma = pragmas[index];
-        auto [_, offset] = unit->decompose_location(pragma.loc);
+        auto& pragma = self.pragmas[index];
+        auto [_, offset] = self.unit->decompose_location(pragma.loc);
         EXPECT_EQ(pragma.kind, kind, chain);
         EXPECT_EQ(pragma.stmt, text, chain);
-        EXPECT_EQ(offset, this->offset(position), chain);
+        EXPECT_EQ(offset, self["main.cpp", position], chain);
     }
 };
 

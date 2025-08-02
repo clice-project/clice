@@ -15,23 +15,23 @@ struct Tester {
     std::string src_path;
 
     /// All sources file in the compilation.
-    AnnotatedSources sources2;
+    AnnotatedSources sources;
 
 public:
     Tester() = default;
 
     Tester(llvm::StringRef file, llvm::StringRef content) {
         src_path = file;
-        sources2.add_source(file, content);
+        sources.add_source(file, content);
     }
 
     void addMain(llvm::StringRef file, llvm::StringRef content) {
         src_path = file;
-        sources2.add_source(file, content);
+        sources.add_source(file, content);
     }
 
     void addFile(llvm::StringRef name, llvm::StringRef content) {
-        sources2.add_source(name, content);
+        sources.add_source(name, content);
     }
 
     Tester& compile(llvm::StringRef standard = "-std=c++20") {
@@ -40,7 +40,7 @@ public:
         database.update_command("fake", src_path, command);
         params.arguments = database.get_command(src_path).arguments;
 
-        for(auto& [file, source]: sources2.all_files) {
+        for(auto& [file, source]: sources.all_files) {
             params.add_remapped_file(file, source.content);
         }
 
@@ -50,8 +50,8 @@ public:
         return *this;
     }
 
-    std::uint32_t offset(llvm::StringRef key) const {
-        return sources2.all_files.lookup(src_path).offsets.lookup(key);
+    std::uint32_t operator[] (llvm::StringRef file, llvm::StringRef pos) {
+        return sources.all_files.lookup(file).offsets.lookup(pos);
     }
 };
 

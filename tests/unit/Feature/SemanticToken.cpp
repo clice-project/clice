@@ -8,19 +8,22 @@ namespace {
 struct SemanticToken : TestFixture {
     index::Shared<feature::SemanticTokens> result;
 
+    using Self = SemanticToken;
+
     void run(llvm::StringRef code) {
         addMain("main.cpp", code);
         Tester::compile();
         result = feature::indexSemanticToken(*unit);
     }
 
-    void EXPECT_TOKEN(llvm::StringRef pos,
+    void EXPECT_TOKEN(this Self& self,
+                      llvm::StringRef pos,
                       SymbolKind kind,
                       uint32_t length,
                       LocationChain chain = LocationChain()) {
         bool visited = false;
-        auto offset = this->offset(pos);
-        auto& tokens = result[unit->interested_file()];
+        auto offset = self["main.cpp", pos];
+        auto& tokens = self.result[self.unit->interested_file()];
 
         for(auto& token: tokens) {
             if(token.range.begin == offset) {
@@ -34,14 +37,15 @@ struct SemanticToken : TestFixture {
         EXPECT_EQ(visited, true, chain);
     }
 
-    void EXPECT_TOKEN(llvm::StringRef pos,
+    void EXPECT_TOKEN(this Self& self,
+                      llvm::StringRef pos,
                       SymbolKind kind,
                       SymbolModifiers modifiers,
                       uint32_t length,
                       LocationChain chain = LocationChain()) {
         bool visited = false;
-        auto offset = this->offset(pos);
-        auto& tokens = result[unit->interested_file()];
+        auto offset = self["main.cpp", pos];
+        auto& tokens = self.result[self.unit->interested_file()];
 
         for(auto& token: tokens) {
             if(token.range.begin == offset) {

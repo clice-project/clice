@@ -86,8 +86,8 @@ TEST(Selection, VarDeclSelectionBoundary) {
         std::vector<SelectionBuilder::OffsetPair> selects;
         for(int begin = 1; begin <= 2; begin++) {
             for(int end = 1; end <= 3; end++) {
-                uint32_t bp = tx.offset(std::format("b{}", begin));
-                uint32_t ep = tx.offset(std::format("e{}", end));
+                uint32_t bp = tx["main.cpp", std::format("b{}", begin)];
+                uint32_t ep = tx["main.cpp", std::format("e{}", end)];
                 selects.push_back({bp, ep});
             }
         }
@@ -116,8 +116,8 @@ TEST(Selection, VarDeclSelectionBoundary) {
 
         std::vector<SelectionBuilder::OffsetPair> selects;
         for(int i = 1; i <= 3; ++i) {
-            uint32_t bp = tx.offset(std::format("b{}", i));
-            uint32_t ep = tx.offset(std::format("e{}", i));
+            uint32_t bp = tx["main.cpp", std::format("b{}", i)];
+            uint32_t ep = tx["main.cpp", std::format("e{}", i)];
             selects.push_back({bp, ep});
         }
 
@@ -145,8 +145,8 @@ TEST(Selection, VarDeclSelectionBoundary) {
         std::vector<SelectionBuilder::OffsetPair> selects;
         for(int i = 1; i <= 4; ++i) {
             for(int j = 1; j <= 2; ++j) {
-                uint32_t bp = tx.offset(std::format("b{}", i));
-                uint32_t ep = tx.offset(std::format("e{}", j));
+                uint32_t bp = tx["main.cpp", std::format("b{}", i)];
+                uint32_t ep = tx["main.cpp", std::format("e{}", j)];
                 selects.push_back({bp, ep});
             }
         }
@@ -180,8 +180,8 @@ TEST(Selection, VarDeclSelectionBoundary) {
         SelectionTester tx("main.cpp", code);
         tx.compile();
 
-        uint32_t bp = tx.offset("b");
-        uint32_t ep = tx.offset("e");
+        uint32_t bp = tx["main.cpp", "b"];
+        uint32_t ep = tx["main.cpp", "e"];
 
         auto& unit = *tx.unit;
         auto tokens = unit.spelled_tokens(unit.interested_file());
@@ -205,8 +205,8 @@ TEST(Selection, ParmVarDeclBoundary) {
         std::vector<SelectionBuilder::OffsetPair> selects;
         for(int begin = 1; begin <= 2; begin++) {
             for(int end = 1; end <= 2; end++) {
-                uint32_t bp = tx.offset(std::format("b{}", begin));
-                uint32_t ep = tx.offset(std::format("e{}", end));
+                uint32_t bp = tx["main.cpp", std::format("b{}", begin)];
+                uint32_t ep = tx["main.cpp", std::format("e{}", end)];
                 selects.push_back({bp, ep});
             }
         }
@@ -233,8 +233,8 @@ TEST(Selection, ParmVarDeclBoundary) {
         SelectionTester tx("main.cpp", code);
         tx.compile();
 
-        auto bp = tx.offset("b1");
-        auto ep = tx.offset("e1");
+        auto bp = tx["main.cpp", "b1"];
+        auto ep = tx["main.cpp", "e1"];
 
         auto& unit = *tx.unit;
         auto tokens = unit.spelled_tokens(unit.interested_file());
@@ -261,8 +261,8 @@ namespace test {
 
     auto& unit = *tx.unit;
 
-    uint32_t begin = tx.offset("stmt_begin");
-    uint32_t end = tx.offset("stmt_end");
+    uint32_t begin = tx["main.cpp", "stmt_begin"];
+    uint32_t end = tx["main.cpp", "stmt_end"];
 
     auto tokens = unit.spelled_tokens(unit.interested_file());
     auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
@@ -296,8 +296,8 @@ namespace test {
 
     auto& unit = *tx.unit;
 
-    uint32_t begin = tx.offset("multi_begin");
-    uint32_t end = tx.offset("multi_end");
+    uint32_t begin = tx["main.cpp", "multi_begin"];
+    uint32_t end = tx["main.cpp", "multi_end"];
 
     auto tokens = unit.spelled_tokens(unit.interested_file());
     auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
@@ -331,8 +331,8 @@ $(class_begin)class Test {
 
     auto& unit = *tx.unit;
 
-    uint32_t begin = tx.offset("class_begin");
-    uint32_t end = tx.offset("class_end");
+    uint32_t begin = tx["main.cpp", "class_begin"];
+    uint32_t end = tx["main.cpp", "class_end"];
 
     auto tokens = unit.spelled_tokens(unit.interested_file());
     auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
@@ -361,8 +361,8 @@ class Test {
 
     auto& unit = *tx.unit;
 
-    uint32_t begin = tx.offset("begin");
-    uint32_t end = tx.offset("end");
+    uint32_t begin = tx["main.cpp", "begin"];
+    uint32_t end = tx["main.cpp", "end"];
 
     auto tokens = unit.spelled_tokens(unit.interested_file());
     auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
@@ -391,8 +391,8 @@ void f(int& x){
     auto& unit = *tx.unit;
 
     {
-        uint32_t begin = tx.offset("begin1");
-        uint32_t end = tx.offset("end1");
+        uint32_t begin = tx["main.cpp", "begin1"];
+        uint32_t end = tx["main.cpp", "end1"];
 
         auto tokens = unit.spelled_tokens(unit.interested_file());
         auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
@@ -414,8 +414,8 @@ void f(int& x){
     }
 
     {
-        uint32_t begin = tx.offset("begin2");
-        uint32_t end = tx.offset("end2");
+        uint32_t begin = tx["main.cpp", "begin2"];
+        uint32_t end = tx["main.cpp", "end2"];
 
         auto tokens = unit.spelled_tokens(unit.interested_file());
         auto [left, right] = SelectionBuilder::selectionBound(tokens, {begin, end}, unit);
@@ -451,8 +451,8 @@ class Test {
         std::vector<SelectionBuilder::OffsetPair> b12_e123;
         for(int begin = 1; begin <= 2; begin++) {
             for(int end = 1; end <= 3; end++) {
-                uint32_t bp = tx.offset(std::format("b{}", begin));
-                uint32_t ep = tx.offset(std::format("e{}", end));
+                uint32_t bp = tx["main.cpp", std::format("b{}", begin)];
+                uint32_t ep = tx["main.cpp", std::format("e{}", end)];
                 b12_e123.push_back({bp, ep});
             }
         }
@@ -479,8 +479,8 @@ class Test {
         std::vector<SelectionBuilder::OffsetPair> b3_e123;
         for(int begin = 3; begin <= 3; begin++) {
             for(int end = 1; end <= 3; end++) {
-                uint32_t bp = tx.offset(std::format("b{}", begin));
-                uint32_t ep = tx.offset(std::format("e{}", end));
+                uint32_t bp = tx["main.cpp", std::format("b{}", begin)];
+                uint32_t ep = tx["main.cpp", std::format("e{}", end)];
                 b3_e123.push_back({bp, ep});
             }
         }
