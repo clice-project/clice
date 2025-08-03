@@ -42,11 +42,11 @@ struct Tester {
         return *this;
     }
 
-    Tester& compile_with_pch(llvm::StringRef standard = "-std=c++20") {
+    bool compile_with_pch(llvm::StringRef standard = "-std=c++20") {
         auto command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
 
         database.update_command("fake", src_path, command);
-        params.arguments = database.get_command(src_path, true).arguments;
+        params.arguments = database.get_command(src_path, true, true).arguments;
 
         auto path = fs::createTemporaryFile("clice", "pch");
         if(!path) {
@@ -70,6 +70,7 @@ struct Tester {
             auto unit = clice::compile(params, info);
             if(!unit) {
                 llvm::outs() << unit.error() << "\n";
+                return false;
             }
         }
 
@@ -81,9 +82,12 @@ struct Tester {
         }
 
         auto unit = clice::compile(params);
-        ASSERT_TRUE(unit);
+        if(!unit) {
+            return false;
+        }
+
         this->unit.emplace(std::move(*unit));
-        return *this;
+        return true;
     }
 
     std::uint32_t operator[] (llvm::StringRef file, llvm::StringRef pos) {
