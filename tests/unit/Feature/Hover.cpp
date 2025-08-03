@@ -1,4 +1,4 @@
-#include "Test/CTest.h"
+#include "Test/Tester.h"
 #include "Feature/Hover.h"
 
 #include "clang/AST/RecursiveASTVisitor.h"
@@ -23,7 +23,7 @@ struct Hover : TestFixture {
     llvm::StringMap<const clang::Decl*> decls;
 
     void run(llvm::StringRef code, LocalSourceRange range = {}) {
-        addMain("main.cpp", code);
+        add_main("main.cpp", code);
         compile();
         DeclCollector collector;
         collector.TraverseTranslationUnitDecl(unit->tu());

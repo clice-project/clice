@@ -1,6 +1,7 @@
 #include "Test/Test.h"
 #include "Compiler/Preamble.h"
 #include "Compiler/Compilation.h"
+#include "Test/Annotation.h"
 
 namespace clice::testing {
 
@@ -9,13 +10,14 @@ namespace {
 void EXPECT_BOUNDS(std::vector<llvm::StringRef> marks,
                    llvm::StringRef content,
                    LocationChain chain = LocationChain()) {
-    Annotation annotation{content};
-    auto bounds = computePreambleBounds(annotation.source());
+    auto annotation = AnnotatedSource::from(content);
+
+    auto bounds = compute_preamble_bounds(annotation.content);
 
     ASSERT_EQ(bounds.size(), marks.size(), chain);
 
     for(std::uint32_t i = 0; i < bounds.size(); i++) {
-        EXPECT_EQ(bounds[i], annotation.offset(marks[i]), chain);
+        EXPECT_EQ(bounds[i], annotation.offsets[marks[i]], chain);
     }
 }
 
@@ -75,8 +77,8 @@ void EXPECT_BUILD_PCH(llvm::StringRef main_file,
     files.erase(main_file);
 
     CompilationParams params;
-    params.outPath = outPath;
-    auto bound = computePreambleBound(content);
+    params.output_file = outPath;
+    auto bound = compute_preamble_bound(content);
     params.add_remapped_file(main_file, content, bound);
 
     params.arguments = {
@@ -125,12 +127,12 @@ TEST(Preamble, Bounds) {
     EXPECT_BOUNDS({"0"}, "#include <iostream>$(0)");
     EXPECT_BOUNDS({"0"}, "#include <iostream>$(0)\n");
 
-    EXPECT_BOUNDS({"0", "1"},
+    EXPECT_BOUNDS({"0", "1", "2", "3"},
                   R"cpp(
-#ifdef TEST
-#include <iostream>$(0)
-#define 1
-#endif$(1)
+#ifdef TEST$(0)
+#include <iostream>$(1)
+#define 1$(2)
+#endif$(3)
 )cpp");
 
     EXPECT_BOUNDS({"0"},
@@ -139,9 +141,9 @@ TEST(Preamble, Bounds) {
 int x = 1;
 )cpp");
 
-    EXPECT_BOUNDS({"0"}, R"cpp(
-module;
-#include <iostream>$(0)
+    EXPECT_BOUNDS({"0", "1"}, R"cpp(
+module;$(0)
+#include <iostream>$(1)
 export module test;
 )cpp");
 }
@@ -257,7 +259,7 @@ int y = foo();
     std::string content = files["main.cpp"];
     files.erase("main.cpp");
 
-    auto bounds = computePreambleBounds(content);
+    auto bounds = compute_preamble_bounds(content);
 
     CompilationParams params;
     params.arguments = {"clang++", "-std=c++20", "main.cpp"};
@@ -270,11 +272,11 @@ int y = foo();
         std::string outPath = std::move(*tmp);
 
         params.add_remapped_file("main.cpp", content, bound);
-        if(params.outPath.empty()) {
-            params.pch = {params.outPath.str().str(), last_bound};
+        if(params.output_file.empty()) {
+            params.pch = {params.output_file.str().str(), last_bound};
         }
 
-        params.outPath = outPath;
+        params.output_file = outPath;
         last_bound = bound;
 
         for(auto& [path, content]: files) {

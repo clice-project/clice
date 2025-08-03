@@ -271,7 +271,7 @@ private:
                 case Condition::BranchKind::Else: {
                     if(!stack.empty()) {
                         auto last = stack.pop_back_val();
-                        addRange({last->conditionRange.getEnd(), cond.loc},
+                        addRange({last->condition_range.getEnd(), cond.loc},
                                  FoldingRangeKind::ConditionDirective,
                                  "");
                     }
@@ -286,7 +286,7 @@ private:
 
                         // For a directive without condition range e.g #else
                         // its condition range is invalid.
-                        if(last->conditionRange.isValid()) {
+                        if(last->condition_range.isValid()) {
                             /// collect({last->conditionRange.getBegin(), cond.loc}, {0, -1});
                         } else {
                             /// collect({last->loc, cond.loc},

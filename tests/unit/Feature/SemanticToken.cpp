@@ -1,4 +1,4 @@
-#include "Test/CTest.h"
+#include "Test/Tester.h"
 #include "Feature/SemanticToken.h"
 
 namespace clice::testing {
@@ -6,23 +6,25 @@ namespace clice::testing {
 namespace {
 
 struct SemanticToken : TestFixture {
-    index::Shared<feature::SemanticTokens> result;
+    feature::SemanticTokens tokens;
+
+    using Self = SemanticToken;
 
     void run(llvm::StringRef code) {
-        addMain("main.cpp", code);
-        Tester::compile();
-        result = feature::indexSemanticToken(*unit);
+        add_main("main.cpp", code);
+        Tester::compile_with_pch();
+        tokens = feature::semantic_tokens(*unit);
     }
 
-    void EXPECT_TOKEN(llvm::StringRef pos,
+    void EXPECT_TOKEN(this Self& self,
+                      llvm::StringRef pos,
                       SymbolKind kind,
                       uint32_t length,
                       LocationChain chain = LocationChain()) {
         bool visited = false;
-        auto offset = offsets[pos];
-        auto& tokens = result[unit->interested_file()];
+        auto offset = self["main.cpp", pos];
 
-        for(auto& token: tokens) {
+        for(auto& token: self.tokens) {
             if(token.range.begin == offset) {
                 EXPECT_EQ(token.kind, kind, chain);
                 EXPECT_EQ(token.range.end - token.range.begin, length, chain);
@@ -34,16 +36,16 @@ struct SemanticToken : TestFixture {
         EXPECT_EQ(visited, true, chain);
     }
 
-    void EXPECT_TOKEN(llvm::StringRef pos,
+    void EXPECT_TOKEN(this Self& self,
+                      llvm::StringRef pos,
                       SymbolKind kind,
                       SymbolModifiers modifiers,
                       uint32_t length,
                       LocationChain chain = LocationChain()) {
         bool visited = false;
-        auto offset = offsets[pos];
-        auto& tokens = result[unit->interested_file()];
+        auto offset = self["main.cpp", pos];
 
-        for(auto& token: tokens) {
+        for(auto& token: self.tokens) {
             if(token.range.begin == offset) {
                 EXPECT_EQ(token.kind, kind, chain);
                 EXPECT_EQ(token.range.end - token.range.begin, length, chain);
@@ -56,8 +58,7 @@ struct SemanticToken : TestFixture {
         EXPECT_EQ(visited, true, chain);
     }
 
-    void dumpResult() {
-        auto& tokens = result[unit->interested_file()];
+    void dump_result() {
         for(auto& token: tokens) {
             clice::println("token: {}", dump(token));
         }
@@ -67,25 +68,23 @@ struct SemanticToken : TestFixture {
 using enum SymbolKind::Kind;
 using enum SymbolModifiers::Kind;
 
-/// FIXME: headers not found
-///
-/// TEST_F(SemanticToken, Include) {
-///     run(R"cpp(
-/// $(0)#include $(1)<stddef.h>
-/// $(2)#include $(3)"stddef.h"
-/// $(4)# $(5)include $(6)"stddef.h"
-/// )cpp");
-/// 
-///     /// FIXME: Included file could be macro.
-/// 
-///     EXPECT_TOKEN("0", Directive, 8);
-///     EXPECT_TOKEN("1", Header, 10);
-///     EXPECT_TOKEN("2", Directive, 8);
-///     EXPECT_TOKEN("3", Header, 10);
-///     EXPECT_TOKEN("4", Directive, 1);
-///     EXPECT_TOKEN("5", Directive, 7);
-///     EXPECT_TOKEN("6", Header, 10);
-/// }
+TEST_F(SemanticToken, Include) {
+    run(R"cpp(
+ $(0)#include $(1)<stddef.h>
+ $(2)#include $(3)"stddef.h"
+ $(4)# $(5)include $(6)"stddef.h"
+ )cpp");
+
+    /// FIXME: Included file could be macro.
+
+    EXPECT_TOKEN("0", Directive, 8);
+    EXPECT_TOKEN("1", Header, 10);
+    EXPECT_TOKEN("2", Directive, 8);
+    EXPECT_TOKEN("3", Header, 10);
+    EXPECT_TOKEN("4", Directive, 1);
+    EXPECT_TOKEN("5", Directive, 7);
+    EXPECT_TOKEN("6", Header, 10);
+}
 
 TEST_F(SemanticToken, Comment) {
     run(R"cpp(

@@ -102,7 +102,13 @@ public:
     }
 
     void run() {
-        Base::TraverseAST(unit.context());
+        if(Base::interestedOnly) {
+            for(auto decl: unit.top_level_decls()) {
+                Base::TraverseDecl(decl);
+            }
+        } else {
+            Base::TraverseAST(unit.context());
+        }
 
         for(auto directive: unit.directives()) {
             for(auto macro: directive.second.macros) {

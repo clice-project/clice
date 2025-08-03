@@ -13,7 +13,7 @@ namespace clice {
 
 struct CompilationParams {
     /// Output file path.
-    llvm::SmallString<128> outPath;
+    llvm::SmallString<128> output_file;
 
     std::string directory;
 
@@ -36,7 +36,7 @@ struct CompilationParams {
 
     /// A flag to inform to stop compilation, this is very useful
     /// to cancel old compilation task.
-    std::shared_ptr<std::atomic_bool> stop;
+    std::shared_ptr<std::atomic_bool> stop = std::make_shared<std::atomic_bool>(false);
 
     /// Store all compilation errors in the process.
     std::shared_ptr<std::vector<Diagnostic>> diagnostics;

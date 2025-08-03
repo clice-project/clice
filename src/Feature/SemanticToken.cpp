@@ -30,7 +30,7 @@ public:
 
         /// TODO: Add more modifiers.
 
-        addToken(location, SymbolKind::from(decl), modifiers);
+        add_token(location, SymbolKind::from(decl), modifiers);
     }
 
     void handleMacroOccurrence(const clang::MacroInfo* def,
@@ -44,7 +44,7 @@ public:
             modifiers |= SymbolModifiers::Declaration;
         }
 
-        addToken(location, SymbolKind::Macro, modifiers);
+        add_token(location, SymbolKind::Macro, modifiers);
     }
 
     /// FIXME: Handle module name occurrence.
@@ -55,21 +55,21 @@ public:
         auto [begin, end] = range;
         if(auto FA = clang::dyn_cast<clang::FinalAttr>(attr)) {
             assert(begin == end && "Invalid range");
-            addToken(begin, SymbolKind::Keyword, {});
+            add_token(begin, SymbolKind::Keyword, {});
         } else if(auto OA = clang::dyn_cast<clang::OverrideAttr>(attr)) {
             assert(begin == end && "Invalid range");
-            addToken(begin, SymbolKind::Keyword, {});
+            add_token(begin, SymbolKind::Keyword, {});
         }
     }
 
-    auto buildForFile() {
+    auto build_for_file() {
         highlight(unit.interested_file());
         run();
         merge(result);
         return std::move(result);
     }
 
-    auto buildForIndex() {
+    auto build_for_index() {
         for(auto fid: unit.files()) {
             highlight(fid);
         }
@@ -84,15 +84,12 @@ public:
     }
 
 public:
-    void addToken(clang::FileID fid, const clang::Token& token, SymbolKind kind) {
-        auto offset = token.getLocation().getRawEncoding() - fakeLoc.getRawEncoding();
-        LocalSourceRange range{offset, offset + token.getLength()};
-
+    void add_token(clang::FileID fid, Token& token, SymbolKind kind) {
         auto& tokens = interestedOnly ? result : sharedResult[fid];
-        tokens.emplace_back(range, kind, SymbolModifiers());
+        tokens.emplace_back(token.range, kind, SymbolModifiers());
     }
 
-    void addToken(clang::SourceLocation location, SymbolKind kind, SymbolModifiers modifiers) {
+    void add_token(clang::SourceLocation location, SymbolKind kind, SymbolModifiers modifiers) {
         if(location.isMacroID()) {
             auto spelling = unit.spelling_location(location);
             auto expansion = unit.expansion_location(location);
@@ -120,107 +117,87 @@ public:
     /// Render semantic tokens for file through raw lexer.
     void highlight(clang::FileID fid) {
         auto content = unit.file_content(fid);
-        auto& langOpts = unit.lang_options();
-
-        /// Whether the token is after `#`.
-        bool isAfterHash = false;
-        /// Whether the token is in the header name.
-        bool isInHeader = false;
-        /// Whether the token is in the directive line.
-        bool isInDirectiveLine = false;
+        auto& lang_opts = unit.lang_options();
 
         /// Use to distinguish whether the token is in a keyword.
-        clang::IdentifierTable identifierTable(langOpts);
+        clang::IdentifierTable identifierTable(lang_opts);
 
-        auto callback = [&](const clang::Token& token) -> bool {
+        Lexer lexer(content, false, &lang_opts);
+
+        while(true) {
+            Token token = lexer.advance();
+            if(token.is_eof()) {
+                break;
+            }
+
             SymbolKind kind = SymbolKind::Invalid;
-
-            /// Clear the all states.
-            if(token.isAtStartOfLine()) {
-                isInHeader = false;
-                isInDirectiveLine = false;
-            }
-
-            if(isInHeader) {
-                addToken(fid, token, SymbolKind::Header);
-                return true;
-            }
-
-            switch(token.getKind()) {
-                case clang::tok::comment: {
-                    kind = SymbolKind::Comment;
-                    break;
-                }
-
-                case clang::tok::numeric_constant: {
-                    kind = SymbolKind::Number;
-                    break;
-                }
-
-                case clang::tok::char_constant:
-                case clang::tok::wide_char_constant:
-                case clang::tok::utf8_char_constant:
-                case clang::tok::utf16_char_constant:
-                case clang::tok::utf32_char_constant: {
-                    kind = SymbolKind::Character;
-                    break;
-                }
-
-                case clang::tok::string_literal: {
-                    kind = SymbolKind::String;
-                    break;
-                }
-
-                case clang::tok::wide_string_literal:
-                case clang::tok::utf8_string_literal:
-                case clang::tok::utf16_string_literal:
-                case clang::tok::utf32_string_literal: {
-                    kind = SymbolKind::String;
-                    break;
-                }
-
-                case clang::tok::hash: {
-                    if(token.isAtStartOfLine()) {
-                        isAfterHash = true;
-                        isInDirectiveLine = true;
-                        kind = SymbolKind::Directive;
+            if(token.is_at_start_of_line && token.kind == clang::tok::hash) {
+                kind = SymbolKind::Directive;
+            } else if(token.is_preprocessor_directive) {
+                kind = SymbolKind::Directive;
+            } else {
+                switch(token.kind) {
+                    case clang::tok::comment: {
+                        kind = SymbolKind::Comment;
+                        break;
                     }
-                    break;
-                }
 
-                case clang::tok::raw_identifier: {
-                    auto spelling = token.getRawIdentifier();
-                    if(isAfterHash) {
-                        isAfterHash = false;
-                        isInHeader = (spelling == "include");
-                        kind = SymbolKind::Directive;
-                    } else if(isInHeader) {
+                    case clang::tok::numeric_constant: {
+                        kind = SymbolKind::Number;
+                        break;
+                    }
+
+                    case clang::tok::char_constant:
+                    case clang::tok::wide_char_constant:
+                    case clang::tok::utf8_char_constant:
+                    case clang::tok::utf16_char_constant:
+                    case clang::tok::utf32_char_constant: {
+                        kind = SymbolKind::Character;
+                        break;
+                    }
+
+                    case clang::tok::string_literal: {
+                        kind = SymbolKind::String;
+                        break;
+                    }
+
+                    case clang::tok::wide_string_literal:
+                    case clang::tok::utf8_string_literal:
+                    case clang::tok::utf16_string_literal:
+                    case clang::tok::utf32_string_literal: {
+                        kind = SymbolKind::String;
+                        break;
+                    }
+
+                    case clang::tok::header_name: {
                         kind = SymbolKind::Header;
-                    } else if(isInDirectiveLine) {
-                        if(spelling == "defined") {
-                            kind = SymbolKind::Directive;
+                        break;
+                    }
+
+                    case clang::tok::raw_identifier: {
+                        auto last = lexer.last();
+                        if(last.is_preprocessor_directive && last.text(content) == "define") {
+                            kind = SymbolKind::Macro;
+                            break;
                         }
-                    } else {
+
+                        auto spelling = token.text(content);
                         /// Check whether the identifier is a keyword.
-                        if(auto& II = identifierTable.get(spelling); II.isKeyword(langOpts)) {
+                        if(auto& II = identifierTable.get(spelling); II.isKeyword(lang_opts)) {
                             kind = SymbolKind::Keyword;
                         }
                     }
-                }
 
-                default: {
-                    break;
+                    default: {
+                        break;
+                    }
                 }
             }
 
             if(kind != SymbolKind::Invalid) {
-                addToken(fid, token, kind);
+                add_token(fid, token, kind);
             }
-
-            return true;
-        };
-
-        tokenize(content, callback, false, &langOpts);
+        }
     }
 
     void resolve(SemanticToken& last, const SemanticToken& current) {
@@ -268,7 +245,7 @@ public:
 
 }  // namespace
 
-SemanticTokens semanticTokens(CompilationUnit& unit) {
+SemanticTokens semantic_tokens(CompilationUnit& unit) {
     SemanticTokensCollector collector(unit, true);
     collector.highlight(unit.interested_file());
     collector.run();

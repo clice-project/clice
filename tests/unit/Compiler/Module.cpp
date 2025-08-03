@@ -13,7 +13,7 @@ PCMInfo buildPCM(llvm::StringRef file, llvm::StringRef code) {
     std::string path = file.str();
 
     CompilationParams params;
-    params.outPath = outPath;
+    params.output_file = outPath;
     params.arguments = {
         "clang++",
         "-std=c++20",

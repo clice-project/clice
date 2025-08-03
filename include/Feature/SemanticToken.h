@@ -21,7 +21,7 @@ struct SemanticToken {
 using SemanticTokens = std::vector<SemanticToken>;
 
 /// Generate semantic tokens for the interested file only.
-SemanticTokens semanticTokens(CompilationUnit& unit);
+SemanticTokens semantic_tokens(CompilationUnit& unit);
 
 /// Generate semantic tokens for all files.
 index::Shared<SemanticTokens> indexSemanticToken(CompilationUnit& unit);

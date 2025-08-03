@@ -3,19 +3,9 @@
 
 namespace clice::testing {
 
-TEST(SourceCode, tokenize) {
-    std::size_t count = 0;
-
-    /// Test breaking the loop.
-    tokenize("int x = 1;", [&](const clang::Token& token) {
-        count++;
-        return false;
-    });
-
-    EXPECT_EQ(count, 1);
-
+TEST(SourceCode, IgnoreComments) {
     /// Test all tokens.
-    count = 0;
+    std::size_t count = 0;
 
     std::vector<clang::tok::TokenKind> kinds = {
         clang::tok::raw_identifier,
@@ -25,17 +15,22 @@ TEST(SourceCode, tokenize) {
         clang::tok::semi,
     };
 
-    tokenize("int x = 1; // comment", [&](const clang::Token& token) {
-        if(token.is(clang::tok::eof)) [[unlikely]] {
-            return false;
+    {
+        /// Test ignore comments.
+        Lexer lexer("int x = 1; // comment", true);
+
+        while(true) {
+            Token token = lexer.advance();
+            if(token.is_eof()) {
+                break;
+            }
+
+            EXPECT_EQ(token.kind, kinds[count]);
+            count += 1;
         }
 
-        EXPECT_EQ(token.getKind(), kinds[count]);
-        count++;
-        return true;
-    });
-
-    EXPECT_EQ(count, 5);
+        EXPECT_EQ(count, 5);
+    }
 
     /// Test retain comments.
     count = 0;
@@ -49,20 +44,46 @@ TEST(SourceCode, tokenize) {
         clang::tok::comment,
     };
 
-    tokenize(
-        "int x = 1; /// comment",
-        [&](const clang::Token& token) {
-            if(token.is(clang::tok::eof)) [[unlikely]] {
-                return false;
+    {
+        /// Test retain comments.
+        Lexer lexer("int x = 1; // comment", false);
+
+        while(true) {
+            Token token = lexer.advance();
+            if(token.is_eof()) {
+                break;
             }
 
-            EXPECT_EQ(token.getKind(), kinds[count]);
-            count++;
-            return true;
-        },
-        false);
+            EXPECT_EQ(token.kind, kinds[count]);
+            count += 1;
+        }
 
-    EXPECT_EQ(count, 6);
+        EXPECT_EQ(count, 6);
+    }
+}
+
+TEST(SourceCode, LexInclude) {
+    /// TODO: test eod
+    /// test multiple lines macros.
+
+    Lexer lexer(R"(
+#include <iostream>
+#include "gtest/test.h"
+module;
+int x = 1;
+)",
+                true,
+                nullptr,
+                false);
+
+    // while(true) {
+    //     Token token = lexer.advance();
+    //     if(token.is_eof()) {
+    //         break;
+    //     }
+    //
+    //    println("kind: {}", token.name());
+    //}
 }
 
 }  // namespace clice::testing

@@ -18,7 +18,7 @@ async::Task<json::Value> Server::on_semantic_token(proto::SemanticTokensParams p
     }
 
     co_return co_await async::submit([kind = this->kind, &ast] {
-        auto tokens = feature::semanticTokens(*ast);
+        auto tokens = feature::semantic_tokens(*ast);
         return proto::to_json(kind, ast->interested_content(), tokens);
     });
 }

@@ -39,9 +39,9 @@ struct CompilationUnit::Impl {
 
     llvm::BumpPtrAllocator pathStorage;
 
-    std::vector<clang::Decl*> top_level_decls;
-
     std::shared_ptr<std::vector<Diagnostic>> diagnostics;
+
+    std::vector<clang::Decl*> top_level_decls;
 };
 
 }  // namespace clice

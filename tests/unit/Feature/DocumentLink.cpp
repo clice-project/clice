@@ -1,4 +1,4 @@
-#include "Test/CTest.h"
+#include "Test/Tester.h"
 #include "Feature/DocumentLink.h"
 
 namespace clice::testing {
@@ -8,20 +8,23 @@ namespace {
 struct DocumentLink : TestFixture {
     index::Shared<feature::DocumentLinks> result;
 
+    using Self = DocumentLink;
+
     void run(llvm::StringRef code) {
-        addMain("main.cpp", code);
+        add_main("main.cpp", code);
         Tester::compile();
         result = feature::indexDocumentLink(*unit);
     }
 
-    void EXPECT_LINK(uint32_t index,
+    void EXPECT_LINK(this Self& self,
+                     uint32_t index,
                      llvm::StringRef begin,
                      llvm::StringRef end,
                      llvm::StringRef path,
                      LocationChain chain = LocationChain()) {
-        auto& link = result[unit->interested_file()][index];
-        EXPECT_EQ(link.range.begin, offset(begin), chain);
-        EXPECT_EQ(link.range.end, offset(end), chain);
+        auto& link = self.result[self.unit->interested_file()][index];
+        EXPECT_EQ(link.range.begin, self["main.cpp", begin], chain);
+        EXPECT_EQ(link.range.end, self["main.cpp", end], chain);
         EXPECT_EQ(link.file, path, chain);
     }
 
@@ -60,9 +63,9 @@ TEST_F(DocumentLink, Include) {
     auto ppragma_once = path::join(".", "pragma_once.h");
     auto pguard_macro = path::join(".", "guard_macro.h");
 
-    addFile(ptest, test);
-    addFile(ppragma_once, pragma_once);
-    addFile(pguard_macro, guard_macro);
+    add_file(ptest, test);
+    add_file(ppragma_once, pragma_once);
+    add_file(pguard_macro, guard_macro);
     run(main);
 
     auto& links = result[unit->interested_file()];
@@ -87,7 +90,7 @@ TEST_F(DocumentLink, HasInclude) {
 )cpp";
 
     auto path = path::join(".", "test.h");
-    addFile(path, test);
+    add_file(path, test);
 
     run(main);
 

@@ -25,7 +25,7 @@ async::Task<OpenFile*> Server::add_document(std::string path, std::string conten
 }
 
 async::Task<> Server::build_pch(std::string path, std::string content) {
-    auto bound = computePreambleBound(content);
+    auto bound = compute_preamble_bound(content);
 
     auto openFile = &opening_files[path];
     bool outdated = true;
@@ -58,7 +58,7 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
         diagnostics->clear();
 
         CompilationParams params;
-        params.outPath = path::join(config::cache.dir, path::filename(path) + ".pch");
+        params.output_file = path::join(config::cache.dir, path::filename(path) + ".pch");
         params.arguments = server.database.get_command(path, true, true).arguments;
         params.diagnostics = diagnostics;
         params.add_remapped_file(path, content, bound);
@@ -155,6 +155,9 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     if(!ast) {
         /// FIXME: Fails needs cancel waiting tasks.
         log::warn("Building AST fails for {}, Beacuse: {}", path, ast.error());
+        for(auto& diagnostic: *file->diagnostics) {
+            log::warn("{}", diagnostic.message);
+        }
         co_return;
     }
 
