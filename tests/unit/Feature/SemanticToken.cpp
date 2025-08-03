@@ -12,7 +12,7 @@ struct SemanticToken : TestFixture {
 
     void run(llvm::StringRef code) {
         add_main("main.cpp", code);
-        Tester::compile();
+        Tester::compile_with_pch();
         tokens = feature::semantic_tokens(*unit);
     }
 
@@ -68,25 +68,23 @@ struct SemanticToken : TestFixture {
 using enum SymbolKind::Kind;
 using enum SymbolModifiers::Kind;
 
-/// FIXME: headers not found
-///
-/// TEST_F(SemanticToken, Include) {
-///     run(R"cpp(
-/// $(0)#include $(1)<stddef.h>
-/// $(2)#include $(3)"stddef.h"
-/// $(4)# $(5)include $(6)"stddef.h"
-/// )cpp");
-///
-///     /// FIXME: Included file could be macro.
-///
-///     EXPECT_TOKEN("0", Directive, 8);
-///     EXPECT_TOKEN("1", Header, 10);
-///     EXPECT_TOKEN("2", Directive, 8);
-///     EXPECT_TOKEN("3", Header, 10);
-///     EXPECT_TOKEN("4", Directive, 1);
-///     EXPECT_TOKEN("5", Directive, 7);
-///     EXPECT_TOKEN("6", Header, 10);
-/// }
+TEST_F(SemanticToken, Include) {
+    run(R"cpp(
+ $(0)#include $(1)<stddef.h>
+ $(2)#include $(3)"stddef.h"
+ $(4)# $(5)include $(6)"stddef.h"
+ )cpp");
+
+    /// FIXME: Included file could be macro.
+
+    EXPECT_TOKEN("0", Directive, 8);
+    EXPECT_TOKEN("1", Header, 10);
+    EXPECT_TOKEN("2", Directive, 8);
+    EXPECT_TOKEN("3", Header, 10);
+    EXPECT_TOKEN("4", Directive, 1);
+    EXPECT_TOKEN("5", Directive, 7);
+    EXPECT_TOKEN("6", Header, 10);
+}
 
 TEST_F(SemanticToken, Comment) {
     run(R"cpp(

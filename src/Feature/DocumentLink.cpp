@@ -41,7 +41,7 @@ index::Shared<DocumentLinks> indexDocumentLink(CompilationUnit& unit) {
                     isFirst = false;
                 }
 
-                endOffset = offset + token.getEndLoc().getRawEncoding() - fakeLoc.getRawEncoding();
+                endOffset = offset + token.getEndLoc().getRawEncoding() - fake_loc.getRawEncoding();
                 return true;
             });
 

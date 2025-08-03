@@ -148,8 +148,10 @@ auto create_invocation(CompilationParams& params,
     return invocation;
 }
 
-template <typename Action, typename Adjuster>
-CompilationResult run_clang(CompilationParams& params, const Adjuster& adjuster) {
+template <typename Action>
+CompilationResult run_clang(CompilationParams& params,
+                            const auto& before_execute,
+                            const auto& after_execute) {
     auto diagnostics = params.diagnostics ? std::move(params.diagnostics)
                                           : std::make_shared<std::vector<Diagnostic>>();
     auto diagnostic_engine =
@@ -177,7 +179,7 @@ CompilationResult run_clang(CompilationParams& params, const Adjuster& adjuster)
     }
 
     /// Adjust the compiler instance, for example, set preamble or modules.
-    adjuster(*instance);
+    before_execute(*instance);
 
     auto action = std::make_unique<ProxyAction>(std::make_unique<Action>(), params.stop);
 
@@ -254,58 +256,66 @@ CompilationResult run_clang(CompilationParams& params, const Adjuster& adjuster)
         .top_level_decls = std::move(top_level_decls),
     };
 
-    return CompilationUnit(CompilationUnit::SyntaxOnly, impl);
+    CompilationUnit unit(CompilationUnit::SyntaxOnly, impl);
+    after_execute(unit);
+    return unit;
 }
 
 }  // namespace
 
 CompilationResult preprocess(CompilationParams& params) {
-    return run_clang<clang::PreprocessOnlyAction>(params, [](auto&) {});
+    return run_clang<clang::PreprocessOnlyAction>(params, [](auto&) {}, [](auto&) {});
 }
 
 CompilationResult compile(CompilationParams& params) {
-    return run_clang<clang::SyntaxOnlyAction>(params, [](auto&) {});
+    return run_clang<clang::SyntaxOnlyAction>(params, [](auto&) {}, [](auto&) {});
 }
 
 CompilationResult compile(CompilationParams& params, PCHInfo& out) {
     assert(!params.output_file.empty() && "PCH file path cannot be empty");
 
-    out.path = params.output_file.str();
-    /// out.preamble = params.content.substr(0, *params.bound);
     /// out.command = params.arguments.str();
     /// FIXME: out.deps = info->deps();
 
-    return run_clang<clang::GeneratePCHAction>(params, [&](clang::CompilerInstance& instance) {
-        /// Set options to generate PCH.
-        instance.getFrontendOpts().OutputFile = params.output_file.str();
-        instance.getFrontendOpts().ProgramAction = clang::frontend::GeneratePCH;
-        instance.getPreprocessorOpts().GeneratePreamble = true;
+    return run_clang<clang::GeneratePCHAction>(
+        params,
+        [&](clang::CompilerInstance& instance) {
+            /// Set options to generate PCH.
+            instance.getFrontendOpts().OutputFile = params.output_file.str();
+            instance.getFrontendOpts().ProgramAction = clang::frontend::GeneratePCH;
+            instance.getPreprocessorOpts().GeneratePreamble = true;
 
-        // We don't want to write comment locations into PCH. They are racy and slow
-        // to read back. We rely on dynamic index for the comments instead.
-        instance.getPreprocessorOpts().WriteCommentListToPCH = false;
+            // We don't want to write comment locations into PCH. They are racy and slow
+            // to read back. We rely on dynamic index for the comments instead.
+            instance.getPreprocessorOpts().WriteCommentListToPCH = false;
 
-        instance.getLangOpts().CompilingPCH = true;
-    });
+            instance.getLangOpts().CompilingPCH = true;
+        },
+        [&](CompilationUnit& unit) {
+            out.path = params.output_file.str();
+            out.preamble = unit.interested_content();
+        });
 }
 
 CompilationResult compile(CompilationParams& params, PCMInfo& out) {
     assert(!params.output_file.empty() && "PCM file path cannot be empty");
+    return run_clang<clang::GenerateReducedModuleInterfaceAction>(
+        params,
+        [&](clang::CompilerInstance& instance) {
+            /// Set options to generate PCH.
+            instance.getFrontendOpts().OutputFile = params.output_file.str();
+            instance.getFrontendOpts().ProgramAction =
+                clang::frontend::GenerateReducedModuleInterface;
 
-    using GeneratePCMAction = clang::GenerateReducedModuleInterfaceAction;
+            out.srcPath = instance.getFrontendOpts().Inputs[0].getFile();
+        },
+        [&](CompilationUnit& unit) {
+            out.path = params.output_file.str();
 
-    for(auto& [name, path]: params.pcms) {
-        out.mods.emplace_back(name);
-    }
-    out.path = params.output_file.str();
-
-    return run_clang<GeneratePCMAction>(params, [&](clang::CompilerInstance& instance) {
-        /// Set options to generate PCH.
-        instance.getFrontendOpts().OutputFile = params.output_file.str();
-        instance.getFrontendOpts().ProgramAction = clang::frontend::GenerateReducedModuleInterface;
-
-        out.srcPath = instance.getFrontendOpts().Inputs[0].getFile();
-    });
+            for(auto& [name, path]: params.pcms) {
+                out.mods.emplace_back(name);
+            }
+        });
 }
 
 CompilationResult complete(CompilationParams& params, clang::CodeCompleteConsumer* consumer) {
@@ -328,13 +338,18 @@ CompilationResult complete(CompilationParams& params, clang::CodeCompleteConsume
         column += 1;
     }
 
-    return run_clang<clang::SyntaxOnlyAction>(params, [&](clang::CompilerInstance& instance) {
-        /// Set options to run code completion.
-        instance.getFrontendOpts().CodeCompletionAt.FileName = std::move(file);
-        instance.getFrontendOpts().CodeCompletionAt.Line = line;
-        instance.getFrontendOpts().CodeCompletionAt.Column = column;
-        instance.setCodeCompletionConsumer(consumer);
-    });
+    return run_clang<clang::SyntaxOnlyAction>(
+        params,
+        [&](clang::CompilerInstance& instance) {
+            /// Set options to run code completion.
+            instance.getFrontendOpts().CodeCompletionAt.FileName = std::move(file);
+            instance.getFrontendOpts().CodeCompletionAt.Line = line;
+            instance.getFrontendOpts().CodeCompletionAt.Column = column;
+            instance.setCodeCompletionConsumer(consumer);
+        },
+        [&](CompilationUnit& unit) {
+            ///
+        });
 }
 
 }  // namespace clice

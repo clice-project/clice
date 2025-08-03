@@ -31,7 +31,7 @@ std::vector<std::uint32_t> computePreambleBounds(llvm::StringRef content) {
             log::fatal("end_loc is invalid, but should be valid");
             return;
         }
-        auto offset = end_loc.getRawEncoding() - fakeLoc.getRawEncoding();
+        auto offset = end_loc.getRawEncoding() - fake_loc.getRawEncoding();
         if(result.empty() || result.back() != offset) {
             result.emplace_back(offset);
         }
