@@ -566,14 +566,13 @@ void printNodeKind(llvm::raw_ostream& OS, const DynTypedNode& N) {
     }
 }
 
-#ifndef NDEBUG
+/// FIXME: Remove in release mode?
 std::string printNodeToString(const DynTypedNode& N, const PrintingPolicy& PP) {
     std::string S;
     llvm::raw_string_ostream OS(S);
     printNodeKind(OS, N);
     return std::move(OS.str());
 }
-#endif
 
 bool isImplicit(const Stmt* S) {
     // Some Stmts are implicit and shouldn't be traversed, but there's no
