@@ -28,31 +28,6 @@ struct LocalSourceRange {
     }
 };
 
-/// Get the content of the file with the given file ID.
-llvm::StringRef getFileContent(const clang::SourceManager& SM, clang::FileID fid);
-
-/// Get the length of the token at the given location. All SourceLocation instances in the clang
-/// AST originate from the start position of tokens, which helps reduce memory usage. When token
-/// length information is needed, a simple lexing operation based on the start position can be
-/// performed.
-std::uint32_t getTokenLength(const clang::SourceManager& SM, clang::SourceLocation location);
-
-/// Get the spelling of the token at the given location.
-llvm::StringRef getTokenSpelling(const clang::SourceManager& SM, clang::SourceLocation location);
-
-/// A fake location could be used to calculate the token location offset when lexer
-/// runs in raw mode.
-inline clang::SourceLocation fake_loc = clang::SourceLocation::getFromRawEncoding(1);
-
-/// @brief Run `clang::Lexer` in raw mode and tokenize the content.
-/// @param content The content to tokenize.
-/// @param callback The callback to call for each token. Return false to break.
-/// @param langOpts The language options to use. If not provided, lastest C++ standard is used.
-void tokenize(llvm::StringRef content,
-              llvm::unique_function<bool(const clang::Token&)> callback,
-              bool ignoreComments = true,
-              const clang::LangOptions* langOpts = nullptr);
-
 struct Token {
     /// Whether this token is at the start of line.
     bool is_at_start_of_line = false;
@@ -84,7 +59,11 @@ struct Token {
     }
 
     bool is_identifier() {
-        return kind == clang::tok::identifier;
+        return kind == clang::tok::raw_identifier;
+    }
+
+    bool is_directive_hash() {
+        return is_at_start_of_line && kind == clang::tok::hash;
     }
 
     /// The tokens after the include diretive are regarded as
@@ -99,7 +78,8 @@ class Lexer {
 public:
     Lexer(llvm::StringRef content,
           bool ignore_comments = true,
-          const clang::LangOptions* lang_opts = nullptr);
+          const clang::LangOptions* lang_opts = nullptr,
+          bool ignore_end_of_directive = true);
 
     Lexer(const Lexer&) = delete;
 
@@ -118,7 +98,14 @@ public:
     /// Advance the lexer and return the next token.
     Token advance();
 
+    /// Advance the lexer until meet the specific kind token.
+    Token advance_until(clang::tok::TokenKind kind);
+
 private:
+    /// If this is set to false, the lexer will emit tok::eod at the end
+    /// of directive.
+    bool ignore_end_of_directive = true;
+
     /// Whether we are lexing the preprocessor directive.
     bool parse_preprocessor_directive = false;
 

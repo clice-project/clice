@@ -58,7 +58,7 @@ struct Tester {
 
         for(auto& [file, source]: sources.all_files) {
             if(file == src_path) {
-                auto bound = computePreambleBound(source.content);
+                auto bound = compute_preamble_bound(source.content);
                 params.add_remapped_file(file, source.content.substr(0, bound));
             } else {
                 params.add_remapped_file(file, source.content);

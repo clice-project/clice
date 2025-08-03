@@ -12,7 +12,7 @@ void EXPECT_BOUNDS(std::vector<llvm::StringRef> marks,
                    LocationChain chain = LocationChain()) {
     auto annotation = AnnotatedSource::from(content);
 
-    auto bounds = computePreambleBounds(annotation.content);
+    auto bounds = compute_preamble_bounds(annotation.content);
 
     ASSERT_EQ(bounds.size(), marks.size(), chain);
 
@@ -78,7 +78,7 @@ void EXPECT_BUILD_PCH(llvm::StringRef main_file,
 
     CompilationParams params;
     params.output_file = outPath;
-    auto bound = computePreambleBound(content);
+    auto bound = compute_preamble_bound(content);
     params.add_remapped_file(main_file, content, bound);
 
     params.arguments = {
@@ -127,12 +127,12 @@ TEST(Preamble, Bounds) {
     EXPECT_BOUNDS({"0"}, "#include <iostream>$(0)");
     EXPECT_BOUNDS({"0"}, "#include <iostream>$(0)\n");
 
-    EXPECT_BOUNDS({"0", "1"},
+    EXPECT_BOUNDS({"0", "1", "2", "3"},
                   R"cpp(
-#ifdef TEST
-#include <iostream>$(0)
-#define 1
-#endif$(1)
+#ifdef TEST$(0)
+#include <iostream>$(1)
+#define 1$(2)
+#endif$(3)
 )cpp");
 
     EXPECT_BOUNDS({"0"},
@@ -141,9 +141,9 @@ TEST(Preamble, Bounds) {
 int x = 1;
 )cpp");
 
-    EXPECT_BOUNDS({"0"}, R"cpp(
-module;
-#include <iostream>$(0)
+    EXPECT_BOUNDS({"0", "1"}, R"cpp(
+module;$(0)
+#include <iostream>$(1)
 export module test;
 )cpp");
 }
@@ -259,7 +259,7 @@ int y = foo();
     std::string content = files["main.cpp"];
     files.erase("main.cpp");
 
-    auto bounds = computePreambleBounds(content);
+    auto bounds = compute_preamble_bounds(content);
 
     CompilationParams params;
     params.arguments = {"clang++", "-std=c++20", "main.cpp"};

@@ -31,10 +31,10 @@ struct PCHInfo {
 
 /// Compute the preamble bound of given content. We just
 /// run lex until we find first not directive.
-std::uint32_t computePreambleBound(llvm::StringRef content);
+std::uint32_t compute_preamble_bound(llvm::StringRef content);
 
 /// Same as above, but return a group of bounds for chained PCH
 /// building.
-std::vector<uint32_t> computePreambleBounds(llvm::StringRef content);
+std::vector<uint32_t> compute_preamble_bounds(llvm::StringRef content);
 
 }  // namespace clice

@@ -19,7 +19,7 @@ struct Include {
     clang::SourceLocation location;
 
     /// The range of filename(includes `""` or `<>`).
-    clang::SourceRange fileNameRange;
+    clang::SourceRange filename_range;
 };
 
 /// Information about `__has_include` directive.
@@ -67,7 +67,7 @@ struct Condition {
     clang::SourceLocation loc;
 
     /// Range of the condition.
-    clang::SourceRange conditionRange;
+    clang::SourceRange condition_range;
 };
 
 /// Information about macro definition, reference and undef.
@@ -129,7 +129,7 @@ struct Import {
 
 struct Directive {
     std::vector<Include> includes;
-    std::vector<HasInclude> hasIncludes;
+    std::vector<HasInclude> has_includes;
     std::vector<Condition> conditions;
     std::vector<MacroRef> macros;
     std::vector<Pragma> pragmas;

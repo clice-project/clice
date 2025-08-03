@@ -83,7 +83,7 @@ public:
         directives[prevFID].includes.emplace_back(Include{
             .fid = {},
             .location = includeTok.getLocation(),
-            .fileNameRange = filenameRange.getAsRange(),
+            .filename_range = filenameRange.getAsRange(),
         });
     }
 
@@ -139,7 +139,7 @@ public:
             fid = SM.translateFile(*file);
         }
 
-        directives[SM.getFileID(location)].hasIncludes.emplace_back(fid, location);
+        directives[SM.getFileID(location)].has_includes.emplace_back(fid, location);
     }
 
     void PragmaDirective(clang::SourceLocation Loc,

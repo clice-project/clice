@@ -5,51 +5,20 @@
 
 namespace clice {
 
-llvm::StringRef getFileContent(const clang::SourceManager& SM, clang::FileID fid) {
-    return SM.getBufferData(fid);
-}
-
 std::uint32_t getTokenLength(const clang::SourceManager& SM, clang::SourceLocation location) {
     return clang::Lexer::MeasureTokenLength(location, SM, {});
 }
 
-llvm::StringRef getTokenSpelling(const clang::SourceManager& SM, clang::SourceLocation location) {
-    return llvm::StringRef(SM.getCharacterData(location), getTokenLength(SM, location));
-}
+/// A fake location could be used to calculate the token location offset when lexer
+/// runs in raw mode.
+inline static clang::SourceLocation fake_loc = clang::SourceLocation::getFromRawEncoding(1);
 
-void tokenize(llvm::StringRef content,
-              llvm::unique_function<bool(const clang::Token&)> callback,
-              bool ignoreComments,
-              const clang::LangOptions* langOpts) {
-    clang::LangOptions defaultLangOpts;
-    defaultLangOpts.CPlusPlus = 1;
-    defaultLangOpts.CPlusPlus26 = 1;
-    defaultLangOpts.LineComment = !ignoreComments;
+Lexer::Lexer(llvm::StringRef content,
+             bool ignore_comments,
+             const clang::LangOptions* lang_opts,
+             bool ignore_end_of_directive) :
+    content(content), ignore_end_of_directive(ignore_end_of_directive) {
 
-    clang::Lexer lexer(fake_loc,
-                       langOpts ? *langOpts : defaultLangOpts,
-                       content.begin(),
-                       content.begin(),
-                       content.end());
-    lexer.SetCommentRetentionState(!ignoreComments);
-
-    clang::Token token;
-    while(true) {
-        lexer.LexFromRawLexer(token);
-        if(token.is(clang::tok::eof)) {
-            break;
-        }
-
-        if(!callback(token)) {
-            break;
-        }
-    }
-
-    /// lexer.LexIncludeFilename()
-}
-
-Lexer::Lexer(llvm::StringRef content, bool ignore_comments, const clang::LangOptions* lang_opts) :
-    content(content) {
     static clang::LangOptions default_opts;
     auto lexer = new clang::Lexer(fake_loc,
                                   lang_opts ? *lang_opts : default_opts,
@@ -83,7 +52,11 @@ void Lexer::lex(Token& token) {
     token.range = LocalSourceRange{offset, offset + raw_token.getLength()};
 
     if(token.is_at_start_of_line) {
-        parse_preprocessor_directive = token.kind == clang::tok::hash;
+        if(token.kind == clang::tok::hash) {
+            parse_preprocessor_directive = true;
+            lexer->setParsingPreprocessorDirective(true);
+        }
+
         parse_header_name = false;
     } else if(parse_preprocessor_directive) {
         /// Preprocessor directive token only have one.
@@ -120,6 +93,15 @@ Token Lexer::advance() {
     }
 
     return current_token;
+}
+
+Token Lexer::advance_until(clang::tok::TokenKind kind) {
+    while(true) {
+        auto token = advance();
+        if(token.kind == kind || token.is_eof()) {
+            return token;
+        }
+    }
 }
 
 }  // namespace clice

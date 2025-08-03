@@ -37,23 +37,23 @@ auto CompilationUnit::decompose_range(clang::SourceRange range)
         auto [fid, offset] = decompose_location(begin);
         return {
             fid,
-            {offset, offset + getTokenLength(impl->src_mgr, end)}
+            {offset, offset + token_length(end)}
         };
     } else {
-        auto [beginFID, beginOffset] = decompose_location(begin);
-        auto [endFID, endOffset] = decompose_location(end);
-        if(beginFID == endFID) {
-            return {
-                beginFID,
-                {beginOffset, endOffset + getTokenLength(impl->src_mgr, end)}
-            };
+        auto [begin_fid, begin_offset] = decompose_location(begin);
+        auto [end_fid, end_offset] = decompose_location(end);
+
+        if(begin_fid == end_fid) {
+            end_offset += token_length(end);
         } else {
-            auto content = file_content(beginFID);
-            return {
-                beginFID,
-                {beginOffset, static_cast<uint32_t>(content.size())}
-            };
+            auto content = file_content(begin_fid);
+            end_offset = content.size();
         }
+
+        return {
+            begin_fid,
+            {begin_offset, end_offset}
+        };
     }
 }
 
@@ -151,8 +151,12 @@ auto CompilationUnit::expanded_tokens(clang::SourceRange range)
     return impl->buffer->expandedTokens(range);
 }
 
+auto CompilationUnit::token_length(clang::SourceLocation location) -> std::uint32_t {
+    return clang::Lexer::MeasureTokenLength(location, impl->src_mgr, impl->instance->getLangOpts());
+}
+
 auto CompilationUnit::token_spelling(clang::SourceLocation location) -> llvm::StringRef {
-    return getTokenSpelling(impl->src_mgr, location);
+    return llvm::StringRef(impl->src_mgr.getCharacterData(location), token_length(location));
 }
 
 auto CompilationUnit::module_name() -> llvm::StringRef {
@@ -179,7 +183,7 @@ std::vector<std::string> CompilationUnit::deps() {
             }
         }
 
-        for(auto& hasInclude: diretive.hasIncludes) {
+        for(auto& hasInclude: diretive.has_includes) {
             if(hasInclude.fid.isValid()) {
                 deps.try_emplace(file_path(hasInclude.fid));
             }
@@ -211,7 +215,7 @@ index::SymbolID CompilationUnit::getSymbolID(const clang::NamedDecl* decl) {
 
 index::SymbolID CompilationUnit::getSymbolID(const clang::MacroInfo* macro) {
     std::uint64_t hash;
-    auto name = getTokenSpelling(impl->src_mgr, macro->getDefinitionLoc());
+    auto name = token_spelling(macro->getDefinitionLoc());
     auto iter = impl->symbolHashCache.find(macro);
     if(iter != impl->symbolHashCache.end()) {
         hash = iter->second;

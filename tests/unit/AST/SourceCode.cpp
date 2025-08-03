@@ -63,20 +63,27 @@ TEST(SourceCode, IgnoreComments) {
 }
 
 TEST(SourceCode, LexInclude) {
+    /// TODO: test eod
+    /// test multiple lines macros.
+
     Lexer lexer(R"(
 #include <iostream>
 #include "gtest/test.h"
+module;
 int x = 1;
-)");
+)",
+                true,
+                nullptr,
+                false);
 
-    while(true) {
-        Token token = lexer.advance();
-        if(token.is_eof()) {
-            break;
-        }
-
-        println("kind: {}", token.name());
-    }
+    // while(true) {
+    //     Token token = lexer.advance();
+    //     if(token.is_eof()) {
+    //         break;
+    //     }
+    //
+    //    println("kind: {}", token.name());
+    //}
 }
 
 }  // namespace clice::testing

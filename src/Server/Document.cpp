@@ -25,7 +25,7 @@ async::Task<OpenFile*> Server::add_document(std::string path, std::string conten
 }
 
 async::Task<> Server::build_pch(std::string path, std::string content) {
-    auto bound = computePreambleBound(content);
+    auto bound = compute_preamble_bound(content);
 
     auto openFile = &opening_files[path];
     bool outdated = true;

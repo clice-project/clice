@@ -175,7 +175,7 @@ auto diagnostic_range(const clang::Diagnostic& diagnostic, const clang::LangOpti
 
         auto [end_fid, end_offset] = src_mgr.getDecomposedLoc(end);
         if(range.isTokenRange()) {
-            end_offset += getTokenLength(src_mgr, end);
+            end_offset += clang::Lexer::MeasureTokenLength(end, src_mgr, options);
         }
 
         if(end_fid == fid && end_offset >= offset) {
@@ -187,7 +187,7 @@ auto diagnostic_range(const clang::Diagnostic& diagnostic, const clang::LangOpti
     }
 
     /// Use token range.
-    auto end_offset = offset + getTokenLength(src_mgr, location);
+    auto end_offset = offset + clang::Lexer::MeasureTokenLength(location, src_mgr, options);
     return std::pair{
         fid,
         LocalSourceRange{offset, end_offset}

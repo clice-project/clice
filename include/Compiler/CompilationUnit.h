@@ -122,6 +122,9 @@ public:
     /// Get the expanded tokens(after preprocessing) of the file id.
     auto expanded_tokens(clang::SourceRange range) -> llvm::ArrayRef<clang::syntax::Token>;
 
+    /// Get the token length.
+    auto token_length(clang::SourceLocation location) -> std::uint32_t;
+
     /// Get the spelling of the token corresponding to the location.
     auto token_spelling(clang::SourceLocation location) -> llvm::StringRef;
 

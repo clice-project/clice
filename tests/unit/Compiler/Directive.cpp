@@ -17,7 +17,7 @@ struct Directive : ::testing::Test, Tester {
         Tester::compile("-std=c++23");
         auto fid = unit->interested_file();
         includes = unit->directives()[fid].includes;
-        hasIncludes = unit->directives()[fid].hasIncludes;
+        hasIncludes = unit->directives()[fid].has_includes;
         conditions = unit->directives()[fid].conditions;
         macros = unit->directives()[fid].macros;
         pragmas = unit->directives()[fid].pragmas;
