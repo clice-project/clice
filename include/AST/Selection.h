@@ -1,181 +1,134 @@
 #pragma once
 
+#include <stack>
+#include "SourceCode.h"
 #include "clang/AST/ASTTypeTraits.h"
+#include "clang/AST/PrettyPrinter.h"
 #include "clang/Tooling/Syntax/Tokens.h"
-
-#include <deque>
+#include "llvm/ADT/SmallVector.h"
 
 namespace clice {
 
-// Code Action:
-// add implementation in cpp file(important).
-// extract implementation to cpp file(important).
-// generate virtual function declaration(full qualified?).
-// generate c++20 coroutine and awaiter interface.
-// expand macro(one step by step).
-// invert if.
-
 class CompilationUnit;
 
-namespace {
-class SelectionBuilder;
-}
-
+// A selection can partially or completely cover several AST nodes.
+// The SelectionTree contains nodes that are covered, and their parents.
+// SelectionTree does not contain all AST nodes, rather only:
+//   Decl, Stmt, TypeLoc, NestedNamespaceSpecifierLoc, CXXCtorInitializer.
+// (These are the nodes with source ranges that fit in DynTypedNode).
+//
+// Usually commonAncestor() is the place to start:
+//  - it's the simplest answer to "what node is under the cursor"
+//  - the selected Expr (for example) can be found by walking up the parent
+//    chain and checking Node->ASTNode.
+//  - if you want to traverse the selected nodes, they are all under
+//    commonAncestor() in the tree.
+//
+// SelectionTree tries to behave sensibly in the presence of macros, but does
+// not model any preprocessor concepts: the output is a subset of the AST.
+// When a macro argument is specifically selected, only its first expansion is
+// selected in the AST. (Returning a selection forest is unreasonably difficult
+// for callers to handle correctly.)
+//
+// Comments, directives and whitespace are completely ignored.
+// Semicolons are also ignored, as the AST generally does not model them well.
+//
+// The SelectionTree owns the Node structures, but the ASTNode attributes
+// point back into the AST it was constructed with.
 class SelectionTree {
-    friend class SelectionBuilder;
-
 public:
-    /// The extent to which an selection is covered by the AST node.
-    enum class CoverageKind : unsigned {
-        /// For example, if the selection is
-        ///
-        ///  void f() {
-        ///     int x = 1;
-        ///         ^^^
-        ///  }
-        ///
-        /// The FunctionDecl `f()` and VarDecl `x` would fully cover the selection.
-        Full,
+    // Create selection trees for the given range, and pass them to Func.
+    //
+    // There may be multiple possible selection trees:
+    // - if the range is empty and borders two tokens, a tree for the right token
+    //   and a tree for the left token will be yielded.
+    // - Func should return true on success (stop) and false on failure (continue)
+    //
+    // Always yields at least one tree. If no tokens are touched, it is empty.
+    static bool createEach(CompilationUnit& unit,
+                           LocalSourceRange range,
+                           llvm::function_ref<bool(SelectionTree)> Func);
 
-        /// For example, if the selection is
-        ///
-        ///  if (x == 1) {
-        ///  ^^^^^^^^^^^^^
-        ///     int y = 2;
-        ///  }
-        ///
-        /// The IfStmt would fully cover the selection while the Expr `x == 1` would partially
-        /// cover the selection.
-        Partial,
-    };
+    // Create a selection tree for the given range.
+    //
+    // Where ambiguous (range is empty and borders two tokens), prefer the token
+    // on the right.
+    static SelectionTree createRight(CompilationUnit& unit, LocalSourceRange range);
 
-    /// An AST node is involved in the selection, either selected directly or some descendant node
-    /// is selected.
-    struct Node {
-        /// The AST node that is selected.
-        clang::DynTypedNode dynNode;
-
-        /// The extent to which the selection is covered by the AST node.
-        CoverageKind kind;
-
-        /// In most cases, there is only 1 child in a selected node. Use SmallVector with stack
-        /// capability 1 to reduce the size of Node.
-        llvm::SmallVector<const Node*, 1> children;
-
-        /// The parent node in the selection tree. nullptr for root node.
-        Node* parent;
-
-        template <typename T, typename... Ts>
-        bool isOneOf() const {
-            return dynNode.get<T>() || (dynNode.get<Ts>() || ...);
-        }
-    };
-
-    /// Construct an empty selection tree.
-    SelectionTree() = default;
-
+    // Copies are no good - contain pointers to other nodes.
     SelectionTree(const SelectionTree&) = delete;
     SelectionTree& operator= (const SelectionTree&) = delete;
 
+    // Moves are OK though - internal storage is pointer-stable when moved.
     SelectionTree(SelectionTree&&) = default;
     SelectionTree& operator= (SelectionTree&&) = default;
 
-    /// Check if there is any selection.
-    bool hasValue() const {
-        return root != nullptr;
+    // Describes to what extent an AST node is covered by the selection.
+    enum Selection : unsigned char {
+        // The AST node owns no characters covered by the selection.
+        // Note that characters owned by children don't count:
+        //   if (x == 0) scream();
+        //       ^^^^^^
+        // The IfStmt would be Unselected because all the selected characters are
+        // associated with its children.
+        // (Invisible nodes like ImplicitCastExpr are always unselected).
+        Unselected,
+        // The AST node owns selected characters, but is not completely covered.
+        Partial,
+        // The AST node owns characters, and is covered by the selection.
+        Complete,
+    };
+
+    // An AST node that is implicated in the selection.
+    // (Either selected directly, or some descendant is selected).
+    struct Node {
+        // The parent within the selection tree. nullptr for TranslationUnitDecl.
+        Node* Parent;
+        // Direct children within the selection tree.
+        llvm::SmallVector<const Node*> Children;
+        // The corresponding node from the full AST.
+        clang::DynTypedNode ASTNode;
+        // The extent to which this node is covered by the selection.
+        Selection Selected;
+        // Walk up the AST to get the lexical DeclContext of this Node, which is not
+        // the node itself.
+        const clang::DeclContext& getDeclContext() const;
+        // Printable node kind, like "CXXRecordDecl" or "AutoTypeLoc".
+        std::string kind() const;
+        // If this node is a wrapper with no syntax (e.g. implicit cast), return
+        // its contents. (If multiple wrappers are present, unwraps all of them).
+        const Node& ignoreImplicit() const;
+        // If this node is inside a wrapper with no syntax (e.g. implicit cast),
+        // return that wrapper. (If multiple are present, unwraps all of them).
+        const Node& outerImplicit() const;
+    };
+
+    // The most specific common ancestor of all the selected nodes.
+    // Returns nullptr if the common ancestor is the root.
+    // (This is to avoid accidentally traversing the TUDecl and thus preamble).
+    const Node* commonAncestor() const;
+
+    // The selection node corresponding to TranslationUnitDecl.
+    const Node& root() const {
+        return *Root;
     }
-
-    // Return nullptr if there is no selection.
-    const Node* getRoot() const {
-        return root;
-    }
-
-    std::deque<Node>& children() {
-        return storage;
-    }
-
-    const std::deque<Node>& children() const {
-        return storage;
-    }
-
-    /// Return true to continue the walk, false to stop.
-    using Walker = llvm::function_ref<bool(const Node*)>;
-
-    /// Return true if the walk is completed, false if the walk is interrupted.
-    bool walkDfs(Walker ops) const {
-        if(!root)
-            return true;
-
-        llvm::SmallVector<const Node*> stack;
-        stack.push_back(root);
-        while(!stack.empty()) {
-            auto node = stack.pop_back_val();
-
-            if(!ops(node))
-                return false;
-
-            for(auto child: node->children) {
-                stack.push_back(child);
-            }
-        }
-
-        return true;
-    }
-
-    /// Return true if the walk is completed, false if the walk is interrupted.
-    bool walkBfs(Walker ops) const {
-        if(!root)
-            return true;
-
-        std::deque<const Node*> queue;
-        queue.push_back(root);
-
-        while(!queue.empty()) {
-            auto node = queue.front();
-            queue.pop_front();
-
-            if(!ops(node))
-                return false;
-
-            for(auto child: node->children) {
-                queue.push_front(child);
-            }
-        }
-
-        return true;
-    }
-
-    explicit operator bool () const {
-        return hasValue();
-    }
-
-    void dump(llvm::raw_ostream& os, clang::ASTContext& context) const;
-
-    static SelectionTree selectOffsetRange(std::uint32_t begin,
-                                           std::uint32_t end,
-                                           clang::ASTContext& context,
-                                           CompilationUnit& unit) {
-        return SelectionTree(begin, end, context, unit);
-    }
-
-    static SelectionTree selectToken(const clang::syntax::Token& token,
-                                     clang::ASTContext& context,
-                                     CompilationUnit& unit);
 
 private:
-    /// Construct a selection tree from the given source range. `start` and `end` means offset from
-    /// file start location, these arguments should come from function `SourceConverter::toOffset`.
-    SelectionTree(std::uint32_t begin,
-                  std::uint32_t end,
-                  clang::ASTContext& context,
-                  CompilationUnit& unit);
+    // Creates a selection tree for the given range in the main file.
+    // The range includes bytes [Start, End).
+    SelectionTree(CompilationUnit& unit, LocalSourceRange range);
 
-    // The root node of selection tree.
-    Node* root;
+    std::deque<Node> Nodes;  // Stable-pointer storage.
+    const Node* Root;
+    clang::PrintingPolicy PrintPolicy;
 
-    // The AST nodes was stored in the order from root to leaf.
-    // Use deque as the stable pointer storage.
-    std::deque<Node> storage;
+    void print(llvm::raw_ostream& OS, const Node& N, int Indent) const;
+
+    friend llvm::raw_ostream& operator<< (llvm::raw_ostream& OS, const SelectionTree& T) {
+        T.print(OS, T.root(), 1);
+        return OS;
+    }
 };
 
 }  // namespace clice
+

@@ -273,4 +273,8 @@ clang::ASTContext& CompilationUnit::context() {
     return impl->instance->getASTContext();
 }
 
+clang::syntax::TokenBuffer& CompilationUnit::token_buffer() {
+    return *impl->buffer;
+}
+
 }  // namespace clice

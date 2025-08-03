@@ -143,6 +143,8 @@ public:
 
     clang::ASTContext& context();
 
+    clang::syntax::TokenBuffer& token_buffer();
+
     TemplateResolver& resolver();
 
     llvm::DenseMap<clang::FileID, Directive>& directives();
