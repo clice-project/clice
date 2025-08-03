@@ -6,14 +6,14 @@ namespace clice::testing {
 namespace {
 
 struct SemanticToken : TestFixture {
-    index::Shared<feature::SemanticTokens> result;
+    feature::SemanticTokens tokens;
 
     using Self = SemanticToken;
 
     void run(llvm::StringRef code) {
         add_main("main.cpp", code);
         Tester::compile();
-        result = feature::indexSemanticToken(*unit);
+        tokens = feature::semantic_tokens(*unit);
     }
 
     void EXPECT_TOKEN(this Self& self,
@@ -23,9 +23,8 @@ struct SemanticToken : TestFixture {
                       LocationChain chain = LocationChain()) {
         bool visited = false;
         auto offset = self["main.cpp", pos];
-        auto& tokens = self.result[self.unit->interested_file()];
 
-        for(auto& token: tokens) {
+        for(auto& token: self.tokens) {
             if(token.range.begin == offset) {
                 EXPECT_EQ(token.kind, kind, chain);
                 EXPECT_EQ(token.range.end - token.range.begin, length, chain);
@@ -45,9 +44,8 @@ struct SemanticToken : TestFixture {
                       LocationChain chain = LocationChain()) {
         bool visited = false;
         auto offset = self["main.cpp", pos];
-        auto& tokens = self.result[self.unit->interested_file()];
 
-        for(auto& token: tokens) {
+        for(auto& token: self.tokens) {
             if(token.range.begin == offset) {
                 EXPECT_EQ(token.kind, kind, chain);
                 EXPECT_EQ(token.range.end - token.range.begin, length, chain);
@@ -60,8 +58,7 @@ struct SemanticToken : TestFixture {
         EXPECT_EQ(visited, true, chain);
     }
 
-    void dumpResult() {
-        auto& tokens = result[unit->interested_file()];
+    void dump_result() {
         for(auto& token: tokens) {
             clice::println("token: {}", dump(token));
         }

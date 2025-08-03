@@ -53,7 +53,16 @@ struct AnnotatedSources {
     }
 
     /// Add sources to the params, use `#[filename]` to mark
-    /// a new file start.
+    /// a new file start. For example
+    ///
+    /// ```cpp
+    /// #[test.h]
+    /// int foo();
+    ///
+    /// #[main.cpp]
+    /// #include "test.h"
+    /// int x = foo();
+    /// ```
     void add_sources(llvm::StringRef content) {
         std::string curr_file;
         std::string curr_content;

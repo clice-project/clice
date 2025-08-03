@@ -11,13 +11,14 @@ namespace clice {
 namespace {
 
 /// A wrapper ast consumer, so that we can cancel the ast parse
-class ProxyASTConsumer : public clang::MultiplexConsumer {
+class ProxyASTConsumer final : public clang::MultiplexConsumer {
 public:
     ProxyASTConsumer(std::unique_ptr<clang::ASTConsumer> consumer,
                      clang::CompilerInstance& instance,
+                     std::vector<clang::Decl*>& top_level_decls,
                      std::shared_ptr<std::atomic_bool> stop) :
         clang::MultiplexConsumer(std::move(consumer)), instance(instance),
-        src_mgr(instance.getSourceManager()), stop(stop) {
+        src_mgr(instance.getSourceManager()), top_level_decls(top_level_decls), stop(stop) {
         /// FIXME: We may want to use a more explicit way to judge this.
         need_collect = instance.getFrontendOpts().OutputFile.empty();
     }
@@ -35,7 +36,7 @@ public:
         }
     }
 
-    auto HandleTopLevelDecl(clang::DeclGroupRef group) -> bool override {
+    auto HandleTopLevelDecl(clang::DeclGroupRef group) -> bool final {
         if(need_collect) {
             if(group.isDeclGroup()) {
                 for(auto decl: group) {
@@ -56,31 +57,40 @@ public:
     }
 
 private:
+    bool need_collect;
     clang::CompilerInstance& instance;
     clang::SourceManager& src_mgr;
-    bool need_collect;
-    std::vector<clang::Decl*> top_level_decls;
+    std::vector<clang::Decl*>& top_level_decls;
     std::shared_ptr<std::atomic_bool> stop;
 };
 
-class ProxyAction : public clang::WrapperFrontendAction {
+class ProxyAction final : public clang::WrapperFrontendAction {
 public:
     ProxyAction(std::unique_ptr<clang::FrontendAction> action,
                 std::shared_ptr<std::atomic_bool> stop) :
         clang::WrapperFrontendAction(std::move(action)), stop(std::move(stop)) {}
 
     auto CreateASTConsumer(clang::CompilerInstance& instance, llvm::StringRef file)
-        -> std::unique_ptr<clang::ASTConsumer> override {
+        -> std::unique_ptr<clang::ASTConsumer> final {
 
         bool need_collect = instance.getFrontendOpts().OutputFile.empty();
 
         return std::make_unique<ProxyASTConsumer>(
             WrapperFrontendAction::CreateASTConsumer(instance, file),
             instance,
+            top_level_decls,
             std::move(stop));
     }
 
+    /// Make this public.
+    using clang::WrapperFrontendAction::EndSourceFile;
+
+    auto pop_decls() {
+        return std::move(top_level_decls);
+    }
+
 private:
+    std::vector<clang::Decl*> top_level_decls;
     std::shared_ptr<std::atomic_bool> stop;
 };
 
@@ -169,8 +179,7 @@ CompilationResult run_clang(CompilationParams& params, const Adjuster& adjuster)
     /// Adjust the compiler instance, for example, set preamble or modules.
     adjuster(*instance);
 
-    std::unique_ptr<clang::FrontendAction> action =
-        std::make_unique<ProxyAction>(std::make_unique<Action>(), params.stop);
+    auto action = std::make_unique<ProxyAction>(std::make_unique<Action>(), params.stop);
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         return std::unexpected("Fail to begin source file");
@@ -229,6 +238,8 @@ CompilationResult run_clang(CompilationParams& params, const Adjuster& adjuster)
         resolver.emplace(instance->getSema());
     }
 
+    auto top_level_decls = action->pop_decls();
+
     auto impl = new CompilationUnit::Impl{
         .interested = pp.getSourceManager().getMainFileID(),
         .src_mgr = instance->getSourceManager(),
@@ -240,6 +251,7 @@ CompilationResult run_clang(CompilationParams& params, const Adjuster& adjuster)
         .pathCache = llvm::DenseMap<clang::FileID, llvm::StringRef>(),
         .symbolHashCache = llvm::DenseMap<const void*, std::uint64_t>(),
         .diagnostics = diagnostics,
+        .top_level_decls = std::move(top_level_decls),
     };
 
     return CompilationUnit(CompilationUnit::SyntaxOnly, impl);

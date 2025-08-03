@@ -134,6 +134,8 @@ public:
     /// Return all diagnostics in the process of compilation.
     auto diagnostics() -> llvm::ArrayRef<Diagnostic>;
 
+    auto top_level_decls() -> llvm::ArrayRef<clang::Decl*>;
+
     clang::LangOptions& lang_options();
 
     clang::ASTContext& context();

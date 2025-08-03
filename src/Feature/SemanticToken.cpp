@@ -268,7 +268,7 @@ public:
 
 }  // namespace
 
-SemanticTokens semanticTokens(CompilationUnit& unit) {
+SemanticTokens semantic_tokens(CompilationUnit& unit) {
     SemanticTokensCollector collector(unit, true);
     collector.highlight(unit.interested_file());
     collector.run();

@@ -233,6 +233,10 @@ auto CompilationUnit::diagnostics() -> llvm::ArrayRef<Diagnostic> {
     return *impl->diagnostics;
 }
 
+auto CompilationUnit::top_level_decls() -> llvm::ArrayRef<clang::Decl*> {
+    return impl->top_level_decls;
+}
+
 const llvm::DenseSet<clang::FileID>& CompilationUnit::files() {
     if(impl->allFiles.empty()) {
         /// FIXME: handle preamble and embed file id.
