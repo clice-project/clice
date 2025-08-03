@@ -1013,9 +1013,7 @@ private:
 
     SourceManager& SM;
     const LangOptions& LangOpts;
-#ifndef NDEBUG
     const PrintingPolicy& PrintPolicy;
-#endif
     const syntax::TokenBuffer& TokenBuf;
     std::stack<Node*> Stack;
     SelectionTester SelChecker;
