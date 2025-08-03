@@ -1,3 +1,4 @@
+#include <thread>
 #include "Test/Tester.h"
 #include "Compiler/Compilation.h"
 #include "Support/FileSystem.h"
