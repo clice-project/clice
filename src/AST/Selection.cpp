@@ -773,10 +773,8 @@ private:
                      unsigned SelBegin,
                      unsigned SelEnd,
                      FileID SelFile) :
-        SM(AST.getSourceManager()), LangOpts(AST.getLangOpts()),
-#ifndef NDEBUG
-        PrintPolicy(PP),
-#endif
+        SM(AST.getSourceManager()), LangOpts(AST.getLangOpts()), PrintPolicy(PP),
+
         TokenBuf(Tokens), SelChecker(Tokens, SelFile, SelBegin, SelEnd, SM),
         UnclaimedExpandedTokens(Tokens.expandedTokens()) {
         // Ensure we have a node for the TU decl, regardless of traversal scope.
