@@ -146,8 +146,18 @@ auto CompilationUnit::presumed_location(clang::SourceLocation location) -> clang
     return impl->src_mgr.getPresumedLoc(location, false);
 }
 
+auto CompilationUnit::create_location(clang::FileID fid, std::uint32_t offset)
+    -> clang::SourceLocation {
+    return impl->src_mgr.getComposedLoc(fid, offset);
+}
+
 auto CompilationUnit::spelled_tokens(clang::FileID fid) -> llvm::ArrayRef<clang::syntax::Token> {
     return impl->buffer->spelledTokens(fid);
+}
+
+auto CompilationUnit::spelled_tokens_touch(clang::SourceLocation location)
+    -> llvm::ArrayRef<clang::syntax::Token> {
+    return clang::syntax::spelledTokensTouching(location, *impl->buffer);
 }
 
 auto CompilationUnit::expanded_tokens(clang::SourceRange range)

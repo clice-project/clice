@@ -29,28 +29,37 @@ namespace {
 
 using Node = SelectionTree::Node;
 
-std::vector<const Attr*> getAttributes(const DynTypedNode& N) {
-    std::vector<const Attr*> Result;
+std::vector<const Attr*> get_attributes(const DynTypedNode& N) {
+    std::vector<const Attr*> result;
+
     if(const auto* TL = N.get<TypeLoc>()) {
-        for(AttributedTypeLoc ATL = TL->getAs<AttributedTypeLoc>(); !ATL.isNull();
+        for(auto ATL = TL->getAs<AttributedTypeLoc>(); !ATL.isNull();
             ATL = ATL.getModifiedLoc().getAs<AttributedTypeLoc>()) {
-            if(const Attr* A = ATL.getAttr())
-                Result.push_back(A);
+            if(const Attr* A = ATL.getAttr()) {
+                result.push_back(A);
+            }
             assert(!ATL.getModifiedLoc().isNull());
         }
     }
+
     if(const auto* S = N.get<AttributedStmt>()) {
-        for(; S != nullptr; S = dyn_cast<AttributedStmt>(S->getSubStmt()))
-            for(const Attr* A: S->getAttrs())
-                if(A)
-                    Result.push_back(A);
+        for(; S != nullptr; S = dyn_cast<AttributedStmt>(S->getSubStmt())) {
+            for(const Attr* A: S->getAttrs()) {
+                if(A) {
+                    result.push_back(A);
+                }
+            }
+        }
     }
+
     if(const auto* D = N.get<Decl>()) {
-        for(const Attr* A: D->attrs())
-            if(A)
-                Result.push_back(A);
+        for(const Attr* A: D->attrs()) {
+            if(A) {
+                result.push_back(A);
+            }
+        }
     }
-    return Result;
+    return result;
 }
 
 // Measure the fraction of selections that were enabled by recovery AST.
@@ -191,12 +200,12 @@ private:
 // This resolves to Unselected if no tokens are ever seen.
 // But Unselected + Complete -> Partial, while NoTokens + Complete --> Complete.
 // This value is never exposed publicly.
-constexpr SelectionTree::Selection NoTokens =
-    static_cast<SelectionTree::Selection>(static_cast<unsigned char>(SelectionTree::Complete + 1));
+constexpr SelectionTree::SelectionKind NoTokens = static_cast<SelectionTree::SelectionKind>(
+    static_cast<unsigned char>(SelectionTree::Complete + 1));
 
 // Nodes start with NoTokens, and then use this function to aggregate the
 // selectedness as more tokens are found.
-void update(SelectionTree::Selection& Result, SelectionTree::Selection New) {
+void update(SelectionTree::SelectionKind& Result, SelectionTree::SelectionKind New) {
     if(New == NoTokens)
         return;
     if(Result == NoTokens)
@@ -208,8 +217,8 @@ void update(SelectionTree::Selection& Result, SelectionTree::Selection New) {
 
 // As well as comments, don't count semicolons as real tokens.
 // They're not properly claimed as expr-statement is missing from the AST.
-bool shouldIgnore(const syntax::Token& Tok) {
-    switch(Tok.kind()) {
+bool should_ignore(const syntax::Token& token) {
+    switch(token.kind()) {
         // Even "attached" comments are not considered part of a node's range.
         case tok::comment:
         // The AST doesn't directly store locations for terminating semicolons.
@@ -291,7 +300,7 @@ public:
         }
         // Precompute selectedness and offset for selected spelled tokens.
         for(unsigned I = 0; I < Sel.size(); ++I) {
-            if(shouldIgnore(Sel[I]) || PPIgnored[I])
+            if(should_ignore(Sel[I]) || PPIgnored[I])
                 continue;
             SelectedSpelled.emplace_back();
             Tok& S = SelectedSpelled.back();
@@ -306,7 +315,7 @@ public:
 
     // Test whether a consecutive range of tokens is selected.
     // The tokens are taken from the expanded token stream.
-    SelectionTree::Selection test(llvm::ArrayRef<syntax::Token> ExpandedTokens) const {
+    SelectionTree::SelectionKind test(llvm::ArrayRef<syntax::Token> ExpandedTokens) const {
         if(ExpandedTokens.empty())
             return NoTokens;
         if(SelectedSpelled.empty())
@@ -331,7 +340,7 @@ public:
         if(ExpandedTokens.back().kind() == tok::eof)
             ExpandedTokens = ExpandedTokens.drop_back();
 
-        SelectionTree::Selection Result = NoTokens;
+        SelectionTree::SelectionKind Result = NoTokens;
         while(!ExpandedTokens.empty()) {
             // Take consecutive tokens from the same context together for efficiency.
             SourceLocation Start = ExpandedTokens.front().location();
@@ -438,7 +447,7 @@ private:
     }
 
     // Hit-test a consecutive range of tokens from a single file ID.
-    SelectionTree::Selection testChunk(FileID FID, llvm::ArrayRef<syntax::Token> Batch) const {
+    SelectionTree::SelectionKind testChunk(FileID FID, llvm::ArrayRef<syntax::Token> Batch) const {
         assert(!Batch.empty());
         SourceLocation StartLoc = Batch.front().location();
         // There are several possible categories of FileID depending on how the
@@ -487,7 +496,7 @@ private:
     }
 
     // Is the closed token range [Begin, End] selected?
-    SelectionTree::Selection testTokenRange(unsigned Begin, unsigned End) const {
+    SelectionTree::SelectionKind testTokenRange(unsigned Begin, unsigned End) const {
         assert(Begin <= End);
         // Outside the selection entirely?
         if(End < SelectedSpelled.front().Offset || Begin > SelectedSpelled.back().Offset)
@@ -503,7 +512,7 @@ private:
         // Aggregate selectedness of tokens in range.
         bool ExtendsOutsideSelection =
             Begin < SelectedSpelled.front().Offset || End > SelectedSpelled.back().Offset;
-        SelectionTree::Selection Result =
+        SelectionTree::SelectionKind Result =
             ExtendsOutsideSelection ? SelectionTree::Unselected : NoTokens;
         for(auto It = B; It != E; ++It)
             update(Result, It->Selected);
@@ -511,7 +520,7 @@ private:
     }
 
     // Is the token at `Offset` selected?
-    SelectionTree::Selection testToken(unsigned Offset) const {
+    SelectionTree::SelectionKind testToken(unsigned Offset) const {
         // Outside the selection entirely?
         if(Offset < SelectedSpelled.front().Offset || Offset > SelectedSpelled.back().Offset)
             return SelectionTree::Unselected;
@@ -542,7 +551,7 @@ private:
 
     struct Tok {
         unsigned Offset;
-        SelectionTree::Selection Selected;
+        SelectionTree::SelectionKind Selected;
     };
 
     std::vector<Tok> SelectedSpelled;
@@ -627,9 +636,9 @@ public:
                                     FileID File) {
         SelectionVisitor V(AST, Tokens, PP, Begin, End, File);
         V.TraverseAST(AST);
-        assert(V.Stack.size() == 1 && "Unpaired push/pop?");
-        assert(V.Stack.top() == &V.Nodes.front());
-        return std::move(V.Nodes);
+        assert(V.stack.size() == 1 && "Unpaired push/pop?");
+        assert(V.stack.top() == &V.nodes.front());
+        return std::move(V.nodes);
     }
 
     // We traverse all "well-behaved" nodes the same way:
@@ -652,35 +661,35 @@ public:
             // the base implementation knows how to find them.
             return Base::TraverseDecl(X);
         }
-        return traverseNode(X, [&] { return Base::TraverseDecl(X); });
+        return traverse_node(X, [&] { return Base::TraverseDecl(X); });
     }
 
     bool TraverseTypeLoc(TypeLoc X) {
-        return traverseNode(&X, [&] { return Base::TraverseTypeLoc(X); });
+        return traverse_node(&X, [&] { return Base::TraverseTypeLoc(X); });
     }
 
     bool TraverseTemplateArgumentLoc(const TemplateArgumentLoc& X) {
-        return traverseNode(&X, [&] { return Base::TraverseTemplateArgumentLoc(X); });
+        return traverse_node(&X, [&] { return Base::TraverseTemplateArgumentLoc(X); });
     }
 
     bool TraverseNestedNameSpecifierLoc(NestedNameSpecifierLoc X) {
-        return traverseNode(&X, [&] { return Base::TraverseNestedNameSpecifierLoc(X); });
+        return traverse_node(&X, [&] { return Base::TraverseNestedNameSpecifierLoc(X); });
     }
 
     bool TraverseConstructorInitializer(CXXCtorInitializer* X) {
-        return traverseNode(X, [&] { return Base::TraverseConstructorInitializer(X); });
+        return traverse_node(X, [&] { return Base::TraverseConstructorInitializer(X); });
     }
 
     bool TraverseCXXBaseSpecifier(const CXXBaseSpecifier& X) {
-        return traverseNode(&X, [&] { return Base::TraverseCXXBaseSpecifier(X); });
+        return traverse_node(&X, [&] { return Base::TraverseCXXBaseSpecifier(X); });
     }
 
     bool TraverseAttr(Attr* X) {
-        return traverseNode(X, [&] { return Base::TraverseAttr(X); });
+        return traverse_node(X, [&] { return Base::TraverseAttr(X); });
     }
 
     bool TraverseConceptReference(ConceptReference* X) {
-        return traverseNode(X, [&] { return Base::TraverseConceptReference(X); });
+        return traverse_node(X, [&] { return Base::TraverseConceptReference(X); });
     }
 
     // Stmt is the same, but this form allows the data recursion optimization.
@@ -709,11 +718,11 @@ public:
     // (The reason for the behavior is to avoid traversing the nested Type twice,
     // but we ignore TraverseType anyway).
     bool TraverseQualifiedTypeLoc(QualifiedTypeLoc QX) {
-        return traverseNode<TypeLoc>(&QX, [&] { return TraverseTypeLoc(QX.getUnqualifiedLoc()); });
+        return traverse_node<TypeLoc>(&QX, [&] { return TraverseTypeLoc(QX.getUnqualifiedLoc()); });
     }
 
     bool TraverseObjCProtocolLoc(ObjCProtocolLoc PL) {
-        return traverseNode(&PL, [&] { return Base::TraverseObjCProtocolLoc(PL); });
+        return traverse_node(&PL, [&] { return Base::TraverseObjCProtocolLoc(PL); });
     }
 
     // Uninteresting parts of the AST that don't have locations within them.
@@ -729,7 +738,7 @@ public:
     // inside the parens, this causes the range-init expression to not be hit.
     // Traverse the loop VarDecl instead, which has the right source range.
     bool TraverseCXXForRangeStmt(CXXForRangeStmt* S) {
-        return traverseNode(S, [&] {
+        return traverse_node(S, [&] {
             return TraverseStmt(S->getInit()) && TraverseDecl(S->getLoopVariable()) &&
                    TraverseStmt(S->getRangeInit()) && TraverseStmt(S->getBody());
         });
@@ -737,12 +746,12 @@ public:
 
     // OpaqueValueExpr blocks traversal, we must explicitly traverse it.
     bool TraverseOpaqueValueExpr(OpaqueValueExpr* E) {
-        return traverseNode(E, [&] { return TraverseStmt(E->getSourceExpr()); });
+        return traverse_node(E, [&] { return TraverseStmt(E->getSourceExpr()); });
     }
 
     // We only want to traverse the *syntactic form* to understand the selection.
     bool TraversePseudoObjectExpr(PseudoObjectExpr* E) {
-        return traverseNode(E, [&] { return TraverseStmt(E->getSyntacticForm()); });
+        return traverse_node(E, [&] { return TraverseStmt(E->getSyntacticForm()); });
     }
 
     bool TraverseTypeConstraint(const TypeConstraint* C) {
@@ -773,22 +782,22 @@ private:
                      unsigned SelBegin,
                      unsigned SelEnd,
                      FileID SelFile) :
-        SM(AST.getSourceManager()), LangOpts(AST.getLangOpts()), PrintPolicy(PP),
+        SM(AST.getSourceManager()), lang_opts(AST.getLangOpts()), print_policy(PP),
 
-        TokenBuf(Tokens), SelChecker(Tokens, SelFile, SelBegin, SelEnd, SM),
-        UnclaimedExpandedTokens(Tokens.expandedTokens()) {
+        token_buffer(Tokens), checker(Tokens, SelFile, SelBegin, SelEnd, SM),
+        unclaimed_expanded_tokens(Tokens.expandedTokens()) {
         // Ensure we have a node for the TU decl, regardless of traversal scope.
-        Nodes.emplace_back();
-        Nodes.back().ASTNode = DynTypedNode::create(*AST.getTranslationUnitDecl());
-        Nodes.back().Parent = nullptr;
-        Nodes.back().Selected = SelectionTree::Unselected;
-        Stack.push(&Nodes.back());
+        nodes.emplace_back();
+        nodes.back().data = DynTypedNode::create(*AST.getTranslationUnitDecl());
+        nodes.back().parent = nullptr;
+        nodes.back().selected = SelectionTree::Unselected;
+        stack.push(&nodes.back());
     }
 
     // Generic case of TraverseFoo. Func should be the call to Base::TraverseFoo.
     // Node is always a pointer so the generic code can handle any null checks.
     template <typename T, typename Func>
-    bool traverseNode(T* Node, const Func& Body) {
+    bool traverse_node(T* Node, const Func& Body) {
         if(Node == nullptr)
             return true;
         auto N = DynTypedNode::create(*Node);
@@ -840,13 +849,13 @@ private:
         }
         // SourceRange often doesn't manage to accurately cover attributes.
         // Fortunately, attributes are rare.
-        if(llvm::any_of(getAttributes(N), [](const Attr* A) { return !A->isImplicit(); })) {
+        if(llvm::any_of(get_attributes(N), [](const Attr* A) { return !A->isImplicit(); })) {
             return false;
         }
 
-        if(!SelChecker.mayHit(S)) {
+        if(!checker.mayHit(S)) {
             log::info("{2}skip: {0} {1}",
-                      printNodeToString(N, PrintPolicy),
+                      printNodeToString(N, print_policy),
                       S.printToString(SM),
                       indent());
             return true;
@@ -868,34 +877,34 @@ private:
     void push(DynTypedNode Node) {
         SourceRange Early = earlySourceRange(Node);
         log::info("{2}push: {0} {1}",
-                  printNodeToString(Node, PrintPolicy),
+                  printNodeToString(Node, print_policy),
                   Node.getSourceRange().printToString(SM),
                   indent());
-        Nodes.emplace_back();
-        Nodes.back().ASTNode = std::move(Node);
-        Nodes.back().Parent = Stack.top();
-        Nodes.back().Selected = NoTokens;
-        Stack.push(&Nodes.back());
-        claimRange(Early, Nodes.back().Selected);
+        nodes.emplace_back();
+        nodes.back().data = std::move(Node);
+        nodes.back().parent = stack.top();
+        nodes.back().selected = NoTokens;
+        stack.push(&nodes.back());
+        claimRange(Early, nodes.back().selected);
     }
 
     // Pops a node off the ancestor stack, and finalizes it. Pairs with push().
     // Performs primary hit detection.
     void pop() {
-        Node& N = *Stack.top();
-        log::info("{1}pop: {0}", printNodeToString(N.ASTNode, PrintPolicy), indent(-1));
-        claimTokensFor(N.ASTNode, N.Selected);
-        if(N.Selected == NoTokens)
-            N.Selected = SelectionTree::Unselected;
-        if(N.Selected || !N.Children.empty()) {
+        Node& N = *stack.top();
+        log::info("{1}pop: {0}", printNodeToString(N.data, print_policy), indent(-1));
+        claimTokensFor(N.data, N.selected);
+        if(N.selected == NoTokens)
+            N.selected = SelectionTree::Unselected;
+        if(N.selected || !N.children.empty()) {
             // Attach to the tree.
-            N.Parent->Children.push_back(&N);
+            N.parent->children.push_back(&N);
         } else {
             // Neither N any children are selected, it doesn't belong in the tree.
-            assert(&N == &Nodes.back());
-            Nodes.pop_back();
+            assert(&N == &nodes.back());
+            nodes.pop_back();
         }
-        Stack.pop();
+        stack.pop();
     }
 
     // Returns the range of tokens that this node will claim directly, and
@@ -920,6 +929,7 @@ private:
         // things like the T in ~Foo<T>().
         if(const auto* CDD = N.get<CXXDestructorDecl>())
             return CDD->getNameInfo().getNamedTypeInfo()->getTypeLoc().getBeginLoc();
+
         if(const auto* ME = N.get<MemberExpr>()) {
             auto NameInfo = ME->getMemberNameInfo();
             if(NameInfo.getName().getNameKind() == DeclarationName::CXXDestructorName)
@@ -932,7 +942,7 @@ private:
     // Claim tokens for N, after processing its children.
     // By default this claims all unclaimed tokens in getSourceRange().
     // We override this if we want to claim fewer tokens (e.g. there are gaps).
-    void claimTokensFor(const DynTypedNode& N, SelectionTree::Selection& Result) {
+    void claimTokensFor(const DynTypedNode& N, SelectionTree::SelectionKind& Result) {
         // CXXConstructExpr often shows implicit construction, like `string s;`.
         // Don't associate any tokens with it unless there's some syntax like {}.
         // This prevents it from claiming 's', its primary location.
@@ -996,9 +1006,10 @@ private:
     // This runs for every node in the AST, and must be fast in common cases.
     // This is usually called from pop(), so we can take children into account.
     // The existing state of Result is relevant.
-    void claimRange(SourceRange S, SelectionTree::Selection& Result) {
-        for(const auto& ClaimedRange: UnclaimedExpandedTokens.erase(TokenBuf.expandedTokens(S)))
-            update(Result, SelChecker.test(ClaimedRange));
+    void claimRange(SourceRange S, SelectionTree::SelectionKind& Result) {
+        for(const auto& ClaimedRange:
+            unclaimed_expanded_tokens.erase(token_buffer.expandedTokens(S)))
+            update(Result, checker.test(ClaimedRange));
 
         if(Result && Result != NoTokens)
             log::info("{1}hit selection: {0}", S.printToString(SM), indent());
@@ -1006,19 +1017,19 @@ private:
 
     std::string indent(int Offset = 0) {
         // Cast for signed arithmetic.
-        int Amount = int(Stack.size()) + Offset;
+        int Amount = int(stack.size()) + Offset;
         assert(Amount >= 0);
         return std::string(Amount, ' ');
     }
 
     SourceManager& SM;
-    const LangOptions& LangOpts;
-    const PrintingPolicy& PrintPolicy;
-    const syntax::TokenBuffer& TokenBuf;
-    std::stack<Node*> Stack;
-    SelectionTester SelChecker;
-    IntervalSet<syntax::Token> UnclaimedExpandedTokens;
-    std::deque<Node> Nodes;  // Stable pointers as we add more nodes.
+    const LangOptions& lang_opts;
+    const PrintingPolicy& print_policy;
+    const syntax::TokenBuffer& token_buffer;
+    std::stack<Node*> stack;
+    SelectionTester checker;
+    IntervalSet<syntax::Token> unclaimed_expanded_tokens;
+    std::deque<Node> nodes;  // Stable pointers as we add more nodes.
 };
 
 }  // namespace
@@ -1029,66 +1040,65 @@ llvm::SmallString<256> abbreviatedString(DynTypedNode N, const PrintingPolicy& P
         llvm::raw_svector_ostream OS(Result);
         N.print(OS, PP);
     }
+
     auto Pos = Result.find('\n');
     if(Pos != llvm::StringRef::npos) {
         bool MoreText = !llvm::all_of(Result.str().drop_front(Pos), llvm::isSpace);
         Result.resize(Pos);
-        if(MoreText)
+        if(MoreText) {
             Result.append(" …");
+        }
     }
     return Result;
 }
 
 void SelectionTree::print(llvm::raw_ostream& OS, const SelectionTree::Node& N, int Indent) const {
-    if(N.Selected)
-        OS.indent(Indent - 1) << (N.Selected == SelectionTree::Complete ? '*' : '.');
+    if(N.selected)
+        OS.indent(Indent - 1) << (N.selected == SelectionTree::Complete ? '*' : '.');
     else
         OS.indent(Indent);
-    printNodeKind(OS, N.ASTNode);
-    OS << ' ' << abbreviatedString(N.ASTNode, PrintPolicy) << "\n";
-    for(const Node* Child: N.Children)
+    printNodeKind(OS, N.data);
+    OS << ' ' << abbreviatedString(N.data, print_policy) << "\n";
+    for(const Node* Child: N.children)
         print(OS, *Child, Indent + 2);
 }
 
 std::string SelectionTree::Node::kind() const {
     std::string S;
     llvm::raw_string_ostream OS(S);
-    printNodeKind(OS, ASTNode);
+    printNodeKind(OS, data);
     return std::move(OS.str());
 }
 
-// Decide which selections emulate a "point" query in between characters.
-// If it's ambiguous (the neighboring characters are selectable tokens), returns
-// both possibilities in preference order.
-// Always returns at least one range - if no tokens touched, and empty range.
-static llvm::SmallVector<LocalSourceRange, 2> pointBounds(unsigned Offset,
-                                                          const syntax::TokenBuffer& Tokens) {
-    const auto& SM = Tokens.sourceManager();
-    SourceLocation Loc = SM.getComposedLoc(SM.getMainFileID(), Offset);
-    llvm::SmallVector<LocalSourceRange, 2> Result;
-    // Prefer right token over left.
-    for(const syntax::Token& Tok: llvm::reverse(spelledTokensTouching(Loc, Tokens))) {
-        if(shouldIgnore(Tok))
-            continue;
-        unsigned Offset = Tokens.sourceManager().getFileOffset(Tok.location());
-        Result.emplace_back(Offset, Offset + Tok.length());
-    }
-    if(Result.empty())
-        Result.emplace_back(Offset, Offset);
-    return Result;
-}
-
-bool SelectionTree::createEach(CompilationUnit& unit,
-                               LocalSourceRange range,
-                               llvm::function_ref<bool(SelectionTree)> func) {
-    auto& tokens = unit.token_buffer();
+bool SelectionTree::create_each(CompilationUnit& unit,
+                                LocalSourceRange range,
+                                llvm::function_ref<bool(SelectionTree)> callback) {
     auto [begin, end] = range;
+
     if(begin != end) {
-        return func(SelectionTree(unit, range));
+        return callback(SelectionTree(unit, range));
     }
 
-    for(auto range: pointBounds(begin, tokens)) {
-        if(func(SelectionTree(unit, range))) {
+    // Decide which selections emulate a "point" query in between characters.
+    // If it's ambiguous (the neighboring characters are selectable tokens), returns
+    // both possibilities in preference order. Always returns at least one range
+    // - if no tokens touched, and empty range.
+    llvm::SmallVector<LocalSourceRange, 2> ranges;
+
+    auto location = unit.create_location(unit.interested_file(), begin);
+
+    // Prefer right token over left.
+    for(const syntax::Token& token: llvm::reverse(unit.spelled_tokens_touch(location))) {
+        if(should_ignore(token)) {
+            continue;
+        }
+
+        auto offset = unit.file_offset(token.location());
+        ranges.emplace_back(offset, offset + token.length());
+    }
+
+    for(auto range: ranges) {
+        if(callback(SelectionTree(unit, range))) {
             return true;
         }
     }
@@ -1096,9 +1106,9 @@ bool SelectionTree::createEach(CompilationUnit& unit,
     return false;
 }
 
-SelectionTree SelectionTree::createRight(CompilationUnit& unit, LocalSourceRange range) {
+SelectionTree SelectionTree::create_right(CompilationUnit& unit, LocalSourceRange range) {
     std::optional<SelectionTree> Result;
-    createEach(unit, range, [&](SelectionTree T) {
+    create_each(unit, range, [&](SelectionTree T) {
         Result = std::move(T);
         return true;
     });
@@ -1106,62 +1116,66 @@ SelectionTree SelectionTree::createRight(CompilationUnit& unit, LocalSourceRange
 }
 
 SelectionTree::SelectionTree(CompilationUnit& unit, LocalSourceRange range) :
-    PrintPolicy(unit.context().getLangOpts()) {
+    print_policy(unit.context().getLangOpts()) {
     // No fundamental reason the selection needs to be in the main file,
     // but that's all clice has needed so far.
     const SourceManager& SM = unit.context().getSourceManager();
     FileID FID = SM.getMainFileID();
-    PrintPolicy.TerseOutput = true;
-    PrintPolicy.IncludeNewlines = false;
+    print_policy.TerseOutput = true;
+    print_policy.IncludeNewlines = false;
     auto [Begin, End] = range;
     log::info(
         "Computing selection for {0}",
         SourceRange(SM.getComposedLoc(FID, Begin), SM.getComposedLoc(FID, End)).printToString(SM));
-    Nodes = SelectionVisitor::collect(unit.context(),
+    nodes = SelectionVisitor::collect(unit.context(),
                                       unit.token_buffer(),
-                                      PrintPolicy,
+                                      print_policy,
                                       Begin,
                                       End,
                                       FID);
-    Root = Nodes.empty() ? nullptr : &Nodes.front();
+    m_root = nodes.empty() ? nullptr : &nodes.front();
     recordMetrics(*this, unit.context().getLangOpts());
     /// FIXME: dlog("Built selection tree\n{0}", *this);
 }
 
-const Node* SelectionTree::commonAncestor() const {
-    const Node* Ancestor = Root;
-    while(Ancestor->Children.size() == 1 && !Ancestor->Selected)
-        Ancestor = Ancestor->Children.front();
+const Node* SelectionTree::common_ancestor() const {
+    const Node* Ancestor = m_root;
+    while(Ancestor->children.size() == 1 && !Ancestor->selected)
+        Ancestor = Ancestor->children.front();
     // Returning nullptr here is a bit unprincipled, but it makes the API safer:
     // the TranslationUnitDecl contains all of the preamble, so traversing it is a
     // performance cliff. Callers can check for null and use root() if they want.
-    return Ancestor != Root ? Ancestor : nullptr;
+    return Ancestor != m_root ? Ancestor : nullptr;
 }
 
-const DeclContext& SelectionTree::Node::getDeclContext() const {
-    for(const Node* CurrentNode = this; CurrentNode != nullptr; CurrentNode = CurrentNode->Parent) {
-        if(const Decl* Current = CurrentNode->ASTNode.get<Decl>()) {
+const DeclContext& SelectionTree::Node::decl_context() const {
+    for(const Node* CurrentNode = this; CurrentNode != nullptr; CurrentNode = CurrentNode->parent) {
+        if(const Decl* Current = CurrentNode->get<Decl>()) {
             if(CurrentNode != this)
                 if(auto* DC = dyn_cast<DeclContext>(Current))
                     return *DC;
             return *Current->getLexicalDeclContext();
         }
-        if(const auto* LE = CurrentNode->ASTNode.get<LambdaExpr>())
+        if(const auto* LE = CurrentNode->get<LambdaExpr>())
             if(CurrentNode != this)
                 return *LE->getCallOperator();
     }
     llvm_unreachable("A tree must always be rooted at TranslationUnitDecl.");
 }
 
-const SelectionTree::Node& SelectionTree::Node::ignoreImplicit() const {
-    if(Children.size() == 1 && getSourceRange(Children.front()->ASTNode) == getSourceRange(ASTNode))
-        return Children.front()->ignoreImplicit();
+clang::SourceRange SelectionTree::Node::source_range() const {
+    return getSourceRange(data);
+}
+
+const SelectionTree::Node& SelectionTree::Node::ignore_implicit() const {
+    if(children.size() == 1 && getSourceRange(children.front()->data) == getSourceRange(data))
+        return children.front()->ignore_implicit();
     return *this;
 }
 
-const SelectionTree::Node& SelectionTree::Node::outerImplicit() const {
-    if(Parent && getSourceRange(Parent->ASTNode) == getSourceRange(ASTNode))
-        return Parent->outerImplicit();
+const SelectionTree::Node& SelectionTree::Node::outer_implicit() const {
+    if(parent && getSourceRange(parent->data) == getSourceRange(data))
+        return parent->outer_implicit();
     return *this;
 }
 

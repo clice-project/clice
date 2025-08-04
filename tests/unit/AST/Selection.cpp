@@ -14,18 +14,18 @@ void select_right(llvm::StringRef code, auto&& callback, LocationChain chain = L
     LocalSourceRange selected_range;
     selected_range.begin = points[0];
     selected_range.end = points.size() == 2 ? points[1] : points[0];
-    auto tree = SelectionTree::createRight(*tester.unit, selected_range);
+    auto tree = SelectionTree::create_right(*tester.unit, selected_range);
     callback(tester, tree);
 }
 
 void EXPECT_SELECT(llvm::StringRef code, const char* kind, LocationChain chain = LocationChain()) {
     select_right(code, [&](Tester& tester, SelectionTree& tree) {
-        auto node = tree.commonAncestor();
+        auto node = tree.common_ancestor();
         if(!kind) {
             ASSERT_FALSE(node, chain);
         } else {
             ASSERT_TRUE(node, chain);
-            auto [begin, end] = node->ASTNode.getSourceRange();
+            auto [begin, end] = node->source_range();
             begin = tester.unit->file_location(begin);
             end = tester.unit->file_location(end);
             auto [fid, range] = tester.unit->decompose_range({begin, end});
@@ -403,9 +403,9 @@ TEST(Selection, NullOrInvalid) {
 TEST(Selection, InjectedClassName) {
     llvm::StringRef code = "struct $X { int x; };";
     select_right(code, [](Tester& tester, SelectionTree& tree) {
-        auto ancestor = tree.commonAncestor();
+        auto ancestor = tree.common_ancestor();
         ASSERT_EQ(ancestor->kind(), "CXXRecordDecl");
-        auto* D = dyn_cast<clang::CXXRecordDecl>(ancestor->ASTNode.get<clang::Decl>());
+        auto* D = dyn_cast<clang::CXXRecordDecl>(ancestor->get<clang::Decl>());
         ASSERT_FALSE(D->isInjectedClassName());
     });
 }
@@ -441,16 +441,16 @@ TEST(Selection, Implicit) {
   )cpp";
 
     select_right(code, [](Tester& tester, SelectionTree& tree) {
-        auto ancestor = tree.commonAncestor();
+        auto ancestor = tree.common_ancestor();
         EXPECT_EQ(ancestor->kind(), "StringLiteral");
-        EXPECT_EQ(ancestor->Parent->kind(), "ImplicitCastExpr");
-        EXPECT_EQ(ancestor->Parent->Parent->kind(), "CXXConstructExpr");
+        EXPECT_EQ(ancestor->parent->kind(), "ImplicitCastExpr");
+        EXPECT_EQ(ancestor->parent->parent->kind(), "CXXConstructExpr");
 
-        auto implicit = ancestor->Parent->Parent->Parent;
+        auto implicit = ancestor->parent->parent->parent;
         EXPECT_EQ(implicit->kind(), "ImplicitCastExpr");
-        EXPECT_EQ(implicit->Parent->kind(), "CallExpr");
-        EXPECT_EQ(ancestor, &implicit->ignoreImplicit());
-        EXPECT_EQ(&ancestor->outerImplicit(), implicit);
+        EXPECT_EQ(implicit->parent->kind(), "CallExpr");
+        EXPECT_EQ(ancestor, &implicit->ignore_implicit());
+        EXPECT_EQ(&ancestor->outer_implicit(), implicit);
     });
 }
 
@@ -464,8 +464,8 @@ void a::foo() { }
   )cpp";
 
     select_right(code, [](Tester& tester, SelectionTree& tree) {
-        auto ancestor = tree.commonAncestor();
-        EXPECT_FALSE(ancestor->getDeclContext().isTranslationUnit());
+        auto ancestor = tree.common_ancestor();
+        EXPECT_FALSE(ancestor->decl_context().isTranslationUnit());
     });
 
     code = R"cpp(
@@ -477,8 +477,8 @@ void a::f$oo() { }
   )cpp";
 
     select_right(code, [](Tester& tester, SelectionTree& tree) {
-        auto ancestor = tree.commonAncestor();
-        EXPECT_TRUE(ancestor->getDeclContext().isTranslationUnit());
+        auto ancestor = tree.common_ancestor();
+        EXPECT_TRUE(ancestor->decl_context().isTranslationUnit());
     });
 }
 
@@ -491,8 +491,8 @@ auto lambda = [] {
   )cpp";
 
     select_right(code, [](Tester& tester, SelectionTree& tree) {
-        auto ancestor = tree.commonAncestor();
-        EXPECT_TRUE(ancestor->getDeclContext().isFunctionOrMethod());
+        auto ancestor = tree.common_ancestor();
+        EXPECT_TRUE(ancestor->decl_context().isFunctionOrMethod());
     });
 }
 
@@ -519,8 +519,8 @@ auto Func(Fo$o auto V) -> Fo$o decltype(auto) {
     auto points = tester.nameless_points();
 
     for(auto point: tester.nameless_points()) {
-        auto tree = SelectionTree::createRight(*tester.unit, {point, point});
-        auto* C = tree.commonAncestor()->ASTNode.get<clang::ConceptReference>();
+        auto tree = SelectionTree::create_right(*tester.unit, {point, point});
+        auto* C = tree.common_ancestor()->get<clang::ConceptReference>();
         EXPECT_TRUE(C && C->getFoundDecl() &&
                     C->getFoundDecl()->getKind() == clang::Decl::UsingShadow);
     }
