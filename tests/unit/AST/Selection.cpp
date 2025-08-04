@@ -3,7 +3,7 @@
 
 namespace clice::testing {
 
-void EXPECT_SELECT(llvm::StringRef code, const char* kind, LocationChain chain = LocationChain()) {
+void select_right(llvm::StringRef code, auto&& callback, LocationChain chain = LocationChain()) {
     Tester tester;
     tester.add_main("main.cpp", code);
     ASSERT_TRUE(tester.compile(), chain);
@@ -14,19 +14,27 @@ void EXPECT_SELECT(llvm::StringRef code, const char* kind, LocationChain chain =
     LocalSourceRange selected_range;
     selected_range.begin = points[0];
     selected_range.end = points.size() == 2 ? points[1] : points[0];
-
     auto tree = SelectionTree::createRight(*tester.unit, selected_range);
+    callback(tester, tree);
+}
 
-    auto node = tree.commonAncestor();
-    if(!kind) {
-        ASSERT_FALSE(node, chain);
-    } else {
-        ASSERT_TRUE(node, chain);
-        auto [fid, range] = tester.unit->decompose_range(node->ASTNode.getSourceRange());
-        llvm::outs() << tree << "\n";
-        ASSERT_EQ(node->kind(), llvm::StringRef(kind), chain);
-        ASSERT_EQ(range, tester.range(), chain);
-    }
+void EXPECT_SELECT(llvm::StringRef code, const char* kind, LocationChain chain = LocationChain()) {
+    select_right(code, [&](Tester& tester, SelectionTree& tree) {
+        auto node = tree.commonAncestor();
+        if(!kind) {
+            ASSERT_FALSE(node, chain);
+        } else {
+            ASSERT_TRUE(node, chain);
+            auto [begin, end] = node->ASTNode.getSourceRange();
+            begin = tester.unit->file_location(begin);
+            end = tester.unit->file_location(end);
+            auto [fid, range] = tester.unit->decompose_range({begin, end});
+            llvm::outs() << tree << "\n";
+            tree.print(llvm::outs(), *node, 2);
+            ASSERT_EQ(node->kind(), llvm::StringRef(kind), chain);
+            ASSERT_EQ(range, tester.range(), chain);
+        }
+    });
 }
 
 TEST(Selection, Expressions) {
@@ -333,81 +341,189 @@ TEST(Selection, Attributes) {
                   "BuiltinTypeLoc");
 }
 
-/// TEST(Selection, Macros) {
-///     EXPECT_SELECT(R"(
-///           int x(int);
-///           #define M(foo) x(foo)
-///           int a = 42;
-///           int b = M(@[$a]);
-///           )",
-///                   "DeclRefExpr");
-///     EXPECT_SELECT(R"(
-///           void foo();
-///           #define CALL_FUNCTION(X) X()
-///           void bar() { CALL_FUNCTION(@[f$o$o]); }
-///           )",
-///                   "DeclRefExpr");
-///     EXPECT_SELECT(R"(
-///           void foo();
-///           #define CALL_FUNCTION(X) X()
-///           void bar() { @[CALL_FUNC$TION(fo$o)]; }
-///           )",
-///                   "CallExpr");
-///     EXPECT_SELECT(R"(
-///           void foo();
-///           #define CALL_FUNCTION(X) X()
-///           void bar() { @[C$ALL_FUNC$TION(foo)]; }
-///           )",
-///                   "CallExpr");
-/// }
+TEST(Selection, Macros) {
+    /// FIXME:
+    /// EXPECT_SELECT(R"(
+    ///        int x(int);
+    ///        #define M(foo) x(foo)
+    ///        int a = 42;
+    ///        int b = M(@[$a]);
+    ///        )",
+    ///               "DeclRefExpr");
+    /// EXPECT_SELECT(R"(
+    ///        void foo();
+    ///        #define CALL_FUNCTION(X) X()
+    ///        void bar() { CALL_FUNCTION(@[f$o$o]); }
+    ///        )",
+    ///               "DeclRefExpr");
+    /// EXPECT_SELECT(R"(
+    ///        void foo();
+    ///        #define CALL_FUNCTION(X) X()
+    ///        void bar() { @[CALL_FUNC$TION(fo$o)]; }
+    ///        )",
+    ///               "CallExpr");
+    /// EXPECT_SELECT(R"(
+    ///        void foo();
+    ///        #define CALL_FUNCTION(X) X()
+    ///        void bar() { @[C$ALL_FUNC$TION(foo)]; }
+    ///        )",
+    ///               "CallExpr");
+}
 
-/// TEST(Selection, NullOrInvalid) {
-///     EXPECT_SELECT(R"(
-///           void foo();
-///           #$define CALL_FUNCTION(X) X($)
-///           void bar() { CALL_FUNCTION(foo); }
-///           )",
-///                   nullptr);
-///     EXPECT_SELECT(R"(
-///           void foo();
-///           #define CALL_FUNCTION(X) X()
-///           void bar() { CALL_FUNCTION(foo$)$; }
-///           )",
-///                   nullptr);
-///     EXPECT_SELECT(R"(
-///           namespace ns {
-///           #if 0
-///           void fo$o() {}
-///           #endif
-///           }
-///           )",
-///                   nullptr);
-///     EXPECT_SELECT(R"(co$nst auto x = 42;)", nullptr);
-///     EXPECT_SELECT(R"($)", nullptr);
-///     EXPECT_SELECT(R"(int x = 42;$)", nullptr);
-///     EXPECT_SELECT(R"($int x; int y;$)", nullptr);
-///     EXPECT_SELECT(R"(void foo() { @[foo$$] (); })",
-///                   "DeclRefExpr");  // Technically valid, but tricky
-/// }
+TEST(Selection, NullOrInvalid) {
+    /// FIXME:
+    ///     EXPECT_SELECT(R"(
+    ///           void foo();
+    ///           #$define CALL_FUNCTION(X) X($)
+    ///           void bar() { CALL_FUNCTION(foo); }
+    ///           )",
+    ///                   nullptr);
+    ///     EXPECT_SELECT(R"(
+    ///           void foo();
+    ///           #define CALL_FUNCTION(X) X()
+    ///           void bar() { CALL_FUNCTION(foo$)$; }
+    ///           )",
+    ///                   nullptr);
+    ///     EXPECT_SELECT(R"(
+    ///           namespace ns {
+    ///           #if 0
+    ///           void fo$o() {}
+    ///           #endif
+    ///           }
+    ///           )",
+    ///                   nullptr);
+    ///     EXPECT_SELECT(R"(co$nst auto x = 42;)", nullptr);
+    ///     EXPECT_SELECT(R"($)", nullptr);
+    ///     EXPECT_SELECT(R"(int x = 42;$)", nullptr);
+    ///     EXPECT_SELECT(R"($int x; int y;$)", nullptr);
+    ///     EXPECT_SELECT(R"(void foo() { @[foo$$] (); })",
+    ///                   "DeclRefExpr");  // Technically valid, but tricky
+}
 
-TEST(Selection, InjectedClassName) {}
+TEST(Selection, InjectedClassName) {
+    llvm::StringRef code = "struct $X { int x; };";
+    select_right(code, [](Tester& tester, SelectionTree& tree) {
+        auto ancestor = tree.commonAncestor();
+        ASSERT_EQ(ancestor->kind(), "CXXRecordDecl");
+        auto* D = dyn_cast<clang::CXXRecordDecl>(ancestor->ASTNode.get<clang::Decl>());
+        ASSERT_FALSE(D->isInjectedClassName());
+    });
+}
 
-TEST(Selection, Metrics) {}
+TEST(Selection, Metrics) {
+    llvm::StringRef code = R"cpp(
+    // error-ok: testing behavior on recovery expression
+    int foo();
+    int foo(int, int);
+    int x = fo^o(42);
+  )cpp";
 
-TEST(Selection, Selected) {}
+    /// FIXME:
+}
 
-TEST(Selection, PathologicalPreprocessor) {}
+TEST(Selection, Selected) {
+    /// FIXME:
+}
 
-TEST(SelectionTest, IncludedFile) {}
+TEST(Selection, PathologicalPreprocessor) {
+    /// FIXME:
+}
 
-TEST(SelectionTest, MacroArgExpansion) {}
+TEST(Selection, IncludedFile) {
+    /// FIXME:
+}
 
-TEST(SelectionTest, Implicit) {}
+TEST(Selection, Implicit) {
+    llvm::StringRef code = R"cpp(
+    struct S { S(const char*); };
+    int f(S);
+    int x = f("$");
+  )cpp";
 
-TEST(SelectionTest, DeclContextIsLexical) {}
+    select_right(code, [](Tester& tester, SelectionTree& tree) {
+        auto ancestor = tree.commonAncestor();
+        EXPECT_EQ(ancestor->kind(), "StringLiteral");
+        EXPECT_EQ(ancestor->Parent->kind(), "ImplicitCastExpr");
+        EXPECT_EQ(ancestor->Parent->Parent->kind(), "CXXConstructExpr");
 
-TEST(SelectionTest, DeclContextLambda) {}
+        auto implicit = ancestor->Parent->Parent->Parent;
+        EXPECT_EQ(implicit->kind(), "ImplicitCastExpr");
+        EXPECT_EQ(implicit->Parent->kind(), "CallExpr");
+        EXPECT_EQ(ancestor, &implicit->ignoreImplicit());
+        EXPECT_EQ(&ancestor->outerImplicit(), implicit);
+    });
+}
 
-TEST(SelectionTest, UsingConcepts) {}
+TEST(Selection, DeclContextIsLexical) {
+    llvm::StringRef code = R"cpp(
+namespace a { 
+    void f$oo(); 
+} 
+
+void a::foo() { }
+  )cpp";
+
+    select_right(code, [](Tester& tester, SelectionTree& tree) {
+        auto ancestor = tree.commonAncestor();
+        EXPECT_FALSE(ancestor->getDeclContext().isTranslationUnit());
+    });
+
+    code = R"cpp(
+namespace a { 
+    void foo(); 
+} 
+
+void a::f$oo() { }
+  )cpp";
+
+    select_right(code, [](Tester& tester, SelectionTree& tree) {
+        auto ancestor = tree.commonAncestor();
+        EXPECT_TRUE(ancestor->getDeclContext().isTranslationUnit());
+    });
+}
+
+TEST(Selection, DeclContextLambda) {
+    llvm::StringRef code = R"cpp(
+void foo();
+auto lambda = [] {
+  return $foo();
+};
+  )cpp";
+
+    select_right(code, [](Tester& tester, SelectionTree& tree) {
+        auto ancestor = tree.commonAncestor();
+        EXPECT_TRUE(ancestor->getDeclContext().isFunctionOrMethod());
+    });
+}
+
+TEST(Selection, UsingConcepts) {
+    llvm::StringRef code = R"cpp(
+namespace ns {
+template <typename T>
+concept Foo = true;
+}
+
+using ns::Foo;
+
+template <Fo$o... T, Fo$o auto U>
+auto Func(Fo$o auto V) -> Fo$o decltype(auto) {
+  Fo$o auto W = V;
+  return W;
+}
+  )cpp";
+
+    Tester tester;
+    tester.add_main("main.cpp", code);
+    ASSERT_TRUE(tester.compile());
+
+    auto points = tester.nameless_points();
+
+    for(auto point: tester.nameless_points()) {
+        auto tree = SelectionTree::createRight(*tester.unit, {point, point});
+        auto* C = tree.commonAncestor()->ASTNode.get<clang::ConceptReference>();
+        EXPECT_TRUE(C && C->getFoundDecl() &&
+                    C->getFoundDecl()->getKind() == clang::Decl::UsingShadow);
+    }
+}
 
 }  // namespace clice::testing

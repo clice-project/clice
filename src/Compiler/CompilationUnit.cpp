@@ -134,6 +134,10 @@ auto CompilationUnit::expansion_location(clang::SourceLocation location) -> clan
     return impl->src_mgr.getExpansionLoc(location);
 }
 
+auto CompilationUnit::file_location(clang::SourceLocation location) -> clang::SourceLocation {
+    return impl->src_mgr.getFileLoc(location);
+}
+
 auto CompilationUnit::include_location(clang::FileID fid) -> clang::SourceLocation {
     return impl->src_mgr.getIncludeLoc(fid);
 }

@@ -113,6 +113,9 @@ public:
     /// macro expansion).
     auto expansion_location(clang::SourceLocation location) -> clang::SourceLocation;
 
+    ///
+    auto file_location(clang::SourceLocation location) -> clang::SourceLocation;
+
     /// FIXME: Do we really need this function?
     auto presumed_location(clang::SourceLocation location) -> clang::PresumedLoc;
 
