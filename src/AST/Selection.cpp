@@ -1115,6 +1115,11 @@ bool SelectionTree::create_each(CompilationUnit& unit,
         ranges.emplace_back(offset, offset + token.length());
     }
 
+    /// Make sure, we have at least one range.
+    if(ranges.empty()) {
+        ranges.emplace_back(begin, begin);
+    }
+
     for(auto range: ranges) {
         if(callback(SelectionTree(unit, range))) {
             return true;
@@ -1125,12 +1130,12 @@ bool SelectionTree::create_each(CompilationUnit& unit,
 }
 
 SelectionTree SelectionTree::create_right(CompilationUnit& unit, LocalSourceRange range) {
-    std::optional<SelectionTree> Result;
+    std::optional<SelectionTree> result;
     create_each(unit, range, [&](SelectionTree T) {
-        Result = std::move(T);
+        result = std::move(T);
         return true;
     });
-    return std::move(*Result);
+    return std::move(*result);
 }
 
 SelectionTree::SelectionTree(CompilationUnit& unit, LocalSourceRange range) :
@@ -1154,13 +1159,15 @@ SelectionTree::SelectionTree(CompilationUnit& unit, LocalSourceRange range) :
 }
 
 const Node* SelectionTree::common_ancestor() const {
-    const Node* Ancestor = m_root;
-    while(Ancestor->children.size() == 1 && !Ancestor->selected)
-        Ancestor = Ancestor->children.front();
+    const Node* ancestor = m_root;
+    while(ancestor->children.size() == 1 && !ancestor->selected) {
+        ancestor = ancestor->children.front();
+    }
+
     // Returning nullptr here is a bit unprincipled, but it makes the API safer:
     // the TranslationUnitDecl contains all of the preamble, so traversing it is a
     // performance cliff. Callers can check for null and use root() if they want.
-    return Ancestor != m_root ? Ancestor : nullptr;
+    return ancestor != m_root ? ancestor : nullptr;
 }
 
 const DeclContext& SelectionTree::Node::decl_context() const {
