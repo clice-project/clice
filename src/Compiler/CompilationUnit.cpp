@@ -160,9 +160,18 @@ auto CompilationUnit::spelled_tokens_touch(clang::SourceLocation location)
     return clang::syntax::spelledTokensTouching(location, *impl->buffer);
 }
 
+auto CompilationUnit::expanded_tokens() -> llvm::ArrayRef<clang::syntax::Token> {
+    return impl->buffer->expandedTokens();
+}
+
 auto CompilationUnit::expanded_tokens(clang::SourceRange range)
     -> llvm::ArrayRef<clang::syntax::Token> {
     return impl->buffer->expandedTokens(range);
+}
+
+auto CompilationUnit::expansions_overlapping(llvm::ArrayRef<clang::syntax::Token> spelled_tokens)
+    -> std::vector<clang::syntax::TokenBuffer::Expansion> {
+    return impl->buffer->expansionsOverlapping(spelled_tokens);
 }
 
 auto CompilationUnit::token_length(clang::SourceLocation location) -> std::uint32_t {

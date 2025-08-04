@@ -130,8 +130,13 @@ public:
     auto spelled_tokens_touch(clang::SourceLocation location)
         -> llvm::ArrayRef<clang::syntax::Token>;
 
+    auto expanded_tokens() -> llvm::ArrayRef<clang::syntax::Token>;
+
     /// Get the expanded tokens(after preprocessing) of the file id.
     auto expanded_tokens(clang::SourceRange range) -> llvm::ArrayRef<clang::syntax::Token>;
+
+    auto expansions_overlapping(llvm::ArrayRef<clang::syntax::Token>)
+        -> std::vector<clang::syntax::TokenBuffer::Expansion>;
 
     /// Get the token length.
     auto token_length(clang::SourceLocation location) -> std::uint32_t;
