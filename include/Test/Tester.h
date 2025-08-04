@@ -93,6 +93,36 @@ struct Tester {
     std::uint32_t operator[] (llvm::StringRef file, llvm::StringRef pos) {
         return sources.all_files.lookup(file).offsets.lookup(pos);
     }
+
+    std::uint32_t point(llvm::StringRef name = "", llvm::StringRef file = "") {
+        if(file.empty()) {
+            file = src_path;
+        }
+
+        auto& offsets = sources.all_files[file].offsets;
+        if(name.empty()) {
+            assert(offsets.size() == 1);
+            return offsets.begin()->second;
+        } else {
+            assert(offsets.contains(name));
+            return offsets.lookup(name);
+        }
+    }
+
+    LocalSourceRange range(llvm::StringRef name = "", llvm::StringRef file = "") {
+        if(file.empty()) {
+            file = src_path;
+        }
+
+        auto& ranges = sources.all_files[file].ranges;
+        if(name.empty()) {
+            assert(ranges.size() == 1);
+            return ranges.begin()->second;
+        } else {
+            assert(ranges.contains(name));
+            return ranges.lookup(name);
+        }
+    }
 };
 
 struct TestFixture : ::testing::Test, Tester {};

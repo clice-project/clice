@@ -113,6 +113,8 @@ public:
         return *Root;
     }
 
+    void print(llvm::raw_ostream& OS, const Node& N, int Indent) const;
+
 private:
     // Creates a selection tree for the given range in the main file.
     // The range includes bytes [Start, End).
@@ -121,8 +123,6 @@ private:
     std::deque<Node> Nodes;  // Stable-pointer storage.
     const Node* Root;
     clang::PrintingPolicy PrintPolicy;
-
-    void print(llvm::raw_ostream& OS, const Node& N, int Indent) const;
 
     friend llvm::raw_ostream& operator<< (llvm::raw_ostream& OS, const SelectionTree& T) {
         T.print(OS, T.root(), 1);

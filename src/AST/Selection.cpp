@@ -1061,11 +1061,11 @@ std::string SelectionTree::Node::kind() const {
 // If it's ambiguous (the neighboring characters are selectable tokens), returns
 // both possibilities in preference order.
 // Always returns at least one range - if no tokens touched, and empty range.
-static llvm::SmallVector<std::pair<unsigned, unsigned>, 2>
-    pointBounds(unsigned Offset, const syntax::TokenBuffer& Tokens) {
+static llvm::SmallVector<LocalSourceRange, 2> pointBounds(unsigned Offset,
+                                                          const syntax::TokenBuffer& Tokens) {
     const auto& SM = Tokens.sourceManager();
     SourceLocation Loc = SM.getComposedLoc(SM.getMainFileID(), Offset);
-    llvm::SmallVector<std::pair<unsigned, unsigned>, 2> Result;
+    llvm::SmallVector<LocalSourceRange, 2> Result;
     // Prefer right token over left.
     for(const syntax::Token& Tok: llvm::reverse(spelledTokensTouching(Loc, Tokens))) {
         if(shouldIgnore(Tok))
@@ -1087,7 +1087,7 @@ bool SelectionTree::createEach(CompilationUnit& unit,
         return func(SelectionTree(unit, range));
     }
 
-    for(std::pair<unsigned, unsigned> Bounds: pointBounds(begin, tokens)) {
+    for(auto range: pointBounds(begin, tokens)) {
         if(func(SelectionTree(unit, range))) {
             return true;
         }
