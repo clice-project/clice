@@ -16,9 +16,11 @@ struct LocationChain {
 
     LocationChain(LocationChain& outer,
                   std::source_location current = std::source_location::current()) :
-        locations{std::move(outer.locations)} {
+        locations{outer.locations} {
         locations.emplace_back(current);
     }
+
+    LocationChain(const LocationChain&) = delete;
 
     /// Dump all locations.
     void backtrace() {

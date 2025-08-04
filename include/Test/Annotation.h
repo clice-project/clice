@@ -8,8 +8,12 @@ namespace clice::testing {
 
 struct AnnotatedSource {
     std::string content;
+    /// All named offsets
     llvm::StringMap<std::uint32_t> offsets;
+
     llvm::StringMap<LocalSourceRange> ranges;
+
+    std::vector<std::uint32_t> nameless_offsets;
 
     /// Point Annotation:
     /// - $(key): Marks a single point.
@@ -25,6 +29,7 @@ struct AnnotatedSource {
 
         llvm::StringMap<std::uint32_t> offsets;
         llvm::StringMap<LocalSourceRange> ranges;
+        std::vector<std::uint32_t> nameless_offsets;
 
         std::uint32_t offset = 0;
         std::uint32_t i = 0;
@@ -48,12 +53,19 @@ struct AnnotatedSource {
                 }  // Malformed
 
                 llvm::StringRef key = content.slice(key_start, key_end);
-                offsets.try_emplace(key, offset);
-                i = key_end + 1;  // Advance cursor past the entire "$(key)"
+                /// empty key is regarded as a nameless, and `()` is not consumed.
+                if(key.empty()) {
+                    // It's the shorthand "$" syntax for an nameless key
+                    nameless_offsets.emplace_back(offset);
+                    i += 1;  // Advance cursor past the single '$'
+                } else {
+                    offsets.try_emplace(key, offset);
+                    i = key_end + 1;  // Advance cursor past the entire "$(key)"
+                }
                 return true;
             } else {
-                // It's the shorthand "$" syntax for an empty key
-                offsets.try_emplace("", offset);
+                // It's the shorthand "$" syntax for an nameless key
+                nameless_offsets.emplace_back(offset);
                 i += 1;  // Advance cursor past the single '$'
                 return true;
             }
@@ -121,7 +133,12 @@ struct AnnotatedSource {
             i += 1;
         }
 
-        return AnnotatedSource{std::move(source), std::move(offsets), std::move(ranges)};
+        return AnnotatedSource{
+            std::move(source),
+            std::move(offsets),
+            std::move(ranges),
+            std::move(nameless_offsets),
+        };
     }
 };
 

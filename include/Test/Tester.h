@@ -26,20 +26,23 @@ struct Tester {
         sources.add_source(name, content);
     }
 
-    Tester& compile(llvm::StringRef standard = "-std=c++20") {
+    bool compile(llvm::StringRef standard = "-std=c++20") {
         auto command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
 
         database.update_command("fake", src_path, command);
-        params.arguments = database.get_command(src_path).arguments;
+        params.arguments = database.get_command(src_path, true, true).arguments;
 
         for(auto& [file, source]: sources.all_files) {
             params.add_remapped_file(file, source.content);
         }
 
         auto info = clice::compile(params);
-        ASSERT_TRUE(info);
+        if(!info) {
+            return false;
+        }
+
         this->unit.emplace(std::move(*info));
-        return *this;
+        return true;
     }
 
     bool compile_with_pch(llvm::StringRef standard = "-std=c++20") {
@@ -107,6 +110,14 @@ struct Tester {
             assert(offsets.contains(name));
             return offsets.lookup(name);
         }
+    }
+
+    llvm::ArrayRef<std::uint32_t> nameless_points(llvm::StringRef file = "") {
+        if(file.empty()) {
+            file = src_path;
+        }
+
+        return sources.all_files[file].nameless_offsets;
     }
 
     LocalSourceRange range(llvm::StringRef name = "", llvm::StringRef file = "") {
