@@ -10,22 +10,24 @@ struct DocumentLink : TestFixture {
 
     using Self = DocumentLink;
 
-    void run(llvm::StringRef code) {
-        add_main("main.cpp", code);
+    void run() {
         Tester::compile();
         result = feature::indexDocumentLink(*unit);
     }
 
     void EXPECT_LINK(this Self& self,
                      uint32_t index,
-                     llvm::StringRef begin,
-                     llvm::StringRef end,
+                     llvm::StringRef name,
                      llvm::StringRef path,
                      LocationChain chain = LocationChain()) {
         auto& link = self.result[self.unit->interested_file()][index];
-        EXPECT_EQ(link.range.begin, self["main.cpp", begin], chain);
-        EXPECT_EQ(link.range.end, self["main.cpp", end], chain);
-        EXPECT_EQ(link.file, path, chain);
+
+        EXPECT_EQ(link.range, self.range(name, "main.cpp"), chain);
+
+        llvm::SmallString<64> file = {link.file};
+        path::remove_dots(file);
+
+        EXPECT_EQ(file, path, chain);
     }
 
     void dump() {
@@ -34,70 +36,58 @@ struct DocumentLink : TestFixture {
 };
 
 TEST_F(DocumentLink, Include) {
-    const char* test = "";
+    add_files("main.cpp", R"cpp(
+#[test.h]
 
-    const char* test2 = R"cpp(
-#include "test.h"
-)cpp";
-
-    const char* pragma_once = R"cpp(
+#[pragma_once.h]
 #pragma once
-)cpp";
 
-    const char* guard_macro = R"cpp(
+#[guard_macro.h]
 #ifndef TEST3_H
 #define TEST3_H
 #endif
-)cpp";
 
-    const char* main = R"cpp(
-#include $(0)"test.h"$(0e)
-#include $(1)"test.h"$(1e)
-#include $(2)"pragma_once.h"$(2e)
-#include $(3)"pragma_once.h"$(3e)
-#include $(4)"guard_macro.h"$(4e)
-#include $(5)"guard_macro.h"$(5e)
-)cpp";
+#[main.cpp]
+#include @0["test.h"$]
+#include @1["test.h"$]
+#include @2["pragma_once.h"$]
+#include @3["pragma_once.h"$]
+#include @4["guard_macro.h"$]
+#include @5["guard_macro.h"$]
+)cpp");
 
-    auto ptest = path::join(".", "test.h");
-    auto ppragma_once = path::join(".", "pragma_once.h");
-    auto pguard_macro = path::join(".", "guard_macro.h");
-
-    add_file(ptest, test);
-    add_file(ppragma_once, pragma_once);
-    add_file(pguard_macro, guard_macro);
-    run(main);
+    run();
 
     auto& links = result[unit->interested_file()];
     EXPECT_EQ(links.size(), 6);
-    EXPECT_LINK(0, "0", "0e", ptest);
-    EXPECT_LINK(1, "1", "1e", ptest);
-    EXPECT_LINK(2, "2", "2e", ppragma_once);
-    EXPECT_LINK(3, "3", "3e", ppragma_once);
-    EXPECT_LINK(4, "4", "4e", pguard_macro);
-    EXPECT_LINK(5, "5", "5e", pguard_macro);
+    EXPECT_LINK(0, "0", "test.h");
+    EXPECT_LINK(1, "1", "test.h");
+    EXPECT_LINK(2, "2", "pragma_once.h");
+    EXPECT_LINK(3, "3", "pragma_once.h");
+    EXPECT_LINK(4, "4", "guard_macro.h");
+    EXPECT_LINK(5, "5", "guard_macro.h");
 }
 
 TEST_F(DocumentLink, HasInclude) {
-    const char* test = "";
-    const char* main = R"cpp(
-#include $(0)"test.h"$(0e)
-#if __has_include($(1)"test.h"$(1e))
+    add_files("main.cpp", R"cpp(
+#[test.h]
+
+#[main.cpp]
+#include @0["test.h"]
+
+#if __has_include(@1["test.h"])
 #endif
 
 #if __has_include("test2.h")
 #endif
-)cpp";
+)cpp");
 
-    auto path = path::join(".", "test.h");
-    add_file(path, test);
-
-    run(main);
+    run();
 
     auto& links = result[unit->interested_file()];
     EXPECT_EQ(links.size(), 2);
-    EXPECT_LINK(0, "0", "0e", path);
-    EXPECT_LINK(1, "1", "1e", path);
+    EXPECT_LINK(0, "0", "test.h");
+    EXPECT_LINK(1, "1", "test.h");
 }
 
 }  // namespace

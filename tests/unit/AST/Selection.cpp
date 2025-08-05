@@ -203,10 +203,13 @@ std::optional<SourceRange> toHalfOpenFileRange(const SourceManager& SM,
 
 }  // namespace
 
+void dump_diagnostics() {}
+
 void select_right(llvm::StringRef code, auto&& callback, LocationChain chain = LocationChain()) {
     Tester tester;
     tester.add_main("main.cpp", code);
     ASSERT_TRUE(tester.compile(), chain);
+    /// ASSERT_TRUE(tester.unit->diagnostics().empty(), chain);
 
     auto points = tester.nameless_points();
     ASSERT_TRUE(points.size() >= 1, chain);
@@ -219,25 +222,28 @@ void select_right(llvm::StringRef code, auto&& callback, LocationChain chain = L
 }
 
 void EXPECT_SELECT(llvm::StringRef code, const char* kind, LocationChain chain = LocationChain()) {
-    select_right(code, [&](Tester& tester, SelectionTree& tree) {
-        auto node = tree.common_ancestor();
-        if(!kind) {
-            ASSERT_FALSE(node, chain);
-        } else {
-            ASSERT_TRUE(node, chain);
-            auto range2 = toHalfOpenFileRange(tester.unit->context().getSourceManager(),
-                                              tester.unit->lang_options(),
-                                              node->source_range());
-            LocalSourceRange range = {
-                tester.unit->file_offset(range2->getBegin()),
-                tester.unit->file_offset(range2->getEnd()),
-            };
-            llvm::outs() << tree << "\n";
-            tree.print(llvm::outs(), *node, 2);
-            ASSERT_EQ(node->kind(), llvm::StringRef(kind), chain);
-            ASSERT_EQ(range, tester.range(), chain);
-        }
-    });
+    select_right(
+        code,
+        [&](Tester& tester, SelectionTree& tree) {
+            auto node = tree.common_ancestor();
+            if(!kind) {
+                ASSERT_FALSE(node, chain);
+            } else {
+                ASSERT_TRUE(node, chain);
+                auto range2 = toHalfOpenFileRange(tester.unit->context().getSourceManager(),
+                                                  tester.unit->lang_options(),
+                                                  node->source_range());
+                LocalSourceRange range = {
+                    tester.unit->file_offset(range2->getBegin()),
+                    tester.unit->file_offset(range2->getEnd()),
+                };
+                llvm::outs() << tree << "\n";
+                tree.print(llvm::outs(), *node, 2);
+                ASSERT_EQ(node->kind(), llvm::StringRef(kind), chain);
+                ASSERT_EQ(range, tester.range(), chain);
+            }
+        },
+        chain);
 }
 
 TEST(Selection, Expressions) {
@@ -632,6 +638,22 @@ TEST(Selection, PathologicalPreprocessor) {
 
 TEST(Selection, IncludedFile) {
     /// FIXME:
+    Tester tester;
+    tester.add_file("expand.inc", "while (0)");
+    llvm::StringRef code = R"(
+void test() {
+#include "exp$and.inc"
+  break;
+}
+)";
+    tester.add_main("main.cpp", code);
+    ASSERT_TRUE(tester.compile());
+
+    auto point = tester.nameless_points()[0];
+    auto tree = SelectionTree::create_right(*tester.unit, {point, point});
+    ASSERT_TRUE(tester.unit->diagnostics().empty());
+
+    ASSERT_EQ(tree.common_ancestor(), nullptr);
 }
 
 TEST(Selection, Implicit) {

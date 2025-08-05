@@ -26,6 +26,11 @@ struct Tester {
         sources.add_source(name, content);
     }
 
+    void add_files(llvm::StringRef main_file, llvm::StringRef content) {
+        src_path = main_file;
+        sources.add_sources(content);
+    }
+
     bool compile(llvm::StringRef standard = "-std=c++20") {
         auto command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
 
@@ -33,7 +38,13 @@ struct Tester {
         params.arguments = database.get_command(src_path, true, true).arguments;
 
         for(auto& [file, source]: sources.all_files) {
-            params.add_remapped_file(file, source.content);
+            if(file == src_path) {
+                params.add_remapped_file(file, source.content);
+            } else {
+                /// FIXME: This is a workaround.
+                std::string path = path::is_absolute(file) ? file.str() : path::join(".", file);
+                params.add_remapped_file(path, source.content);
+            }
         }
 
         auto info = clice::compile(params);

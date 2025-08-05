@@ -179,7 +179,7 @@ struct AnnotatedSources {
         while(!content.empty()) {
             llvm::StringRef line = content.take_front(content.find_first_of("\r\n"));
             content = content.drop_front(line.size());
-            if(content.starts_with("\n")) {
+            if(content.starts_with("\r\n")) {
                 content = content.drop_front(2);
             } else if(content.starts_with("\n")) {
                 content = content.drop_front(1);
