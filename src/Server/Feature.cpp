@@ -1,20 +1,47 @@
 #include "Server/Server.h"
 #include "Server/Convert.h"
 #include "Compiler/Compilation.h"
+#include "Feature/Hover.h"
 
 namespace clice {
+
+async::Task<json::Value> Server::on_hover(proto::HoverParams params) {
+    auto path = mapping.to_path(params.textDocument.uri);
+
+    auto opening_file = &opening_files[path];
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
+
+    auto offset = to_offset(kind, opening_file->content, params.position);
+
+    opening_file = &opening_files[path];
+    auto content = opening_file->content;
+    auto ast = opening_file->ast;
+    if(!ast) {
+        co_return json::Value(nullptr);
+    }
+
+    co_return co_await async::submit([kind = this->kind, offset, &ast] {
+        auto hover = feature::hover(*ast, offset);
+
+        proto::Hover result;
+        result.contents.kind = "markdown";
+        result.contents.value = std::format("{}: {}", hover.kind.name(), hover.name);
+
+        return json::serialize(result);
+    });
+}
 
 async::Task<json::Value> Server::on_semantic_token(proto::SemanticTokensParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
 
-    auto openFile = &opening_files[path];
-    auto guard = co_await openFile->ast_built_lock.try_lock();
+    auto opening_file = &opening_files[path];
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
 
-    openFile = &opening_files[path];
-    auto content = openFile->content;
-    auto ast = openFile->ast;
+    opening_file = &opening_files[path];
+    auto content = opening_file->content;
+    auto ast = opening_file->ast;
     if(!ast) {
-        co_return "";
+        co_return json::Value(nullptr);
     }
 
     co_return co_await async::submit([kind = this->kind, &ast] {

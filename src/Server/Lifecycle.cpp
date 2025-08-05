@@ -39,6 +39,9 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     capabilities.textDocumentSync.change = proto::TextDocumentSyncKind::Full;
     capabilities.textDocumentSync.save = true;
 
+    /// Hover
+    capabilities.hoverProvider = true;
+
     /// Completion
     capabilities.completionProvider.triggerCharacters = {".", "<", ">", ":", "\"", "/", "*"};
     capabilities.completionProvider.resolveProvider = false;
