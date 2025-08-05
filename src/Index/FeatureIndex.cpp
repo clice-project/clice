@@ -69,7 +69,7 @@ Shared<std::vector<char>> FeatureIndex::build(CompilationUnit& unit) {
         indices[fid].foldings = std::move(result);
     }
 
-    for(auto&& [fid, result]: feature::indexDocumentLink(unit)) {
+    for(auto&& [fid, result]: feature::index_document_link(unit)) {
         indices[fid].links = std::move(result);
     }
 

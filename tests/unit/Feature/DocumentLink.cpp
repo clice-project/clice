@@ -6,13 +6,13 @@ namespace clice::testing {
 namespace {
 
 struct DocumentLink : TestFixture {
-    index::Shared<feature::DocumentLinks> result;
+    std::vector<feature::DocumentLink> links;
 
     using Self = DocumentLink;
 
     void run() {
         Tester::compile();
-        result = feature::indexDocumentLink(*unit);
+        links = feature::document_links(*unit);
     }
 
     void EXPECT_LINK(this Self& self,
@@ -20,7 +20,7 @@ struct DocumentLink : TestFixture {
                      llvm::StringRef name,
                      llvm::StringRef path,
                      LocationChain chain = LocationChain()) {
-        auto& link = self.result[self.unit->interested_file()][index];
+        auto& link = self.links[index];
 
         EXPECT_EQ(link.range, self.range(name, "main.cpp"), chain);
 
@@ -31,7 +31,7 @@ struct DocumentLink : TestFixture {
     }
 
     void dump() {
-        clice::println("{}", clice::dump(result[unit->interested_file()]));
+        clice::println("{}", clice::dump(links));
     }
 };
 
@@ -58,7 +58,6 @@ TEST_F(DocumentLink, Include) {
 
     run();
 
-    auto& links = result[unit->interested_file()];
     EXPECT_EQ(links.size(), 6);
     EXPECT_LINK(0, "0", "test.h");
     EXPECT_LINK(1, "1", "test.h");
@@ -84,7 +83,6 @@ TEST_F(DocumentLink, HasInclude) {
 
     run();
 
-    auto& links = result[unit->interested_file()];
     EXPECT_EQ(links.size(), 2);
     EXPECT_LINK(0, "0", "test.h");
     EXPECT_LINK(1, "1", "test.h");

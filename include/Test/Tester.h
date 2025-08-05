@@ -57,6 +57,7 @@ struct Tester {
     }
 
     bool compile_with_pch(llvm::StringRef standard = "-std=c++20") {
+        params.diagnostics = std::make_shared<std::vector<Diagnostic>>();
         auto command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
 
         database.update_command("fake", src_path, command);
@@ -73,9 +74,11 @@ struct Tester {
         for(auto& [file, source]: sources.all_files) {
             if(file == src_path) {
                 auto bound = compute_preamble_bound(source.content);
-                params.add_remapped_file(file, source.content.substr(0, bound));
+                params.add_remapped_file(file, source.content, bound);
             } else {
-                params.add_remapped_file(file, source.content);
+                /// FIXME: This is a workaround.
+                std::string path = path::is_absolute(file) ? file.str() : path::join(".", file);
+                params.add_remapped_file(path, source.content);
             }
         }
 
@@ -84,6 +87,9 @@ struct Tester {
             auto unit = clice::compile(params, info);
             if(!unit) {
                 llvm::outs() << unit.error() << "\n";
+                for(auto& diag: *params.diagnostics) {
+                    println("{}", diag.message);
+                }
                 return false;
             }
         }
@@ -92,7 +98,13 @@ struct Tester {
         params.output_file.clear();
         params.pch = {info.path, info.preamble.size()};
         for(auto& [file, source]: sources.all_files) {
-            params.add_remapped_file(file, source.content);
+            if(file == src_path) {
+                params.add_remapped_file(file, source.content);
+            } else {
+                /// FIXME: This is a workaround.
+                std::string path = path::is_absolute(file) ? file.str() : path::join(".", file);
+                params.add_remapped_file(path, source.content);
+            }
         }
 
         auto unit = clice::compile(params);

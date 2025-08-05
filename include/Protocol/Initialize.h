@@ -117,7 +117,7 @@ struct ServerCapabilities {
     /// FIXME: CodeLensOptions codeLensProvider;
 
     /// The server provides document link support.
-    /// FIXME: DocumentLinkOptions documentLinkProvider;
+    DocumentLinkOptions documentLinkProvider;
 
     /// The server provides color provider support.
     /// FIXME: DocumentColorOptions colorProvider;
