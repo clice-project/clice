@@ -63,6 +63,7 @@ Server::Server() {
     register_callback<&Server::on_did_save>("textDocument/didSave");
     register_callback<&Server::on_did_close>("textDocument/didClose");
 
+    register_callback<&Server::on_hover>("textDocument/hover");
     register_callback<&Server::on_completion>("textDocument/completion");
     register_callback<&Server::on_semantic_token>("textDocument/semanticTokens/full");
 }

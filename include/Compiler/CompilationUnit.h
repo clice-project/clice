@@ -113,14 +113,30 @@ public:
     /// macro expansion).
     auto expansion_location(clang::SourceLocation location) -> clang::SourceLocation;
 
+    ///
+    auto file_location(clang::SourceLocation location) -> clang::SourceLocation;
+
     /// FIXME: Do we really need this function?
     auto presumed_location(clang::SourceLocation location) -> clang::PresumedLoc;
+
+    /// Create a file location with given file id and offset.
+    auto create_location(clang::FileID fid, std::uint32_t offset) -> clang::SourceLocation;
 
     /// Get the spelled tokens(raw token) of the file id.
     auto spelled_tokens(clang::FileID fid) -> llvm::ArrayRef<clang::syntax::Token>;
 
+    /// The spelled tokens that overlap or touch a spelling location Loc.
+    /// This always returns 0-2 tokens.
+    auto spelled_tokens_touch(clang::SourceLocation location)
+        -> llvm::ArrayRef<clang::syntax::Token>;
+
+    auto expanded_tokens() -> llvm::ArrayRef<clang::syntax::Token>;
+
     /// Get the expanded tokens(after preprocessing) of the file id.
     auto expanded_tokens(clang::SourceRange range) -> llvm::ArrayRef<clang::syntax::Token>;
+
+    auto expansions_overlapping(llvm::ArrayRef<clang::syntax::Token>)
+        -> std::vector<clang::syntax::TokenBuffer::Expansion>;
 
     /// Get the token length.
     auto token_length(clang::SourceLocation location) -> std::uint32_t;
@@ -142,6 +158,8 @@ public:
     clang::LangOptions& lang_options();
 
     clang::ASTContext& context();
+
+    clang::syntax::TokenBuffer& token_buffer();
 
     TemplateResolver& resolver();
 

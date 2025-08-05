@@ -26,20 +26,34 @@ struct Tester {
         sources.add_source(name, content);
     }
 
-    Tester& compile(llvm::StringRef standard = "-std=c++20") {
+    void add_files(llvm::StringRef main_file, llvm::StringRef content) {
+        src_path = main_file;
+        sources.add_sources(content);
+    }
+
+    bool compile(llvm::StringRef standard = "-std=c++20") {
         auto command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
 
         database.update_command("fake", src_path, command);
-        params.arguments = database.get_command(src_path).arguments;
+        params.arguments = database.get_command(src_path, true, true).arguments;
 
         for(auto& [file, source]: sources.all_files) {
-            params.add_remapped_file(file, source.content);
+            if(file == src_path) {
+                params.add_remapped_file(file, source.content);
+            } else {
+                /// FIXME: This is a workaround.
+                std::string path = path::is_absolute(file) ? file.str() : path::join(".", file);
+                params.add_remapped_file(path, source.content);
+            }
         }
 
         auto info = clice::compile(params);
-        ASSERT_TRUE(info);
+        if(!info) {
+            return false;
+        }
+
         this->unit.emplace(std::move(*info));
-        return *this;
+        return true;
     }
 
     bool compile_with_pch(llvm::StringRef standard = "-std=c++20") {
@@ -92,6 +106,44 @@ struct Tester {
 
     std::uint32_t operator[] (llvm::StringRef file, llvm::StringRef pos) {
         return sources.all_files.lookup(file).offsets.lookup(pos);
+    }
+
+    std::uint32_t point(llvm::StringRef name = "", llvm::StringRef file = "") {
+        if(file.empty()) {
+            file = src_path;
+        }
+
+        auto& offsets = sources.all_files[file].offsets;
+        if(name.empty()) {
+            assert(offsets.size() == 1);
+            return offsets.begin()->second;
+        } else {
+            assert(offsets.contains(name));
+            return offsets.lookup(name);
+        }
+    }
+
+    llvm::ArrayRef<std::uint32_t> nameless_points(llvm::StringRef file = "") {
+        if(file.empty()) {
+            file = src_path;
+        }
+
+        return sources.all_files[file].nameless_offsets;
+    }
+
+    LocalSourceRange range(llvm::StringRef name = "", llvm::StringRef file = "") {
+        if(file.empty()) {
+            file = src_path;
+        }
+
+        auto& ranges = sources.all_files[file].ranges;
+        if(name.empty()) {
+            assert(ranges.size() == 1);
+            return ranges.begin()->second;
+        } else {
+            assert(ranges.contains(name));
+            return ranges.lookup(name);
+        }
     }
 };
 

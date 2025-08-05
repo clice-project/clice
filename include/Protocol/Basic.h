@@ -123,4 +123,12 @@ struct TextDocumentPositionParams {
     Position position;
 };
 
+struct MarkupContent {
+    /// The type of the Markup.
+    string kind;
+
+    /// The content itself.
+    string value;
+};
+
 }  // namespace clice::proto

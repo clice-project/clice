@@ -43,7 +43,9 @@ void warn(std::format_string<Args...> fmt, Args&&... args) {
 
 template <typename... Args>
 void debug(std::format_string<Args...> fmt, Args&&... args) {
+#ifndef NDEBUG
     log::log(Level::DEBUG, fmt.get(), std::forward<Args>(args)...);
+#endif
 }
 
 template <typename... Args>

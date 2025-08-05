@@ -41,6 +41,7 @@ struct HoverItem {
 struct Hover {
     /// Title
     SymbolKind kind;
+
     std::string name;
 
     /// Extra information.
@@ -56,28 +57,11 @@ struct Hover {
     std::string source;
 };
 
-/// Hover information for all symbols in the file.
-struct Hovers {
-    struct Occurrence {
-        LocalSourceRange range;
-        uint32_t index;
-    };
-
-    /// Hover information for all symbols in the file.
-    std::vector<Hover> hovers;
-
-    /// A map between the file offset and the index of the hover.
-    std::vector<Occurrence> occurrences;
-};
-
 /// Generate the hover information for the given declaration(for test).
 Hover hover(CompilationUnit& unit, const clang::NamedDecl* decl);
 
 /// Generate the hover information for the symbol at the given offset.
-Hover hover(CompilationUnit& unit, uint32_t offset);
-
-/// Generate the hover information for all files in the given unit.
-index::Shared<Hovers> indexHover(CompilationUnit& unit);
+Hover hover(CompilationUnit& unit, std::uint32_t offset);
 
 }  // namespace clice::feature
 

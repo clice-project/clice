@@ -85,58 +85,58 @@ struct ServerCapabilities {
     HoverOptions hoverProvider;
 
     /// The server provides signature help support.
-    SignatureHelpOptions signatureHelpProvider;
+    /// FIXME: SignatureHelpOptions signatureHelpProvider;
 
     /// The server provides go to declaration support.
-    DeclarationOptions declarationProvider;
+    /// FIXME: DeclarationOptions declarationProvider;
 
     /// The server provides goto definition support.
-    DefinitionOptions definitionProvider;
+    /// FIXME: DefinitionOptions definitionProvider;
 
     /// The server provides goto type definition support.
-    TypeDefinitionOptions typeDefinitionProvider;
+    /// FIXME: TypeDefinitionOptions typeDefinitionProvider;
 
     /// The server provides goto implementation support.
-    ImplementationOptions implementationProvider;
+    /// FIXME: ImplementationOptions implementationProvider;
 
     /// The server provides find references support.
-    ReferenceOptions referencesProvider;
+    /// FIXME: ReferenceOptions referencesProvider;
 
     /// The server provides document highlight support.
-    DocumentHighlightOptions documentHighlightProvider;
+    /// FIXME: DocumentHighlightOptions documentHighlightProvider;
 
     /// The server provides document symbol support.
-    DocumentSymbolOptions documentSymbolProvider;
+    /// FIXME: DocumentSymbolOptions documentSymbolProvider;
 
     /// The server provides code actions. The `CodeActionOptions` return type is
     /// only valid if the client signals code action literal support via the
     /// property `textDocument.codeAction.codeActionLiteralSupport`.
-    CodeActionOptions codeActionProvider;
+    /// FIXME: CodeActionOptions codeActionProvider;
 
     /// The server provides code lens.
-    CodeLensOptions codeLensProvider;
+    /// FIXME: CodeLensOptions codeLensProvider;
 
     /// The server provides document link support.
-    DocumentLinkOptions documentLinkProvider;
+    /// FIXME: DocumentLinkOptions documentLinkProvider;
 
     /// The server provides color provider support.
     /// FIXME: DocumentColorOptions colorProvider;
 
     /// The server provides document formatting.
-    DocumentFormattingOptions documentFormattingProvider;
+    /// FIXME: DocumentFormattingOptions documentFormattingProvider;
 
     /// The server provides document range formatting.
-    DocumentRangeFormattingOptions documentRangeFormattingProvider;
+    /// FIXME: DocumentRangeFormattingOptions documentRangeFormattingProvider;
 
     /// The server provides document formatting on typing.
-    DocumentOnTypeFormattingOptions documentOnTypeFormattingProvider;
+    /// FIXME: DocumentOnTypeFormattingOptions documentOnTypeFormattingProvider;
 
     /// The server provides rename support. RenameOptions may only be specified if the client
     /// states that it supports `prepareSupport` in its initial `initialize` request.
-    RenameOptions renameProvider;
+    /// FIXME: RenameOptions renameProvider;
 
     /// The server provides folding provider support.
-    FoldingRangeOptions foldingRangeProvider;
+    /// FIXME: FoldingRangeOptions foldingRangeProvider;
 
     /// The server provides execute command support.
     /// FIXME: ExecuteCommandOptions executeCommandProvider;
@@ -148,7 +148,7 @@ struct ServerCapabilities {
     /// FIXME: LinkedEditingRangeOptions linkedEditingRangeProvider;
 
     /// The server provides call hierarchy support.
-    CallHierarchyOptions callHierarchyProvider;
+    /// FIXME: CallHierarchyOptions callHierarchyProvider;
 
     /// The server provides semantic tokens support.
     SemanticTokensOptions semanticTokensProvider;
@@ -157,13 +157,13 @@ struct ServerCapabilities {
     /// FIXME: MonikerOptions monikerProvider;
 
     /// The server provides type hierarchy support.
-    TypeHierarchyOptions typeHierarchyProvider;
+    /// FIXME: TypeHierarchyOptions typeHierarchyProvider;
 
     /// The server provides inline values.
     /// FIXME: InlineValueOptions inlineValueProvider;
 
     /// The server provides inlay hints.
-    InlayHintOptions inlayHintProvider;
+    /// FIXME: InlayHintOptions inlayHintProvider;
 
     /// The server has support for pull model diagnostics.
     /// FIXME: DiagnosticOptions diagnosticProvider;

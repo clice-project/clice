@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AST/SourceLocation.h"
+#include "AST/SourceCode.h"
 #include "clang/Lex/MacroInfo.h"
 #include "llvm/ADT/DenseMap.h"
 

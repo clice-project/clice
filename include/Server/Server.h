@@ -103,6 +103,8 @@ private:
     async::Task<> on_did_close(proto::DidCloseTextDocumentParams params);
 
 private:
+    async::Task<json::Value> on_hover(proto::HoverParams params);
+
     async::Task<json::Value> on_semantic_token(proto::SemanticTokensParams params);
 
     async::Task<json::Value> on_completion(proto::CompletionParams params);

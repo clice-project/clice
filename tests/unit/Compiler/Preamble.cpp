@@ -21,63 +21,28 @@ void EXPECT_BOUNDS(std::vector<llvm::StringRef> marks,
     }
 }
 
-llvm::StringMap<std::string> scan(llvm::StringRef content) {
-    llvm::StringMap<std::string> files;
-    std::string current_filename;
-    std::string current_content;
-
-    auto save_previous_file = [&]() {
-        if(current_filename.empty()) {
-            return;
-        }
-
-        files.try_emplace(current_filename, llvm::StringRef(current_content).trim());
-        current_filename.clear();
-        current_content.clear();
-    };
-
-    while(!content.empty()) {
-        llvm::StringRef line = content.take_front(content.find_first_of("\r\n"));
-        content = content.drop_front(line.size());
-        if(content.starts_with("\r\n")) {
-            content = content.drop_front(2);
-        } else if(content.starts_with("\n")) {
-            content = content.drop_front(1);
-        }
-
-        if(line.starts_with("#[") && line.ends_with("]")) {
-            save_previous_file();
-            current_filename = line.slice(2, line.size() - 1).str();
-        } else if(!current_filename.empty()) {
-            current_content += line;
-            current_content += '\n';
-        }
-    }
-
-    save_previous_file();
-
-    return files;
-}
-
 void EXPECT_BUILD_PCH(llvm::StringRef main_file,
                       llvm::StringRef test_contents,
                       llvm::StringRef preamble = "",
                       LocationChain chain = LocationChain()) {
     auto tmp = fs::createTemporaryFile("clice", "pch");
     ASSERT_TRUE(tmp);
-    std::string outPath = std::move(*tmp);
+    std::string output_path = std::move(*tmp);
 
-    auto files = scan(test_contents);
+    AnnotatedSources sources;
+    sources.add_sources(test_contents);
+    auto& files = sources.all_files;
+
     if(!preamble.empty()) {
-        files.try_emplace("preamble.h", preamble);
+        files.try_emplace("preamble.h", AnnotatedSource{.content = preamble.str()});
     }
 
     ASSERT_TRUE(files.contains(main_file));
-    std::string content = files[main_file];
+    std::string content = files[main_file].content;
     files.erase(main_file);
 
     CompilationParams params;
-    params.output_file = outPath;
+    params.output_file = output_path;
     auto bound = compute_preamble_bound(content);
     params.add_remapped_file(main_file, content, bound);
 
@@ -94,8 +59,8 @@ void EXPECT_BUILD_PCH(llvm::StringRef main_file,
     std::string buffer = main_file.str();
     params.arguments.emplace_back(buffer.c_str());
 
-    for(auto& [path, content]: files) {
-        params.add_remapped_file(path::join(".", path), content);
+    for(auto& [path, source]: files) {
+        params.add_remapped_file(path::join(".", path), source.content);
     }
 
     /// Build PCH.
@@ -105,14 +70,14 @@ void EXPECT_BUILD_PCH(llvm::StringRef main_file,
         auto AST = compile(params, info);
         ASSERT_TRUE(AST, chain);
 
-        EXPECT_EQ(info.path, outPath, chain);
+        EXPECT_EQ(info.path, output_path, chain);
         /// EXPECT_EQ(info.command, params.arguments, chain);
         /// TODO: EXPECT_EQ(info.deps, deps);
     }
 
     /// Build AST with PCH.
-    for(auto& [path, content]: files) {
-        params.add_remapped_file(path::join(".", path), content);
+    for(auto& [path, source]: files) {
+        params.add_remapped_file(path::join(".", path), source.content);
     }
 
     params.add_remapped_file(main_file, content);
@@ -199,9 +164,11 @@ int foo();
 #include "test2.h"
 )cpp";
 
-    auto files = scan(test_contents);
+    AnnotatedSources sources;
+    sources.add_sources(test_contents);
+    auto& files = sources.all_files;
     ASSERT_TRUE(files.contains("main.cpp"));
-    std::string content = files["main.cpp"];
+    std::string content = files["main.cpp"].content;
     files.erase("main.cpp");
 
     std::string preamble;
@@ -213,8 +180,8 @@ int foo();
         params.add_remapped_file("main.cpp", content);
         params.arguments = {"clang++", "-std=c++20", "main.cpp"};
 
-        for(auto& [path, file]: files) {
-            params.add_remapped_file(path::join(".", path), file);
+        for(auto& [path, source]: files) {
+            params.add_remapped_file(path::join(".", path), source.content);
         }
 
         auto unit = preprocess(params);
@@ -254,9 +221,11 @@ int x = bar();
 int y = foo();
 )cpp";
 
-    auto files = scan(test_contents);
+    AnnotatedSources sources;
+    sources.add_sources(test_contents);
+    auto& files = sources.all_files;
     ASSERT_TRUE(files.contains("main.cpp"));
-    std::string content = files["main.cpp"];
+    std::string content = files["main.cpp"].content;
     files.erase("main.cpp");
 
     auto bounds = compute_preamble_bounds(content);
@@ -279,8 +248,8 @@ int y = foo();
         params.output_file = outPath;
         last_bound = bound;
 
-        for(auto& [path, content]: files) {
-            params.add_remapped_file(path::join(".", path), content);
+        for(auto& [path, source]: files) {
+            params.add_remapped_file(path::join(".", path), source.content);
         }
 
         {
@@ -293,8 +262,8 @@ int y = foo();
     }
 
     /// Build AST with PCH.
-    for(auto& [path, content]: files) {
-        params.add_remapped_file(path::join(".", path), content);
+    for(auto& [path, source]: files) {
+        params.add_remapped_file(path::join(".", path), source.content);
     }
 
     params.add_remapped_file("main.cpp", content);

@@ -134,6 +134,10 @@ auto CompilationUnit::expansion_location(clang::SourceLocation location) -> clan
     return impl->src_mgr.getExpansionLoc(location);
 }
 
+auto CompilationUnit::file_location(clang::SourceLocation location) -> clang::SourceLocation {
+    return impl->src_mgr.getFileLoc(location);
+}
+
 auto CompilationUnit::include_location(clang::FileID fid) -> clang::SourceLocation {
     return impl->src_mgr.getIncludeLoc(fid);
 }
@@ -142,13 +146,32 @@ auto CompilationUnit::presumed_location(clang::SourceLocation location) -> clang
     return impl->src_mgr.getPresumedLoc(location, false);
 }
 
+auto CompilationUnit::create_location(clang::FileID fid, std::uint32_t offset)
+    -> clang::SourceLocation {
+    return impl->src_mgr.getComposedLoc(fid, offset);
+}
+
 auto CompilationUnit::spelled_tokens(clang::FileID fid) -> llvm::ArrayRef<clang::syntax::Token> {
     return impl->buffer->spelledTokens(fid);
+}
+
+auto CompilationUnit::spelled_tokens_touch(clang::SourceLocation location)
+    -> llvm::ArrayRef<clang::syntax::Token> {
+    return clang::syntax::spelledTokensTouching(location, *impl->buffer);
+}
+
+auto CompilationUnit::expanded_tokens() -> llvm::ArrayRef<clang::syntax::Token> {
+    return impl->buffer->expandedTokens();
 }
 
 auto CompilationUnit::expanded_tokens(clang::SourceRange range)
     -> llvm::ArrayRef<clang::syntax::Token> {
     return impl->buffer->expandedTokens(range);
+}
+
+auto CompilationUnit::expansions_overlapping(llvm::ArrayRef<clang::syntax::Token> spelled_tokens)
+    -> std::vector<clang::syntax::TokenBuffer::Expansion> {
+    return impl->buffer->expansionsOverlapping(spelled_tokens);
 }
 
 auto CompilationUnit::token_length(clang::SourceLocation location) -> std::uint32_t {
@@ -271,6 +294,10 @@ TemplateResolver& CompilationUnit::resolver() {
 
 clang::ASTContext& CompilationUnit::context() {
     return impl->instance->getASTContext();
+}
+
+clang::syntax::TokenBuffer& CompilationUnit::token_buffer() {
+    return *impl->buffer;
 }
 
 }  // namespace clice
