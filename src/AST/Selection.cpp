@@ -29,6 +29,10 @@ namespace {
 
 using Node = SelectionTree::Node;
 
+#ifndef NDEBUG
+#define nlog(...) log::debug(__VA_ARGS__)
+#endif
+
 std::vector<const Attr*> get_attributes(const DynTypedNode& N) {
     std::vector<const Attr*> result;
 
@@ -872,10 +876,10 @@ private:
         }
 
         if(!checker.mayHit(S)) {
-            log::info("{2}skip: {0} {1}",
-                      printNodeToString(N, print_policy),
-                      S.printToString(SM),
-                      indent());
+            log::debug("{2}skip: {0} {1}",
+                       printNodeToString(N, print_policy),
+                       S.printToString(SM),
+                       indent());
             return true;
         }
         return false;
@@ -892,14 +896,14 @@ private:
 
     // Pushes a node onto the ancestor stack. Pairs with pop().
     // Performs early hit detection for some nodes (on the earlySourceRange).
-    void push(DynTypedNode Node) {
-        SourceRange Early = earlySourceRange(Node);
-        log::info("{2}push: {0} {1}",
-                  printNodeToString(Node, print_policy),
-                  Node.getSourceRange().printToString(SM),
-                  indent());
+    void push(DynTypedNode node) {
+        SourceRange Early = earlySourceRange(node);
+        log::debug("{2}push: {0} {1}",
+                   printNodeToString(node, print_policy),
+                   node.getSourceRange().printToString(SM),
+                   indent());
         nodes.emplace_back();
-        nodes.back().data = std::move(Node);
+        nodes.back().data = std::move(node);
         nodes.back().parent = stack.top();
         nodes.back().selected = NoTokens;
         stack.push(&nodes.back());
@@ -910,7 +914,7 @@ private:
     // Performs primary hit detection.
     void pop() {
         Node& N = *stack.top();
-        log::info("{1}pop: {0}", printNodeToString(N.data, print_policy), indent(-1));
+        log::debug("{1}pop: {0}", printNodeToString(N.data, print_policy), indent(-1));
         claimTokensFor(N.data, N.selected);
         if(N.selected == NoTokens)
             N.selected = SelectionTree::Unselected;
@@ -1030,7 +1034,7 @@ private:
             update(Result, checker.test(ClaimedRange));
 
         if(Result && Result != NoTokens)
-            log::info("{1}hit selection: {0}", S.printToString(SM), indent());
+            log::debug("{1}hit selection: {0}", S.printToString(SM), indent());
     }
 
     std::string indent(int Offset = 0) {
@@ -1148,7 +1152,7 @@ SelectionTree::SelectionTree(CompilationUnit& unit, LocalSourceRange range) :
     print_policy.IncludeNewlines = false;
     auto [begin, end] = range;
 
-    log::info(
+    log::debug(
         "Computing selection for {0}",
         SourceRange(SM.getComposedLoc(fid, begin), SM.getComposedLoc(fid, end)).printToString(SM));
 

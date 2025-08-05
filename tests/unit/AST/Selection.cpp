@@ -237,8 +237,10 @@ void EXPECT_SELECT(llvm::StringRef code, const char* kind, LocationChain chain =
                     tester.unit->file_offset(range2->getBegin()),
                     tester.unit->file_offset(range2->getEnd()),
                 };
-                llvm::outs() << tree << "\n";
-                tree.print(llvm::outs(), *node, 2);
+
+                /// llvm::outs() << tree << "\n";
+                /// tree.print(llvm::outs(), *node, 2);
+
                 ASSERT_EQ(node->kind(), llvm::StringRef(kind), chain);
                 ASSERT_EQ(range, tester.range(), chain);
             }
@@ -639,17 +641,20 @@ TEST(Selection, PathologicalPreprocessor) {
 TEST(Selection, IncludedFile) {
     /// FIXME:
     Tester tester;
-    tester.add_file("expand.inc", "while (0)");
     llvm::StringRef code = R"(
+#[expand.inc]
+while (0)
+
+#[main.cpp]
 void test() {
 #include "exp$and.inc"
   break;
 }
 )";
-    tester.add_main("main.cpp", code);
+    tester.add_files("main.cpp", code);
     ASSERT_TRUE(tester.compile());
 
-    auto point = tester.nameless_points()[0];
+    auto point = tester.nameless_points("main.cpp")[0];
     auto tree = SelectionTree::create_right(*tester.unit, {point, point});
     ASSERT_TRUE(tester.unit->diagnostics().empty());
 
