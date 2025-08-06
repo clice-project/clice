@@ -114,7 +114,7 @@ target("unit_tests")
 
     add_tests("default")
 
-    on_config(function (target)
+    after_load(function (target)
         target:set("runargs", 
             "--test-dir=" .. path.absolute("tests/data"),
             "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
