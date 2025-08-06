@@ -152,8 +152,8 @@ template <typename Action>
 CompilationResult run_clang(CompilationParams& params,
                             const auto& before_execute,
                             const auto& after_execute) {
-    auto diagnostics = params.diagnostics ? std::move(params.diagnostics)
-                                          : std::make_shared<std::vector<Diagnostic>>();
+    auto diagnostics =
+        params.diagnostics ? params.diagnostics : std::make_shared<std::vector<Diagnostic>>();
     auto diagnostic_engine =
         clang::CompilerInstance::createDiagnostics(*params.vfs,
                                                    new clang::DiagnosticOptions(),
@@ -188,10 +188,10 @@ CompilationResult run_clang(CompilationParams& params,
     }
 
     auto& pp = instance->getPreprocessor();
-    // FIXME: clang-tidy, include-fixer, etc?
+    /// FIXME: clang-tidy, include-fixer, etc?
 
-    // `BeginSourceFile` may create new preprocessor, so all operations related to preprocessor
-    // should be done after `BeginSourceFile`.
+    /// `BeginSourceFile` may create new preprocessor, so all operations related to preprocessor
+    /// should be done after `BeginSourceFile`.
 
     /// Collect directives.
     llvm::DenseMap<clang::FileID, Directive> directives;

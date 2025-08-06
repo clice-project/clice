@@ -73,6 +73,8 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
 
         log::info("Start building PCH for {}, command: [{}]", path, command);
 
+        std::vector<feature::DocumentLink> links;
+
         /// PCH file is written until destructing, Add a single block
         /// for it.
         bool cond = co_await async::submit([&] {
@@ -86,6 +88,8 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
                 return false;
             }
 
+            links = feature::document_links(*result);
+
             /// TODO: index PCH.
 
             return true;
@@ -98,6 +102,8 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
         auto& openFile = server.opening_files[path];
         /// Update the built PCH info.
         openFile.pch = std::move(info);
+        openFile.pch_includes = std::move(links);
+
         /// Resume waiters on this event.
         openFile.pch_built_event.set();
         openFile.pch_built_event.clear();

@@ -7,9 +7,38 @@ namespace clice::feature {
 
 namespace {}
 
-DocumentLinks documentLinks(CompilationUnit& unit);
+DocumentLinks document_links(CompilationUnit& unit) {
+    DocumentLinks links;
 
-index::Shared<DocumentLinks> indexDocumentLink(CompilationUnit& unit) {
+    auto& interested_diretive = unit.directives()[unit.interested_file()];
+    for(auto include: interested_diretive.includes) {
+        auto [_, range] = unit.decompose_range(include.filename_range);
+        links.emplace_back(range, unit.file_path(include.fid).str());
+    }
+
+    auto content = unit.interested_content();
+    for(auto& has_include: interested_diretive.has_includes) {
+        /// If the include path is empty, skip it.
+        if(has_include.fid.isInvalid()) {
+            continue;
+        }
+
+        auto location = has_include.location;
+        auto [_, offset] = unit.decompose_location(location);
+
+        /// FIXME: handle incomplete code, the <> or "" may not be in pair.
+        auto sub_content = content.substr(offset);
+        char c = sub_content[0] == '<' ? '>' : '"';
+        std::uint32_t end_offset = offset + sub_content.find_first_of(c, 1) + 1;
+
+        links.emplace_back(LocalSourceRange{offset, end_offset},
+                           unit.file_path(has_include.fid).str());
+    }
+
+    return links;
+}
+
+index::Shared<DocumentLinks> index_document_link(CompilationUnit& unit) {
     index::Shared<DocumentLinks> result;
 
     for(auto& [fid, diretives]: unit.directives()) {

@@ -7,6 +7,7 @@
 #include "Compiler/Command.h"
 #include "Compiler/Preamble.h"
 #include "Compiler/Diagnostic.h"
+#include "Feature/DocumentLink.h"
 #include "Protocol/Protocol.h"
 
 namespace clice {
@@ -22,6 +23,7 @@ struct OpenFile {
     std::optional<PCHInfo> pch;
     async::Task<bool> pch_build_task;
     async::Event pch_built_event;
+    std::vector<feature::DocumentLink> pch_includes;
 
     /// For each opened file, we would like to build an AST for it.
     std::shared_ptr<CompilationUnit> ast;
@@ -103,11 +105,13 @@ private:
     async::Task<> on_did_close(proto::DidCloseTextDocumentParams params);
 
 private:
+    async::Task<json::Value> on_completion(proto::CompletionParams params);
+
     async::Task<json::Value> on_hover(proto::HoverParams params);
 
-    async::Task<json::Value> on_semantic_token(proto::SemanticTokensParams params);
+    async::Task<json::Value> on_document_link(proto::DocumentLinkParams params);
 
-    async::Task<json::Value> on_completion(proto::CompletionParams params);
+    async::Task<json::Value> on_semantic_token(proto::SemanticTokensParams params);
 
 private:
     /// The current request id.

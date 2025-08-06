@@ -44,7 +44,7 @@ struct CompilationParams {
     void add_remapped_file(llvm::StringRef path,
                            llvm::StringRef content,
                            std::uint32_t bound = -1) {
-        if(bound != 0 && bound != -1) {
+        if(bound != -1) {
             assert(bound <= content.size());
             content = content.substr(0, bound);
         }
