@@ -111,6 +111,8 @@ private:
 
     async::Task<json::Value> on_document_link(proto::DocumentLinkParams params);
 
+    async::Task<json::Value> on_folding_range(proto::FoldingRangeParams params);
+
     async::Task<json::Value> on_semantic_token(proto::SemanticTokensParams params);
 
 private:

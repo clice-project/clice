@@ -1,3 +1,4 @@
+#include "Feature/FoldingRange.h"
 #include "Server/Server.h"
 #include "Server/Convert.h"
 #include "Compiler/Compilation.h"
@@ -89,6 +90,46 @@ async::Task<json::Value> Server::on_document_link(proto::DocumentLinkParams para
         for(auto& link: links) {
             result.emplace_back(converter.lookup(link.range), mapping.to_uri(link.file));
         }
+        return json::serialize(result);
+    });
+}
+
+async::Task<json::Value> Server::on_folding_range(proto::FoldingRangeParams params) {
+    auto path = mapping.to_path(params.textDocument.uri);
+
+    auto opening_file = &opening_files[path];
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
+
+    opening_file = &opening_files[path];
+    auto content = opening_file->content;
+    auto ast = opening_file->ast;
+    if(!ast) {
+        co_return json::Value(nullptr);
+    }
+
+    co_return co_await async::submit([&, kind = this->kind] {
+        auto foldings = feature::folding_ranges(*ast);
+        PositionConverter converter(content, kind);
+        converter.to_positions(foldings,
+                               [](feature::FoldingRange& folding) { return folding.range; });
+
+        std::vector<proto::FoldingRange> result;
+
+        for(auto&& folding: foldings) {
+            auto [begin_offset, end_offset] = folding.range;
+            auto [begin_line, begin_char] = converter.lookup(begin_offset);
+            auto [end_line, end_char] = converter.lookup(end_offset);
+
+            proto::FoldingRange range;
+            range.startLine = begin_line;
+            range.startCharacter = begin_char;
+            range.endLine = end_line;
+            range.endCharacter = end_char;
+            range.kind = "region";
+            range.collapsedText = folding.text;
+            result.emplace_back(std::move(range));
+        }
+
         return json::serialize(result);
     });
 }

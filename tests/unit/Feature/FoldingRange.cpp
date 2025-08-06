@@ -6,12 +6,12 @@ namespace clice::testing {
 namespace {
 
 struct FoldingRange : TestFixture {
-    std::vector<feature::FoldingRange> result;
+    std::vector<feature::FoldingRange> ranges;
 
     void run(llvm::StringRef source) {
         add_main("main.cpp", source);
         TestFixture::compile();
-        result = feature::foldingRanges(*unit);
+        ranges = feature::folding_ranges(*unit);
     }
 
     using Self = FoldingRange;
@@ -22,10 +22,10 @@ struct FoldingRange : TestFixture {
                       llvm::StringRef end,
                       feature::FoldingRangeKind kind,
                       LocationChain chain = LocationChain()) {
-        auto& folding = self.result[index];
-        auto begin_offset = self["main.cpp", begin];
+        auto& folding = self.ranges[index];
+        auto begin_offset = self.point(begin, "main.cpp");
         EXPECT_EQ(begin_offset, folding.range.begin, chain);
-        auto end_offset = self["main.cpp", end];
+        auto end_offset = self.point(end, "main.cpp");
         EXPECT_EQ(end_offset, folding.range.end, chain);
     }
 };
@@ -54,7 +54,7 @@ $(7)NS_BEGIN
 NS_END$(8)
 )cpp");
 
-    EXPECT_EQ(result.size(), 4);
+    EXPECT_EQ(ranges.size(), 4);
     EXPECT_RANGE(0, "1", "2", Namespace);
     EXPECT_RANGE(1, "3", "4", Namespace);
     EXPECT_RANGE(2, "5", "6", Namespace);
@@ -79,7 +79,7 @@ enum e3 { D };
 
 )cpp");
 
-    EXPECT_EQ(result.size(), 2);
+    EXPECT_EQ(ranges.size(), 2);
     EXPECT_RANGE(0, "1", "2", Enum);
     EXPECT_RANGE(1, "3", "4", Enum);
 }
@@ -113,7 +113,7 @@ void foo() $(9){
 }$(10)
 )cpp");
 
-    EXPECT_EQ(result.size(), 6);
+    EXPECT_EQ(ranges.size(), 6);
     EXPECT_RANGE(0, "1", "2", Struct);
     EXPECT_RANGE(1, "3", "4", Union);
     EXPECT_RANGE(2, "5", "6", Struct);
@@ -146,7 +146,7 @@ struct s3 $(3){
 }$(4);
 )cpp");
 
-    EXPECT_EQ(result.size(), 4);
+    EXPECT_EQ(ranges.size(), 4);
     EXPECT_RANGE(0, "1", "2", Struct);
     EXPECT_RANGE(1, "3", "4", Struct);
     EXPECT_RANGE(2, "5", "6", FunctionBody);
@@ -189,7 +189,7 @@ auto l4 = [] $(13)(
 )$(14) {};
 )cpp");
 
-    EXPECT_EQ(result.size(), 7);
+    EXPECT_EQ(ranges.size(), 7);
     EXPECT_RANGE(0, "1", "2", LambdaCapture);
     EXPECT_RANGE(1, "3", "4", FunctionBody);
     EXPECT_RANGE(2, "5", "6", LambdaCapture);
@@ -234,7 +234,7 @@ void k() $(13){
 }$(14)
 )cpp");
 
-    EXPECT_EQ(result.size(), 7);
+    EXPECT_EQ(ranges.size(), 7);
     EXPECT_RANGE(0, "1", "2", FunctionParams);
     EXPECT_RANGE(1, "3", "4", FunctionBody);
     EXPECT_RANGE(2, "5", "6", FunctionParams);
@@ -263,7 +263,7 @@ int main() $(1){
 }$(6)
 )cpp");
 
-    EXPECT_EQ(result.size(), 3);
+    EXPECT_EQ(ranges.size(), 3);
     EXPECT_RANGE(0, "1", "6", FunctionBody);
     EXPECT_RANGE(1, "2", "3", FunctionCall);
     EXPECT_RANGE(2, "4", "5", FunctionCall);
@@ -306,7 +306,7 @@ L l2 = $(3){
 
 )cpp");
 
-    EXPECT_EQ(result.size(), 2);
+    EXPECT_EQ(ranges.size(), 2);
     EXPECT_RANGE(0, "1", "2", Initializer);
     EXPECT_RANGE(1, "3", "4", Initializer);
 }
@@ -393,7 +393,7 @@ $(1)#pragma region level1
 #pragma region  // mismatch region, skipped
 )cpp");
 
-    EXPECT_EQ(result.size(), 3);
+    EXPECT_EQ(ranges.size(), 3);
     EXPECT_RANGE(0, "1", "6", Region);
     EXPECT_RANGE(1, "2", "5", Region);
     EXPECT_RANGE(2, "3", "4", Region);
