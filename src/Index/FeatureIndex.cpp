@@ -73,7 +73,7 @@ Shared<std::vector<char>> FeatureIndex::build(CompilationUnit& unit) {
         indices[fid].links = std::move(result);
     }
 
-    for(auto&& [fid, result]: feature::indexDocumentSymbol(unit)) {
+    for(auto&& [fid, result]: feature::index_document_symbol(unit)) {
         indices[fid].symbols = std::move(result);
     }
 

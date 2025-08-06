@@ -106,7 +106,7 @@ struct ServerCapabilities {
     /// FIXME: DocumentHighlightOptions documentHighlightProvider;
 
     /// The server provides document symbol support.
-    /// FIXME: DocumentSymbolOptions documentSymbolProvider;
+    DocumentSymbolOptions documentSymbolProvider;
 
     /// The server provides code actions. The `CodeActionOptions` return type is
     /// only valid if the client signals code action literal support via the

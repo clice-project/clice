@@ -6,14 +6,13 @@ namespace clice::testing {
 namespace {
 
 struct DocumentSymbol : TestFixture {
-
 protected:
     auto run(llvm::StringRef code) {
         add_main("main.cpp", code);
         Tester::compile();
         EXPECT_TRUE(unit.has_value());
 
-        return feature::documentSymbols(*unit);
+        return feature::document_symbols(*unit);
     }
 
     static void total_size(const std::vector<feature::DocumentSymbol>& result, size_t& size) {
@@ -52,8 +51,8 @@ namespace _1::_2{
 
 )cpp";
 
-    auto res = run(main);
-    EXPECT_EQ(total_size(res), 8);
+    auto symbols = run(main);
+    EXPECT_EQ(total_size(symbols), 8);
 }
 
 TEST_F(DocumentSymbol, Struct) {
@@ -70,10 +69,10 @@ struct _3 {
 
 )cpp";
 
-    auto res = run(main);
-    EXPECT_EQ(total_size(res), 5);
+    auto symbols = run(main);
+    EXPECT_EQ(total_size(symbols), 5);
     // tester->info->tu()->dump();
-    // println("{}", pretty_dump(res));
+    // println("{}", pretty_dump(symbols));
 }
 
 TEST_F(DocumentSymbol, Field) {
@@ -93,8 +92,8 @@ struct x {
 
 )cpp";
 
-    auto res = run(main);
-    EXPECT_EQ(total_size(res), 7);
+    auto symbols = run(main);
+    EXPECT_EQ(total_size(symbols), 7);
 }
 
 TEST_F(DocumentSymbol, Constructor) {
@@ -108,8 +107,8 @@ struct S {
     ~S() {}
 };
 )cpp";
-    auto res = run(main);
-    EXPECT_EQ(total_size(res), 6);
+    auto symbols = run(main);
+    EXPECT_EQ(total_size(symbols), 6);
 }
 
 TEST_F(DocumentSymbol, Method) {
@@ -126,8 +125,8 @@ struct _0 {
 
 )cpp";
 
-    auto res = run(main);
-    EXPECT_EQ(total_size(res), 7);
+    auto symbols = run(main);
+    EXPECT_EQ(total_size(symbols), 7);
 }
 
 TEST_F(DocumentSymbol, Enum) {
@@ -147,8 +146,8 @@ enum B {
 
 )cpp";
 
-    auto res = run(main);
-    EXPECT_EQ(total_size(res), 8);
+    auto symbols = run(main);
+    EXPECT_EQ(total_size(symbols), 8);
 }
 
 TEST_F(DocumentSymbol, TopLevelVariable) {
@@ -157,8 +156,8 @@ constexpr auto x = 1;
 int y = 2;
 )cpp";
 
-    auto res = run(main);
-    EXPECT_EQ(total_size(res), 2);
+    auto symbols = run(main);
+    EXPECT_EQ(total_size(symbols), 2);
 }
 
 TEST_F(DocumentSymbol, Macro) {
@@ -174,14 +173,14 @@ VAR(test)
 
 )cpp";
 
-    auto res = run(main);
+    auto symbols = run(main);
 
     // clang-format off
 
 /// FIXME:
 /// Fix range for macro expansion.  Current out put is:
 //
-// debug(res);
+// debug(symbols);
 // 
 // kind: Class, name:test, detail:, deprecated:false, range: {"end":{"character":0,"line":5},"start":{"character":0,"line":3}}, children_num:1
 //  kind: Field, name:x, detail:int, deprecated:false, range: {"end":{"character":3,"line":4},"start":{"character":4,"line":4}}, children_num:0
@@ -189,7 +188,7 @@ VAR(test)
 
     // clang-format on
 
-    /// EXPECT_EQ(total_size(res), 3);
+    /// EXPECT_EQ(total_size(symbols), 3);
 }
 
 TEST_F(DocumentSymbol, WithHeader) {

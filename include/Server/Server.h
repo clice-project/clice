@@ -109,6 +109,8 @@ private:
 
     async::Task<json::Value> on_hover(proto::HoverParams params);
 
+    async::Task<json::Value> on_document_symbol(proto::DocumentSymbolParams params);
+
     async::Task<json::Value> on_document_link(proto::DocumentLinkParams params);
 
     async::Task<json::Value> on_folding_range(proto::FoldingRangeParams params);

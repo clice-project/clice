@@ -86,7 +86,7 @@ public:
 
 }  // namespace
 
-DocumentSymbols documentSymbols(CompilationUnit& unit) {
+DocumentSymbols document_symbols(CompilationUnit& unit) {
     DocumentSymbolCollector collector(unit, true);
     collector.TraverseDecl(unit.tu());
 
@@ -95,7 +95,7 @@ DocumentSymbols documentSymbols(CompilationUnit& unit) {
     return std::move(frame.symbols);
 }
 
-index::Shared<DocumentSymbols> indexDocumentSymbol(CompilationUnit& unit) {
+index::Shared<DocumentSymbols> index_document_symbol(CompilationUnit& unit) {
     DocumentSymbolCollector collector(unit, true);
     collector.TraverseDecl(unit.tu());
 
