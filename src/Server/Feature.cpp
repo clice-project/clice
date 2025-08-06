@@ -1,3 +1,4 @@
+#include "Feature/DocumentSymbol.h"
 #include "Feature/FoldingRange.h"
 #include "Server/Server.h"
 #include "Server/Convert.h"
@@ -58,6 +59,56 @@ async::Task<json::Value> Server::on_hover(proto::HoverParams params) {
         proto::Hover result;
         result.contents.kind = "markdown";
         result.contents.value = std::format("{}: {}", hover.kind.name(), hover.name);
+
+        return json::serialize(result);
+    });
+}
+
+async::Task<json::Value> Server::on_document_symbol(proto::DocumentSymbolParams params) {
+    auto path = mapping.to_path(params.textDocument.uri);
+
+    auto opening_file = &opening_files[path];
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
+
+    opening_file = &opening_files[path];
+    auto content = opening_file->content;
+    auto ast = opening_file->ast;
+    if(!ast) {
+        co_return json::Value(nullptr);
+    }
+
+    auto to_range = [&](LocalSourceRange range) {
+        auto c = PositionConverter(content, kind);
+        auto begin = c.toPosition(range.begin);
+        auto end = c.toPosition(range.end);
+        return proto::Range{begin, end};
+    };
+
+    auto transform = [&to_range](this auto& self,
+                                 feature::DocumentSymbol& symbol) -> proto::DocumentSymbol {
+        proto::DocumentSymbol result;
+        result.name = std::move(symbol.name);
+        result.detail = std::move(symbol.detail);
+
+        /// FIXME: Add kind map.
+        result.kind = static_cast<proto::SymbolKind>(symbol.kind.value());
+        result.range = to_range(symbol.range);
+        result.selectionRange = to_range(symbol.selectionRange);
+
+        for(auto& child: symbol.children) {
+            result.children.emplace_back(self(child));
+        }
+
+        return result;
+    };
+
+    co_return co_await async::submit([&ast, &transform] {
+        auto symbols = feature::document_symbols(*ast);
+
+        std::vector<proto::DocumentSymbol> result;
+        for(auto& symbol: symbols) {
+            result.emplace_back(transform(symbol));
+        }
 
         return json::serialize(result);
     });

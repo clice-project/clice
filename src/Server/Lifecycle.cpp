@@ -47,6 +47,9 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     /// Hover
     capabilities.hoverProvider = true;
 
+    /// DocumentSymbol
+    capabilities.documentSymbolProvider = {};
+
     /// DocumentLink
     capabilities.documentLinkProvider.resolveProvider = false;
 
