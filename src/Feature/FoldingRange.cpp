@@ -28,7 +28,7 @@ public:
 
         /// Collect namespace.
         clang::SourceRange range(shrink.front().location(), decl->getRBraceLoc());
-        addRange(range, FoldingRangeKind::Namespace, "{...}");
+        add_range(range, FoldingRangeKind::Namespace, "{...}");
 
         return true;
     }
@@ -44,7 +44,7 @@ public:
                                 : decl->isClass() ? FoldingRangeKind::Class
                                 : decl->isUnion() ? FoldingRangeKind::Union
                                                   : FoldingRangeKind::Enum;
-        addRange(decl->getBraceRange(), kind, "{...}");
+        add_range(decl->getBraceRange(), kind, "{...}");
 
         /// Collect public/protected/private blocks for a non-lambda struct/class.
         if(auto RD = llvm::dyn_cast<clang::CXXRecordDecl>(decl)) {
@@ -56,7 +56,7 @@ public:
             for(auto* decl: RD->decls()) {
                 if(auto* AS = llvm::dyn_cast<clang::AccessSpecDecl>(decl)) {
                     if(last) {
-                        addRange(
+                        add_range(
                             clang::SourceRange(last->getColonLoc(), AS->getAccessSpecifierLoc()),
                             FoldingRangeKind::AccessSpecifier,
                             "");
@@ -66,9 +66,9 @@ public:
             }
 
             if(last) {
-                addRange(clang::SourceRange(last->getColonLoc(), RD->getBraceRange().getEnd()),
-                         FoldingRangeKind::AccessSpecifier,
-                         "");
+                add_range(clang::SourceRange(last->getColonLoc(), RD->getBraceRange().getEnd()),
+                          FoldingRangeKind::AccessSpecifier,
+                          "");
             }
         }
 
@@ -78,12 +78,12 @@ public:
     bool VisitFunctionDecl(const clang::FunctionDecl* decl) {
         /// If it's a forward declaration, try to collect the parameter list.
         if(!decl->doesThisDeclarationHaveABody()) {
-            collectParameterList(decl->getSourceRange());
+            collect_parameter_list(decl->getSourceRange());
         } else {
-            collectParameterList(decl->getBeginLoc(), decl->getBody()->getBeginLoc());
+            collect_parameter_list(decl->getBeginLoc(), decl->getBody()->getBeginLoc());
 
             /// Collect function body.
-            addRange(decl->getBody()->getSourceRange(), FoldingRangeKind::FunctionBody, "{...}");
+            add_range(decl->getBody()->getSourceRange(), FoldingRangeKind::FunctionBody, "{...}");
         }
 
         return true;
@@ -92,15 +92,15 @@ public:
     bool VisitLambdaExpr(const clang::LambdaExpr* lambda) {
         auto introduceRange = lambda->getIntroducerRange();
         /// Collect lambda capture list.
-        addRange(lambda->getIntroducerRange(), FoldingRangeKind::LambdaCapture, "[...]");
+        add_range(lambda->getIntroducerRange(), FoldingRangeKind::LambdaCapture, "[...]");
 
         /// Collect explicit parameter list.
         if(lambda->hasExplicitParameters()) {
-            collectParameterList(introduceRange.getEnd(),
-                                 lambda->getCompoundStmtBody()->getBeginLoc());
+            collect_parameter_list(introduceRange.getEnd(),
+                                   lambda->getCompoundStmtBody()->getBeginLoc());
         }
 
-        collectCompoundStmt(lambda->getBody());
+        collect_compound_stmt(lambda->getBody());
         return true;
     }
 
@@ -116,9 +116,9 @@ public:
             if(kind == clang::tok::r_paren)
                 depth += 1;
             else if(kind == clang::tok::l_paren && --depth == 0) {
-                addRange({tokens.back().location(), rightParen},
-                         FoldingRangeKind::FunctionCall,
-                         "(...)");
+                add_range({tokens.back().location(), rightParen},
+                          FoldingRangeKind::FunctionCall,
+                          "(...)");
                 break;
             }
             tokens = tokens.drop_back();
@@ -129,42 +129,42 @@ public:
 
     bool VisitCXXConstructExpr(const clang::CXXConstructExpr* stmt) {
         if(auto range = stmt->getParenOrBraceRange(); range.isValid()) {
-            addRange({range.getBegin().getLocWithOffset(1), range.getEnd()},
-                     FoldingRangeKind::FunctionCall,
-                     "(...)");
+            add_range({range.getBegin().getLocWithOffset(1), range.getEnd()},
+                      FoldingRangeKind::FunctionCall,
+                      "(...)");
         }
         return true;
     }
 
     bool VisitInitListExpr(const clang::InitListExpr* expr) {
-        addRange({expr->getLBraceLoc(), expr->getRBraceLoc()},
-                 FoldingRangeKind::Initializer,
-                 "{...}");
+        add_range({expr->getLBraceLoc(), expr->getRBraceLoc()},
+                  FoldingRangeKind::Initializer,
+                  "{...}");
         return true;
     }
 
-    auto buildForFile(CompilationUnit& unit) {
+    auto build_for_file(CompilationUnit& unit) {
         TraverseTranslationUnitDecl(unit.tu());
         collectDrectives(unit.directives()[unit.interested_file()]);
         std::ranges::sort(result, refl::less);
         return std::move(result);
     }
 
-    auto buildForIndex(CompilationUnit& unit) {
+    auto build_for_index(CompilationUnit& unit) {
         TraverseTranslationUnitDecl(unit.tu());
         for(auto& [fid, directive]: unit.directives()) {
             collectDrectives(directive);
         }
 
-        for(auto& [fid, ranges]: indexResult) {
+        for(auto& [fid, ranges]: index_result) {
             std::ranges::sort(ranges, refl::less);
         }
 
-        return std::move(indexResult);
+        return std::move(index_result);
     }
 
 private:
-    void addRange(clang::SourceRange range, FoldingRangeKind kind, std::string text) {
+    void add_range(clang::SourceRange range, FoldingRangeKind kind, std::string text) {
         /// In normal AST, the range must be valid. But unfortunately, the range
         /// may be invalid in incomplete AST, so we need to check it.
         if(range.isInvalid()) {
@@ -180,61 +180,61 @@ private:
             return;
         }
 
-        auto [fid, localRange] = unit.decompose_range(clang::SourceRange(begin, end));
-        auto [beginOffset, endOffset] = localRange;
+        auto [fid, local_range] = unit.decompose_range(clang::SourceRange(begin, end));
+        auto [begin_offset, end_offset] = local_range;
 
-        bool isSameLine = true;
+        bool is_same_line = true;
         auto content = unit.file_content(fid);
-        for(auto i = beginOffset; i < endOffset; ++i) {
+        for(auto i = begin_offset; i < end_offset; ++i) {
             if(content[i] == '\n') {
-                isSameLine = false;
+                is_same_line = false;
                 break;
             }
         }
 
         /// TODO: Currently, we only support folding range in different lines.
-        if(isSameLine) {
+        if(is_same_line) {
             return;
         }
 
-        auto& ranges = interestedOnly ? result : indexResult[fid];
-        ranges.emplace_back(localRange, kind, std::move(text));
+        auto& ranges = interestedOnly ? result : index_result[fid];
+        ranges.emplace_back(local_range, kind, std::move(text));
     }
 
-    void collectParameterList(clang::SourceLocation left, clang::SourceLocation right) {
-        collectParameterList(clang::SourceRange(left, right));
+    void collect_parameter_list(clang::SourceLocation left, clang::SourceLocation right) {
+        collect_parameter_list(clang::SourceRange(left, right));
     }
 
     /// Collect function parameter list between '(' and ')'.
-    void collectParameterList(clang::SourceRange bounds) {
+    void collect_parameter_list(clang::SourceRange bounds) {
         auto tokens = unit.expanded_tokens(bounds);
-        auto leftParen = tokens.drop_until([](const auto& tk) {  //
+        auto left_paren = tokens.drop_until([](const auto& tk) {  //
             return tk.kind() == clang::tok::l_paren;
         });
 
-        if(leftParen.empty())
+        if(left_paren.empty())
             return;
 
-        auto rightParenIter =
-            std::find_if(leftParen.rbegin(), leftParen.rend(), [](const auto& tk) {
+        auto right_paren_iter =
+            std::find_if(left_paren.rbegin(), left_paren.rend(), [](const auto& tk) {
                 return tk.kind() == clang::tok::r_paren;
             });
 
-        if(rightParenIter == leftParen.rend())
+        if(right_paren_iter == left_paren.rend())
             return;
 
-        addRange(clang::SourceRange(leftParen.front().location(), rightParenIter->location()),
-                 FoldingRangeKind::FunctionParams,
-                 "(...)");
+        add_range(clang::SourceRange(left_paren.front().location(), right_paren_iter->location()),
+                  FoldingRangeKind::FunctionParams,
+                  "(...)");
     }
 
-    void collectCompoundStmt(const clang::Stmt* stmt) {
+    void collect_compound_stmt(const clang::Stmt* stmt) {
         if(auto* CS = llvm::dyn_cast<clang::CompoundStmt>(stmt)) {
-            addRange({CS->getLBracLoc(), CS->getRBracLoc()},
-                     FoldingRangeKind::CompoundStmt,
-                     "{...}");
+            add_range({CS->getLBracLoc(), CS->getRBracLoc()},
+                      FoldingRangeKind::CompoundStmt,
+                      "{...}");
             for(auto child: stmt->children()) {
-                collectCompoundStmt(child);
+                collect_compound_stmt(child);
             }
         }
     }
@@ -243,15 +243,15 @@ private:
         std::remove_reference_t<decltype(std::declval<CompilationUnit>().directives())>;
 
     void collectDrectives(const Directive& directive) {
-        collectConditionMacro(directive.conditions);
-        collectPragmaRegion(directive.pragmas);
+        collect_condition_directive(directive.conditions);
+        collect_pragma_region(directive.pragmas);
 
         /// TODO:
         /// Collect multiline include statement.
     }
 
     /// Collect all condition macro's block as folding range.
-    void collectConditionMacro(const std::vector<Condition>& conds) {
+    void collect_condition_directive(const std::vector<Condition>& conds) {
 
         // All condition directives have been stored in `conds` variable, ordered by presumed line
         // number increasement, so use a stack to handle the branch structure.
@@ -271,9 +271,9 @@ private:
                 case Condition::BranchKind::Else: {
                     if(!stack.empty()) {
                         auto last = stack.pop_back_val();
-                        addRange({last->condition_range.getEnd(), cond.loc},
-                                 FoldingRangeKind::ConditionDirective,
-                                 "");
+                        add_range({last->condition_range.getEnd(), cond.loc},
+                                  FoldingRangeKind::ConditionDirective,
+                                  "");
                     }
 
                     stack.push_back(&cond);
@@ -302,7 +302,7 @@ private:
     }
 
     /// Collect all condition macro's block as folding range.
-    void collectPragmaRegion(const std::vector<Pragma>& pragmas) {
+    void collect_pragma_region(const std::vector<Pragma>& pragmas) {
         llvm::SmallVector<const Pragma*> stack;
         for(auto& pragma: pragmas) {
             if(pragma.kind == Pragma::Region) {
@@ -313,24 +313,24 @@ private:
                 }
 
                 auto last = stack.pop_back_val();
-                addRange(clang::SourceRange(last->loc, pragma.loc), FoldingRangeKind::Region, "");
+                add_range(clang::SourceRange(last->loc, pragma.loc), FoldingRangeKind::Region, "");
             }
         }
     }
 
 private:
     FoldingRanges result;
-    index::Shared<FoldingRanges> indexResult;
+    index::Shared<FoldingRanges> index_result;
 };
 
 }  // namespace
 
-FoldingRanges foldingRanges(CompilationUnit& unit) {
-    return FoldingRangeCollector(unit, true).buildForFile(unit);
+FoldingRanges folding_ranges(CompilationUnit& unit) {
+    return FoldingRangeCollector(unit, true).build_for_file(unit);
 }
 
-index::Shared<FoldingRanges> indexFoldingRange(CompilationUnit& unit) {
-    return FoldingRangeCollector(unit, false).buildForIndex(unit);
+index::Shared<FoldingRanges> index_folding_range(CompilationUnit& unit) {
+    return FoldingRangeCollector(unit, false).build_for_index(unit);
 }  // namespace feature
 
 }  // namespace clice::feature

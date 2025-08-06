@@ -50,7 +50,10 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     /// DocumentLink
     capabilities.documentLinkProvider.resolveProvider = false;
 
-    /// Semantic tokens.
+    /// FoldingRange
+    capabilities.foldingRangeProvider = true;
+
+    /// Semantic tokens
     capabilities.semanticTokensProvider.range = false;
     capabilities.semanticTokensProvider.full = true;
     for(auto name: SymbolKind::all()) {

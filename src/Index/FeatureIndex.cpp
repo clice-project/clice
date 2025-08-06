@@ -65,7 +65,7 @@ Shared<std::vector<char>> FeatureIndex::build(CompilationUnit& unit) {
         indices[fid].tokens = std::move(result);
     }
 
-    for(auto&& [fid, result]: feature::indexFoldingRange(unit)) {
+    for(auto&& [fid, result]: feature::index_folding_range(unit)) {
         indices[fid].foldings = std::move(result);
     }
 

@@ -136,7 +136,7 @@ struct ServerCapabilities {
     /// FIXME: RenameOptions renameProvider;
 
     /// The server provides folding provider support.
-    /// FIXME: FoldingRangeOptions foldingRangeProvider;
+    FoldingRangeOptions foldingRangeProvider;
 
     /// The server provides execute command support.
     /// FIXME: ExecuteCommandOptions executeCommandProvider;
