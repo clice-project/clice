@@ -3,32 +3,58 @@
 #include "Format.h"
 #include "FileSystem.h"
 
+#include "llvm/Support/CommandLine.h"
+
 namespace clice::log {
 
 enum class Level {
+    TRACE,
+    DEBUG,
     INFO,
     WARN,
-    DEBUG,
-    TRACE,
     FATAL,
 };
 
+struct LogOpt {
+    Level level = Level::INFO;
+    bool color = false;
+};
+
+inline LogOpt log_opt;
+
 template <typename... Args>
 void log(Level level, std::string_view fmt, Args&&... args) {
+#define Green "\033[32m"
+#define Yellow "\033[33m"
+#define Cyan "\033[36m"
+#define Magenta "\033[35m"
+#define Red "\033[31m"
+#define None "\033[0m"
     namespace chrono = std::chrono;
     auto now = chrono::floor<chrono::milliseconds>(chrono::system_clock::now());
     auto time = now;  // chrono::zoned_time(chrono::current_zone(), now);
     auto tag = [&] {
         switch(level) {
-            case Level::INFO: return "\033[32mINFO\033[0m";          // Green
-            case Level::WARN: return "\033[33mWARN\033[0m";          // Yellow
-            case Level::DEBUG: return "\033[36mDEBUG\033[0m";        // Cyan
-            case Level::TRACE: return "\033[35mTRACE\033[0m";        // Magenta
-            case Level::FATAL: return "\033[31mFATAL ERROR\033[0m";  // Red
+            case Level::INFO: return log_opt.color ? Green "[INFO]" None : "[INFO]";    // Green
+            case Level::WARN: return log_opt.color ? Yellow "[WARN]" None : "[WARN]";   // Yellow
+            case Level::DEBUG: return log_opt.color ? Cyan "[DEBUG]" None : "[DEBUG]";  // Cyan
+            case Level::TRACE:
+                return log_opt.color ? Magenta "[TRACE]" None : "[TRACE]";  // Magenta
+            case Level::FATAL:
+                return log_opt.color ? Red "[FATAL ERROR]" None : "[FATAL ERROR]";  // Red
+            default: llvm::llvm_unreachable_internal("Illegal log level");
         }
     }();
-    llvm::errs() << std::format("[{0:%Y-%m-%d %H:%M:%S}] [{1}] ", time, tag)
-                 << std::vformat(fmt, std::make_format_args(args...)) << "\n";
+    if(level >= log_opt.level) {
+        llvm::errs() << std::format("[{0:%Y-%m-%d %H:%M:%S}] {1} ", time, tag)
+                     << std::vformat(fmt, std::make_format_args(args...)) << "\n";
+    }
+#undef Green
+#undef Yellow
+#undef Cyan
+#undef Magenta
+#undef Red
+#undef None
 }
 
 template <typename... Args>
