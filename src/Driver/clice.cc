@@ -4,6 +4,8 @@
 
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Process.h"
+#include "llvm/ADT/StringSwitch.h"
 
 namespace cl = llvm::cl;
 using namespace clice;
@@ -32,21 +34,56 @@ cl::opt<std::string> resource_dir(
     cl::value_desc("path"),
     cl::desc(R"(The path of the clang resource directory, default is "../../lib/clang/version")"));
 
+static cl::OptionCategory category_log{"clice logging options"};
+
+cl::opt<std::string> log_color("log-color",
+                               cl::cat(category_log),
+                               cl::value_desc("always|auto|never"),
+                               cl::init("auto"),
+                               cl::desc("When to use terminal colors, default is auto"));
+
+cl::opt<std::string> log_level("log-level",
+                               cl::cat(category_log),
+                               cl::value_desc("trace|debug|info|warn|fatal"),
+                               cl::init("info"),
+                               cl::desc("The log level, default is info"));
+
 void printVersion(llvm::raw_ostream& os) {
     os << std::format("clice version: {}\n", clice::config::version)
        << std::format("llvm version: {}\n", clice::config::llvm_version);
 }
 
+void init_log() {
+    using namespace log;
+    if(auto color_mode = llvm::StringRef{log_color}; !color_mode.compare("never")) {
+        log_opt.color = false;
+    } else if(!color_mode.compare("always")) {
+        log_opt.color = true;
+    } else {
+        // Auto mode
+        log_opt.color = llvm::sys::Process::StandardErrIsDisplayed();
+    }
+    log_opt.level = llvm::StringSwitch<Level>(log_level)
+                        .Case("trace", Level::TRACE)
+                        .Case("debug", Level::DEBUG)
+                        .Case("warn", Level::WARN)
+                        .Case("fatal", Level::FATAL)
+                        .Default(Level::INFO);
+}
+
 /// Check the command line arguments and initialize the clice.
 bool checkArguments(int argc, const char** argv) {
     /// Hide unrelated options.
-    cl::HideUnrelatedOptions(category);
+    std::vector<cl::OptionCategory*> categories = {&category, &category_log};
+    cl::HideUnrelatedOptions(categories);
 
     // Set version printer and parse command line options
     cl::SetVersionPrinter(printVersion);
     cl::ParseCommandLineOptions(argc,
                                 argv,
                                 "clice is a new generation of language server for C/C++");
+
+    init_log();
 
     for(int i = 0; i < argc; ++i) {
         log::info("argv[{}] = {}", i, argv[i]);
