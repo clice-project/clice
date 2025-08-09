@@ -34,7 +34,7 @@ public:
         if(llvm::isa<clang::TranslationUnitDecl>(decl)) {
             if(interested_only) {
                 for(auto top: unit.top_level_decls()) {
-                    if(!Base::TraverseDecl(top)) {
+                    if(!TraverseDecl(top)) {
                         return false;
                     }
                 }
@@ -67,9 +67,8 @@ public:
             }
         }
 
-        /// if constexpr(requires)
-        if constexpr(requires { getDerived().hookTraverseDecl(decl, &Base::TraverseDecl); }) {
-            return getDerived().hookTraverseDecl(decl, &Base::TraverseDecl);
+        if constexpr(requires { getDerived().on_traverse_decl(decl, &Base::TraverseDecl); }) {
+            return getDerived().on_traverse_decl(decl, &Base::TraverseDecl);
         } else {
             return Base::TraverseDecl(decl);
         }

@@ -18,7 +18,7 @@ public:
     DocumentSymbolCollector(CompilationUnit& unit, bool interested_only) :
         Base(unit, interested_only) {}
 
-    bool isInterested(clang::Decl* decl) {
+    bool is_interested(clang::Decl* decl) {
         switch(decl->getKind()) {
             case clang::Decl::Namespace:
             case clang::Decl::Enum:
@@ -44,8 +44,8 @@ public:
         }
     }
 
-    bool hookTraverseDecl(clang::Decl* decl, auto MF) {
-        if(!isInterested(decl)) {
+    bool on_traverse_decl(clang::Decl* decl, auto MF) {
+        if(!is_interested(decl)) {
             return (this->*MF)(decl);
         }
 
@@ -59,7 +59,7 @@ public:
         /// Add new symbol.
         auto& symbol = frame.cursor->emplace_back();
         symbol.kind = SymbolKind::from(decl);
-        symbol.name = getDeclName(ND);
+        symbol.name = ast::name_of(ND);
         symbol.selectionRange = selectionRange;
         symbol.range = selectionRange;
 

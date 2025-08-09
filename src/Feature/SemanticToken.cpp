@@ -24,7 +24,7 @@ public:
             modifiers |= SymbolModifiers::Declaration;
         }
 
-        if(isTemplated(decl)) {
+        if(ast::is_templated(decl)) {
             modifiers |= SymbolModifiers::Templated;
         }
 

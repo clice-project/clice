@@ -245,7 +245,7 @@ public:
         handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
         handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
 
-        if(auto target = declForType(decl->getType())) {
+        if(auto target = ast::decl_of(decl->getType())) {
             handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
         }
 
@@ -280,7 +280,7 @@ public:
         handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
         handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
 
-        if(auto target = declForType(decl->getType())) {
+        if(auto target = ast::decl_of(decl->getType())) {
             handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
         }
 
@@ -309,7 +309,7 @@ public:
         handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
         handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
 
-        if(auto target = declForType(decl->getType())) {
+        if(auto target = ast::decl_of(decl->getType())) {
             handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
         }
 
@@ -332,7 +332,7 @@ public:
 
                 case clang::TSK_ExplicitInstantiationDeclaration:
                 case clang::TSK_ExplicitInstantiationDefinition: {
-                    auto decl = instantiatedFrom(CTSD);
+                    auto decl = ast::instantiated_from(CTSD);
                     handleDeclOccurrence(decl, RelationKind::Reference, CTSD->getLocation());
                     handleRelation(decl, RelationKind::Reference, decl, CTSD->getLocation());
                     return true;
@@ -349,7 +349,7 @@ public:
             if(auto def = CRD->getDefinition()) {
                 for(auto base: CRD->bases()) {
                     /// FIXME: Handle dependent base class.
-                    if(auto target = declForType(base.getType())) {
+                    if(auto target = ast::decl_of(base.getType())) {
                         handleRelation(def, RelationKind::Base, target, base.getSourceRange());
                         handleRelation(target, RelationKind::Derived, def, base.getSourceRange());
                     }
@@ -437,7 +437,7 @@ public:
         handleDeclOccurrence(decl, RelationKind::Definition, decl->getLocation());
         handleRelation(decl, RelationKind::Definition, decl, decl->getLocation());
 
-        if(auto target = declForType(decl->getUnderlyingType())) {
+        if(auto target = ast::decl_of(decl->getUnderlyingType())) {
             handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
         }
 
@@ -472,7 +472,7 @@ public:
         handleDeclOccurrence(decl, kind, decl->getLocation());
         handleRelation(decl, kind, decl, decl->getLocation());
 
-        if(auto target = declForType(decl->getType())) {
+        if(auto target = ast::decl_of(decl->getType())) {
             handleRelation(decl, RelationKind::TypeDefinition, target, decl->getLocation());
         }
 
@@ -563,7 +563,7 @@ public:
             return true;
         }
 
-        auto decl = declForType(loc.getType());
+        auto decl = ast::decl_of(loc.getType());
         auto location = loc.getTemplateNameLoc();
         handleDeclOccurrence(decl, RelationKind::Reference, location);
         handleRelation(decl, RelationKind::Reference, decl, location);
