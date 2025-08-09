@@ -23,32 +23,26 @@
 
 namespace clice {
 
-using namespace clang;
-
 namespace {
 
 using Node = SelectionTree::Node;
 
-#ifndef NDEBUG
-#define nlog(...) log::debug(__VA_ARGS__)
-#endif
+std::vector<const clang::Attr*> get_attributes(const clang::DynTypedNode& N) {
+    std::vector<const clang::Attr*> result;
 
-std::vector<const Attr*> get_attributes(const DynTypedNode& N) {
-    std::vector<const Attr*> result;
-
-    if(const auto* TL = N.get<TypeLoc>()) {
-        for(auto ATL = TL->getAs<AttributedTypeLoc>(); !ATL.isNull();
-            ATL = ATL.getModifiedLoc().getAs<AttributedTypeLoc>()) {
-            if(const Attr* A = ATL.getAttr()) {
+    if(const auto* TL = N.get<clang::TypeLoc>()) {
+        for(auto ATL = TL->getAs<clang::AttributedTypeLoc>(); !ATL.isNull();
+            ATL = ATL.getModifiedLoc().getAs<clang::AttributedTypeLoc>()) {
+            if(const clang::Attr* A = ATL.getAttr()) {
                 result.push_back(A);
             }
             assert(!ATL.getModifiedLoc().isNull());
         }
     }
 
-    if(const auto* S = N.get<AttributedStmt>()) {
-        for(; S != nullptr; S = dyn_cast<AttributedStmt>(S->getSubStmt())) {
-            for(const Attr* A: S->getAttrs()) {
+    if(const auto* S = N.get<clang::AttributedStmt>()) {
+        for(; S != nullptr; S = dyn_cast<clang::AttributedStmt>(S->getSubStmt())) {
+            for(const clang::Attr* A: S->getAttrs()) {
                 if(A) {
                     result.push_back(A);
                 }
@@ -56,8 +50,8 @@ std::vector<const Attr*> get_attributes(const DynTypedNode& N) {
         }
     }
 
-    if(const auto* D = N.get<Decl>()) {
-        for(const Attr* A: D->attrs()) {
+    if(const auto* D = N.get<clang::Decl>()) {
+        for(const clang::Attr* A: D->attrs()) {
             if(A) {
                 result.push_back(A);
             }
@@ -67,7 +61,7 @@ std::vector<const Attr*> get_attributes(const DynTypedNode& N) {
 }
 
 // Measure the fraction of selections that were enabled by recovery AST.
-void recordMetrics(const SelectionTree& S, const LangOptions& Lang) {
+void recordMetrics(const SelectionTree& S, const clang::LangOptions& Lang) {
     /// if(!trace::enabled())
     ///     return;
     /// const char* LanguageLabel = Lang.CPlusPlus ? "C++" : Lang.ObjC ? "ObjC" : "C";
@@ -90,7 +84,7 @@ void recordMetrics(const SelectionTree& S, const LangOptions& Lang) {
 }
 
 // Return the range covering a node and all its children.
-SourceRange getSourceRange(const DynTypedNode& N) {
+clang::SourceRange getSourceRange(const clang::DynTypedNode& N) {
     // MemberExprs to implicitly access anonymous fields should not claim any
     // tokens for themselves. Given:
     //   struct A { struct { int b; }; };
@@ -102,10 +96,10 @@ SourceRange getSourceRange(const DynTypedNode& N) {
     // For our purposes, we don't want the second MemberExpr to own any tokens,
     // so we reduce its range to match the CXXConstructExpr.
     // (It's not clear that changing the clang AST would be correct in general).
-    if(const auto* ME = N.get<MemberExpr>()) {
+    if(const auto* ME = N.get<clang::MemberExpr>()) {
         if(!ME->getMemberDecl()->getDeclName())
-            return ME->getBase() ? getSourceRange(DynTypedNode::create(*ME->getBase()))
-                                 : SourceRange();
+            return ME->getBase() ? getSourceRange(clang::DynTypedNode::create(*ME->getBase()))
+                                 : clang::SourceRange();
     }
     return N.getSourceRange();
 }
@@ -221,28 +215,30 @@ void update(SelectionTree::SelectionKind& Result, SelectionTree::SelectionKind N
 
 // As well as comments, don't count semicolons as real tokens.
 // They're not properly claimed as expr-statement is missing from the AST.
-bool should_ignore(const syntax::Token& token) {
+bool should_ignore(const clang::syntax::Token& token) {
     switch(token.kind()) {
         // Even "attached" comments are not considered part of a node's range.
-        case tok::comment:
+        case clang::tok::comment:
         // The AST doesn't directly store locations for terminating semicolons.
-        case tok::semi:
+        case clang::tok::semi:
         // We don't have locations for cvr-qualifiers: see QualifiedTypeLoc.
-        case tok::kw_const:
-        case tok::kw_volatile:
-        case tok::kw_restrict: return true;
+        case clang::tok::kw_const:
+        case clang::tok::kw_volatile:
+        case clang::tok::kw_restrict: return true;
         default: return false;
     }
 }
 
 // Determine whether 'Target' is the first expansion of the macro
 // argument whose top-level spelling location is 'SpellingLoc'.
-bool is_first_expansion(FileID Target, SourceLocation SpellingLoc, const SourceManager& SM) {
-    SourceLocation Prev = SpellingLoc;
+bool is_first_expansion(clang::FileID Target,
+                        clang::SourceLocation SpellingLoc,
+                        const clang::SourceManager& SM) {
+    clang::SourceLocation Prev = SpellingLoc;
     while(true) {
         // If the arg is expanded multiple times, getMacroArgExpandedLocation()
         // returns the first expansion.
-        SourceLocation Next = SM.getMacroArgExpandedLocation(Prev);
+        clang::SourceLocation Next = SM.getMacroArgExpandedLocation(Prev);
         // So if we reach the target, target is the first-expansion of the
         // first-expansion ...
         if(SM.getFileID(Next) == Target)
@@ -275,34 +271,36 @@ class SelectionTester {
 public:
     // The selection is offsets [SelBegin, SelEnd) in SelFile.
     SelectionTester(CompilationUnit& unit,
-                    FileID selected_file,
+                    clang::FileID selected_file,
                     LocalSourceRange selected_range,
-                    const SourceManager& SM) :
+                    const clang::SourceManager& SM) :
         selected_file(selected_file), selected_file_range(SM.getLocForStartOfFile(selected_file),
                                                           SM.getLocForEndOfFile(selected_file)),
         SM(SM) {
         // Find all tokens (partially) selected in the file.
         auto spelled_tokens = unit.spelled_tokens(selected_file);
 
-        const syntax::Token* first =
-            llvm::partition_point(spelled_tokens, [&](const syntax::Token& token) {
+        const clang::syntax::Token* first =
+            llvm::partition_point(spelled_tokens, [&](const clang::syntax::Token& token) {
                 return unit.file_offset(token.endLocation()) <= selected_range.begin;
             });
 
-        const syntax::Token* last =
-            std::partition_point(first, spelled_tokens.end(), [&](const syntax::Token& token) {
-                return unit.file_offset(token.location()) < selected_range.end;
-            });
+        const clang::syntax::Token* last =
+            std::partition_point(first,
+                                 spelled_tokens.end(),
+                                 [&](const clang::syntax::Token& token) {
+                                     return unit.file_offset(token.location()) < selected_range.end;
+                                 });
 
         auto selected_tokens = llvm::ArrayRef(first, last);
 
         // Find which of these are preprocessed to nothing and should be ignored.
         llvm::BitVector PPIgnored(selected_tokens.size(), false);
 
-        for(const syntax::TokenBuffer::Expansion& expansion:
+        for(const clang::syntax::TokenBuffer::Expansion& expansion:
             unit.expansions_overlapping(selected_tokens)) {
             if(expansion.Expanded.empty()) {
-                for(const syntax::Token& token: expansion.Spelled) {
+                for(const clang::syntax::Token& token: expansion.Spelled) {
                     if(&token >= first && &token < last) {
                         PPIgnored[&token - first] = true;
                     }
@@ -333,7 +331,7 @@ public:
 
     // Test whether a consecutive range of tokens is selected.
     // The tokens are taken from the expanded token stream.
-    SelectionTree::SelectionKind test(llvm::ArrayRef<syntax::Token> ExpandedTokens) const {
+    SelectionTree::SelectionKind test(llvm::ArrayRef<clang::syntax::Token> ExpandedTokens) const {
         if(ExpandedTokens.empty())
             return NoTokens;
 
@@ -357,18 +355,18 @@ public:
         // but it could occur for unmatched-bracket cases.
         // FIXME: fix it in TokenBuffer, expandedTokens(SourceRange) should not
         // return the eof token.
-        if(ExpandedTokens.back().kind() == tok::eof)
+        if(ExpandedTokens.back().kind() == clang::tok::eof)
             ExpandedTokens = ExpandedTokens.drop_back();
 
         SelectionTree::SelectionKind result = NoTokens;
 
         while(!ExpandedTokens.empty()) {
             // Take consecutive tokens from the same context together for efficiency.
-            SourceLocation Start = ExpandedTokens.front().location();
-            FileID FID = SM.getFileID(Start);
+            clang::SourceLocation Start = ExpandedTokens.front().location();
+            clang::FileID FID = SM.getFileID(Start);
             // Comparing SourceLocations against bounds is cheaper than getFileID().
-            SourceLocation Limit = SM.getComposedLoc(FID, SM.getFileIDSize(FID));
-            auto Batch = ExpandedTokens.take_while([&](const syntax::Token& T) {
+            clang::SourceLocation Limit = SM.getComposedLoc(FID, SM.getFileIDSize(FID));
+            auto Batch = ExpandedTokens.take_while([&](const clang::syntax::Token& T) {
                 return T.location() >= Start && T.location() < Limit;
             });
             assert(!Batch.empty());
@@ -383,7 +381,7 @@ public:
     // Cheap check whether any of the tokens in R might be selected.
     // If it returns false, test() will return NoTokens or Unselected.
     // If it returns true, test() may return any value.
-    bool mayHit(SourceRange R) const {
+    bool mayHit(clang::SourceRange R) const {
         if(selected_spelled.empty() || maybe_selected_expanded.empty())
             return false;
         // If the node starts after the selection ends, it is not selected.
@@ -394,7 +392,7 @@ public:
             if(*B > selected_spelled.back().offset)
                 return false;
         // If the node ends before the selection begins, it is not selected.
-        SourceLocation EndLoc = R.getEnd();
+        clang::SourceLocation EndLoc = R.getEnd();
         while(EndLoc.isMacroID())
             EndLoc = SM.getImmediateExpansionRange(EndLoc).getEnd();
         // In the rare case that the expansion range is a char range, EndLoc is
@@ -409,12 +407,12 @@ private:
     // Plausible expanded tokens that might be affected by the selection.
     // This is an overestimate, it may contain tokens that are not selected.
     // The point is to allow cheap pruning in test()
-    llvm::ArrayRef<syntax::Token>
-        computeMaybeSelectedExpandedTokens(const syntax::TokenBuffer& Toks) {
+    llvm::ArrayRef<clang::syntax::Token>
+        computeMaybeSelectedExpandedTokens(const clang::syntax::TokenBuffer& Toks) {
         if(selected_spelled.empty())
             return {};
 
-        auto LastAffectedToken = [&](SourceLocation Loc) {
+        auto LastAffectedToken = [&](clang::SourceLocation Loc) {
             auto Offset = offsetInSelFile(Loc);
             while(Loc.isValid() && !Offset) {
                 Loc = Loc.isMacroID() ? SM.getImmediateExpansionRange(Loc).getEnd()
@@ -424,7 +422,7 @@ private:
             return Offset;
         };
 
-        auto FirstAffectedToken = [&](SourceLocation Loc) {
+        auto FirstAffectedToken = [&](clang::SourceLocation Loc) {
             auto Offset = offsetInSelFile(Loc);
             while(Loc.isValid() && !Offset) {
                 Loc = Loc.isMacroID() ? SM.getImmediateExpansionRange(Loc).getBegin()
@@ -434,10 +432,10 @@ private:
             return Offset;
         };
 
-        const syntax::Token* Start = llvm::partition_point(
+        const clang::syntax::Token* Start = llvm::partition_point(
             Toks.expandedTokens(),
-            [&, First = selected_spelled.front().offset](const syntax::Token& Tok) {
-                if(Tok.kind() == tok::eof)
+            [&, First = selected_spelled.front().offset](const clang::syntax::Token& Tok) {
+                if(Tok.kind() == clang::tok::eof)
                     return false;
                 // Implausible if upperbound(Tok) < First.
                 if(auto Offset = LastAffectedToken(Tok.location()))
@@ -448,11 +446,11 @@ private:
             });
 
         bool EndInvalid = false;
-        const syntax::Token* End = std::partition_point(
+        const clang::syntax::Token* End = std::partition_point(
             Start,
             Toks.expandedTokens().end(),
-            [&, Last = selected_spelled.back().offset](const syntax::Token& Tok) {
-                if(Tok.kind() == tok::eof)
+            [&, Last = selected_spelled.back().offset](const clang::syntax::Token& Tok) {
+                if(Tok.kind() == clang::tok::eof)
                     return false;
                 // Plausible if lowerbound(Tok) <= Last.
                 if(auto Offset = FirstAffectedToken(Tok.location()))
@@ -470,9 +468,10 @@ private:
     }
 
     // Hit-test a consecutive range of tokens from a single file ID.
-    SelectionTree::SelectionKind testChunk(FileID FID, llvm::ArrayRef<syntax::Token> Batch) const {
+    SelectionTree::SelectionKind testChunk(clang::FileID FID,
+                                           llvm::ArrayRef<clang::syntax::Token> Batch) const {
         assert(!Batch.empty());
-        SourceLocation StartLoc = Batch.front().location();
+        clang::SourceLocation StartLoc = Batch.front().location();
         // There are several possible categories of FileID depending on how the
         // preprocessor was used to generate these tokens:
         //   main file, #included file, macro args, macro bodies.
@@ -489,7 +488,7 @@ private:
         // Handle tokens in another file #included into the main file.
         // Check if the #include is selected, but don't claim it exclusively.
         if(StartLoc.isFileID()) {
-            for(SourceLocation Loc = Batch.front().location(); Loc.isValid();
+            for(clang::SourceLocation Loc = Batch.front().location(); Loc.isValid();
                 Loc = SM.getIncludeLoc(SM.getFileID(Loc))) {
                 if(auto Offset = offsetInSelFile(Loc))
                     // FIXME: use whole #include directive, not just the filename string.
@@ -500,10 +499,10 @@ private:
 
         assert(StartLoc.isMacroID());
         // Handle tokens that were passed as a macro argument.
-        SourceLocation ArgStart = SM.getTopMacroCallerLoc(StartLoc);
+        clang::SourceLocation ArgStart = SM.getTopMacroCallerLoc(StartLoc);
         if(auto ArgOffset = offsetInSelFile(ArgStart)) {
             if(is_first_expansion(FID, ArgStart, SM)) {
-                SourceLocation ArgEnd = SM.getTopMacroCallerLoc(Batch.back().location());
+                clang::SourceLocation ArgEnd = SM.getTopMacroCallerLoc(Batch.back().location());
                 return testTokenRange(*ArgOffset, *offsetInSelFile(ArgEnd));
             } else {  // NOLINT(llvm-else-after-return)
                       /* fall through and treat as part of the macro body */
@@ -556,7 +555,7 @@ private:
     }
 
     // Decomposes Loc and returns the offset if the file ID is SelFile.
-    std::optional<unsigned> offsetInSelFile(SourceLocation Loc) const {
+    std::optional<unsigned> offsetInSelFile(clang::SourceLocation Loc) const {
         // Decoding Loc with SM.getDecomposedLoc is relatively expensive.
         // But SourceLocations for a file are numerically contiguous, so we
         // can use cheap integer operations instead.
@@ -566,7 +565,7 @@ private:
         return Loc.getRawEncoding() - selected_file_range.getBegin().getRawEncoding();
     }
 
-    SourceLocation getExpansionStart(SourceLocation Loc) const {
+    clang::SourceLocation getExpansionStart(clang::SourceLocation Loc) const {
         while(Loc.isMacroID())
             Loc = SM.getImmediateExpansionRange(Loc).getBegin();
         return Loc;
@@ -578,18 +577,18 @@ private:
     };
 
     std::vector<Tok> selected_spelled;
-    llvm::ArrayRef<syntax::Token> maybe_selected_expanded;
-    FileID selected_file;
-    SourceRange selected_file_range;
-    const SourceManager& SM;
+    llvm::ArrayRef<clang::syntax::Token> maybe_selected_expanded;
+    clang::FileID selected_file;
+    clang::SourceRange selected_file_range;
+    const clang::SourceManager& SM;
 };
 
 // Show the type of a node for debugging.
-void printNodeKind(llvm::raw_ostream& OS, const DynTypedNode& N) {
-    if(const TypeLoc* TL = N.get<TypeLoc>()) {
+void printNodeKind(llvm::raw_ostream& OS, const clang::DynTypedNode& N) {
+    if(const clang::TypeLoc* TL = N.get<clang::TypeLoc>()) {
         // TypeLoc is a hierarchy, but has only a single ASTNodeKind.
         // Synthesize the name from the Type subclass (except for QualifiedTypeLoc).
-        if(TL->getTypeLocClass() == TypeLoc::Qualified)
+        if(TL->getTypeLocClass() == clang::TypeLoc::Qualified)
             OS << "QualifiedTypeLoc";
         else
             OS << TL->getType()->getTypeClassName() << "TypeLoc";
@@ -599,27 +598,27 @@ void printNodeKind(llvm::raw_ostream& OS, const DynTypedNode& N) {
 }
 
 /// FIXME: Remove in release mode?
-std::string printNodeToString(const DynTypedNode& N, const PrintingPolicy& PP) {
+std::string printNodeToString(const clang::DynTypedNode& N, const clang::PrintingPolicy& PP) {
     std::string S;
     llvm::raw_string_ostream OS(S);
     printNodeKind(OS, N);
     return std::move(OS.str());
 }
 
-bool isImplicit(const Stmt* S) {
+bool isImplicit(const clang::Stmt* S) {
     // Some Stmts are implicit and shouldn't be traversed, but there's no
     // "implicit" attribute on Stmt/Expr.
     // Unwrap implicit casts first if present (other nodes too?).
-    if(auto* ICE = llvm::dyn_cast<ImplicitCastExpr>(S))
+    if(auto* ICE = llvm::dyn_cast<clang::ImplicitCastExpr>(S))
         S = ICE->getSubExprAsWritten();
     // Implicit this in a MemberExpr is not filtered out by RecursiveASTVisitor.
     // It would be nice if RAV handled this (!shouldTraverseImplicitCode()).
-    if(auto* CTI = llvm::dyn_cast<CXXThisExpr>(S))
+    if(auto* CTI = llvm::dyn_cast<clang::CXXThisExpr>(S))
         if(CTI->isImplicit())
             return true;
     // Make sure implicit access of anonymous structs don't end up owning tokens.
-    if(auto* ME = llvm::dyn_cast<MemberExpr>(S)) {
-        if(auto* FD = llvm::dyn_cast<FieldDecl>(ME->getMemberDecl()))
+    if(auto* ME = llvm::dyn_cast<clang::MemberExpr>(S)) {
+        if(auto* FD = llvm::dyn_cast<clang::FieldDecl>(ME->getMemberDecl()))
             if(FD->isAnonymousStructOrUnion())
                 // If Base is an implicit CXXThis, then the whole MemberExpr has no
                 // tokens. If it's a normal e.g. DeclRef, we treat the MemberExpr like
@@ -627,11 +626,11 @@ bool isImplicit(const Stmt* S) {
                 return isImplicit(ME->getBase());
     }
     // Refs to operator() and [] are (almost?) always implicit as part of calls.
-    if(auto* DRE = llvm::dyn_cast<DeclRefExpr>(S)) {
-        if(auto* FD = llvm::dyn_cast<FunctionDecl>(DRE->getDecl())) {
+    if(auto* DRE = llvm::dyn_cast<clang::DeclRefExpr>(S)) {
+        if(auto* FD = llvm::dyn_cast<clang::FunctionDecl>(DRE->getDecl())) {
             switch(FD->getOverloadedOperator()) {
-                case OO_Call:
-                case OO_Subscript: return true;
+                case clang::OO_Call:
+                case clang::OO_Subscript: return true;
                 default: break;
             }
         }
@@ -647,14 +646,14 @@ bool isImplicit(const Stmt* S) {
 // selected or contain some nodes that are.
 //
 // For simple cases (not inside macros) we prune subtrees that don't intersect.
-class SelectionVisitor : public RecursiveASTVisitor<SelectionVisitor> {
+class SelectionVisitor : public clang::RecursiveASTVisitor<SelectionVisitor> {
 public:
     // Runs the visitor to gather selected nodes and their ancestors.
     // If there is any selection, the root (TUDecl) is the first node.
     static std::deque<Node> collect(CompilationUnit& unit,
-                                    const PrintingPolicy& PP,
+                                    const clang::PrintingPolicy& PP,
                                     LocalSourceRange range,
-                                    FileID fid) {
+                                    clang::FileID fid) {
         SelectionVisitor V(unit, PP, range, fid);
         V.TraverseAST(unit.context());
         assert(V.stack.size() == 1 && "Unpaired push/pop?");
@@ -672,9 +671,9 @@ public:
     // Two categories of nodes are not "well-behaved":
     //  - those without source range information, we don't record those
     //  - those that can't be stored in DynTypedNode.
-    bool TraverseDecl(Decl* X) {
+    bool TraverseDecl(clang::Decl* X) {
         // Already pushed by constructor.
-        if(llvm::isa_and_nonnull<TranslationUnitDecl>(X)) {
+        if(llvm::isa_and_nonnull<clang::TranslationUnitDecl>(X)) {
             /// Top level decls cover the selection.
             for(auto decl: unit.top_level_decls()) {
                 if(!TraverseDecl(decl)) {
@@ -695,39 +694,39 @@ public:
         return traverse_node(X, [&] { return Base::TraverseDecl(X); });
     }
 
-    bool TraverseTypeLoc(TypeLoc X) {
+    bool TraverseTypeLoc(clang::TypeLoc X) {
         return traverse_node(&X, [&] { return Base::TraverseTypeLoc(X); });
     }
 
-    bool TraverseTemplateArgumentLoc(const TemplateArgumentLoc& X) {
+    bool TraverseTemplateArgumentLoc(const clang::TemplateArgumentLoc& X) {
         return traverse_node(&X, [&] { return Base::TraverseTemplateArgumentLoc(X); });
     }
 
-    bool TraverseNestedNameSpecifierLoc(NestedNameSpecifierLoc X) {
+    bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc X) {
         return traverse_node(&X, [&] { return Base::TraverseNestedNameSpecifierLoc(X); });
     }
 
-    bool TraverseConstructorInitializer(CXXCtorInitializer* X) {
+    bool TraverseConstructorInitializer(clang::CXXCtorInitializer* X) {
         return traverse_node(X, [&] { return Base::TraverseConstructorInitializer(X); });
     }
 
-    bool TraverseCXXBaseSpecifier(const CXXBaseSpecifier& X) {
+    bool TraverseCXXBaseSpecifier(const clang::CXXBaseSpecifier& X) {
         return traverse_node(&X, [&] { return Base::TraverseCXXBaseSpecifier(X); });
     }
 
-    bool TraverseAttr(Attr* X) {
+    bool TraverseAttr(clang::Attr* X) {
         return traverse_node(X, [&] { return Base::TraverseAttr(X); });
     }
 
-    bool TraverseConceptReference(ConceptReference* X) {
+    bool TraverseConceptReference(clang::ConceptReference* X) {
         return traverse_node(X, [&] { return Base::TraverseConceptReference(X); });
     }
 
     // Stmt is the same, but this form allows the data recursion optimization.
-    bool dataTraverseStmtPre(Stmt* X) {
+    bool dataTraverseStmtPre(clang::Stmt* X) {
         if(!X || isImplicit(X))
             return false;
-        auto N = DynTypedNode::create(*X);
+        auto N = clang::DynTypedNode::create(*X);
         if(safely_skipable(N))
             return false;
         push(std::move(N));
@@ -738,7 +737,7 @@ public:
         return true;
     }
 
-    bool dataTraverseStmtPost(Stmt* X) {
+    bool dataTraverseStmtPost(clang::Stmt* X) {
         pop();
         return true;
     }
@@ -748,27 +747,25 @@ public:
     // This means we'd never see 'int' in 'const int'! Work around that here.
     // (The reason for the behavior is to avoid traversing the nested Type twice,
     // but we ignore TraverseType anyway).
-    bool TraverseQualifiedTypeLoc(QualifiedTypeLoc QX) {
-        return traverse_node<TypeLoc>(&QX, [&] { return TraverseTypeLoc(QX.getUnqualifiedLoc()); });
+    bool TraverseQualifiedTypeLoc(clang::QualifiedTypeLoc QX) {
+        return traverse_node<clang::TypeLoc>(&QX, [&] {
+            return TraverseTypeLoc(QX.getUnqualifiedLoc());
+        });
     }
 
-    bool TraverseObjCProtocolLoc(ObjCProtocolLoc PL) {
-        return traverse_node(&PL, [&] { return Base::TraverseObjCProtocolLoc(PL); });
-    }
-
-    // Uninteresting parts of the AST that don't have locations within them.
-    bool TraverseNestedNameSpecifier(NestedNameSpecifier*) {
+    bool TraverseType(clang::QualType) {
         return true;
     }
 
-    bool TraverseType(QualType) {
+    // Uninteresting parts of the AST that don't have locations within them.
+    bool TraverseNestedNameSpecifier(clang::NestedNameSpecifier*) {
         return true;
     }
 
     // The DeclStmt for the loop variable claims to cover the whole range
     // inside the parens, this causes the range-init expression to not be hit.
     // Traverse the loop VarDecl instead, which has the right source range.
-    bool TraverseCXXForRangeStmt(CXXForRangeStmt* S) {
+    bool TraverseCXXForRangeStmt(clang::CXXForRangeStmt* S) {
         return traverse_node(S, [&] {
             return TraverseStmt(S->getInit()) && TraverseDecl(S->getLoopVariable()) &&
                    TraverseStmt(S->getRangeInit()) && TraverseStmt(S->getBody());
@@ -776,16 +773,16 @@ public:
     }
 
     // OpaqueValueExpr blocks traversal, we must explicitly traverse it.
-    bool TraverseOpaqueValueExpr(OpaqueValueExpr* E) {
+    bool TraverseOpaqueValueExpr(clang::OpaqueValueExpr* E) {
         return traverse_node(E, [&] { return TraverseStmt(E->getSourceExpr()); });
     }
 
     // We only want to traverse the *syntactic form* to understand the selection.
-    bool TraversePseudoObjectExpr(PseudoObjectExpr* E) {
+    bool TraversePseudoObjectExpr(clang::PseudoObjectExpr* E) {
         return traverse_node(E, [&] { return TraverseStmt(E->getSyntacticForm()); });
     }
 
-    bool TraverseTypeConstraint(const TypeConstraint* C) {
+    bool TraverseTypeConstraint(const clang::TypeConstraint* C) {
         if(auto* E = C->getImmediatelyDeclaredConstraint()) {
             // Technically this expression is 'implicit' and not traversed by the RAV.
             // However, the range is correct, so we visit expression to avoid adding
@@ -800,23 +797,23 @@ public:
 
     // PredefinedExpr like __func__ has a StringLiteral child for its value.
     // It's not written, so don't traverse it.
-    Stmt::child_range getStmtChildren(PredefinedExpr*) {
-        return {StmtIterator{}, StmtIterator{}};
+    clang::Stmt::child_range getStmtChildren(clang::PredefinedExpr*) {
+        return {clang::StmtIterator{}, clang::StmtIterator{}};
     }
 
 private:
     using Base = RecursiveASTVisitor<SelectionVisitor>;
 
     SelectionVisitor(CompilationUnit& unit,
-                     const PrintingPolicy& PP,
+                     const clang::PrintingPolicy& PP,
                      LocalSourceRange range,
-                     FileID SelFile) :
+                     clang::FileID SelFile) :
         unit(unit), SM(unit.context().getSourceManager()), lang_opts(unit.context().getLangOpts()),
         print_policy(PP), checker(unit, SelFile, range, SM),
         unclaimed_expanded_tokens(unit.expanded_tokens()) {
         // Ensure we have a node for the TU decl, regardless of traversal scope.
         nodes.emplace_back();
-        nodes.back().data = DynTypedNode::create(*unit.context().getTranslationUnitDecl());
+        nodes.back().data = clang::DynTypedNode::create(*unit.context().getTranslationUnitDecl());
         nodes.back().parent = nullptr;
         nodes.back().selected = SelectionTree::Unselected;
         stack.push(&nodes.back());
@@ -828,10 +825,10 @@ private:
     bool traverse_node(T* Node, const Func& Body) {
         if(Node == nullptr)
             return true;
-        auto N = DynTypedNode::create(*Node);
+        auto N = clang::DynTypedNode::create(*Node);
         if(safely_skipable(N))
             return true;
-        push(DynTypedNode::create(*Node));
+        push(clang::DynTypedNode::create(*Node));
         bool Ret = Body();
         pop();
         return Ret;
@@ -863,21 +860,21 @@ private:
 
     // An optimization for a common case: nodes outside macro expansions that
     // don't intersect the selection may be recursively skipped.
-    bool safely_skipable(const DynTypedNode& N) {
-        SourceRange S = getSourceRange(N);
-        if(auto* TL = N.get<TypeLoc>()) {
+    bool safely_skipable(const clang::DynTypedNode& N) {
+        clang::SourceRange S = getSourceRange(N);
+        if(auto* TL = N.get<clang::TypeLoc>()) {
             // FIXME: TypeLoc::getBeginLoc()/getEndLoc() are pretty fragile
             // heuristics. We should consider only pruning critical TypeLoc nodes, to
             // be more robust.
 
             // AttributedTypeLoc may point to the attribute's range, NOT the modified
             // type's range.
-            if(auto AT = TL->getAs<AttributedTypeLoc>())
+            if(auto AT = TL->getAs<clang::AttributedTypeLoc>())
                 S = AT.getModifiedLoc().getSourceRange();
         }
         // SourceRange often doesn't manage to accurately cover attributes.
         // Fortunately, attributes are rare.
-        if(llvm::any_of(get_attributes(N), [](const Attr* A) { return !A->isImplicit(); })) {
+        if(llvm::any_of(get_attributes(N), [](const clang::Attr* A) { return !A->isImplicit(); })) {
             return false;
         }
 
@@ -893,17 +890,17 @@ private:
 
     // There are certain nodes we want to treat as leaves in the SelectionTree,
     // although they do have children.
-    bool shouldSkipChildren(const Stmt* X) const {
+    bool shouldSkipChildren(const clang::Stmt* X) const {
         // UserDefinedLiteral (e.g. 12_i) has two children (12 and _i).
         // Unfortunately TokenBuffer sees 12_i as one token and can't split it.
         // So we treat UserDefinedLiteral as a leaf node, owning the token.
-        return llvm::isa<UserDefinedLiteral>(X);
+        return llvm::isa<clang::UserDefinedLiteral>(X);
     }
 
     // Pushes a node onto the ancestor stack. Pairs with pop().
     // Performs early hit detection for some nodes (on the earlySourceRange).
-    void push(DynTypedNode node) {
-        SourceRange Early = earlySourceRange(node);
+    void push(clang::DynTypedNode node) {
+        clang::SourceRange Early = earlySourceRange(node);
         log::debug("{2}push: {0} {1}",
                    printNodeToString(node, print_policy),
                    node.getSourceRange().printToString(SM),
@@ -938,8 +935,8 @@ private:
     // Returns the range of tokens that this node will claim directly, and
     // is not available to the node's children.
     // Usually empty, but sometimes children cover tokens but shouldn't own them.
-    SourceRange earlySourceRange(const DynTypedNode& N) {
-        if(const Decl* VD = N.get<VarDecl>()) {
+    clang::SourceRange earlySourceRange(const clang::DynTypedNode& N) {
+        if(const clang::Decl* VD = N.get<clang::VarDecl>()) {
             // We want the name in the var-decl to be claimed by the decl itself and
             // not by any children. Ususally, we don't need this, because source
             // ranges of children are not overlapped with their parent's.
@@ -955,32 +952,32 @@ private:
         // rather than the TypeLoc nested inside it.
         // We still traverse the TypeLoc, because it may contain other targeted
         // things like the T in ~Foo<T>().
-        if(const auto* CDD = N.get<CXXDestructorDecl>())
+        if(const auto* CDD = N.get<clang::CXXDestructorDecl>())
             return CDD->getNameInfo().getNamedTypeInfo()->getTypeLoc().getBeginLoc();
 
-        if(const auto* ME = N.get<MemberExpr>()) {
+        if(const auto* ME = N.get<clang::MemberExpr>()) {
             auto NameInfo = ME->getMemberNameInfo();
-            if(NameInfo.getName().getNameKind() == DeclarationName::CXXDestructorName)
+            if(NameInfo.getName().getNameKind() == clang::DeclarationName::CXXDestructorName)
                 return NameInfo.getNamedTypeInfo()->getTypeLoc().getBeginLoc();
         }
 
-        return SourceRange();
+        return clang::SourceRange();
     }
 
     // Claim tokens for N, after processing its children.
     // By default this claims all unclaimed tokens in getSourceRange().
     // We override this if we want to claim fewer tokens (e.g. there are gaps).
-    void claimTokensFor(const DynTypedNode& N, SelectionTree::SelectionKind& Result) {
+    void claimTokensFor(const clang::DynTypedNode& N, SelectionTree::SelectionKind& Result) {
         // CXXConstructExpr often shows implicit construction, like `string s;`.
         // Don't associate any tokens with it unless there's some syntax like {}.
         // This prevents it from claiming 's', its primary location.
-        if(const auto* CCE = N.get<CXXConstructExpr>()) {
+        if(const auto* CCE = N.get<clang::CXXConstructExpr>()) {
             claimRange(CCE->getParenOrBraceRange(), Result);
             return;
         }
         // ExprWithCleanups is always implicit. It often wraps CXXConstructExpr.
         // Prevent it claiming 's' in the case above.
-        if(N.get<ExprWithCleanups>())
+        if(N.get<clang::ExprWithCleanups>())
             return;
 
         // Declarators nest "inside out", with parent types inside child ones.
@@ -1008,22 +1005,22 @@ private:
         // In each row
         //   --- represents unclaimed parts of the SourceRange.
         //   ### represents parts that children already claimed.
-        if(const auto* TL = N.get<TypeLoc>()) {
-            if(auto PTL = TL->getAs<ParenTypeLoc>()) {
+        if(const auto* TL = N.get<clang::TypeLoc>()) {
+            if(auto PTL = TL->getAs<clang::ParenTypeLoc>()) {
                 claimRange(PTL.getLParenLoc(), Result);
                 claimRange(PTL.getRParenLoc(), Result);
                 return;
             }
-            if(auto ATL = TL->getAs<ArrayTypeLoc>()) {
+            if(auto ATL = TL->getAs<clang::ArrayTypeLoc>()) {
                 claimRange(ATL.getBracketsRange(), Result);
                 return;
             }
-            if(auto PTL = TL->getAs<PointerTypeLoc>()) {
+            if(auto PTL = TL->getAs<clang::PointerTypeLoc>()) {
                 claimRange(PTL.getStarLoc(), Result);
                 return;
             }
-            if(auto FTL = TL->getAs<FunctionTypeLoc>()) {
-                claimRange(SourceRange(FTL.getLParenLoc(), FTL.getEndLoc()), Result);
+            if(auto FTL = TL->getAs<clang::FunctionTypeLoc>()) {
+                claimRange(clang::SourceRange(FTL.getLParenLoc(), FTL.getEndLoc()), Result);
                 return;
             }
         }
@@ -1035,7 +1032,7 @@ private:
     // This runs for every node in the AST, and must be fast in common cases.
     // This is usually called from pop(), so we can take children into account.
     // The existing state of Result is relevant.
-    void claimRange(SourceRange S, SelectionTree::SelectionKind& Result) {
+    void claimRange(clang::SourceRange S, SelectionTree::SelectionKind& Result) {
         for(const auto& ClaimedRange: unclaimed_expanded_tokens.erase(unit.expanded_tokens(S)))
             update(Result, checker.test(ClaimedRange));
 
@@ -1050,19 +1047,19 @@ private:
         return std::string(Amount, ' ');
     }
 
-    SourceManager& SM;
-    const LangOptions& lang_opts;
-    const PrintingPolicy& print_policy;
+    clang::SourceManager& SM;
+    const clang::LangOptions& lang_opts;
+    const clang::PrintingPolicy& print_policy;
     CompilationUnit& unit;
     std::stack<Node*> stack;
     SelectionTester checker;
-    IntervalSet<syntax::Token> unclaimed_expanded_tokens;
+    IntervalSet<clang::syntax::Token> unclaimed_expanded_tokens;
     std::deque<Node> nodes;  // Stable pointers as we add more nodes.
 };
 
 }  // namespace
 
-llvm::SmallString<256> abbreviatedString(DynTypedNode N, const PrintingPolicy& PP) {
+llvm::SmallString<256> abbreviatedString(clang::DynTypedNode N, const clang::PrintingPolicy& PP) {
     llvm::SmallString<256> Result;
     {
         llvm::raw_svector_ostream OS(Result);
@@ -1116,7 +1113,7 @@ bool SelectionTree::create_each(CompilationUnit& unit,
     auto location = unit.create_location(unit.interested_file(), begin);
 
     // Prefer right token over left.
-    for(const syntax::Token& token: llvm::reverse(unit.spelled_tokens_touch(location))) {
+    for(const clang::syntax::Token& token: llvm::reverse(unit.spelled_tokens_touch(location))) {
         if(should_ignore(token)) {
             continue;
         }
@@ -1152,15 +1149,15 @@ SelectionTree::SelectionTree(CompilationUnit& unit, LocalSourceRange range) :
     print_policy(unit.context().getLangOpts()) {
     // No fundamental reason the selection needs to be in the main file,
     // but that's all clice has needed so far.
-    const SourceManager& SM = unit.context().getSourceManager();
-    FileID fid = SM.getMainFileID();
+    const clang::SourceManager& SM = unit.context().getSourceManager();
+    clang::FileID fid = SM.getMainFileID();
     print_policy.TerseOutput = true;
     print_policy.IncludeNewlines = false;
     auto [begin, end] = range;
 
-    log::debug(
-        "Computing selection for {0}",
-        SourceRange(SM.getComposedLoc(fid, begin), SM.getComposedLoc(fid, end)).printToString(SM));
+    log::debug("Computing selection for {0}",
+               clang::SourceRange(SM.getComposedLoc(fid, begin), SM.getComposedLoc(fid, end))
+                   .printToString(SM));
 
     nodes = SelectionVisitor::collect(unit, print_policy, range, fid);
     m_root = nodes.empty() ? nullptr : &nodes.front();
@@ -1180,15 +1177,15 @@ const Node* SelectionTree::common_ancestor() const {
     return ancestor != m_root ? ancestor : nullptr;
 }
 
-const DeclContext& SelectionTree::Node::decl_context() const {
+const clang::DeclContext& SelectionTree::Node::decl_context() const {
     for(const Node* CurrentNode = this; CurrentNode != nullptr; CurrentNode = CurrentNode->parent) {
-        if(const Decl* Current = CurrentNode->get<Decl>()) {
+        if(const clang::Decl* Current = CurrentNode->get<clang::Decl>()) {
             if(CurrentNode != this)
-                if(auto* DC = dyn_cast<DeclContext>(Current))
+                if(auto* DC = dyn_cast<clang::DeclContext>(Current))
                     return *DC;
             return *Current->getLexicalDeclContext();
         }
-        if(const auto* LE = CurrentNode->get<LambdaExpr>())
+        if(const auto* LE = CurrentNode->get<clang::LambdaExpr>())
             if(CurrentNode != this)
                 return *LE->getCallOperator();
     }
