@@ -133,7 +133,7 @@ private:
                       clang::SourceLocation location,
                       std::vector<index::SymbolID> labels) {
         auto [fid, offset] = unit.decompose_location(location);
-        auto& hints = interestedOnly ? result : sharedResult[fid];
+        auto& hints = interested_only ? result : sharedResult[fid];
         hints.emplace_back(offset, kind, labels);
     }
 
@@ -172,7 +172,7 @@ public:
 }  // namespace
 
 InlayHints inlayHints(CompilationUnit& unit, LocalSourceRange target) {
-    InlayHintsCollector collector(unit, true, target);
+    InlayHintsCollector collector(unit, true);
     collector.TraverseAST(unit.context());
     ranges::sort(collector.result, refl::less);
     return std::move(collector.result);

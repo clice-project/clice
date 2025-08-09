@@ -15,8 +15,8 @@ class DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollecto
 public:
     using Base = FilteredASTVisitor<DocumentSymbolCollector>;
 
-    DocumentSymbolCollector(CompilationUnit& unit, bool interestedOnly) :
-        Base(unit, interestedOnly, std::nullopt) {}
+    DocumentSymbolCollector(CompilationUnit& unit, bool interested_only) :
+        Base(unit, interested_only) {}
 
     bool isInterested(clang::Decl* decl) {
         switch(decl->getKind()) {
@@ -53,7 +53,7 @@ public:
         auto [fid, selectionRange] =
             unit.decompose_range(unit.expansion_location(ND->getLocation()));
 
-        auto& frame = interestedOnly ? result : sharedResult[fid];
+        auto& frame = interested_only ? result : sharedResult[fid];
         auto cursor = frame.cursor;
 
         /// Add new symbol.
@@ -69,7 +69,7 @@ public:
         bool res = (this->*MF)(decl);
 
         /// When all children node are set, go back to last node.
-        (interestedOnly ? result : sharedResult[fid]).cursor = cursor;
+        (interested_only ? result : sharedResult[fid]).cursor = cursor;
 
         return res;
     }

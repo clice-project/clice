@@ -13,8 +13,8 @@ class SemanticVisitor : public FilteredASTVisitor<SemanticVisitor<Derived>> {
 public:
     using Base = FilteredASTVisitor<SemanticVisitor>;
 
-    SemanticVisitor(CompilationUnit& unit, bool interestedOnly) :
-        Base(unit, interestedOnly, {}), unit(unit), resolver(unit.resolver()) {}
+    SemanticVisitor(CompilationUnit& unit, bool interested_only) :
+        Base(unit, interested_only), unit(unit), resolver(unit.resolver()) {}
 
 public:
     Derived& getDerived() {
@@ -102,7 +102,7 @@ public:
     }
 
     void run() {
-        if(Base::interestedOnly) {
+        if(Base::interested_only) {
             for(auto decl: unit.top_level_decls()) {
                 Base::TraverseDecl(decl);
             }

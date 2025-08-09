@@ -62,7 +62,7 @@ std::vector<const clang::Attr*> get_attributes(const clang::DynTypedNode& node) 
 }
 
 // Measure the fraction of selections that were enabled by recovery AST.
-void record_metrics(const SelectionTree& selection_tree, const clang::LangOptions& lang_opts) {
+void record_metrics(const SelectionTree& tree, const clang::LangOptions& lang_opts) {
     /// if(!trace::enabled())
     ///     return;
     /// const char* language_label = lang_opts.CPlusPlus ? "C++" : lang_opts.ObjC ? "ObjC" : "C";
