@@ -1,5 +1,6 @@
 #include "Test/Tester.h"
 #include "Feature/DocumentSymbol.h"
+#include "AST/Utility.h"
 
 namespace clice::testing {
 
@@ -9,7 +10,7 @@ struct DocumentSymbol : TestFixture {
 protected:
     auto run(llvm::StringRef code) {
         add_main("main.cpp", code);
-        Tester::compile();
+        Tester::compile_with_pch();
         EXPECT_TRUE(unit.has_value());
 
         return feature::document_symbols(*unit);
@@ -71,8 +72,6 @@ struct _3 {
 
     auto symbols = run(main);
     EXPECT_EQ(total_size(symbols), 5);
-    // tester->info->tu()->dump();
-    // println("{}", pretty_dump(symbols));
 }
 
 TEST_F(DocumentSymbol, Field) {

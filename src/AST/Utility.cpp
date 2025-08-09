@@ -4,9 +4,9 @@
 #include "clang/AST/DeclTemplate.h"
 #include "clang/Basic/SourceManager.h"
 
-namespace clice {
+namespace clice::ast {
 
-bool isDefinition(const clang::Decl* decl) {
+bool is_definition(const clang::Decl* decl) {
     if(auto VD = llvm::dyn_cast<clang::VarDecl>(decl)) {
         return VD->isThisDeclarationADefinition();
     }
@@ -29,7 +29,7 @@ bool isDefinition(const clang::Decl* decl) {
     return false;
 }
 
-bool isTemplated(const clang::Decl* decl) {
+bool is_templated(const clang::Decl* decl) {
     if(decl->getDescribedTemplate()) {
         return true;
     }
@@ -55,7 +55,7 @@ const static clang::CXXRecordDecl* getDeclContextForTemplateInstationPattern(con
     return nullptr;
 }
 
-const clang::NamedDecl* instantiatedFrom(const clang::NamedDecl* decl) {
+const clang::NamedDecl* instantiated_from(const clang::NamedDecl* decl) {
     if(auto CTSD = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(decl)) {
 
         auto kind = CTSD->getTemplateSpecializationKind();
@@ -134,14 +134,14 @@ const clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
 
     decl = llvm::cast<clang::NamedDecl>(decl->getCanonicalDecl());
 
-    if(auto ND = instantiatedFrom(llvm::cast<clang::NamedDecl>(decl))) {
+    if(auto ND = instantiated_from(llvm::cast<clang::NamedDecl>(decl))) {
         return llvm::cast<clang::NamedDecl>(ND->getCanonicalDecl());
     }
 
     return decl;
 }
 
-std::string getDeclName(const clang::NamedDecl* decl) {
+std::string name_of(const clang::NamedDecl* decl) {
     llvm::SmallString<128> result;
 
     auto name = decl->getDeclName();
@@ -203,7 +203,7 @@ std::string getDeclName(const clang::NamedDecl* decl) {
     return result.str().str();
 }
 
-clang::QualType typeForDecl(const clang::NamedDecl* decl) {
+clang::QualType type_of(const clang::NamedDecl* decl) {
     if(auto VD = llvm::dyn_cast<clang::VarDecl>(decl)) {
         return VD->getType();
     }
@@ -235,7 +235,7 @@ clang::QualType typeForDecl(const clang::NamedDecl* decl) {
     return clang::QualType();
 }
 
-const clang::NamedDecl* declForType(clang::QualType type) {
+const clang::NamedDecl* decl_of(clang::QualType type) {
     if(type.isNull()) {
         return nullptr;
     }
@@ -265,18 +265,10 @@ const clang::NamedDecl* declForType(clang::QualType type) {
             return decl;
         }
 
-        return instantiatedFrom(TST->getAsCXXRecordDecl());
+        return instantiated_from(TST->getAsCXXRecordDecl());
     }
 
     return nullptr;
 }
 
-void dumpInclude(clang::SourceManager& srcMgr, clang::SourceLocation loc) {
-    auto file = srcMgr.getFileID(loc);
-    for(auto includeLoc = srcMgr.getIncludeLoc(file); includeLoc.isValid();
-        includeLoc = srcMgr.getIncludeLoc(file)) {
-        includeLoc.dump(srcMgr);
-        file = srcMgr.getFileID(includeLoc);
-    }
-}
-}  // namespace clice
+}  // namespace clice::ast

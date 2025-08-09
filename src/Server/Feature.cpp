@@ -13,7 +13,9 @@ namespace clice {
 async::Task<json::Value> Server::on_completion(proto::CompletionParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = &opening_files[path];
-    auto offset = to_offset(kind, opening_file->content, params.position);
+    auto content = opening_file->content;
+
+    auto offset = to_offset(kind, content, params.position);
 
     if(!opening_file->pch_build_task.empty()) {
         co_await opening_file->pch_built_event;
@@ -26,7 +28,7 @@ async::Task<json::Value> Server::on_completion(proto::CompletionParams params) {
         /// Set compilation params ... .
         CompilationParams params;
         params.arguments = database.get_command(path, true).arguments;
-        params.add_remapped_file(path, opening_file->content);
+        params.add_remapped_file(path, content);
         params.pch = {pch->path, pch->preamble.size()};
         params.completion = {path, offset};
 
@@ -40,14 +42,14 @@ async::Task<json::Value> Server::on_completion(proto::CompletionParams params) {
 
 async::Task<json::Value> Server::on_hover(proto::HoverParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
-
     auto opening_file = &opening_files[path];
+    auto content = opening_file->content;
+
     auto guard = co_await opening_file->ast_built_lock.try_lock();
 
     auto offset = to_offset(kind, opening_file->content, params.position);
-
     opening_file = &opening_files[path];
-    auto content = opening_file->content;
+
     auto ast = opening_file->ast;
     if(!ast) {
         co_return json::Value(nullptr);
@@ -66,12 +68,12 @@ async::Task<json::Value> Server::on_hover(proto::HoverParams params) {
 
 async::Task<json::Value> Server::on_document_symbol(proto::DocumentSymbolParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
-
     auto opening_file = &opening_files[path];
-    auto guard = co_await opening_file->ast_built_lock.try_lock();
-
-    opening_file = &opening_files[path];
     auto content = opening_file->content;
+
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
+    opening_file = &opening_files[path];
+
     auto ast = opening_file->ast;
     if(!ast) {
         co_return json::Value(nullptr);
@@ -116,11 +118,11 @@ async::Task<json::Value> Server::on_document_symbol(proto::DocumentSymbolParams 
 
 async::Task<json::Value> Server::on_document_link(proto::DocumentLinkParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
-
     auto opening_file = &opening_files[path];
+    opening_file = &opening_files[path];
+
     auto guard = co_await opening_file->ast_built_lock.try_lock();
 
-    opening_file = &opening_files[path];
     auto content = opening_file->content;
     auto ast = opening_file->ast;
     if(!ast) {
@@ -147,12 +149,12 @@ async::Task<json::Value> Server::on_document_link(proto::DocumentLinkParams para
 
 async::Task<json::Value> Server::on_folding_range(proto::FoldingRangeParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
-
     auto opening_file = &opening_files[path];
+    auto content = opening_file->content;
+
     auto guard = co_await opening_file->ast_built_lock.try_lock();
 
     opening_file = &opening_files[path];
-    auto content = opening_file->content;
     auto ast = opening_file->ast;
     if(!ast) {
         co_return json::Value(nullptr);
@@ -187,12 +189,13 @@ async::Task<json::Value> Server::on_folding_range(proto::FoldingRangeParams para
 
 async::Task<json::Value> Server::on_semantic_token(proto::SemanticTokensParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
-
     auto opening_file = &opening_files[path];
+    auto content = opening_file->content;
+
     auto guard = co_await opening_file->ast_built_lock.try_lock();
 
     opening_file = &opening_files[path];
-    auto content = opening_file->content;
+
     auto ast = opening_file->ast;
     if(!ast) {
         co_return json::Value(nullptr);

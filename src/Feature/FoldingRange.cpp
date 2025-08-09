@@ -9,8 +9,8 @@ namespace {
 
 class FoldingRangeCollector : public FilteredASTVisitor<FoldingRangeCollector> {
 public:
-    FoldingRangeCollector(CompilationUnit& unit, bool interestedOnly) :
-        FilteredASTVisitor(unit, interestedOnly, std::nullopt) {}
+    FoldingRangeCollector(CompilationUnit& unit, bool interested_only) :
+        FilteredASTVisitor(unit, interested_only) {}
 
     constexpr static auto LastColOfLine = std::numeric_limits<unsigned>::max();
 
@@ -197,7 +197,7 @@ private:
             return;
         }
 
-        auto& ranges = interestedOnly ? result : index_result[fid];
+        auto& ranges = interested_only ? result : index_result[fid];
         ranges.emplace_back(local_range, kind, std::move(text));
     }
 

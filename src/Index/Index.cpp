@@ -36,7 +36,7 @@ public:
                               RelationKind kind,
                               clang::SourceLocation location) {
         assert(decl && "Invalid decl");
-        decl = normalize(decl);
+        decl = ast::normalize(decl);
 
         if(location.isMacroID()) {
             auto spelling = unit.spelling_location(location);
@@ -117,10 +117,10 @@ public:
             relation.range = relationRange;
             relation.target_symbol = 0;
         } else if(kind.isBetweenSymbol()) {
-            auto symbol_id = unit.getSymbolID(normalize(target));
+            auto symbol_id = unit.getSymbolID(ast::normalize(target));
             relation.target_symbol = symbol_id.hash;
         } else if(kind.isCall()) {
-            auto symbol_id = unit.getSymbolID(normalize(target));
+            auto symbol_id = unit.getSymbolID(ast::normalize(target));
             relation.range = relationRange;
             relation.target_symbol = symbol_id.hash;
         } else {
@@ -128,7 +128,7 @@ public:
         }
 
         auto& index = getIndex(fid);
-        auto symbol_id = unit.getSymbolID(normalize(decl));
+        auto symbol_id = unit.getSymbolID(ast::normalize(decl));
         auto& symbol = index.get_symbol(symbol_id.hash);
         index.add_relation(symbol, relation);
     }

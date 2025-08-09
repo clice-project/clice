@@ -15,10 +15,10 @@ class DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollecto
 public:
     using Base = FilteredASTVisitor<DocumentSymbolCollector>;
 
-    DocumentSymbolCollector(CompilationUnit& unit, bool interestedOnly) :
-        Base(unit, interestedOnly, std::nullopt) {}
+    DocumentSymbolCollector(CompilationUnit& unit, bool interested_only) :
+        Base(unit, interested_only) {}
 
-    bool isInterested(clang::Decl* decl) {
+    bool is_interested(clang::Decl* decl) {
         switch(decl->getKind()) {
             case clang::Decl::Namespace:
             case clang::Decl::Enum:
@@ -44,8 +44,8 @@ public:
         }
     }
 
-    bool hookTraverseDecl(clang::Decl* decl, auto MF) {
-        if(!isInterested(decl)) {
+    bool on_traverse_decl(clang::Decl* decl, auto MF) {
+        if(!is_interested(decl)) {
             return (this->*MF)(decl);
         }
 
@@ -53,13 +53,13 @@ public:
         auto [fid, selectionRange] =
             unit.decompose_range(unit.expansion_location(ND->getLocation()));
 
-        auto& frame = interestedOnly ? result : sharedResult[fid];
+        auto& frame = interested_only ? result : sharedResult[fid];
         auto cursor = frame.cursor;
 
         /// Add new symbol.
         auto& symbol = frame.cursor->emplace_back();
         symbol.kind = SymbolKind::from(decl);
-        symbol.name = getDeclName(ND);
+        symbol.name = ast::name_of(ND);
         symbol.selectionRange = selectionRange;
         symbol.range = selectionRange;
 
@@ -69,7 +69,7 @@ public:
         bool res = (this->*MF)(decl);
 
         /// When all children node are set, go back to last node.
-        (interestedOnly ? result : sharedResult[fid]).cursor = cursor;
+        (interested_only ? result : sharedResult[fid]).cursor = cursor;
 
         return res;
     }

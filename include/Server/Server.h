@@ -90,12 +90,13 @@ private:
     async::Task<json::Value> on_initialize(proto::InitializeParams params);
 
 private:
-    async::Task<OpenFile*> add_document(std::string path, std::string content);
-
     async::Task<> build_pch(std::string file, std::string preamble);
 
     async::Task<> build_ast(std::string file, std::string content);
 
+    async::Task<OpenFile*> add_document(std::string path, std::string content);
+
+private:
     async::Task<> on_did_open(proto::DidOpenTextDocumentParams params);
 
     async::Task<> on_did_change(proto::DidChangeTextDocumentParams params);

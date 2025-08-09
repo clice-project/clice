@@ -274,8 +274,9 @@ CompilationResult compile(CompilationParams& params) {
 CompilationResult compile(CompilationParams& params, PCHInfo& out) {
     assert(!params.output_file.empty() && "PCH file path cannot be empty");
 
-    /// out.command = params.arguments.str();
-    /// FIXME: out.deps = info->deps();
+    /// Record the begin time of PCH building.
+    auto now = std::chrono::system_clock::now().time_since_epoch();
+    out.mtime = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
 
     return run_clang<clang::GeneratePCHAction>(
         params,
@@ -294,11 +295,14 @@ CompilationResult compile(CompilationParams& params, PCHInfo& out) {
         [&](CompilationUnit& unit) {
             out.path = params.output_file.str();
             out.preamble = unit.interested_content();
+            out.deps = unit.deps();
+            out.arguments = params.arguments;
         });
 }
 
 CompilationResult compile(CompilationParams& params, PCMInfo& out) {
     assert(!params.output_file.empty() && "PCM file path cannot be empty");
+
     return run_clang<clang::GenerateReducedModuleInterfaceAction>(
         params,
         [&](clang::CompilerInstance& instance) {
