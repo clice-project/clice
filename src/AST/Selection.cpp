@@ -673,9 +673,15 @@ public:
     //  - those without source range information, we don't record those
     //  - those that can't be stored in DynTypedNode.
     bool TraverseDecl(Decl* X) {
+        // Already pushed by constructor.
         if(llvm::isa_and_nonnull<TranslationUnitDecl>(X)) {
-            // Already pushed by constructor.
-            return Base::TraverseDecl(X);
+            /// Top level decls cover the selection.
+            for(auto decl: unit.top_level_decls()) {
+                if(!TraverseDecl(decl)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         // Base::TraverseDecl will suppress children, but not this node itself.
