@@ -5,38 +5,32 @@
 
 namespace clice {
 
-async::Task<OpenFile*> Server::add_document(std::string path, std::string content) {
-    auto& openFile = opening_files[path];
-    openFile.content = content;
-
-    auto& task = openFile.ast_build_task;
-
-    /// If there is already an AST build task, cancel it.
-    if(!task.empty()) {
-        task.cancel();
-        task.dispose();
-    }
-
-    /// Create and schedule a new task.
-    task = build_ast(std::move(path), std::move(content));
-    co_await task;
-
-    co_return &opening_files[path];
-}
-
 async::Task<> Server::build_pch(std::string path, std::string content) {
     auto bound = compute_preamble_bound(content);
 
-    auto openFile = &opening_files[path];
-    bool outdated = true;
-    if(openFile->pch) {
-        /// FIXME:
-        /// outdated = co_await isPCHOutdated(path, llvm::StringRef(content).substr(0, bound));
-    }
+    auto open_file = &opening_files[path];
 
-    /// If not need update, return directly.
-    if(!outdated) {
-        co_return;
+    /// Check update ...
+    if(open_file->pch) {
+        bool outdated = false;
+
+        auto& info = *open_file->pch;
+        for(auto& dep: info.deps) {
+            fs::file_status status;
+            auto error = fs::status(dep, status, true);
+            if(error || std::chrono::duration_cast<std::chrono::milliseconds>(
+                            status.getLastModificationTime().time_since_epoch())
+                                .count() > info.mtime) {
+                outdated = true;
+                break;
+            }
+        }
+
+        /// If not need update, return directly.
+        if(!outdated) {
+            log::info("PCH is already up-to-date for {}", path);
+            co_return;
+        }
     }
 
     /// The actual PCH build task.
@@ -111,17 +105,17 @@ async::Task<> Server::build_pch(std::string path, std::string content) {
         co_return true;
     };
 
-    openFile = &opening_files[path];
+    open_file = &opening_files[path];
 
     /// If there is already an PCH build task, cancel it.
-    auto& task = openFile->pch_build_task;
+    auto& task = open_file->pch_build_task;
     if(!task.empty()) {
         task.cancel();
         task.dispose();
     }
 
     /// Schedule the new building task.
-    task = PCHBuildTask(*this, path, bound, std::move(content), openFile->diagnostics);
+    task = PCHBuildTask(*this, path, bound, std::move(content), open_file->diagnostics);
 
     if(co_await task) {
         log::info("Building PCH successfully for {}", path);
@@ -177,6 +171,26 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     file->ast_build_task.dispose();
 
     log::info("Building AST successfully for {}", path);
+}
+
+async::Task<OpenFile*> Server::add_document(std::string path, std::string content) {
+    auto& openFile = opening_files[path];
+    openFile.content = content;
+
+    auto& task = openFile.ast_build_task;
+
+    /// If there is already an AST build task, cancel it.
+    if(!task.empty()) {
+        task.cancel();
+        task.dispose();
+    }
+
+    /// Create and schedule a new task.
+    task = build_ast(std::move(path), std::move(content));
+
+    co_await task;
+
+    co_return &opening_files[path];
 }
 
 async::Task<> Server::on_did_open(proto::DidOpenTextDocumentParams params) {
