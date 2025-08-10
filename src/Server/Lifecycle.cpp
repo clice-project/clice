@@ -68,4 +68,16 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     co_return json::serialize(result);
 }
 
+async::Task<> Server::on_initialized(proto::InitializedParams) {
+    co_return;
+}
+
+async::Task<json::Value> Server::on_shutdown(proto::ShutdownParams params) {
+    co_return json::Value(nullptr);
+}
+
+async::Task<> Server::on_exit(proto::ExitParams params) {
+    co_return;
+}
+
 }  // namespace clice

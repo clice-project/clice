@@ -128,7 +128,7 @@ target("integration_tests")
     add_deps("clice")
     add_packages("python", "llvm")
 
-    add_tests("default", {run_timeout = 1000 * 10})
+    add_tests("default")
 
     on_test(function (target, opt)
         import("private.action.run.runenvs")
@@ -144,7 +144,7 @@ target("integration_tests")
             "--executable=" .. target:dep("clice"):targetfile(),
             "--resource-dir=" .. path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
         }
-        local opt = {envs = envs, timeout = opt.run_timeout, curdir = os.projectdir()}
+        local opt = {envs = envs, curdir = os.projectdir()}
 
         if has_config("ci") and is_plat("macosx") then
             os.vrun("pip install pytest pytest-asyncio pytest-xdist")

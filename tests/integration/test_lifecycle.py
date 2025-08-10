@@ -13,4 +13,5 @@ async def test_initialize(executable, test_data_dir, resource_dir):
     result = await client.initialize(test_data_dir)
     assert "serverInfo" in result
     assert result["serverInfo"]["name"] == "clice"
+
     await client.exit()

@@ -89,6 +89,12 @@ private:
 private:
     async::Task<json::Value> on_initialize(proto::InitializeParams params);
 
+    async::Task<> on_initialized(proto::InitializedParams);
+
+    async::Task<json::Value> on_shutdown(proto::ShutdownParams params);
+
+    async::Task<> on_exit(proto::ExitParams params);
+
 private:
     async::Task<bool> build_pch(std::string file, std::string preamble);
 
