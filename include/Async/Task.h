@@ -8,7 +8,6 @@
 #include <source_location>
 
 #include "Support/Format.h"
-#include "llvm/ADT/PointerIntPair.h"
 
 namespace clice::async {
 
@@ -24,10 +23,15 @@ struct promise_base {
 
         /// The coroutine handle will be destroyed when the task is done or cancelled.
         Disposable = 1 << 1,
+
+        /// The coroutine is done or is cancelled and resumed, means it will never
+        /// scheduled again.
+        Finished = 1 << 2,
     };
 
-    /// The address of the actual coroutine handle and flags.
-    llvm::PointerIntPair<void*, 2, Flags> data;
+    uint8_t flags;
+
+    void* data;
 
     /// The coroutine handle that is waiting for the task to complete.
     /// If this is a top-level coroutine, it is empty.
@@ -39,12 +43,12 @@ struct promise_base {
 
     template <typename Promise>
     void set(std::coroutine_handle<Promise> handle) {
-        data.setInt(Empty);
-        data.setPointer(handle.address());
+        flags = Empty;
+        data = handle.address();
     }
 
     auto handle() const noexcept {
-        return std::coroutine_handle<>::from_address(data.getPointer());
+        return std::coroutine_handle<>::from_address(data);
     }
 
     void schedule();
@@ -60,21 +64,29 @@ struct promise_base {
     void cancel() {
         auto p = this;
         while(p) {
-            p->data.setInt(Flags(data.getInt() | Flags::Cancelled));
+            p->flags |= Flags::Cancelled;
             p = p->next;
         }
     }
 
     bool cancelled() const noexcept {
-        return data.getInt() & Flags::Cancelled;
+        return flags & Flags::Cancelled;
     }
 
     void dispose() {
-        data.setInt(Flags(data.getInt() | Flags::Disposable));
+        flags |= Flags::Disposable;
     }
 
     bool disposable() const noexcept {
-        return data.getInt() & Flags::Disposable;
+        return flags & Flags::Disposable;
+    }
+
+    void finish() {
+        flags |= Flags::Finished;
+    }
+
+    bool finished() {
+        return flags & Flags::Finished;
     }
 
     std::coroutine_handle<> resume_handle() {
@@ -83,11 +95,16 @@ struct promise_base {
             auto p = this;
             while(p && p->cancelled()) {
                 auto con = p->continuation;
+
                 if(p->disposable()) {
                     p->destroy();
+                } else {
+                    p->finish();
                 }
+
                 p = con;
             }
+
             return std::noop_coroutine();
         } else {
             /// Otherwise, resume the coroutine handle.
@@ -120,6 +137,9 @@ struct final {
             continuation->next = nullptr;
             handle = continuation->resume_handle();
         }
+
+        /// Mark current coroutine as finished.
+        current.promise().finish();
 
         if(current.promise().disposable()) {
             /// If this task is disposable, destroy the coroutine handle.
@@ -270,10 +290,18 @@ public:
         core.promise().cancel();
     }
 
+    bool cancelled() {
+        return core.promise().cancelled();
+    }
+
     /// Dispose the task, it will be destroyed when finished or cancelled.
     void dispose() {
         core.promise().dispose();
         core = nullptr;
+    }
+
+    bool finished() {
+        return core.promise().finished();
     }
 
     T result() {

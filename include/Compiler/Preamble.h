@@ -13,20 +13,20 @@ class CompilationUnit;
 struct CompilationParams;
 
 struct PCHInfo {
-    /// The building time.
-    std::int64_t mtime;
-
     /// The path of the output PCH file.
     std::string path;
+
+    /// The building time of this PCH.
+    std::int64_t mtime;
 
     /// The content used to build this PCH.
     std::string preamble;
 
-    /// The command used to build this PCH.
-    std::string command;
-
     /// All files involved in building this PCH.
     std::vector<std::string> deps;
+
+    /// The command arguments used to build this PCH.
+    std::vector<const char*> arguments;
 };
 
 /// Compute the preamble bound of given content. We just

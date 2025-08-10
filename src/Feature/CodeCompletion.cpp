@@ -211,7 +211,7 @@ public:
 
     /// Render edit text for declaration.
     std::string render(const clang::NamedDecl* decl) {
-        return getDeclName(decl);
+        return ast::name_of(decl);
     }
 
     void process_candidate(clang::CodeCompletionResult& candidate) {
@@ -269,7 +269,7 @@ public:
                 auto declaration = candidate.Declaration;
                 /// if(declaration)
                 ///  auto name = getDeclName();
-                if(!check_name(getDeclName(declaration))) {
+                if(!check_name(ast::name_of(declaration))) {
                     return;
                 }
 
@@ -316,7 +316,7 @@ public:
         /// Add overload set.
         for(auto& [_, overload_set]: overloads) {
             CompletionItem item;
-            item.label = getDeclName(overload_set.first);
+            item.label = ast::name_of(overload_set.first);
             item.kind = CompletionItemKind::Function;
             item.score = overload_set.score;
             item.edit.range = prefix.range;

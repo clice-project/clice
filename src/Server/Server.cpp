@@ -57,6 +57,9 @@ async::Task<> Server::registerCapacity(llvm::StringRef id,
 
 Server::Server() {
     register_callback<&Server::on_initialize>("initialize");
+    register_callback<&Server::on_initialized>("initialized");
+    register_callback<&Server::on_shutdown>("shutdown");
+    register_callback<&Server::on_exit>("exit");
 
     register_callback<&Server::on_did_open>("textDocument/didOpen");
     register_callback<&Server::on_did_change>("textDocument/didChange");

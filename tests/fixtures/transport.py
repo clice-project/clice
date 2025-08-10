@@ -63,10 +63,10 @@ class LSPTransport:
 
     async def stop(self):
         if self.mode == "stdio" and self.process:
-            logging.info("Terminating LSP server process.")
-            self.process.terminate()
-            await self.process.wait()
-            logging.info("LSP server process terminated.")
+            return_code = await self.process.wait()
+            if return_code != 0:
+                raise RuntimeError("Server exit with error!")
+
         elif self.mode == "socket" and self.writer:
             logging.info("Closing socket connection to LSP server.")
             self.writer.close()

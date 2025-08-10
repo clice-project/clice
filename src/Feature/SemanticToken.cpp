@@ -24,7 +24,7 @@ public:
             modifiers |= SymbolModifiers::Declaration;
         }
 
-        if(isTemplated(decl)) {
+        if(ast::is_templated(decl)) {
             modifiers |= SymbolModifiers::Templated;
         }
 
@@ -85,7 +85,7 @@ public:
 
 public:
     void add_token(clang::FileID fid, Token& token, SymbolKind kind) {
-        auto& tokens = interestedOnly ? result : sharedResult[fid];
+        auto& tokens = interested_only ? result : sharedResult[fid];
         tokens.emplace_back(token.range, kind, SymbolModifiers());
     }
 
@@ -110,7 +110,7 @@ public:
             return;
         }
 
-        auto& tokens = interestedOnly ? result : sharedResult[fid];
+        auto& tokens = interested_only ? result : sharedResult[fid];
         tokens.emplace_back(range, kind, modifiers);
     }
 

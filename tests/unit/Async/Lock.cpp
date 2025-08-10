@@ -42,6 +42,39 @@ TEST(Async, Lock) {
     async::run(task1(), task2(), task3());
 }
 
+TEST(Async, LockCancel) {
+    async::Lock lock;
+
+    int x = 0;
+    int y = 0;
+
+    auto task = [&]() -> async::Task<> {
+        x += 1;
+        auto guard = co_await lock.try_lock();
+        co_await async::sleep(100);
+        y += 1;
+    };
+
+    auto task1 = task();
+    auto task2 = task();
+    auto task3 = task();
+
+    auto cancel = [&task2]() -> async::Task<> {
+        co_await async::sleep(10);
+        task2.cancel();
+        task2.dispose();
+    };
+
+    task1.schedule();
+    task2.schedule();
+    task3.schedule();
+
+    async::run(cancel());
+
+    EXPECT_EQ(x, 3);
+    EXPECT_EQ(y, 2);
+}
+
 }  // namespace
 
 }  // namespace clice::testing

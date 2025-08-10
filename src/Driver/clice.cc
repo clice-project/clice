@@ -161,6 +161,8 @@ int main(int argc, const char** argv) {
 
     async::run();
 
+    log::info("clice exit normally!");
+
     return 0;
 }
 

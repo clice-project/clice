@@ -183,4 +183,16 @@ struct InitializeResult {
     ServerCapabilities capabilities;
 };
 
+struct Empty {};
+
+using InitializedParams = Empty;
+
+using ShutdownParams = Empty;
+
+using ShutdownResult = Empty;
+
+using ExitParams = Empty;
+
+using ExitResult = Empty;
+
 }  // namespace clice::proto

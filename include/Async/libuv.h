@@ -74,4 +74,6 @@ void init();
 
 void run();
 
+void stop();
+
 }  // namespace clice::async

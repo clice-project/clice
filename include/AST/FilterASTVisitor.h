@@ -2,34 +2,19 @@
 
 #include "AST/SourceCode.h"
 #include "Compiler/CompilationUnit.h"
-
 #include "clang/AST/RecursiveASTVisitor.h"
 
 namespace clice {
 
-struct RAVFileter {
-
-    RAVFileter(CompilationUnit& unit, bool interestedOnly, std::optional<LocalSourceRange> limit) :
-        unit(unit), limit(limit), interestedOnly(interestedOnly) {}
-
-    bool filterable(clang::SourceRange range) const;
-
-    CompilationUnit& unit;
-    std::optional<LocalSourceRange> limit;
-    bool interestedOnly = true;
-};
-
 /// A visitor class that extends clang::RecursiveASTVisitor to traverse
 /// AST nodes with an additional filtering mechanism.
 template <typename Derived>
-class FilteredASTVisitor : public clang::RecursiveASTVisitor<Derived>, public RAVFileter {
+class FilteredASTVisitor : public clang::RecursiveASTVisitor<Derived> {
 public:
     using Base = clang::RecursiveASTVisitor<Derived>;
 
-    FilteredASTVisitor(CompilationUnit& unit,
-                       bool interestedOnly,
-                       std::optional<LocalSourceRange> targetRange = std::nullopt) :
-        RAVFileter(unit, interestedOnly, targetRange) {}
+    FilteredASTVisitor(CompilationUnit& unit, bool interested_only) :
+        unit(unit), interested_only(interested_only) {}
 
 #define CHECK_DERIVED_IMPL(func)                                                                   \
     static_assert(std::same_as<decltype(&FilteredASTVisitor::func), decltype(&Derived::func)>,     \
@@ -47,10 +32,19 @@ public:
         }
 
         if(llvm::isa<clang::TranslationUnitDecl>(decl)) {
+            if(interested_only) {
+                for(auto top: unit.top_level_decls()) {
+                    if(!TraverseDecl(top)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
             return Base::TraverseDecl(decl);
         }
 
-        if(filterable(decl->getSourceRange()) || decl->isImplicit()) {
+        if(decl->isImplicit()) {
             return true;
         }
 
@@ -73,9 +67,8 @@ public:
             }
         }
 
-        /// if constexpr(requires)
-        if constexpr(requires { getDerived().hookTraverseDecl(decl, &Base::TraverseDecl); }) {
-            return getDerived().hookTraverseDecl(decl, &Base::TraverseDecl);
+        if constexpr(requires { getDerived().on_traverse_decl(decl, &Base::TraverseDecl); }) {
+            return getDerived().on_traverse_decl(decl, &Base::TraverseDecl);
         } else {
             return Base::TraverseDecl(decl);
         }
@@ -84,7 +77,7 @@ public:
     bool TraverseStmt(clang::Stmt* stmt) {
         CHECK_DERIVED_IMPL(TraverseStmt);
 
-        if(!stmt || filterable(stmt->getSourceRange())) {
+        if(!stmt) {
             return true;
         }
 
@@ -95,7 +88,7 @@ public:
     bool TraverseAttributedStmt(clang::AttributedStmt* stmt) {
         CHECK_DERIVED_IMPL(TraverseAttributedStmt);
 
-        if(!stmt || filterable(stmt->getSourceRange())) {
+        if(!stmt) {
             return true;
         }
 
@@ -115,7 +108,7 @@ public:
     bool TraverseTypeLoc(clang::TypeLoc loc) {
         CHECK_DERIVED_IMPL(TraverseTypeLoc);
 
-        if(!loc || filterable(loc.getSourceRange())) {
+        if(!loc) {
             return true;
         }
 
@@ -130,7 +123,7 @@ public:
     bool TraverseAttr(clang::Attr* attr) {
         CHECK_DERIVED_IMPL(TraverseAttr);
 
-        if(!attr || filterable(attr->getRange())) {
+        if(!attr) {
             return true;
         }
 
@@ -153,7 +146,7 @@ public:
     bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc loc) {
         CHECK_DERIVED_IMPL(TraverseNestedNameSpecifierLoc);
 
-        if(!loc || filterable(loc.getSourceRange())) {
+        if(!loc) {
             return true;
         }
 
@@ -173,7 +166,7 @@ public:
     bool TraverseConceptReference(clang::ConceptReference* reference) {
         CHECK_DERIVED_IMPL(TraverseConceptReference);
 
-        if(!reference || filterable(reference->getSourceRange())) {
+        if(!reference) {
             return true;
         }
 
@@ -185,6 +178,10 @@ public:
     }
 
 #undef CHECK_DERIVED_IMPL
+
+protected:
+    CompilationUnit& unit;
+    bool interested_only;
 };
 
 }  // namespace clice

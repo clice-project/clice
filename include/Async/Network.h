@@ -18,7 +18,7 @@ void listen(Callback callback);
 /// Listen on the given ip and port, callback is called when there is a LSP message available.
 void listen(const char* ip, unsigned int port, Callback callback);
 
-/// Spawn a new process and listen on its stdin/stdout.
+/// FIXME: Spawn a new process and listen on its stdin/stdout.
 void spawn(llvm::StringRef path, llvm::ArrayRef<std::string> args, Callback callback);
 
 /// Write a JSON value to the client.
