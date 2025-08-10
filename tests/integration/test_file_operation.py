@@ -31,10 +31,12 @@ async def test_did_change(executable, test_data_dir, resource_dir):
 
     # Test frequently change content will not make server crash.
     content = client.get_file("main.cpp").content
-    for _ in range(0, 4):
+
+    for _ in range(0, 20):
         content += "\n"
+        await asyncio.sleep(0.2)
         await client.did_change("main.cpp", content)
-        await asyncio.sleep(0.1)
 
     await asyncio.sleep(5)
+    logging.info("Send exit")
     await client.exit()

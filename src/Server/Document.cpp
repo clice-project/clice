@@ -117,8 +117,13 @@ async::Task<bool> Server::build_pch(std::string file, std::string content) {
     /// If there is already an PCH build task, cancel it.
     auto& task = open_file->pch_build_task;
     if(!task.empty()) {
-        task.cancel();
-        task.dispose();
+        if(task.finished()) {
+            task.release().destroy();
+            log::info("Release old pch task!");
+        } else {
+            task.cancel();
+            task.dispose();
+        }
         log::info("Cancel old PCH building task!");
     }
 
@@ -182,6 +187,7 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     file = &opening_files[path];
     /// Update built AST info.
     file->ast = std::make_shared<CompilationUnit>(std::move(*ast));
+
     /// Dispose the task so that it will destroyed when task complete.
     file->ast_build_task.dispose();
 
@@ -196,14 +202,19 @@ async::Task<OpenFile*> Server::add_document(std::string path, std::string conten
 
     /// If there is already an AST build task, cancel it.
     if(!task.empty()) {
-        task.cancel();
-        task.dispose();
+        if(task.finished()) {
+            task.release().destroy();
+            log::info("Release old AST building Task!");
+        } else {
+            task.cancel();
+            task.dispose();
+        }
         log::info("Cancel old AST building Task!");
     }
 
     /// Create and schedule a new task.
     task = build_ast(std::move(path), std::move(content));
-    co_await task;
+    task.schedule();
 
     co_return &opening_files[path];
 }

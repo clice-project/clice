@@ -26,7 +26,6 @@ class LSPClient(LSPTransport):
 
     async def exit(self):
         await self.send_notification("exit")
-        await asyncio.sleep(1)
         await self.stop()
 
     def get_abs_path(self, relative_path: str):
