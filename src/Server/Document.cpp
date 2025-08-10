@@ -5,7 +5,7 @@
 
 namespace clice {
 
-async::Task<> Server::build_pch(std::string file, std::string content) {
+async::Task<bool> Server::build_pch(std::string file, std::string content) {
     auto bound = compute_preamble_bound(content);
 
     auto open_file = &opening_files[file];
@@ -38,7 +38,7 @@ async::Task<> Server::build_pch(std::string file, std::string content) {
     if(open_file->pch && !check_pch_update(*open_file->pch)) {
         /// If not need update, return directly.
         log::info("PCH is already up-to-date for {}", file);
-        co_return;
+        co_return true;
     }
 
     /// The actual PCH build task.
@@ -119,6 +119,7 @@ async::Task<> Server::build_pch(std::string file, std::string content) {
     if(!task.empty()) {
         task.cancel();
         task.dispose();
+        log::info("Cancel old PCH building task!");
     }
 
     /// Schedule the new building task.
@@ -129,9 +130,11 @@ async::Task<> Server::build_pch(std::string file, std::string content) {
 
         /// Dispose the task so that it will destroyed when task complete.
         task.dispose();
+        co_return true;
     }
 
-    /// TODO: report diagnostics in the preamble.
+    /// FIXME: report diagnostics in the preamble.
+    co_return false;
 }
 
 async::Task<> Server::build_ast(std::string path, std::string content) {
@@ -142,7 +145,10 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     auto guard = co_await file->ast_built_lock.try_lock();
 
     /// PCH is already updated.
-    co_await build_pch(path, content);
+    bool success = co_await build_pch(path, content);
+    if(!success) {
+        co_return;
+    }
 
     auto pch = opening_files[path].pch;
     if(!pch) {
@@ -190,28 +196,34 @@ async::Task<OpenFile*> Server::add_document(std::string path, std::string conten
     if(!task.empty()) {
         task.cancel();
         task.dispose();
+        log::info("Cancel old AST building Task!");
     }
 
     /// Create and schedule a new task.
     task = build_ast(std::move(path), std::move(content));
-
-    co_await task;
+    task.schedule();
 
     co_return &opening_files[path];
 }
 
-async::Task<> Server::on_did_open(proto::DidOpenTextDocumentParams params) {
-    auto path = mapping.to_path(params.textDocument.uri);
-    auto file = co_await add_document(path, std::move(params.textDocument.text));
-    if(file->diagnostics) {
-        auto guard = co_await file->ast_built_lock.try_lock();
-        file = &opening_files[path];
+async::Task<> Server::publish_diagnostics(std::string path, OpenFile* file) {
+    auto guard = co_await file->ast_built_lock.try_lock();
+    file = &opening_files[path];
+    if(file->ast) {
         auto diagnostics = feature::diagnostics(kind, mapping, *file->ast);
         co_await notify("textDocument/publishDiagnostics",
                         json::Object{
                             {"uri",         mapping.to_uri(path)  },
                             {"diagnostics", std::move(diagnostics)},
         });
+    }
+}
+
+async::Task<> Server::on_did_open(proto::DidOpenTextDocumentParams params) {
+    auto path = mapping.to_path(params.textDocument.uri);
+    auto file = co_await add_document(path, std::move(params.textDocument.text));
+    if(file->diagnostics) {
+        co_await publish_diagnostics(path, file);
     }
     co_return;
 }
@@ -220,14 +232,7 @@ async::Task<> Server::on_did_change(proto::DidChangeTextDocumentParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto file = co_await add_document(path, std::move(params.contentChanges[0].text));
     if(file->diagnostics) {
-        auto guard = co_await file->ast_built_lock.try_lock();
-        file = &opening_files[path];
-        auto diagnostics = feature::diagnostics(kind, mapping, *file->ast);
-        co_await notify("textDocument/publishDiagnostics",
-                        json::Object{
-                            {"uri",         mapping.to_uri(path)  },
-                            {"diagnostics", std::move(diagnostics)},
-        });
+        co_await publish_diagnostics(path, file);
     }
     co_return;
 }

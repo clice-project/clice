@@ -79,6 +79,7 @@ struct promise_base {
 
     std::coroutine_handle<> resume_handle() {
         if(cancelled()) {
+
             /// If the task is cancelled and disposable, destroy the coroutine handle.
             auto p = this;
             while(p && p->cancelled()) {
@@ -88,6 +89,7 @@ struct promise_base {
                 }
                 p = con;
             }
+
             return std::noop_coroutine();
         } else {
             /// Otherwise, resume the coroutine handle.

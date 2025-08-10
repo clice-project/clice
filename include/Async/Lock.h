@@ -31,9 +31,7 @@ public:
 
     class Guard {
     public:
-        Guard(Lock* lock) : lock(lock) {
-            assert(lock->locked && "Guard: should be locked");
-        }
+        Guard(Lock* lock) : lock(lock) {}
 
         Guard(Guard&& other) : lock(other.lock) {
             other.lock = nullptr;
@@ -58,12 +56,17 @@ public:
     /// Try to get the lock. If the lock is locked, the current coroutine will be
     /// suspended and wait for the lock to be released.
     Task<Guard> try_lock() {
+        /// Note that this task also may be canceled, we make sure
+        /// even cancel, it can resume one task.
+        Guard guard(this);
+
         if(locked) {
             co_await awaiter::lock{awaiters};
         }
 
         locked = true;
-        co_return Guard{this};
+
+        co_return std::move(guard);
     }
 
 private:

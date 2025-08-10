@@ -106,17 +106,18 @@ public:
 
     bool VisitCallExpr(const clang::CallExpr* call) {
         auto tokens = unit.expanded_tokens(call->getSourceRange());
-        if(tokens.back().kind() != clang::tok::r_paren)
+        if(tokens.empty() || tokens.back().kind() != clang::tok::r_paren) {
             return true;
+        }
 
-        auto rightParen = tokens.back().location();
+        auto right_paren = tokens.back().location();
         size_t depth = 0;
         while(!tokens.empty()) {
             auto kind = tokens.back().kind();
             if(kind == clang::tok::r_paren)
                 depth += 1;
             else if(kind == clang::tok::l_paren && --depth == 0) {
-                add_range({tokens.back().location(), rightParen},
+                add_range({tokens.back().location(), right_paren},
                           FoldingRangeKind::FunctionCall,
                           "(...)");
                 break;
@@ -144,16 +145,16 @@ public:
     }
 
     auto build_for_file(CompilationUnit& unit) {
-        TraverseTranslationUnitDecl(unit.tu());
-        collectDrectives(unit.directives()[unit.interested_file()]);
+        TraverseDecl(unit.tu());
+        collect_drectives(unit.directives()[unit.interested_file()]);
         std::ranges::sort(result, refl::less);
         return std::move(result);
     }
 
     auto build_for_index(CompilationUnit& unit) {
-        TraverseTranslationUnitDecl(unit.tu());
+        TraverseDecl(unit.tu());
         for(auto& [fid, directive]: unit.directives()) {
-            collectDrectives(directive);
+            collect_drectives(directive);
         }
 
         for(auto& [fid, ranges]: index_result) {
@@ -242,7 +243,7 @@ private:
     using ASTDirectives =
         std::remove_reference_t<decltype(std::declval<CompilationUnit>().directives())>;
 
-    void collectDrectives(const Directive& directive) {
+    void collect_drectives(const Directive& directive) {
         collect_condition_directive(directive.conditions);
         collect_pragma_region(directive.pragmas);
 
