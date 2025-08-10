@@ -96,6 +96,12 @@ private:
     async::Task<> on_exit(proto::ExitParams params);
 
 private:
+    /// Load the cache info from disk.
+    void load_cache_info();
+
+    /// Save the cache info to disk.
+    void save_cache_info();
+
     async::Task<bool> build_pch(std::string file, std::string preamble);
 
     async::Task<> build_ast(std::string file, std::string content);

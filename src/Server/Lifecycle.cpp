@@ -26,6 +26,9 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
         }
     }
 
+    /// Load cache info.
+    load_cache_info();
+
     proto::InitializeResult result;
     auto& [info, capabilities] = result;
     info.name = "clice";
@@ -77,6 +80,7 @@ async::Task<json::Value> Server::on_shutdown(proto::ShutdownParams params) {
 }
 
 async::Task<> Server::on_exit(proto::ExitParams params) {
+    save_cache_info();
     async::stop();
     co_return;
 }

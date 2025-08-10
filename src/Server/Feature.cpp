@@ -14,7 +14,6 @@ async::Task<json::Value> Server::on_completion(proto::CompletionParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = &opening_files[path];
     auto content = opening_file->content;
-
     auto offset = to_offset(kind, content, params.position);
 
     if(!opening_file->pch_build_task.empty()) {
@@ -43,7 +42,6 @@ async::Task<json::Value> Server::on_completion(proto::CompletionParams params) {
 async::Task<json::Value> Server::on_hover(proto::HoverParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = &opening_files[path];
-    auto content = opening_file->content;
 
     auto guard = co_await opening_file->ast_built_lock.try_lock();
 
@@ -69,7 +67,6 @@ async::Task<json::Value> Server::on_hover(proto::HoverParams params) {
 async::Task<json::Value> Server::on_document_symbol(proto::DocumentSymbolParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = &opening_files[path];
-    auto content = opening_file->content;
 
     auto guard = co_await opening_file->ast_built_lock.try_lock();
     opening_file = &opening_files[path];
@@ -79,6 +76,7 @@ async::Task<json::Value> Server::on_document_symbol(proto::DocumentSymbolParams 
         co_return json::Value(nullptr);
     }
 
+    llvm::StringRef content = ast->interested_content();
     auto to_range = [&](LocalSourceRange range) {
         auto c = PositionConverter(content, kind);
         auto begin = c.toPosition(range.begin);
@@ -123,7 +121,6 @@ async::Task<json::Value> Server::on_document_link(proto::DocumentLinkParams para
 
     auto guard = co_await opening_file->ast_built_lock.try_lock();
 
-    auto content = opening_file->content;
     auto ast = opening_file->ast;
     if(!ast) {
         co_return json::Value(nullptr);
@@ -136,6 +133,7 @@ async::Task<json::Value> Server::on_document_link(proto::DocumentLinkParams para
         auto links = feature::document_links(*ast);
         links.insert(links.begin(), pch_links.begin(), pch_links.end());
 
+        llvm::StringRef content = ast->interested_content();
         PositionConverter converter(content, kind);
         converter.to_positions(links, [](feature::DocumentLink& link) { return link.range; });
 
@@ -150,8 +148,6 @@ async::Task<json::Value> Server::on_document_link(proto::DocumentLinkParams para
 async::Task<json::Value> Server::on_folding_range(proto::FoldingRangeParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = &opening_files[path];
-    auto content = opening_file->content;
-
     auto guard = co_await opening_file->ast_built_lock.try_lock();
 
     opening_file = &opening_files[path];
@@ -161,6 +157,7 @@ async::Task<json::Value> Server::on_folding_range(proto::FoldingRangeParams para
     }
 
     co_return co_await async::submit([&, kind = this->kind] {
+        llvm::StringRef content = ast->interested_content();
         auto foldings = feature::folding_ranges(*ast);
         PositionConverter converter(content, kind);
         converter.to_positions(foldings,
@@ -190,7 +187,6 @@ async::Task<json::Value> Server::on_folding_range(proto::FoldingRangeParams para
 async::Task<json::Value> Server::on_semantic_token(proto::SemanticTokensParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = &opening_files[path];
-    auto content = opening_file->content;
 
     auto guard = co_await opening_file->ast_built_lock.try_lock();
 

@@ -429,7 +429,10 @@ auto CompilationDatabase::get_command(this Self& self,
     } else {
         /// FIXME: Use a better way to handle fallback command.
         info.dictionary = {};
-        info.arguments = {"clang++", "-std=c++20"};
+        info.arguments = {
+            self.save_string("clang++").data(),
+            self.save_string("-std=c++20").data(),
+        };
     }
 
     auto append_argument = [&](llvm::StringRef argument) {

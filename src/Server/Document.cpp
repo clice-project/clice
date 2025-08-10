@@ -2,8 +2,117 @@
 #include "Server/Server.h"
 #include "Compiler/Compilation.h"
 #include "Feature/Diagnostic.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/FileOutputBuffer.h"
 
 namespace clice {
+
+void Server::load_cache_info() {
+    auto path = path::join(config::cache.dir, "cache.json");
+    auto file = llvm::MemoryBuffer::getFile(path);
+    if(!file) {
+        log::warn("Fail to load cache info, because: {}", file.getError());
+        return;
+    }
+
+    llvm::StringRef content = file.get()->getBuffer();
+    auto json = json::parse(content);
+    if(!json) {
+        log::warn("Fail to load cache info, invalid json: {}", json.takeError());
+        return;
+    }
+
+    auto object = json->getAsObject();
+    if(!object) {
+        return;
+    }
+
+    auto version = object->getString("version");
+    if(!version) {
+        log::info("Fail to load cache info, the cache info is outdated");
+        return;
+    }
+
+    if(auto array = object->getArray("pchs")) {
+        for(auto& pch: *array) {
+            auto object = pch.getAsObject();
+            if(!object) {
+                continue;
+            }
+
+            auto file = object->getString("file");
+            auto path = object->getString("path");
+            auto preamble = object->getString("preamble");
+            auto mtime = object->getNumber("mtime");
+            auto deps = object->getArray("deps");
+            auto arguments = object->getArray("arguments");
+
+            if(!file || !path || !preamble || !mtime || !deps || !arguments) {
+                continue;
+            }
+
+            PCHInfo info;
+            info.path = *path;
+            info.preamble = *preamble;
+            info.mtime = *mtime;
+
+            for(auto& dep: *deps) {
+                info.deps.push_back(dep.getAsString()->str());
+            }
+
+            for(auto& argument: *arguments) {
+                auto carg = database.save_string(*argument.getAsString());
+                info.arguments.emplace_back(carg.data());
+            }
+
+            /// Update the PCH info.
+            opening_files[*file].pch = std::move(info);
+        }
+    }
+
+    log::info("Load cache info successfully");
+}
+
+void Server::save_cache_info() {
+    json::Object json;
+    json["version"] = "0.0.1";
+    json["pchs"] = json::Array();
+
+    for(auto& [file, open_file]: opening_files) {
+        if(!open_file.pch) {
+            continue;
+        }
+
+        auto& pch = *open_file.pch;
+        json::Object object;
+        object["file"] = file;
+        object["path"] = pch.path;
+        object["preamble"] = pch.preamble;
+        object["mtime"] = pch.mtime;
+        object["deps"] = json::serialize(pch.deps);
+        object["arguments"] = json::serialize(pch.arguments);
+
+        json["pchs"].getAsArray()->emplace_back(std::move(object));
+    }
+    auto binary = std::format("{}", json::Value(std::move(json)));
+
+    auto path = path::join(config::cache.dir, "cache.json");
+    auto result = llvm::FileOutputBuffer::create(path, binary.size());
+    if(!result) {
+        log::warn("Fail to create file output buffer for cache info: {}", result.takeError());
+        return;
+    }
+
+    auto& buffer = *result.get();
+    std::memcpy(buffer.getBufferStart(), binary.data(), binary.size());
+
+    if(auto error = buffer.commit()) {
+        log::warn("Fail to save cache info: {}", error);
+        return;
+    }
+
+    log::info("Save cache info successfully");
+}
 
 async::Task<bool> Server::build_pch(std::string file, std::string content) {
     auto bound = compute_preamble_bound(content);
