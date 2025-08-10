@@ -58,6 +58,21 @@ void run() {
     uv_check_result(uv_run(loop, UV_RUN_DEFAULT));
 
     stop();
+
+    /// Run agian to cleanup the loop.
+    uv_check_result(uv_run(loop, UV_RUN_DEFAULT));
+    uv_check_result(uv_loop_close(loop));
+
+    /// Clear all unfinished tasks.
+    for(auto task: tasks) {
+        if(task->cancelled()) {
+            task->resume();
+        } else {
+            task->destroy();
+        }
+    }
+
+    loop = nullptr;
 }
 
 void stop() {
@@ -69,12 +84,6 @@ void stop() {
 
     /// Close all handles.
     uv_walk(async::loop, walk_cb, nullptr);
-
-    /// Run agian to cleanup the loop.
-    uv_check_result(uv_run(loop, UV_RUN_DEFAULT));
-    uv_check_result(uv_loop_close(loop));
-
-    loop = nullptr;
 }
 
 }  // namespace clice::async

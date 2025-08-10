@@ -128,8 +128,10 @@ async::Task<bool> Server::build_pch(std::string file, std::string content) {
     if(co_await task) {
         log::info("Building PCH successfully for {}", file);
 
-        /// Dispose the task so that it will destroyed when task complete.
-        task.dispose();
+        /// FIXME: At this point, task has already been finished, destroy it
+        /// directly.
+        task.release().destroy();
+
         co_return true;
     }
 
@@ -201,7 +203,7 @@ async::Task<OpenFile*> Server::add_document(std::string path, std::string conten
 
     /// Create and schedule a new task.
     task = build_ast(std::move(path), std::move(content));
-    task.schedule();
+    co_await task;
 
     co_return &opening_files[path];
 }

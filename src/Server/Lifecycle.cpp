@@ -77,6 +77,7 @@ async::Task<json::Value> Server::on_shutdown(proto::ShutdownParams params) {
 }
 
 async::Task<> Server::on_exit(proto::ExitParams params) {
+    async::stop();
     co_return;
 }
 
