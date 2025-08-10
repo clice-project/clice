@@ -4,6 +4,7 @@
 #include "Feature/Diagnostic.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/FileOutputBuffer.h"
+#include "llvm/ADT/ScopeExit.h"
 
 namespace clice {
 
@@ -94,22 +95,39 @@ void Server::save_cache_info() {
 
         json["pchs"].getAsArray()->emplace_back(std::move(object));
     }
-    auto binary = std::format("{}", json::Value(std::move(json)));
 
-    auto path = path::join(config::cache.dir, "cache.json");
-    auto result = llvm::FileOutputBuffer::create(path, binary.size());
-    if(!result) {
-        log::warn("Fail to create file output buffer for cache info: {}", result.takeError());
+    auto final_path = path::join(config::cache.dir, "cache.json");
+
+    llvm::SmallString<128> temp_path;
+    if(auto error = llvm::sys::fs::createTemporaryFile("cache", "json", temp_path)) {
+        log::warn("Fail to create temporary file for cache info: {}", error.message());
         return;
     }
 
-    auto& buffer = *result.get();
-    std::memcpy(buffer.getBufferStart(), binary.data(), binary.size());
+    auto clean_up = llvm::make_scope_exit([&temp_path]() { llvm::sys::fs::remove(temp_path); });
 
-    if(auto error = buffer.commit()) {
-        log::warn("Fail to save cache info: {}", error);
+    std::error_code EC;
+    llvm::raw_fd_ostream os(temp_path, EC, llvm::sys::fs::OF_None);
+    if(EC) {
+        log::warn("Fail to open temporary file for writing: {}", EC.message());
         return;
     }
+
+    os << json::Value(std::move(json));
+    os.flush();
+    os.close();
+
+    if(os.has_error()) {
+        log::warn("Fail to write cache info to temporary file");
+        return;
+    }
+
+    if(auto error = llvm::sys::fs::rename(temp_path, final_path)) {
+        log::warn("Fail to rename temporary file to final cache file: {}", error.message());
+        return;
+    }
+
+    clean_up.release();
 
     log::info("Save cache info successfully");
 }
@@ -210,6 +228,8 @@ async::Task<bool> Server::build_pch(std::string file, std::string content) {
             co_return false;
         }
 
+        log::info("Building PCH successfully for {}", path);
+
         /// Update the built PCH info.
         open_file->pch = std::move(pch);
         open_file->pch_includes = std::move(links);
@@ -240,8 +260,6 @@ async::Task<bool> Server::build_pch(std::string file, std::string content) {
     task = PCHBuildTask(info, open_file, file, bound, std::move(content), open_file->diagnostics);
 
     if(co_await task) {
-        log::info("Building PCH successfully for {}", file);
-
         /// FIXME: At this point, task has already been finished, destroy it
         /// directly.
         task.release().destroy();

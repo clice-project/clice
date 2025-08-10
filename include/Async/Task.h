@@ -138,6 +138,9 @@ struct final {
             handle = continuation->resume_handle();
         }
 
+        /// Mark current coroutine as finished.
+        current.promise().finish();
+
         if(current.promise().disposable()) {
             /// If this task is disposable, destroy the coroutine handle.
             current.destroy();

@@ -73,7 +73,7 @@ class LSPClient(LSPTransport):
                 "version": file.version
             },
             "contentChanges": [
-                {"content": content, }
+                {"text": content, }
             ]
         }
 

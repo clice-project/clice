@@ -57,7 +57,7 @@ public:
     /// suspended and wait for the lock to be released.
     Task<Guard> try_lock() {
         /// Note that this task also may be canceled, we make sure
-        /// even cancel, it can resume one task.
+        /// even cancel, it can resume one task(through destructor).
         Guard guard(this);
 
         if(locked) {
@@ -66,6 +66,8 @@ public:
 
         locked = true;
 
+        /// Use `std::move` to make sure it will not resume
+        /// the awaiter here.
         co_return std::move(guard);
     }
 

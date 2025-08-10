@@ -31,11 +31,10 @@ async::Task<json::Value> Server::on_completion(proto::CompletionParams params) {
         params.pch = {pch->path, pch->preamble.size()};
         params.completion = {path, offset};
 
-        co_return co_await async::submit(
-            [kind = this->kind, content = opening_file->content, &params] {
-                auto items = feature::code_complete(params, {});
-                return proto::to_json(kind, content, items);
-            });
+        co_return co_await async::submit([kind = this->kind, &content, &params] {
+            auto items = feature::code_complete(params, {});
+            return proto::to_json(kind, content, items);
+        });
     }
 }
 
