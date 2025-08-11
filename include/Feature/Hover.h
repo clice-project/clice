@@ -6,7 +6,15 @@
 
 namespace clice::config {
 
-struct HoverOptions {};
+struct HoverOptions {
+    /// Strip doxygen info and merge with lsp info
+    bool enable_doxygen_parsing = true;
+    /// If set `false`, the comment will be wrapped
+    /// in code block and keep ascii typesetting
+    bool parse_comment_as_markdown = true;
+    /// Show sugar type
+    bool show_aka = true;
+};
 
 }  // namespace clice::config
 
