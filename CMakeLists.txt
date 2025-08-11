@@ -19,14 +19,6 @@ message(STATUS "Found LLVM ${LLVM_INSTALL_PATH}")
 
 set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
 
-# if(WIN32)
-#     # https://github.com/llvm/llvm-project/issues/86250
-#     add_definitions(-DCLANG_BUILD_STATIC)
-# else()
-#     find_package(LLVM REQUIRED CONFIG)
-#     find_package(Clang REQUIRED CONFIG)
-# endif()
-
 # install dependencies
 include(FetchContent)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -92,11 +84,21 @@ target_link_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/lib")
 target_compile_options(clice-core PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
 
-file(GLOB LLVM_LIBRARIES "${LLVM_INSTALL_PATH}/lib/*.lib")
+# if(WIN32)
+#     # https://github.com/llvm/llvm-project/issues/86250
+#     add_definitions(-DCLANG_BUILD_STATIC)
+# else()
+#     find_package(LLVM REQUIRED CONFIG)
+#     find_package(Clang REQUIRED CONFIG)
+# endif()
 
 if(NOT WIN32)
+    # Workaround for llvm libs, link all libs temporarily.
+    file(GLOB LLVM_LIBRARIES "${LLVM_INSTALL_PATH}/lib/*.{CMAKE_STATIC_LIBRARY_SUFFIX}")
+    file(GLOB LLVM_LIBRARIES "${LLVM_INSTALL_PATH}/lib/*.{CMAKE_SHARED_LIBRARY_SUFFIX}")
     target_link_libraries(clice-core PUBLIC ${LLVM_LIBRARIES})
 else()
+    file(GLOB LLVM_LIBRARIES "${LLVM_INSTALL_PATH}/lib/*.lib")
     target_link_libraries(clice-core PUBLIC ${LLVM_LIBRARIES} version ntdll)
 endif()
 
