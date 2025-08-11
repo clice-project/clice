@@ -95,8 +95,8 @@ target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
 if(NOT WIN32)
     # Workaround for llvm libs, link all libs temporarily.
     file(GLOB LLVM_LIBRARIES 
-        "${LLVM_INSTALL_PATH}/lib/*.${CMAKE_STATIC_LIBRARY_SUFFIX}"
-        "${LLVM_INSTALL_PATH}/lib/*.${CMAKE_SHARED_LIBRARY_SUFFIX}")
+        "${LLVM_INSTALL_PATH}/lib/*${CMAKE_STATIC_LIBRARY_SUFFIX}"
+        "${LLVM_INSTALL_PATH}/lib/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
     target_link_libraries(clice-core PUBLIC ${LLVM_LIBRARIES})
 else()
     file(GLOB LLVM_LIBRARIES "${LLVM_INSTALL_PATH}/lib/*.lib")
