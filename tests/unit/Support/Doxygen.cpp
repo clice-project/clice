@@ -220,6 +220,7 @@ TEST(DoxygenInfo, DoxygenParserIntergrated) {
             doc for bar line2
  @param[in,out] baz doc for baz
  @param awa not exist. deprecated
+ @param foo doc for foo extra line
 
  @details here are some details
           details line2
@@ -281,7 +282,7 @@ TEST(DoxygenInfo, DoxygenParserIntergrated) {
 
         auto info_baz = di.find_param_info("baz");
         EXPECT_TRUE(info_baz.has_value());
-        if(info_bar.has_value()) {
+        if(info_baz.has_value()) {
             EXPECT_TRUE(info_baz.value()->direction ==
                         DoxygenInfo::ParamCommandCommentContent::ParamDirection::InOut);
             clice::println("Doc for `baz`:\n```\n{}\n```", info_baz.value()->content);

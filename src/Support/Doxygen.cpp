@@ -13,10 +13,19 @@ void DoxygenInfo::add_param_command_comment(
     llvm::StringRef name,
     llvm::StringRef content,
     DoxygenInfo::ParamCommandCommentContent::ParamDirection direction) {
-    auto [it, exists] = param_command_comments.try_emplace(name);
-    if(exists) {
+    auto [it, not_exist] = param_command_comments.try_emplace(name);
+    if(not_exist) {
         it->second.content = content;
         it->second.direction = direction;
+    } else {
+        // Merge the info as doxygen does
+        if(it->second.direction == ParamCommandCommentContent::ParamDirection::Unspecified &&
+           direction != ParamCommandCommentContent::ParamDirection::Unspecified) {
+            // Update the direction if not assigned
+            it->second.direction = direction;
+        }
+        it->second.content += "\n";
+        it->second.content += content;
     }
 }
 

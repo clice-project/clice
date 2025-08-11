@@ -1,6 +1,7 @@
+#include "Support/StructedText.h"
+
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
-#include "Support/StructedText.h"
 
 namespace clice {
 
@@ -75,12 +76,12 @@ Paragraph& Paragraph::append_text(std::string text, Kind kind) {
         if(s.empty()) {
             return *this;
         }
-        bool flag = !chunks.empty() && !chunks.back().content.ends_with(" \t\n\v\f\r");
+        bool flag = !chunks.empty() && !std::isspace(chunks.back().content.back());
         auto& chunk = chunks.emplace_back();
         chunk.kind = Kind::PlainText;
         chunk.content = std::move(s.str());
         chunk.space_ahead = flag;
-        chunk.space_after = !s.ends_with(" \t\n\v\f\r");
+        chunk.space_after = !std::isspace(s.back());
     } else {
         bool flag = !chunks.empty() && chunks.back().kind != Kind::PlainText;
         auto& chunk = chunks.emplace_back();
