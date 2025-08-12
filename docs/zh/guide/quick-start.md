@@ -24,7 +24,7 @@ clice 实现了 [Language Server Protocol](https://microsoft.github.io/language-
 
 ### Build from Source
 
-自己从源码编译 clice，具体的步骤参考 [build](../development/build.md)。
+自己从源码编译 clice，具体的步骤参考 [build](../dev/build.md)。
 
 
 ## Project Setup
