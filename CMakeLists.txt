@@ -109,19 +109,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         clangToolingSyntax
     )
 else()
-    if(WIN32)
-        file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
-            "${LLVM_INSTALL_PATH}/lib/*.lib"
-        )
-    elseif(APPLE)
-        file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
-            "${LLVM_INSTALL_PATH}/lib/*.a"
-        )
-    else() # Linux / Unix
-        file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
-            "${LLVM_INSTALL_PATH}/lib/*.a"
-        )
-    endif()
+    file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS "${LLVM_INSTALL_PATH}/lib/*${CMAKE_STATIC_LIBRARY_SUFFIX}")
     target_link_libraries(LLVM INTERFACE ${LLVM_LIBRARIES})
 endif()
 
