@@ -85,25 +85,45 @@ if(WIN32)
     target_compile_definitions(LLVM INTERFACE "CLANG_BUILD_STATIC")
     target_link_libraries(LLVM INTERFACE version ntdll)
 endif()
-if(WIN32)
-    file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
-        "${LLVM_INSTALL_PATH}/lib/*.lib"
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_link_directories(LLVM INTERFACE "${LLVM_INSTALL_PATH}/lib")
+    target_link_libraries(LLVM INTERFACE
+        LLVMSupport
+        LLVMFrontendOpenMP
+        LLVMOption
+        clangAST
+        clangASTMatchers
+        clangBasic
+        clangDependencyScanning
+        clangDriver
+        clangFormat
+        clangFrontend
+        clangIndex
+        clangLex
+        clangSema
+        clangSerialization
+        clangTooling
+        clangToolingCore
+        clangToolingInclusions
+        clangToolingInclusionsStdlib
+        clangToolingSyntax
     )
-elseif(APPLE)
-    file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
-        "${LLVM_INSTALL_PATH}/lib/*.dylib"
-        "${LLVM_INSTALL_PATH}/lib/*.a"
-    )
-    target_link_options(LLVM INTERFACE "LINKER:--as-needed")
-else() # Linux / Unix
-    file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
-        "${LLVM_INSTALL_PATH}/lib/*.so"
-        "${LLVM_INSTALL_PATH}/lib/*.a"
-    )
-    target_link_options(LLVM INTERFACE "LINKER:--as-needed")
+else()
+    if(WIN32)
+        file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
+            "${LLVM_INSTALL_PATH}/lib/*.lib"
+        )
+    elseif(APPLE)
+        file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
+            "${LLVM_INSTALL_PATH}/lib/*.a"
+        )
+    else() # Linux / Unix
+        file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
+            "${LLVM_INSTALL_PATH}/lib/*.a"
+        )
+    endif()
+    target_link_libraries(LLVM INTERFACE ${LLVM_LIBRARIES})
 endif()
-# target_link_directories(LLVM INTERFACE "${LLVM_INSTALL_PATH}/lib")
-target_link_libraries(LLVM INTERFACE ${LLVM_LIBRARIES})
 
 target_compile_options(clice-core PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
