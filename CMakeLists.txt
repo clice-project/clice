@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
-# set LLVM install path
+# set llvm-libs install path
 if(NOT DEFINED LLVM_INSTALL_PATH OR LLVM_INSTALL_PATH STREQUAL "")
     message(FATAL_ERROR "Error: The variable LLVM_INSTALL_PATH is not set. Please specify it with -DLLVM_INSTALL_PATH=<value>.")
 endif()
@@ -15,17 +15,9 @@ get_filename_component(LLVM_INSTALL_PATH "${LLVM_INSTALL_PATH}" ABSOLUTE)
 if(NOT EXISTS "${LLVM_INSTALL_PATH}")
     message(FATAL_ERROR "Error: The specified LLVM_INSTALL_PATH does not exist: ${LLVM_INSTALL_PATH}")
 endif()
-message(STATUS "Found LLVM ${LLVM_INSTALL_PATH}")
+message(STATUS "Found llvm-libs ${LLVM_INSTALL_PATH}")
 
 set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
-
-if(WIN32)
-    # https://github.com/llvm/llvm-project/issues/86250
-    add_definitions(-DCLANG_BUILD_STATIC)
-else()
-    find_package(LLVM REQUIRED CONFIG)
-    find_package(Clang REQUIRED CONFIG)
-endif()
 
 # install dependencies
 include(FetchContent)
@@ -87,13 +79,15 @@ file(GLOB_RECURSE CLICE_SOURCES
 add_library(clice-core STATIC "${CLICE_SOURCES}")
 
 # set llvm include and lib path
-target_include_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/include")
-target_link_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/lib")
-target_compile_options(clice-core PUBLIC ${CLICE_CXX_FLAGS})
-target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
-
-if(NOT WIN32)
-    target_link_libraries(clice-core PUBLIC
+add_library(llvm-libs INTERFACE IMPORTED)
+target_include_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/include")
+if(WIN32)
+    target_compile_definitions(llvm-libs INTERFACE "CLANG_BUILD_STATIC")
+    target_link_libraries(llvm-libs INTERFACE version ntdll)
+endif()
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_link_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/lib")
+    target_link_libraries(llvm-libs INTERFACE
         LLVMSupport
         LLVMFrontendOpenMP
         LLVMOption
@@ -115,12 +109,15 @@ if(NOT WIN32)
         clangToolingSyntax
     )
 else()
-    file(GLOB LLVM_LIBRARIES "${LLVM_INSTALL_PATH}/lib/*.lib")
-    target_link_libraries(clice-core PUBLIC ${LLVM_LIBRARIES} version ntdll)
+    file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS "${LLVM_INSTALL_PATH}/lib/*${CMAKE_STATIC_LIBRARY_SUFFIX}")
+    target_link_libraries(llvm-libs INTERFACE ${LLVM_LIBRARIES})
 endif()
 
+target_compile_options(clice-core PUBLIC ${CLICE_CXX_FLAGS})
+target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
+
 target_include_directories(clice-core PUBLIC "${CMAKE_SOURCE_DIR}/include")
-target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus)
+target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus llvm-libs)
 
 # clice executable
 add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")
