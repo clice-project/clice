@@ -79,32 +79,35 @@ file(GLOB_RECURSE CLICE_SOURCES
 add_library(clice-core STATIC "${CLICE_SOURCES}")
 
 # set llvm include and lib path
-target_include_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/include")
-target_link_directories(clice-core PUBLIC "${LLVM_INSTALL_PATH}/lib")
+add_library(LLVM INTERFACE IMPORTED)
+target_include_directories(LLVM INTERFACE "${LLVM_INSTALL_PATH}/include")
+if(WIN32)
+    target_compile_definitions(LLVM INTERFACE "CLANG_BUILD_STATIC")
+    target_link_libraries(LLVM INTERFACE version ntdll)
+endif()
+if(WIN32)
+    file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
+        "${LLVM_INSTALL_PATH}/lib/*.lib"
+    )
+elseif(APPLE)
+    file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
+        "${LLVM_INSTALL_PATH}/lib/*.dylib"
+        "${LLVM_INSTALL_PATH}/lib/*.a"
+    )
+else() # Linux / Unix
+    file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
+        "${LLVM_INSTALL_PATH}/lib/*.so"
+        "${LLVM_INSTALL_PATH}/lib/*.a"
+    )
+endif()
+# target_link_directories(LLVM INTERFACE "${LLVM_INSTALL_PATH}/lib")
+target_link_libraries(LLVM INTERFACE ${LLVM_LIBRARIES})
+
 target_compile_options(clice-core PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
 
-# if(WIN32)
-#     # https://github.com/llvm/llvm-project/issues/86250
-#     add_definitions(-DCLANG_BUILD_STATIC)
-# else()
-#     find_package(LLVM REQUIRED CONFIG)
-#     find_package(Clang REQUIRED CONFIG)
-# endif()
-
-if(NOT WIN32)
-    # Workaround for llvm libs, link all libs temporarily.
-    file(GLOB LLVM_LIBRARIES 
-        "${LLVM_INSTALL_PATH}/lib/*${CMAKE_STATIC_LIBRARY_SUFFIX}"
-        "${LLVM_INSTALL_PATH}/lib/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
-    target_link_libraries(clice-core PUBLIC ${LLVM_LIBRARIES})
-else()
-    file(GLOB LLVM_LIBRARIES "${LLVM_INSTALL_PATH}/lib/*.lib")
-    target_link_libraries(clice-core PUBLIC ${LLVM_LIBRARIES} version ntdll)
-endif()
-
 target_include_directories(clice-core PUBLIC "${CMAKE_SOURCE_DIR}/include")
-target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus)
+target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus LLVM)
 
 # clice executable
 add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")
