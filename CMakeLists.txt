@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+dcmake_minimum_required(VERSION 3.20)
 project(CLICE_PROJECT LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -99,6 +99,7 @@ else() # Linux / Unix
         "${LLVM_INSTALL_PATH}/lib/*.so"
         "${LLVM_INSTALL_PATH}/lib/*.a"
     )
+    target_link_options(LLVM INTERFACE "LINKER:--as-needed")
 endif()
 # target_link_directories(LLVM INTERFACE "${LLVM_INSTALL_PATH}/lib")
 target_link_libraries(LLVM INTERFACE ${LLVM_LIBRARIES})
