@@ -1,4 +1,4 @@
-dcmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20)
 project(CLICE_PROJECT LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -94,6 +94,7 @@ elseif(APPLE)
         "${LLVM_INSTALL_PATH}/lib/*.dylib"
         "${LLVM_INSTALL_PATH}/lib/*.a"
     )
+    target_link_options(LLVM INTERFACE "LINKER:--as-needed")
 else() # Linux / Unix
     file(GLOB LLVM_LIBRARIES CONFIGURE_DEPENDS
         "${LLVM_INSTALL_PATH}/lib/*.so"
