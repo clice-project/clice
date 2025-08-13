@@ -1,40 +1,29 @@
-# Design of clice
-
-## Server
-clice is a language server, which is also a kind of server. It uses [libuv](https://github.com/libuv/libuv) as the event library and follows the common event-driven model. The main thread handles requests and distributes tasks, while the thread pool executes the actual tasks. Related code is located in the `Server` directory. It generally is responsible for the following tasks:
-
-- communicate with the client
-- initialize the server
-- distrubute tasks to the thread pool
-- manage all opened files
+# Architecture
 
 ## Protocol
 
-describe the LSP [specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/) with C++ struct definition.
+Use C++ to describe type definitions in the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 
 ## AST
 
-The main focus is to encapsulate some compiler interfaces of Clang.
-- build preamble
-- build AST
-- capture macros
-- capture diagnostics
-- resolve template
-- implement `SelectionTree`
+Some convenient wrappers for clang AST interfaces.
 
-TODO: add more details
+## Async
 
-## Index
+Wrapper for libuv coroutines using C++20 coroutines.
 
-mainly about how to build index and how to use it.
+## Compiler
 
-TODO: add more details
+Wrapper for clang compilation interfaces, responsible for actual compilation processes and obtaining various compilation information.
 
 ## Feature
 
-specific LSP feature implementations.
+Specific implementations of various LSP features.
+
+## Server
+
+clice is a language server, first and foremost a server. It uses [libuv](https://github.com/libuv/libuv) as the event library, adopting a common event-driven compilation model. The main thread is responsible for handling requests and dispatching tasks, while the thread pool is responsible for executing time-consuming tasks, such as compilation tasks. Related code is located in the `Server` directory.
 
 ## Support
 
-some useful utilities.
-
+Some other utility libraries.
