@@ -39,6 +39,80 @@ struct OpenFile {
     std::unique_ptr<OpenFile> next;
 };
 
+class ActiveFileIterator;
+
+/// A manager for all OpenFile with LRU cache.
+class ActiveFileManager {
+    friend class ActiveFileIterator;
+
+public:
+    constexpr static size_t DefaultMaxActiveFileNum = 8;
+    constexpr static size_t UnlimitedActiveFileNum = 512;
+
+public:
+    /// Create an ActiveFileManager with a default size.
+    ActiveFileManager() : max_size(DefaultMaxActiveFileNum) {}
+
+    ActiveFileManager(const ActiveFileManager&) = delete;
+    ActiveFileManager& operator= (const ActiveFileManager&) = delete;
+
+    /// Set the maximum active file count and it will be clamped to [1, UnlimitedActiveFileNum].
+    void set_max_active_file(size_t size) {
+        max_size = std::clamp(size, 1ul, UnlimitedActiveFileNum);
+    }
+
+    /// Get the maximum size of the cache.
+    size_t max_active_file() const {
+        return max_size;
+    }
+
+    /// Get the current size of the cache.
+    size_t size() const {
+        return index.size();
+    }
+
+    std::optional<OpenFile*> get(llvm::StringRef path);
+
+    OpenFile* get_or_create(llvm::StringRef path);
+
+    OpenFile* put(llvm::StringRef path, OpenFile file);
+
+    OpenFile& operator[] (llvm::StringRef path) {
+        return *get_or_create(path);
+    }
+
+    ActiveFileIterator begin() const;
+
+    ActiveFileIterator end() const;
+
+private:
+    OpenFile* lru_put_impl(llvm::StringRef path, OpenFile file);
+
+private:
+    /// The maximum size of the cache.
+    size_t max_size;
+
+    /// A double-linked list to store all opened files. While the `first` field of pair (each node
+    /// of list) refers to a key in `index`, the `second` field refers to the OpenFile object.
+    /// In another word, the `index` holds the ownership of path and the `items` holds the
+    /// ownership of OpenFile object.
+    using ListContainer = std::list<std::pair<llvm::StringRef, OpenFile>>;
+
+    /// The first element is the most recently used, and the last
+    /// element is the least recently used.
+    /// When a file is accessed, it will be moved to the front of the list.
+    /// When a new file is added, if the size exceeds the maximum size,
+    /// the last element will be removed.
+    ListContainer items;
+
+    /// A map from path to the iterator of the list.
+    llvm::StringMap<ListContainer::iterator> index;
+};
+
+struct ActiveFileIterator : public ActiveFileManager::ListContainer::const_iterator {
+    using Base = ActiveFileManager::ListContainer::const_iterator;
+};
+
 class Server {
 public:
     Server();
@@ -147,7 +221,7 @@ private:
     CompilationDatabase database;
 
     /// All opening files, TODO: use a LRU cache.
-    llvm::StringMap<OpenFile> opening_files;
+    ActiveFileManager opening_files;
 
     PathMapping mapping;
 };

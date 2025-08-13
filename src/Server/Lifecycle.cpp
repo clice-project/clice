@@ -18,6 +18,9 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     /// Initialize configuration.
     config::init(workspace);
 
+    /// Set server options.
+    opening_files.set_max_active_file(config::server.max_active_file);
+
     /// Load compile commands.json
     for(auto& dir: config::server.compile_commands_dirs) {
         auto content = fs::read(dir + "/compile_commands.json");
