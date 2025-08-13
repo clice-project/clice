@@ -1,4 +1,6 @@
-## Supported Platforms (CI Tested)
+# Build from Source
+
+## Supported Platforms
 
 - Windows
 - Linux

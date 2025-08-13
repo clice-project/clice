@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import { genSidebar } from './theme/sidebar'
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
@@ -16,23 +17,25 @@ export default defineConfig({
     // https://vitepress.dev/reference/default-theme-config
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Examples', link: '/markdown-examples' }
     ],
 
-    sidebar: [
-      {
-        text: 'Guide',
-        items: [
-          { text: 'Guide', link: '/guide' },
-          { text: 'Runtime API Examples', link: '/api-examples' }
-        ]
-      }
-    ],
-
+    sidebar: {
+      "/zh/": [
+        genSidebar('zh/design', { title: 'Design' }),
+        genSidebar('zh/dev', { title: 'Development' }),
+        genSidebar('zh/guide', { title: 'Guide' }),
+      ],
+      "/": [
+        genSidebar('en/design', { title: 'Design' }),
+        genSidebar('en/dev', { title: 'Development' }),
+        genSidebar('en/guide', { title: 'Guide' }),
+      ],
+    },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/clice-project/clice' }
+      { icon: 'discord', link: 'https://discord.gg/PA3UxW2VA3' },
+      { icon: 'github', link: 'https://github.com/clice-project/clice' },
     ],
 
-    outline: 'deep', 
+    outline: 'deep',
   }
 })
