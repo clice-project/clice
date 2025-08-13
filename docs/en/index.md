@@ -3,33 +3,33 @@ layout: home
 
 hero:
   name: clice
-  text: A complete new C++ language server
-  tagline: 
+  text: Next Generation C++ Language Server
+  tagline: Development is actively in progress
   actions:
     - theme: brand
       text: What is clice?
-      link: /zh/guide/what-is-clice
+      link: /en/guide/what-is-clice
     - theme: alt
-      text: Quick start
-      link: /zh/guide/quick-start
+      text: Quick Start
+      link: /en/guide/quick-start
     - theme: alt
-      text: contribute
-      link: /zh/guide/contribution
+      text: Contribution
+      link: /en/dev/contribution
   image:
       src: /image.png
-      alt: VitePress
+      alt: clice
 
 features:
-  - icon: 📝
-    title: Focus on Your Content
-    details: Effortlessly create beautiful documentation sites with just markdown.
-  - icon: 📝
-    title: Enjoy the Vite DX
-    details: Instant server start, lightning fast hot updates, and leverage Vite ecosystem plugins.
-  - icon: 📝
-    title: Customize with Vue
-    details: Use Vue syntax and components directly in markdown, or build custom themes with Vue.
-  - icon: 📝
-    title: Ship Fast Sites
-    details: Fast initial load with static HTML, fast post-load navigation with client-side routing.
+  - icon: T
+    title: Better Template Handling
+    details: Use pseudo-instantiation to handle dependent template names, with code completion even for complex templates
+  - icon: H
+    title: Header File Context
+    details: Support header file state switching between different source file contexts, and fully support non-self-contained files
+  - icon: M
+    title: Modules
+    details: Excellent C++20 module support, from code completion to highlighting to navigation, all adapted
+  - icon: I
+    title: Better Performance
+    details: Excellent asynchronous task scheduling, support for compilation task cancellation, caching necessary information, avoiding meaningless CPU waste
 ---

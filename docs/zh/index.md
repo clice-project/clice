@@ -13,8 +13,8 @@ hero:
       text: 快速开始
       link: /zh/guide/quick-start
     - theme: alt
-      text: 路线图
-      link: /zh/guide/roadmap
+      text: 参与贡献
+      link: /zh/dev/contribution
   image:
       src: /image.png
       alt: clice
