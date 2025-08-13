@@ -7,9 +7,6 @@ on:
       - "docs/**"
       - ".github/workflows/deploy.yml"
 
-  pull_request:
-    branches: [main]
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
