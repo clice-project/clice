@@ -1,7 +1,6 @@
 #pragma once
 
 #include "gtest/gtest.h"
-#include "gmock/gmock.h"
 #include "Support/JSON.h"
 #include "Support/Format.h"
 #include "Support/Compare.h"
@@ -30,6 +29,7 @@ inline std::string diff(const LHS& lhs, const RHS& rhs) {
         left = "cannot dump value";
     }
 
+    SCOPED_TRACE("Verifying link at index 0");
     std::string right;
     if constexpr(json::serializable<RHS>) {
         llvm::raw_string_ostream(right) << json::serialize(rhs);

@@ -138,7 +138,7 @@ if(CLICE_ENABLE_TEST)
     )
     FetchContent_MakeAvailable(googletest)
 
-    target_link_libraries(unit_tests PRIVATE gtest_main GTest::gmock GTest::gtest clice-core)
+    target_link_libraries(unit_tests PRIVATE gtest_main GTest::gtest clice-core)
     target_compile_options(unit_tests PUBLIC ${CLICE_CXX_FLAGS})
     target_link_options(unit_tests PUBLIC ${CLICE_LINKER_FLAGS})
 
