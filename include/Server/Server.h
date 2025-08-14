@@ -9,7 +9,6 @@
 #include "Compiler/Diagnostic.h"
 #include "Feature/DocumentLink.h"
 #include "Protocol/Protocol.h"
-#include <llvm/ADT/StringRef.h>
 
 namespace clice {
 
@@ -59,7 +58,7 @@ public:
 
     /// Set the maximum active file count and it will be clamped to [1, UnlimitedActiveFileNum].
     void set_max_active_file(size_t size) {
-        max_size = std::clamp(size, 1ul, UnlimitedActiveFileNum);
+        max_size = std::clamp(size, static_cast<size_t>(1), UnlimitedActiveFileNum);
     }
 
     /// Get the maximum size of the cache.
@@ -225,7 +224,7 @@ private:
     /// The compilation database.
     CompilationDatabase database;
 
-    /// All opening files, TODO: use a LRU cache.
+    /// All opening files.
     ActiveFileManager opening_files;
 
     PathMapping mapping;
