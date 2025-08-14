@@ -39,13 +39,17 @@ struct OpenFile {
     std::unique_ptr<OpenFile> next;
 };
 
-class ActiveFileIterator;
-
 /// A manager for all OpenFile with LRU cache.
 class ActiveFileManager {
-    friend class ActiveFileIterator;
-
 public:
+    /// A double-linked list to store all opened files. While the `first` field of pair (each node
+    /// of list) refers to a key in `index`, the `second` field refers to the OpenFile object.
+    /// In another word, the `index` holds the ownership of path and the `items` holds the
+    /// ownership of OpenFile object.
+    using ListContainer = std::list<std::pair<llvm::StringRef, OpenFile>>;
+
+    struct ActiveFileIterator : public ListContainer::const_iterator {};
+
     constexpr static size_t DefaultMaxActiveFileNum = 8;
     constexpr static size_t UnlimitedActiveFileNum = 512;
 
@@ -85,9 +89,13 @@ public:
         return index.contains(path);
     }
 
-    ActiveFileIterator begin() const;
+    ActiveFileIterator begin() const {
+        return ActiveFileIterator(items.begin());
+    }
 
-    ActiveFileIterator end() const;
+    ActiveFileIterator end() const {
+        return ActiveFileIterator(items.end());
+    }
 
 private:
     OpenFile* lru_put_impl(llvm::StringRef path, OpenFile file);
@@ -95,12 +103,6 @@ private:
 private:
     /// The maximum size of the cache.
     size_t max_size;
-
-    /// A double-linked list to store all opened files. While the `first` field of pair (each node
-    /// of list) refers to a key in `index`, the `second` field refers to the OpenFile object.
-    /// In another word, the `index` holds the ownership of path and the `items` holds the
-    /// ownership of OpenFile object.
-    using ListContainer = std::list<std::pair<llvm::StringRef, OpenFile>>;
 
     /// The first element is the most recently used, and the last
     /// element is the least recently used.
@@ -111,10 +113,6 @@ private:
 
     /// A map from path to the iterator of the list.
     llvm::StringMap<ListContainer::iterator> index;
-};
-
-struct ActiveFileIterator : public ActiveFileManager::ListContainer::const_iterator {
-    using Base = ActiveFileManager::ListContainer::const_iterator;
 };
 
 class Server {

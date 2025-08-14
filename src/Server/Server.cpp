@@ -53,14 +53,6 @@ OpenFile* ActiveFileManager::put(llvm::StringRef path, OpenFile file) {
     return std::addressof(iter->second->second);
 }
 
-ActiveFileIterator ActiveFileManager::begin() const {
-    return ActiveFileIterator(items.begin());
-}
-
-ActiveFileIterator ActiveFileManager::end() const {
-    return ActiveFileIterator(items.end());
-}
-
 async::Task<> Server::request(llvm::StringRef method, json::Value params) {
     co_await async::net::write(json::Object{
         {"jsonrpc", "2.0"            },
