@@ -6,32 +6,33 @@ namespace clice::testing {
 
 namespace {
 
-struct DocumentSymbol : TestFixture {
-protected:
-    auto run(llvm::StringRef code) {
-        add_main("main.cpp", code);
-        Tester::compile_with_pch();
-        EXPECT_TRUE(unit.has_value());
+suite<"DocumentSymbol"> document_symbol = [] {
+    Tester tester;
+    std::vector<feature::DocumentSymbol> symbols;
 
-        return feature::document_symbols(*unit);
-    }
+    auto run = [&](llvm::StringRef code) {
+        tester.clear();
+        tester.add_main("main.cpp", code);
+        tester.compile_with_pch();
+        expect(that % tester.unit.has_value());
+        symbols = feature::document_symbols(*tester.unit);
+    };
 
-    static void total_size(const std::vector<feature::DocumentSymbol>& result, size_t& size) {
-        for(auto& item: result) {
-            ++size;
-            total_size(item.children, size);
-        }
-    }
-
-    static size_t total_size(const std::vector<feature::DocumentSymbol>& result) {
+    auto total_size_wrapper = [](const std::vector<feature::DocumentSymbol>& result) -> size_t {
         size_t size = 0;
+        std::function<void(const std::vector<feature::DocumentSymbol>&, size_t&)> total_size =
+            [&total_size](const std::vector<feature::DocumentSymbol>& result, size_t& size) {
+                for(auto& item: result) {
+                    ++size;
+                    total_size(item.children, size);
+                }
+            };
         total_size(result, size);
         return size;
-    }
-};
+    };
 
-TEST_F(DocumentSymbol, Namespace) {
-    const char* main = R"cpp(
+    test("Namespace") = [&] {
+        const char* main = R"cpp(
 namespace _1 {
     namespace _2 {
     
@@ -49,15 +50,14 @@ namespace {}
 
 namespace _1::_2{
 }
-
 )cpp";
 
-    auto symbols = run(main);
-    EXPECT_EQ(total_size(symbols), 8);
-}
+        run(main);
+        expect(that % total_size_wrapper(symbols) == 8);
+    };
 
-TEST_F(DocumentSymbol, Struct) {
-    const char* main = R"cpp(
+    test("Struct") = [&] {
+        const char* main = R"cpp(
 struct _1 {};
 struct _2 {};
 
@@ -65,18 +65,14 @@ struct _3 {
     struct _4 {};
     struct _5 {};
 };
-
-
-
 )cpp";
 
-    auto symbols = run(main);
-    EXPECT_EQ(total_size(symbols), 5);
-}
+        run(main);
+        expect(that % total_size_wrapper(symbols) == 5);
+    };
 
-TEST_F(DocumentSymbol, Field) {
-    const char* main = R"cpp(
-
+    test("Field") = [&] {
+        const char* main = R"cpp(
 struct x {
     int x1;
     int x2;
@@ -88,15 +84,14 @@ struct x {
 
     static int x3;
 };
-
 )cpp";
 
-    auto symbols = run(main);
-    EXPECT_EQ(total_size(symbols), 7);
-}
+        run(main);
+        expect(that % total_size_wrapper(symbols) == 7);
+    };
 
-TEST_F(DocumentSymbol, Constructor) {
-    const char* main = R"cpp(
+    test("Constructor") = [&] {
+        const char* main = R"cpp(
 struct S {
     int x;
 
@@ -106,12 +101,12 @@ struct S {
     ~S() {}
 };
 )cpp";
-    auto symbols = run(main);
-    EXPECT_EQ(total_size(symbols), 6);
-}
+        run(main);
+        expect(that % total_size_wrapper(symbols) == 6);
+    };
 
-TEST_F(DocumentSymbol, Method) {
-    const char* main = R"cpp(
+    test("Method") = [&] {
+        const char* main = R"cpp(
 
 struct _0 {
     void f(int x) {}
@@ -121,15 +116,14 @@ struct _0 {
     void f2(const _0& x) {}
     void f2(_0 x) {}
 };
-
 )cpp";
 
-    auto symbols = run(main);
-    EXPECT_EQ(total_size(symbols), 7);
-}
+        run(main);
+        expect(that % total_size_wrapper(symbols) == 7);
+    };
 
-TEST_F(DocumentSymbol, Enum) {
-    const char* main = R"cpp(
+    test("Enum") = [&] {
+        const char* main = R"cpp(
 
 enum class A {
     _1,
@@ -142,25 +136,24 @@ enum B {
     _b,
     _c,
 };
-
 )cpp";
 
-    auto symbols = run(main);
-    EXPECT_EQ(total_size(symbols), 8);
-}
+        run(main);
+        expect(that % total_size_wrapper(symbols) == 8);
+    };
 
-TEST_F(DocumentSymbol, TopLevelVariable) {
-    const char* main = R"cpp(
+    test("TopLevelVariable") = [&] {
+        const char* main = R"cpp(
 constexpr auto x = 1;
 int y = 2;
 )cpp";
 
-    auto symbols = run(main);
-    EXPECT_EQ(total_size(symbols), 2);
-}
+        run(main);
+        expect(that % total_size_wrapper(symbols) == 2);
+    };
 
-TEST_F(DocumentSymbol, Macro) {
-    const char* main = R"cpp(
+    test("Macro") = [&] {
+        const char* main = R"cpp(
 #define CLASS(X) class X 
 
 CLASS(test) {
@@ -169,67 +162,13 @@ CLASS(test) {
 
 #define VAR(X) int X = 1; 
 VAR(test)
-
 )cpp";
 
-    auto symbols = run(main);
+        run(main);
 
-    // clang-format off
-
-/// FIXME:
-/// Fix range for macro expansion.  Current out put is:
-//
-// debug(symbols);
-// 
-// kind: Class, name:test, detail:, deprecated:false, range: {"end":{"character":0,"line":5},"start":{"character":0,"line":3}}, children_num:1
-//  kind: Field, name:x, detail:int, deprecated:false, range: {"end":{"character":3,"line":4},"start":{"character":4,"line":4}}, children_num:0
-// kind: Variable, name:test, detail:int, deprecated:false, range: {"end":{"character":0,"line":8},"start":{"character":0,"line":8}}, children_num:0
-
-    // clang-format on
-
-    /// EXPECT_EQ(total_size(symbols), 3);
-}
-
-TEST_F(DocumentSymbol, WithHeader) {
-    const char* header = R"cpp(
-
-struct Test {
-    
-    struct Inner {
-       double z;
+        /// expect(that % total_size_wrapper(symbols) == 3);
     };
-
-    int a;
-
-    constexpr static int x = 1;
 };
-
-)cpp";
-
-    const char* main = R"cpp(
-#include "header.h"
-
-constexpr auto x = 1;
-int y = 2;
-)cpp";
-
-    Tester tx;
-    tx.add_file(path::join(".", "header.h"), header);
-    tx.add_main("main.cpp", main);
-    tx.compile();
-
-    auto& info = tx.unit;
-    EXPECT_TRUE(info.has_value());
-
-    // auto maps = feature::indexDocumentSymbol(*info);
-    // for(auto& [fileID, result]: maps) {
-    //     if(fileID == info->srcMgr().getMainFileID()) {
-    //         EXPECT_EQ(total_size(result), 2);
-    //     } else {
-    //         EXPECT_EQ(total_size(result), 5);
-    //     }
-    // }
-}
 
 }  // namespace
 

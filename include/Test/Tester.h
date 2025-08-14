@@ -157,6 +157,14 @@ struct Tester {
             return ranges.lookup(name);
         }
     }
+
+    void clear() {
+        params = CompilationParams();
+        database = CompilationDatabase();
+        unit.reset();
+        sources.all_files.clear();
+        src_path.clear();
+    }
 };
 
 struct TestFixture : ::testing::Test, Tester {};

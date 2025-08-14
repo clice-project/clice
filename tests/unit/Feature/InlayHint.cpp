@@ -5,39 +5,41 @@ namespace clice::testing {
 
 namespace {
 
-struct InlayHints : public Tester, ::testing::Test {
-protected:
+suite<"InlayHint"> inlay_hint = [] {
+    Tester tester;
     feature::InlayHints hints;
 
-    void run(llvm::StringRef code, llvm::StringRef name) {
-        add_main("main.cpp", code);
-        compile();
+    auto run = [&](llvm::StringRef code, llvm::StringRef name) {
+        tester.clear();
+        tester.add_main("main.cpp", code);
+        tester.compile();
 
-        LocalSourceRange range = LocalSourceRange(0, unit->interested_content().size());
-        hints = feature::inlay_hints(*unit, range);
+        LocalSourceRange range = LocalSourceRange(0, tester.unit->interested_content().size());
+        hints = feature::inlay_hints(*tester.unit, range);
 
-        assert(nameless_points().size() == 1);
+        expect(that % tester.nameless_points().size() == 1);
 
         /// bool visited = false;
         /// for(auto& hint: hints) {
-        ///     if(hint.offset == nameless_points().front() && hint.parts.front().name == name){
+        ///     if(hint.offset == tester.nameless_points().front() && hint.parts.front().name ==
+        ///     name){
         ///         visited = true;
         ///         break;
         ///     }
         /// }
-        /// EXPECT_TRUE(visited);
-    }
-};
+        /// expect(that % visited);
+    };
 
-TEST_F(InlayHints, Parameters) {
-    run(R"cpp(
+    test("Parameters") = [&] {
+        run(R"cpp(
 void foo(int param);
 void bar() {
   foo($42);
 }
 )cpp",
-        "param");
-}
+            "param");
+    };
+};
 
 }  // namespace
 }  // namespace clice::testing

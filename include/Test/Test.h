@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gtest/gtest.h"
+#include "boost/ut.hpp"
 #include "Support/JSON.h"
 #include "Support/Format.h"
 #include "Support/Compare.h"
@@ -8,6 +9,8 @@
 #include "Test/LocationChain.h"
 
 namespace clice::testing {
+
+using namespace boost::ut;
 
 #undef EXPECT_TRUE
 #undef EXPECT_FALSE

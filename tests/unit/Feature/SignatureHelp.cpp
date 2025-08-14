@@ -5,8 +5,11 @@ namespace clice::testing {
 
 namespace {
 
-TEST(Feature, SignatureHelp) {
-    const char* code = R"cpp(
+suite<"SignatureHelp"> signature_help = [] {
+    Tester tester;
+
+    test("SignatureHelp") = [&] {
+        const char* code = R"cpp(
 void foo();
 
 void foo(int x);
@@ -18,18 +21,19 @@ int main() {
 }
 )cpp";
 
-    CompilationParams params;
-    params.arguments = {"clang++", "-std=c++20", "main.cpp"};
-    params.add_remapped_file("main.cpp", code);
-    /// params.completion = {"main.cpp", 9, 10};
+        CompilationParams params;
+        params.arguments = {"clang++", "-std=c++20", "main.cpp"};
+        params.add_remapped_file("main.cpp", code);
+        /// params.completion = {"main.cpp", 9, 10};
 
-    /// config::SignatureHelpOption options = {};
-    /// auto result = feature::signatureHelp(params, options);
-    ///  EXPECT
-    ///  foo(int x, int y)
-    ///  foo(int x)
-    ///  foo()
-}
+        /// config::SignatureHelpOption options = {};
+        /// auto result = feature::signatureHelp(params, options);
+        ///  EXPECT
+        ///  foo(int x, int y)
+        ///  foo(int x)
+        ///  foo()
+    };
+};
 
 }  // namespace
 

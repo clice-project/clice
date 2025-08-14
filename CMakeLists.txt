@@ -138,7 +138,14 @@ if(CLICE_ENABLE_TEST)
     )
     FetchContent_MakeAvailable(googletest)
 
-    target_link_libraries(unit_tests PRIVATE gtest_main GTest::gtest clice-core)
+    FetchContent_Declare(
+        ut
+        GIT_REPOSITORY https://github.com/boost-ext/ut.git
+        GIT_TAG        v2.3.1
+    )
+    FetchContent_MakeAvailable(ut)
+
+    target_link_libraries(unit_tests PRIVATE gtest_main GTest::gtest Boost::ut clice-core)
     target_compile_options(unit_tests PUBLIC ${CLICE_CXX_FLAGS})
     target_link_options(unit_tests PUBLIC ${CLICE_LINKER_FLAGS})
 

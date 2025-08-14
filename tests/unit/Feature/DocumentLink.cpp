@@ -5,38 +5,31 @@ namespace clice::testing {
 
 namespace {
 
-struct DocumentLink : TestFixture {
+suite<"DocumentLink"> document_link = [] {
+    Tester tester;
     std::vector<feature::DocumentLink> links;
 
-    using Self = DocumentLink;
+    auto run = [&](llvm::StringRef source) {
+        tester.clear();
+        tester.add_files("main.cpp", source);
+        tester.compile();
+        links = feature::document_links(*tester.unit);
+    };
 
-    void run() {
-        Tester::compile();
-        links = feature::document_links(*unit);
-    }
+    auto expect_link = [&](std::size_t index, llvm::StringRef name, llvm::StringRef path) {
+        auto& link = links[index];
+        auto range = tester.range(name, "main.cpp");
+        expect(that % link.range.begin == range.begin);
+        expect(that % link.range.end == range.end);
 
-    void EXPECT_LINK(this Self& self,
-                     uint32_t index,
-                     llvm::StringRef name,
-                     llvm::StringRef path,
-                     LocationChain chain = LocationChain()) {
-        auto& link = self.links[index];
-
-        EXPECT_EQ(link.range, self.range(name, "main.cpp"), chain);
-
+        /// FIXME: workaround to make `./file` to `file`
         llvm::SmallString<64> file = {link.file};
         path::remove_dots(file);
+        expect(that % file == path);
+    };
 
-        EXPECT_EQ(file, path, chain);
-    }
-
-    void dump() {
-        clice::println("{}", clice::dump(links));
-    }
-};
-
-TEST_F(DocumentLink, Include) {
-    add_files("main.cpp", R"cpp(
+    test("Include") = [&] {
+        run(R"cpp(
 #[test.h]
 
 #[pragma_once.h]
@@ -56,19 +49,17 @@ TEST_F(DocumentLink, Include) {
 #include @5["guard_macro.h"$]
 )cpp");
 
-    run();
+        expect(that % links.size() == 6);
+        expect_link(0, "0", "test.h");
+        expect_link(1, "1", "test.h");
+        expect_link(2, "2", "pragma_once.h");
+        expect_link(3, "3", "pragma_once.h");
+        expect_link(4, "4", "guard_macro.h");
+        expect_link(5, "5", "guard_macro.h");
+    };
 
-    EXPECT_EQ(links.size(), 6);
-    EXPECT_LINK(0, "0", "test.h");
-    EXPECT_LINK(1, "1", "test.h");
-    EXPECT_LINK(2, "2", "pragma_once.h");
-    EXPECT_LINK(3, "3", "pragma_once.h");
-    EXPECT_LINK(4, "4", "guard_macro.h");
-    EXPECT_LINK(5, "5", "guard_macro.h");
-}
-
-TEST_F(DocumentLink, HasInclude) {
-    add_files("main.cpp", R"cpp(
+    test("HasInclude") = [&] {
+        run(R"cpp(
 #[test.h]
 
 #[main.cpp]
@@ -81,12 +72,11 @@ TEST_F(DocumentLink, HasInclude) {
 #endif
 )cpp");
 
-    run();
-
-    EXPECT_EQ(links.size(), 2);
-    EXPECT_LINK(0, "0", "test.h");
-    EXPECT_LINK(1, "1", "test.h");
-}
+        expect(that % links.size() == 2);
+        expect_link(0, "0", "test.h");
+        expect_link(1, "1", "test.h");
+    };
+};
 
 }  // namespace
 
