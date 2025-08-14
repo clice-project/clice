@@ -1,4 +1,7 @@
+#pragma once
+
 #include "clang/AST/Decl.h"
+#include "clang/AST/TypeLoc.h"
 
 namespace clice::ast {
 
@@ -24,7 +27,70 @@ std::string name_of(const clang::NamedDecl* decl);
 /// returns the type for the decl if any.
 clang::QualType type_of(const clang::NamedDecl* decl);
 
+const clang::NamedDecl* get_decl_for_type(const clang::Type* T);
+
 /// Get the underlying decl for a type if any.
 const clang::NamedDecl* decl_of(clang::QualType type);
+
+/// Check whether the decl is anonymous.
+bool is_anonymous(const clang::NamedDecl* decl);
+
+clang::NestedNameSpecifierLoc get_qualifier_loc(const clang::NamedDecl* decl);
+
+auto get_template_specialization_args(const clang::NamedDecl* decl)
+    -> std::optional<llvm::ArrayRef<clang::TemplateArgumentLoc>>;
+
+std::string print_template_specialization_args(const clang::NamedDecl* decl);
+
+std::string print_name(const clang::NamedDecl* decl);
+
+clang::TemplateTypeParmTypeLoc get_contained_auto_param_type(clang::TypeLoc TL);
+
+clang::NamedDecl* get_only_instantiation(clang::NamedDecl* TemplatedDecl);
+
+/// getSimpleName() returns the plain identifier for an entity, if any.
+llvm::StringRef getSimpleName(const clang::DeclarationName& DN);
+llvm::StringRef getSimpleName(const clang::NamedDecl& D);
+llvm::StringRef getSimpleName(clang::QualType T);
+
+std::string summarizeExpr(const clang::Expr* E);
+
+// Returns the template parameter pack type from an instantiated function
+// template, if it exists, nullptr otherwise.
+const clang::TemplateTypeParmType* getFunctionPackType(const clang::FunctionDecl* Callee);
+
+// Returns the template parameter pack type that this parameter was expanded
+// from (if in the Args... or Args&... or Args&&... form), if this is the case,
+// nullptr otherwise.
+const clang::TemplateTypeParmType* getUnderlyingPackType(const clang::ParmVarDecl* Param);
+
+// Returns the parameters that are forwarded from the template parameters.
+// For example, `template <typename... Args> void foo(Args... args)` will return
+// the `args` parameters.
+llvm::SmallVector<const clang::ParmVarDecl*>
+    resolveForwardingParameters(const clang::FunctionDecl* D, unsigned MaxDepth = 10);
+
+// Determines if any intermediate type in desugaring QualType QT is of
+// substituted template parameter type. Ignore pointer or reference wrappers.
+bool isSugaredTemplateParameter(clang::QualType QT);
+
+// A simple wrapper for `clang::desugarForDiagnostic` that provides optional
+// semantic.
+std::optional<clang::QualType> desugar(clang::ASTContext& AST, clang::QualType QT);
+
+// Apply a series of heuristic methods to determine whether or not a QualType QT
+// is suitable for desugaring (e.g. getting the real name behind the using-alias
+// name). If so, return the desugared type. Otherwise, return the unchanged
+// parameter QT.
+//
+// This could be refined further. See
+// https://github.com/clangd/clangd/issues/1298.
+clang::QualType maybeDesugar(clang::ASTContext& AST, clang::QualType QT);
+
+// Given a callee expression `Fn`, if the call is through a function pointer,
+// try to find the declaration of the corresponding function pointer type,
+// so that we can recover argument names from it.
+// FIXME: This function is mostly duplicated in SemaCodeComplete.cpp; unify.
+clang::FunctionProtoTypeLoc getPrototypeLoc(clang::Expr* Fn);
 
 }  // namespace clice::ast
