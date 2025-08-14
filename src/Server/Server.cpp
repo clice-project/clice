@@ -21,7 +21,7 @@ OpenFile* ActiveFileManager::lru_put_impl(llvm::StringRef path, OpenFile file) {
         index.erase(items.back().first);
         items.pop_back();
     }
-    items.emplace_front(path, OpenFile{});
+    items.emplace_front(path, std::move(file));
 
     // fix the ownership of the StringRef of the path.
     auto [added, _] = index.insert({path, items.begin()});

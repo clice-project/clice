@@ -9,6 +9,7 @@
 #include "Compiler/Diagnostic.h"
 #include "Feature/DocumentLink.h"
 #include "Protocol/Protocol.h"
+#include <llvm/ADT/StringRef.h>
 
 namespace clice {
 
@@ -79,6 +80,10 @@ public:
 
     OpenFile& operator[] (llvm::StringRef path) {
         return *get_or_create(path);
+    }
+
+    bool contains(llvm::StringRef path) const {
+        return index.contains(path);
     }
 
     ActiveFileIterator begin() const;
