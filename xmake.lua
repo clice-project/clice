@@ -25,6 +25,7 @@ if has_config("dev") then
 
     if has_config("enable_test") then
         add_requires("gtest[main]")
+        add_requires("boost_ut[2.3.1]")
         -- TODO: fix python fetch on mac (from xmake-repo python fetch)
         if not (has_config("ci") and is_plat("macosx")) then
             add_requires("python >=3.12", {kind = "binary"})
