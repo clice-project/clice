@@ -1,4 +1,4 @@
-#include <print>
+#include "Support/Format.h"
 
 #include "Test/Test.h"
 #include "Support/StructedText.h"
@@ -44,7 +44,7 @@ char *longestPalindrome_solv2(const char *s) {
     st.add_code_block(cb, "c");
     auto& para = st.add_paragraph();
     para.append_text("para1").append_newline_char();
-    std::print("{}", st.as_markdown());
+    clice::print("{}", st.as_markdown());
 }
 
 TEST(StructedText, BulletList) {
@@ -54,7 +54,7 @@ TEST(StructedText, BulletList) {
     st.add_bullet_list().add_item().add_paragraph().append_text("Item3", Paragraph::Kind::Bold);
     st.add_bullet_list().add_item().add_paragraph().append_text("Item4", Paragraph::Kind::Italic);
     st.add_bullet_list().add_item().add_paragraph().append_text("Item5", Paragraph::Kind::Strikethough);
-    std::print("{}", st.as_markdown());
+    clice::print("{}", st.as_markdown());
 }
 
 TEST(StructedText, FullText) {
@@ -105,7 +105,7 @@ This is *Italic* **Bold** ~~Striketough~~, `InlineCode`
     warnings.add_item().add_paragraph().append_text("warnings3: blah blah...");
     st.add_ruler();
     st.add_code_block("int test_bar(int foo, char **bar, char **baz);\n", "cpp");
-    std::print("{}", st.as_markdown());
+    clice::print("{}", st.as_markdown());
 }
 
 }  // namespace clice::testing
