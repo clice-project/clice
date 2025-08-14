@@ -167,7 +167,5 @@ struct Tester {
     }
 };
 
-struct TestFixture : ::testing::Test, Tester {};
-
 }  // namespace clice::testing
 

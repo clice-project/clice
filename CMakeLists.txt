@@ -132,20 +132,13 @@ if(CLICE_ENABLE_TEST)
     target_include_directories(unit_tests PUBLIC "${CMAKE_SOURCE_DIR}")
 
     FetchContent_Declare(
-        googletest
-        GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG v1.17.x
-    )
-    FetchContent_MakeAvailable(googletest)
-
-    FetchContent_Declare(
         ut
         GIT_REPOSITORY https://github.com/boost-ext/ut.git
         GIT_TAG        v2.3.1
     )
     FetchContent_MakeAvailable(ut)
 
-    target_link_libraries(unit_tests PRIVATE gtest_main GTest::gtest Boost::ut clice-core)
+    target_link_libraries(unit_tests PRIVATE Boost::ut clice-core)
     target_compile_options(unit_tests PUBLIC ${CLICE_CXX_FLAGS})
     target_link_options(unit_tests PUBLIC ${CLICE_LINKER_FLAGS})
 
