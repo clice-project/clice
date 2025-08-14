@@ -7,10 +7,11 @@ namespace clice::testing {
 
 namespace {
 
-TEST(Compiler, TopLevelDecls) {
-    Tester tester;
+suite<"Compiler"> compiler = [] {
+    test("TopLevelDecls") = [] {
+        Tester tester;
 
-    llvm::StringRef content = R"(
+        llvm::StringRef content = R"(
 #include <iostream>
 
 int x = 1;  
@@ -28,19 +29,19 @@ struct Bar {
 };
 )";
 
-    tester.add_main("main.cpp", content);
-    tester.compile_with_pch();
+        tester.add_main("main.cpp", content);
+        tester.compile_with_pch();
 
-    EXPECT_EQ(tester.unit->top_level_decls().size(), 4);
-}
+        expect(that % tester.unit->top_level_decls().size() == 4);
+    };
 
-TEST(Compiler, StopCompilation) {
-    std::shared_ptr<std::atomic_bool> stop = std::make_shared<std::atomic_bool>(false);
+    test("StopCompilation") = [] {
+        std::shared_ptr<std::atomic_bool> stop = std::make_shared<std::atomic_bool>(false);
 
-    Tester tester;
-    tester.params.stop = stop;
+        Tester tester;
+        tester.params.stop = stop;
 
-    llvm::StringRef content = R"(
+        llvm::StringRef content = R"(
 #include <iostream>
 #include <vector>
 #include <string>
@@ -48,19 +49,20 @@ TEST(Compiler, StopCompilation) {
 #include <unordered_map>
 #include <optional>
 )";
-    tester.add_main("main.cpp", content);
+        tester.add_main("main.cpp", content);
 
-    bool result = true;
+        bool result = true;
 
-    std::thread thread([&]() { result = tester.compile_with_pch(); });
+        std::thread thread([&]() { result = tester.compile_with_pch(); });
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    stop->store(true);
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        stop->store(true);
 
-    thread.join();
+        thread.join();
 
-    EXPECT_FALSE(result);
-}
+        expect(that % !result);
+    };
+};
 
 }  // namespace
 

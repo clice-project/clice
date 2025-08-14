@@ -6,7 +6,9 @@ namespace clice::testing {
 
 namespace {
 
-PCMInfo buildPCM(llvm::StringRef file, llvm::StringRef code) {
+using namespace std::literals;
+
+auto buildPCM = [](llvm::StringRef file, llvm::StringRef code) {
     llvm::SmallString<128> outPath;
     fs::createUniquePath(llvm::Twine(file) + "%%%%%%.pcm", outPath, true);
 
@@ -30,9 +32,9 @@ PCMInfo buildPCM(llvm::StringRef file, llvm::StringRef code) {
     }
 
     return pcm;
-}
+};
 
-ModuleInfo scan(llvm::StringRef content) {
+auto scan = [](llvm::StringRef content) {
     CompilationParams params;
     params.arguments = {
         "clang++",
@@ -48,76 +50,78 @@ ModuleInfo scan(llvm::StringRef content) {
         std::abort();
     }
     return std::move(*info);
-}
+};
 
-TEST(Module, Scan) {
-    /// Simple case.
-    const char* content = R"(
+suite<"Module"> module = [] {
+    test("Scan") = [&] {
+        /// Simple case.
+        const char* content = R"(
 export module A;
 import B;    
     )";
-    auto info = scan(content);
-    ASSERT_EQ(info.isInterfaceUnit, true);
-    ASSERT_EQ(info.name, "A");
-    ASSERT_EQ(info.mods.size(), 1);
-    ASSERT_EQ(info.mods[0], "B");
+        auto info = scan(content);
+        expect(that % info.isInterfaceUnit == true);
+        expect(that % info.name == "A"sv);
+        expect(that % info.mods.size() == 1);
+        expect(that % info.mods[0] == "B"sv);
 
-    /// FIXME: Fix standard library search path(resource dir).
+        /// FIXME: Fix standard library search path(resource dir).
 
-    /// With global module fragment and private module fragment.
-    ///    content = R"(
-    /// module;
-    /// #include <iostream>
-    /// export module A;
-    /// import B;
-    /// import C;
-    /// module : private;
-    ///)";
-    ///    info = scan(content);
-    ///    ASSERT_EQ(info.isInterfaceUnit, true);
-    ///    ASSERT_EQ(info.name, "A");
-    ///    ASSERT_EQ(info.mods.size(), 2);
-    ///    ASSERT_EQ(info.mods[0], "B");
-    ///    ASSERT_EQ(info.mods[1], "C");
+        /// With global module fragment and private module fragment.
+        ///    content = R"(
+        /// module;
+        /// #include <iostream>
+        /// export module A;
+        /// import B;
+        /// import C;
+        /// module : private;
+        ///)";
+        ///    info = scan(content);
+        ///    expect(that % info.isInterfaceUnit == true);
+        ///    expect(that % info.name == "A");
+        ///    expect(that % info.mods.size() == 2);
+        ///    expect(that % info.mods[0] == "B");
+        ///    expect(that % info.mods[1] == "C");
 
-    /// With module partition.
-    ///    content = R"(
-    /// module;
-    /// #include <iostream>
-    /// export module A:B;
-    /// import B;
-    /// import C;
-    /// module : private;
-    ///)";
-    ///    info = scan(content);
-    ///    ASSERT_EQ(info.isInterfaceUnit, true);
-    ///    ASSERT_EQ(info.name, "A:B");
-    ///    ASSERT_EQ(info.mods.size(), 2);
-    ///    ASSERT_EQ(info.mods[0], "B");
-    ///    ASSERT_EQ(info.mods[1], "C");
+        /// With module partition.
+        ///    content = R"(
+        /// module;
+        /// #include <iostream>
+        /// export module A:B;
+        /// import B;
+        /// import C;
+        /// module : private;
+        ///)";
+        ///    info = scan(content);
+        ///    expect(that % info.isInterfaceUnit == true);
+        ///    expect(that % info.name == "A:B");
+        ///    expect(that % info.mods.size() == 2);
+        ///    expect(that % info.mods[0] == "B");
+        ///    expect(that % info.mods[1] == "C");
 
-    content = R"(
+        content = R"(
 module A;
 import B;    
 import C;
 )";
-    info = scan(content);
-    ASSERT_EQ(info.isInterfaceUnit, false);
-    ASSERT_EQ(info.name, "A");
-    ASSERT_EQ(info.mods.size(), 2);
-    ASSERT_EQ(info.mods[0], "B");
-    ASSERT_EQ(info.mods[1], "C");
-}
+        info = scan(content);
+        expect(that % info.isInterfaceUnit == false);
+        expect(that % info.name == "A"sv);
+        expect(that % info.mods.size() == 2);
+        expect(that % info.mods[0] == "B"sv);
+        expect(that % info.mods[1] == "C"sv);
+    };
 
-TEST(Module, Normal) {
-    const char* content = R"(
+    test("Normal") = [&] {
+        const char* content = R"(
 export module A;
 )";
-    auto pcm = buildPCM("A.ixx", content);
-    // ASSERT_EQ(pcm.isInterfaceUnit, true);
-    // ASSERT_EQ(pcm.name, "A");
-    // ASSERT_EQ(pcm.mods.size(), 0);
-}
+        auto pcm = buildPCM("A.ixx", content);
+        // expect(that % pcm.isInterfaceUnit == true);
+        // expect(that % pcm.name == "A");
+        // expect(that % pcm.mods.size() == 0);
+    };
+};
 
 // TEST(Module, ScanModuleName) {
 //     CompilationParams params;

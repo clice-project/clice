@@ -54,151 +54,154 @@ void parse_and_dump(llvm::StringRef command) {
     }
 }
 
-TEST(Command, GetOptionID) {
-    auto GET_OPTION_ID = CompilationDatabase::get_option_id;
-    namespace option = clang::driver::options;
+suite<"Command"> command = [] {
+    auto expect_strip = [](llvm::StringRef argv, llvm::StringRef result) {
+        CompilationDatabase database;
+        database.update_command("fake/", "main.cpp", argv);
+        expect(that % printArgv(database.get_command("main.cpp").arguments) == result);
+    };
 
-    /// GroupClass
-    EXPECT_EQ(GET_OPTION_ID("-g"), option::OPT_g_Flag);
+    test("GetOptionID") = [] {
+        auto GET_OPTION_ID = CompilationDatabase::get_option_id;
+        namespace option = clang::driver::options;
 
-    /// InputClass
-    EXPECT_EQ(GET_OPTION_ID("main.cpp"), option::OPT_INPUT);
+        /// GroupClass
+        expect(that % GET_OPTION_ID("-g") == option::OPT_g_Flag);
 
-    /// UnknownClass
-    EXPECT_EQ(GET_OPTION_ID("--clice"), option::OPT_UNKNOWN);
+        /// InputClass
+        expect(that % GET_OPTION_ID("main.cpp") == option::OPT_INPUT);
 
-    /// FlagClass
-    EXPECT_EQ(GET_OPTION_ID("-v"), option::OPT_v);
-    EXPECT_EQ(GET_OPTION_ID("-c"), option::OPT_c);
-    EXPECT_EQ(GET_OPTION_ID("-pedantic"), option::OPT_pedantic);
-    EXPECT_EQ(GET_OPTION_ID("--pedantic"), option::OPT_pedantic);
+        /// UnknownClass
+        expect(that % GET_OPTION_ID("--clice") == option::OPT_UNKNOWN);
 
-    /// JoinedClass
-    EXPECT_EQ(GET_OPTION_ID("-Wno-unused-variable"), option::OPT_W_Joined);
-    EXPECT_EQ(GET_OPTION_ID("-W*"), option::OPT_W_Joined);
-    EXPECT_EQ(GET_OPTION_ID("-W"), option::OPT_W_Joined);
+        /// FlagClass
+        expect(that % GET_OPTION_ID("-v") == option::OPT_v);
+        expect(that % GET_OPTION_ID("-c") == option::OPT_c);
+        expect(that % GET_OPTION_ID("-pedantic") == option::OPT_pedantic);
+        expect(that % GET_OPTION_ID("--pedantic") == option::OPT_pedantic);
 
-    /// ValuesClass
+        /// JoinedClass
+        expect(that % GET_OPTION_ID("-Wno-unused-variable") == option::OPT_W_Joined);
+        expect(that % GET_OPTION_ID("-W*") == option::OPT_W_Joined);
+        expect(that % GET_OPTION_ID("-W") == option::OPT_W_Joined);
 
-    /// SeparateClass
-    EXPECT_EQ(GET_OPTION_ID("-Xclang"), option::OPT_Xclang);
-    /// EXPECT_EQ(GET_ID("-Xclang -ast-dump"), option::OPT_Xclang);
+        /// ValuesClass
 
-    /// RemainingArgsClass
+        /// SeparateClass
+        expect(that % GET_OPTION_ID("-Xclang") == option::OPT_Xclang);
+        /// expect(that % GET_ID("-Xclang -ast-dump") == option::OPT_Xclang);
 
-    /// RemainingArgsJoinedClass
+        /// RemainingArgsClass
 
-    /// CommaJoinedClass
-    EXPECT_EQ(GET_OPTION_ID("-Wl,"), option::OPT_Wl_COMMA);
+        /// RemainingArgsJoinedClass
 
-    /// MultiArgClass
+        /// CommaJoinedClass
+        expect(that % GET_OPTION_ID("-Wl,") == option::OPT_Wl_COMMA);
 
-    /// JoinedOrSeparateClass
-    EXPECT_EQ(GET_OPTION_ID("-o"), option::OPT_o);
-    EXPECT_EQ(GET_OPTION_ID("-I"), option::OPT_I);
-    EXPECT_EQ(GET_OPTION_ID("--include-directory="), option::OPT_I);
-    EXPECT_EQ(GET_OPTION_ID("-x"), option::OPT_x);
-    EXPECT_EQ(GET_OPTION_ID("--language="), option::OPT_x);
+        /// MultiArgClass
 
-    /// JoinedAndSeparateClass
-}
+        /// JoinedOrSeparateClass
+        expect(that % GET_OPTION_ID("-o") == option::OPT_o);
+        expect(that % GET_OPTION_ID("-I") == option::OPT_I);
+        expect(that % GET_OPTION_ID("--include-directory=") == option::OPT_I);
+        expect(that % GET_OPTION_ID("-x") == option::OPT_x);
+        expect(that % GET_OPTION_ID("--language=") == option::OPT_x);
 
-void EXPECT_STRIP(llvm::StringRef argv,
-                  llvm::StringRef result,
-                  LocationChain chain = LocationChain()) {
-    CompilationDatabase database;
-    database.update_command("fake/", "main.cpp", argv);
-    EXPECT_EQ(printArgv(database.get_command("main.cpp").arguments), result, chain);
-};
+        /// JoinedAndSeparateClass
+    };
 
-TEST(Command, DefaultFilters) {
-    /// Filter -c, -o and input file.
-    EXPECT_STRIP("g++ main.cc", "g++ main.cpp");
-    EXPECT_STRIP("clang++ -c main.cpp", "clang++ main.cpp");
-    EXPECT_STRIP("clang++ -o main.o main.cpp", "clang++ main.cpp");
-    EXPECT_STRIP("clang++ -c -o main.o main.cc", "clang++ main.cpp");
-    EXPECT_STRIP("cl.exe /c /Fomain.cpp.o main.cpp", "cl.exe main.cpp");
+    test("DefaultFilters") = [&] {
+        /// Filter -c, -o and input file.
+        expect_strip("g++ main.cc", "g++ main.cpp");
+        expect_strip("clang++ -c main.cpp", "clang++ main.cpp");
+        expect_strip("clang++ -o main.o main.cpp", "clang++ main.cpp");
+        expect_strip("clang++ -c -o main.o main.cc", "clang++ main.cpp");
+        expect_strip("cl.exe /c /Fomain.cpp.o main.cpp", "cl.exe main.cpp");
 
-    /// Filter PCH related.
+        /// Filter PCH related.
 
-    /// CMake
-    EXPECT_STRIP("g++ -std=gnu++20 -Winvalid-pch -include cmake_pch.hxx -o main.cpp.o -c main.cpp",
-                 "g++ -std=gnu++20 -Winvalid-pch -include cmake_pch.hxx main.cpp");
-    EXPECT_STRIP(
-        "clang++ -Winvalid-pch -Xclang -include-pch -Xclang cmake_pch.hxx.pch -Xclang -include -Xclang cmake_pch.hxx -o main.cpp.o -c main.cpp",
-        "clang++ -Winvalid-pch -Xclang -include -Xclang cmake_pch.hxx main.cpp");
-    EXPECT_STRIP("cl.exe /Yufoo.h /FIfoo.h /Fpfoo.h_v143.pch /c /Fomain.cpp.o main.cpp",
-                 "cl.exe -include foo.h main.cpp");
+        /// CMake
+        expect_strip(
+            "g++ -std=gnu++20 -Winvalid-pch -include cmake_pch.hxx -o main.cpp.o -c main.cpp",
+            "g++ -std=gnu++20 -Winvalid-pch -include cmake_pch.hxx main.cpp");
+        expect_strip(
+            "clang++ -Winvalid-pch -Xclang -include-pch -Xclang cmake_pch.hxx.pch -Xclang -include -Xclang cmake_pch.hxx -o main.cpp.o -c main.cpp",
+            "clang++ -Winvalid-pch -Xclang -include -Xclang cmake_pch.hxx main.cpp");
+        expect_strip("cl.exe /Yufoo.h /FIfoo.h /Fpfoo.h_v143.pch /c /Fomain.cpp.o main.cpp",
+                     "cl.exe -include foo.h main.cpp");
 
-    /// TODO: Test more commands from other build system.
-}
+        /// TODO: Test more commands from other build system.
+    };
 
-TEST(Command, Reuse) {
-    using namespace std::literals;
+    test("Reuse") = [] {
+        using namespace std::literals;
 
-    CompilationDatabase database;
-    database.update_command("fake", "test.cpp", "clang++ -std=c++23 test.cpp"sv);
-    database.update_command("fake", "test2.cpp", "clang++ -std=c++23 test2.cpp"sv);
+        CompilationDatabase database;
+        database.update_command("fake", "test.cpp", "clang++ -std=c++23 test.cpp"sv);
+        database.update_command("fake", "test2.cpp", "clang++ -std=c++23 test2.cpp"sv);
 
-    auto command1 = database.get_command("test.cpp").arguments;
-    auto command2 = database.get_command("test2.cpp").arguments;
-    ASSERT_EQ(command1.size(), 3);
-    ASSERT_EQ(command2.size(), 3);
+        auto command1 = database.get_command("test.cpp").arguments;
+        auto command2 = database.get_command("test2.cpp").arguments;
+        expect(that % command1.size() == 3);
+        expect(that % command2.size() == 3);
 
-    EXPECT_EQ(command1[0], "clang++"sv);
-    EXPECT_EQ(command1[1], "-std=c++23"sv);
-    EXPECT_EQ(command1[2], "test.cpp"sv);
+        expect(that % command1[0] == "clang++"sv);
+        expect(that % command1[1] == "-std=c++23"sv);
+        expect(that % command1[2] == "test.cpp"sv);
 
-    EXPECT_EQ(command1[0], command2[0]);
-    EXPECT_EQ(command1[1], command2[1]);
-    EXPECT_EQ(command2[2], "test2.cpp"sv);
-}
+        expect(that % command1[0] == command2[0]);
+        expect(that % command1[1] == command2[1]);
+        expect(that % command2[2] == "test2.cpp"sv);
+    };
 
-TEST(Command, Module) {}
+    test("Module") = [] {
+        // Empty test
+    };
 
-TEST(Command, QueryDriver) {
+    test("QueryDriver") = [] {
 #if __linux__
-    using namespace std::literals;
+        using namespace std::literals;
 
-    CompilationDatabase database;
-    auto info = database.query_driver("g++");
-    ASSERT_TRUE(info);
+        CompilationDatabase database;
+        auto info = database.query_driver("g++");
+        expect(that % info);
 
-    EXPECT_EQ(info->target, "x86_64-linux-gnu");
-    EXPECT_EQ(info->system_includes.size(), 6);
+        expect(that % info->target == llvm::StringRef("x86_64-linux-gnu"));
+        expect(that % info->system_includes.size() == 6);
 
-    if(_GLIBCXX_RELEASE == 13) {
-        EXPECT_EQ(info->system_includes[0], "/usr/include/c++/13"sv);
-        EXPECT_EQ(info->system_includes[1], "/usr/include/x86_64-linux-gnu/c++/13"sv);
-        EXPECT_EQ(info->system_includes[2], "/usr/include/c++/13/backward"sv);
-    } else if(_GLIBCXX_RELEASE == 14) {
-        EXPECT_EQ(info->system_includes[0], "/usr/include/c++/14"sv);
-        EXPECT_EQ(info->system_includes[1], "/usr/include/x86_64-linux-gnu/c++/14"sv);
-        EXPECT_EQ(info->system_includes[2], "/usr/include/c++/14/backward"sv);
-    }
+        if(_GLIBCXX_RELEASE == 13) {
+            expect(that % info->system_includes[0] == "/usr/include/c++/13"sv);
+            expect(that % info->system_includes[1] == "/usr/include/x86_64-linux-gnu/c++/13"sv);
+            expect(that % info->system_includes[2] == "/usr/include/c++/13/backward"sv);
+        } else if(_GLIBCXX_RELEASE == 14) {
+            expect(that % info->system_includes[0] == "/usr/include/c++/14"sv);
+            expect(that % info->system_includes[1] == "/usr/include/x86_64-linux-gnu/c++/14"sv);
+            expect(that % info->system_includes[2] == "/usr/include/c++/14/backward"sv);
+        }
 
-    EXPECT_EQ(info->system_includes[3], "/usr/local/include"sv);
-    EXPECT_EQ(info->system_includes[4], "/usr/include/x86_64-linux-gnu"sv);
-    EXPECT_EQ(info->system_includes[5], "/usr/include"sv);
+        expect(that % info->system_includes[3] == "/usr/local/include"sv);
+        expect(that % info->system_includes[4] == "/usr/include/x86_64-linux-gnu"sv);
+        expect(that % info->system_includes[5] == "/usr/include"sv);
 
-    info = database.query_driver("clang++");
-    ASSERT_TRUE(info);
+        info = database.query_driver("clang++");
+        expect(that % info);
 
 #endif
-}
+    };
 
-TEST(Command, ResourceDir) {
-    /// CompilationDatabase database;
-    /// database.update_command("test.cpp", "clang++ -std=c++23 test.cpp");
-    /// auto command = database.get_command("test.cpp", false, true);
-    /// ASSERT_EQ(command.size(), 4);
-    ///
-    /// using namespace std::literals;
-    /// EXPECT_EQ(command[0], "clang++"sv);
-    /// EXPECT_EQ(command[1], "-std=c++23"sv);
-    /// EXPECT_EQ(command[2], "test.cpp"sv);
-    /// EXPECT_EQ(command[3], std::format("-resource-dir={}", fs::resource_dir));
-}
+    test("ResourceDir") = [] {
+        /// CompilationDatabase database;
+        /// database.update_command("test.cpp", "clang++ -std=c++23 test.cpp");
+        /// auto command = database.get_command("test.cpp", false, true);
+        /// expect(that % command.size() == 4);
+        ///
+        /// using namespace std::literals;
+        /// expect(that % command[0] == "clang++"sv);
+        /// expect(that % command[1] == "-std=c++23"sv);
+        /// expect(that % command[2] == "test.cpp"sv);
+        /// expect(that % command[3] == std::format("-resource-dir={}", fs::resource_dir));
+    };
+};
 
 }  // namespace
 
