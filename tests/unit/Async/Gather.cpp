@@ -5,63 +5,65 @@ namespace clice::testing {
 
 namespace {
 
-TEST(Async, GatherPack) {
-    int x = 0;
+suite<"Async"> suite = [] {
+    test("GatherPack") = [] {
+        int x = 0;
 
-    auto task_gen = [&]() -> async::Task<int> {
-        co_await async::sleep(100);
-        x += 1;
-        co_return x;
+        auto task_gen = [&]() -> async::Task<int> {
+            co_await async::sleep(100);
+            x += 1;
+            co_return x;
+        };
+
+        auto [a, b, c] = async::run(task_gen(), task_gen(), task_gen());
+
+        expect(that % a == 1);
+        expect(that % b == 2);
+        expect(that % c == 3);
     };
 
-    auto [a, b, c] = async::run(task_gen(), task_gen(), task_gen());
+    test("GatherRange") = [] {
+        std::vector<int> args;
+        for(int i = 0; i < 30; ++i) {
+            args.push_back(i);
+        }
 
-    EXPECT_EQ(a, 1);
-    EXPECT_EQ(b, 2);
-    EXPECT_EQ(c, 3);
-}
+        std::vector<int> results;
 
-TEST(Async, GatherRange) {
-    std::vector<int> args;
-    for(int i = 0; i < 30; ++i) {
-        args.push_back(i);
-    }
+        auto task_gen = [&](int x) -> async::Task<bool> {
+            co_await async::sleep(10);
+            results.push_back(x);
+            co_return true;
+        };
 
-    std::vector<int> results;
+        auto core = async::gather(args, task_gen);
+        async::run(core);
 
-    auto task_gen = [&](int x) -> async::Task<bool> {
-        co_await async::sleep(10);
-        results.push_back(x);
-        co_return true;
+        expect(that % args == results);
+        expect(that % core.result() == true);
     };
 
-    auto core = async::gather(args, task_gen);
-    async::run(core);
+    test("GatherCancel") = [] {
+        std::vector<int> args;
+        for(int i = 0; i < 30; ++i) {
+            args.push_back(i);
+        }
 
-    EXPECT_EQ(args, results);
-    EXPECT_EQ(core.result(), true);
-}
+        std::vector<int> results;
 
-TEST(Async, GatherCancel) {
-    std::vector<int> args;
-    for(int i = 0; i < 30; ++i) {
-        args.push_back(i);
-    }
+        auto task_gen = [&](int x) -> async::Task<bool> {
+            co_await async::sleep(10);
+            results.push_back(x);
+            co_return false;
+        };
 
-    std::vector<int> results;
+        auto core = async::gather(args, task_gen);
+        async::run(core);
 
-    auto task_gen = [&](int x) -> async::Task<bool> {
-        co_await async::sleep(10);
-        results.push_back(x);
-        co_return false;
+        expect(that % results.size() == 1);
+        expect(that % core.result() == false);
     };
-
-    auto core = async::gather(args, task_gen);
-    async::run(core);
-
-    EXPECT_EQ(results.size(), 1);
-    EXPECT_EQ(core.result(), false);
-}
+};
 
 }  // namespace
 

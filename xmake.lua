@@ -111,6 +111,7 @@ target("unit_tests")
 
     add_deps("clice-core")
     add_packages("gtest")
+    add_packages("boost_ut")
 
     add_tests("default")
 
