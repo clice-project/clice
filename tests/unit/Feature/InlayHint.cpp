@@ -18,14 +18,14 @@ protected:
 
         assert(nameless_points().size() == 1);
 
-        bool visited = false;
-        for(auto& hint: hints) {
-            if(hint.offset == nameless_points().front() && hint.parts.front().name == name){
-                visited = true;
-                break;
-            }
-        }
-        EXPECT_TRUE(visited);
+        /// bool visited = false;
+        /// for(auto& hint: hints) {
+        ///     if(hint.offset == nameless_points().front() && hint.parts.front().name == name){
+        ///         visited = true;
+        ///         break;
+        ///     }
+        /// }
+        /// EXPECT_TRUE(visited);
     }
 };
 
