@@ -1,29 +1,51 @@
 #pragma once
 
-#include "boost/ut.hpp"
+#include "TExpr.h"
+#include "LocationChain.h"
 #include "Support/JSON.h"
 #include "Support/Format.h"
 #include "Support/Compare.h"
 #include "Support/FileSystem.h"
-#include "Test/LocationChain.h"
-
-namespace std {
-
-/// FIXME: Use a better way to print optional.
-template <typename T>
-ostream& operator<< (std::ostream& os, const optional<T>& t) {
-    if(t) {
-        os << *t;
-    } else {
-        os << "nullopt";
-    }
-    return os;
-}
-
-}  // namespace std
+#include "Support/FixedString.h"
 
 namespace clice::testing {
 
-using namespace boost::ut;
+using TSuite = void (*)();
+
+void add_suite(std::string_view name, TSuite suite);
+
+template <fixed_string suite_name>
+struct suite {
+    template <typename Suite>
+    suite(Suite suite) {
+        static_assert(std::convertible_to<Suite, TSuite>, "Suite must be stateless!");
+        add_suite(suite_name, suite);
+    }
+};
+
+template <typename TExpr>
+void expect(const TExpr& expr, std::source_location location = std::source_location::current()) {
+    if(!bool(expr)) {
+        std::abort();
+    }
+}
+
+struct test {
+    test(std::string_view name) {}
+
+    template <typename Test>
+    void operator= (Test&& test) {
+        test();
+    }
+};
+
+struct that_t {
+    template <typename TExpr>
+    constexpr decltype(auto) operator% (const TExpr& expr) const {
+        return expr;
+    }
+};
+
+constexpr inline that_t that;
 
 }  // namespace clice::testing

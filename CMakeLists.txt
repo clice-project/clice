@@ -131,14 +131,7 @@ if(CLICE_ENABLE_TEST)
     add_executable(unit_tests "${CLICE_TEST_SOURCES}" "${CMAKE_SOURCE_DIR}/src/Driver/unit_tests.cc")
     target_include_directories(unit_tests PUBLIC "${CMAKE_SOURCE_DIR}")
 
-    FetchContent_Declare(
-        ut
-        GIT_REPOSITORY https://github.com/boost-ext/ut.git
-        GIT_TAG        v2.3.1
-    )
-    FetchContent_MakeAvailable(ut)
-
-    target_link_libraries(unit_tests PRIVATE Boost::ut clice-core)
+    target_link_libraries(unit_tests PRIVATE clice-core)
     target_compile_options(unit_tests PUBLIC ${CLICE_CXX_FLAGS})
     target_link_options(unit_tests PUBLIC ${CLICE_LINKER_FLAGS})
 

@@ -24,7 +24,6 @@ if has_config("dev") then
     end
 
     if has_config("enable_test") then
-        add_requires("boost_ut[2.3.1]")
         -- TODO: fix python fetch on mac (from xmake-repo python fetch)
         if not (has_config("ci") and is_plat("macosx")) then
             add_requires("python >=3.12", {kind = "binary"})
@@ -110,7 +109,6 @@ target("unit_tests")
     add_includedirs(".", {public = true})
 
     add_deps("clice-core")
-    add_packages("boost_ut")
 
     add_tests("default")
 
