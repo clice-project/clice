@@ -3,7 +3,7 @@
 
 namespace clice {
 
-std::optional<OpenFile*> ActiveFileManager::get(llvm::StringRef path) {
+std::optional<ActiveFileManager::ActiveFile> ActiveFileManager::get(llvm::StringRef path) {
     auto iter = index.find(path);
     if(iter == index.end()) {
         return std::nullopt;
@@ -11,26 +11,27 @@ std::optional<OpenFile*> ActiveFileManager::get(llvm::StringRef path) {
 
     /// If the file is in the chain, move it to the front.
     items.splice(items.begin(), items, iter->second);
-    return std::addressof(iter->second->second);
+    return iter->second->second;
 }
 
-OpenFile* ActiveFileManager::lru_put_impl(llvm::StringRef path, OpenFile file) {
+ActiveFileManager::ActiveFile& ActiveFileManager::lru_put_impl(llvm::StringRef path,
+                                                               OpenFile file) {
     /// If the file is not in the chain, create a new OpenFile.
-    if(items.size() >= max_size) {
+    if(items.size() >= capability) {
         /// If the size exceeds the maximum size, remove the last element.
         index.erase(items.back().first);
         items.pop_back();
     }
-    items.emplace_front(path, std::move(file));
+    items.emplace_front(path, std::make_shared<OpenFile>(std::move(file)));
 
     // fix the ownership of the StringRef of the path.
     auto [added, _] = index.insert({path, items.begin()});
     items.front().first = added->getKey();
 
-    return std::addressof(items.front().second);
+    return items.front().second;
 }
 
-OpenFile* ActiveFileManager::get_or_create(llvm::StringRef path) {
+ActiveFileManager::ActiveFile& ActiveFileManager::get_or_add(llvm::StringRef path) {
     auto iter = index.find(path);
     if(iter == index.end()) {
         return lru_put_impl(path, OpenFile{});
@@ -38,19 +39,19 @@ OpenFile* ActiveFileManager::get_or_create(llvm::StringRef path) {
 
     // If the file is in the chain, move it to the front.
     items.splice(items.begin(), items, iter->second);
-    return std::addressof(iter->second->second);
+    return iter->second->second;
 }
 
-OpenFile* ActiveFileManager::put(llvm::StringRef path, OpenFile file) {
+ActiveFileManager::ActiveFile& ActiveFileManager::add(llvm::StringRef path, OpenFile file) {
     auto iter = index.find(path);
     if(iter == index.end()) {
         return lru_put_impl(path, std::move(file));
     }
-    iter->second->second = std::move(file);
+    iter->second->second = std::make_shared<OpenFile>(std::move(file));
 
     // If the file is in the chain, move it to the front.
     items.splice(items.begin(), items, iter->second);
-    return std::addressof(iter->second->second);
+    return iter->second->second;
 }
 
 async::Task<> Server::request(llvm::StringRef method, json::Value params) {

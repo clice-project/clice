@@ -19,7 +19,7 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     config::init(workspace);
 
     /// Set server options.
-    opening_files.set_max_active_file(config::server.max_active_file);
+    opening_files.set_capability(config::server.max_active_file);
 
     /// Load compile commands.json
     for(auto& dir: config::server.compile_commands_dirs) {

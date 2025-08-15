@@ -67,7 +67,7 @@ void Server::load_cache_info() {
             }
 
             /// Update the PCH info.
-            opening_files[*file].pch = std::move(info);
+            opening_files[*file]->pch = std::move(info);
         }
     }
 
@@ -80,11 +80,11 @@ void Server::save_cache_info() {
     json["pchs"] = json::Array();
 
     for(auto& [file, open_file]: opening_files) {
-        if(!open_file.pch) {
+        if(!open_file->pch) {
             continue;
         }
 
-        auto& pch = *open_file.pch;
+        auto& pch = *open_file->pch;
         json::Object object;
         object["file"] = file;
         object["path"] = pch.path;
@@ -104,7 +104,11 @@ void Server::save_cache_info() {
         return;
     }
 
-    auto clean_up = llvm::make_scope_exit([&temp_path]() { llvm::sys::fs::remove(temp_path); });
+    auto clean_up = llvm::make_scope_exit([&temp_path]() {
+        if(auto errc = llvm::sys::fs::remove(temp_path); errc != std::error_code{}) {
+            log::warn("Fail to remove temporary file: {}", errc.message());
+        }
+    });
 
     std::error_code EC;
     llvm::raw_fd_ostream os(temp_path, EC, llvm::sys::fs::OF_None);
@@ -132,116 +136,119 @@ void Server::save_cache_info() {
     log::info("Save cache info successfully");
 }
 
+namespace {
+
+bool check_pch_update(llvm::StringRef content,
+                      std::uint32_t bound,
+                      CompilationDatabase::LookupInfo& info,
+                      PCHInfo& pch) {
+    if(content.substr(0, bound) != pch.preamble) {
+        return true;
+    }
+
+    if(info.arguments != pch.arguments) {
+        return true;
+    }
+
+    /// Check deps.
+    for(auto& dep: pch.deps) {
+        fs::file_status status;
+        auto error = fs::status(dep, status, true);
+        if(error || std::chrono::duration_cast<std::chrono::milliseconds>(
+                        status.getLastModificationTime().time_since_epoch())
+                            .count() > pch.mtime) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/// The actual PCH build task.
+async::Task<bool> build_pch_impl(CompilationDatabase::LookupInfo& info,
+                                 std::shared_ptr<OpenFile> open_file,
+                                 std::string path,
+                                 std::uint32_t bound,
+                                 std::string content,
+                                 std::shared_ptr<std::vector<Diagnostic>> diagnostics) {
+    if(!fs::exists(config::cache.dir)) {
+        auto error = fs::create_directories(config::cache.dir);
+        if(error) {
+            log::warn("Fail to create directory for PCH building: {}", config::cache.dir);
+            co_return false;
+        }
+    }
+
+    /// Everytime we build a new pch, the old diagnostics should be discarded.
+    diagnostics->clear();
+
+    CompilationParams params;
+    params.output_file = path::join(config::cache.dir, path::filename(path) + ".pch");
+    params.arguments = std::move(info.arguments);
+    params.diagnostics = diagnostics;
+    params.add_remapped_file(path, content, bound);
+
+    PCHInfo pch;
+
+    std::string command;
+    for(auto argument: params.arguments) {
+        command += " ";
+        command += argument;
+    }
+
+    log::info("Start building PCH for {}, command: [{}]", path, command);
+
+    std::string message;
+    std::vector<feature::DocumentLink> links;
+
+    bool success = co_await async::submit([&params, &pch, &message, &links] -> bool {
+        /// PCH file is written until destructing, Add a single block
+        /// for it.
+        auto unit = compile(params, pch);
+        if(!unit) {
+            message = std::move(unit.error());
+            return false;
+        }
+
+        links = feature::document_links(*unit);
+        /// TODO: index PCH file, etc
+        return true;
+    });
+
+    if(!success) {
+        log::warn("Building PCH fails for {}, Because: {}", path, message);
+        for(auto& diagnostic: *diagnostics) {
+            log::warn("{}", diagnostic.message);
+        }
+        co_return false;
+    }
+
+    log::info("Building PCH successfully for {}", path);
+
+    /// Update the built PCH info.
+    open_file->pch = std::move(pch);
+    open_file->pch_includes = std::move(links);
+
+    /// Resume waiters on this event.
+    open_file->pch_built_event.set();
+    open_file->pch_built_event.clear();
+
+    co_return true;
+};
+
+}  // namespace
+
 async::Task<bool> Server::build_pch(std::string file, std::string content) {
     auto bound = compute_preamble_bound(content);
-
-    auto open_file = &opening_files[file];
     auto info = database.get_command(file, true, true);
-
-    auto check_pch_update = [&content, &bound, &info](PCHInfo& pch) {
-        if(content.substr(0, bound) != pch.preamble) {
-            return true;
-        }
-
-        if(info.arguments != pch.arguments) {
-            return true;
-        }
-
-        /// Check deps.
-        for(auto& dep: pch.deps) {
-            fs::file_status status;
-            auto error = fs::status(dep, status, true);
-            if(error || std::chrono::duration_cast<std::chrono::milliseconds>(
-                            status.getLastModificationTime().time_since_epoch())
-                                .count() > pch.mtime) {
-                return true;
-            }
-        }
-
-        return false;
-    };
+    auto& open_file = opening_files[file];
 
     /// Check update ...
-    if(open_file->pch && !check_pch_update(*open_file->pch)) {
+    if(open_file->pch && !check_pch_update(content, bound, info, *open_file->pch)) {
         /// If not need update, return directly.
         log::info("PCH is already up-to-date for {}", file);
         co_return true;
     }
-
-    /// The actual PCH build task.
-    constexpr static auto PCHBuildTask =
-        [](CompilationDatabase::LookupInfo& info,
-           OpenFile* open_file,
-           std::string path,
-           std::uint32_t bound,
-           std::string content,
-           std::shared_ptr<std::vector<Diagnostic>> diagnostics) -> async::Task<bool> {
-        if(!fs::exists(config::cache.dir)) {
-            auto error = fs::create_directories(config::cache.dir);
-            if(error) {
-                log::warn("Fail to create directory for PCH building: {}", config::cache.dir);
-                co_return false;
-            }
-        }
-
-        /// Everytime we build a new pch, the old diagnostics should be discarded.
-        diagnostics->clear();
-
-        CompilationParams params;
-        params.output_file = path::join(config::cache.dir, path::filename(path) + ".pch");
-        params.arguments = std::move(info.arguments);
-        params.diagnostics = diagnostics;
-        params.add_remapped_file(path, content, bound);
-
-        PCHInfo pch;
-
-        std::string command;
-        for(auto argument: params.arguments) {
-            command += " ";
-            command += argument;
-        }
-
-        log::info("Start building PCH for {}, command: [{}]", path, command);
-
-        std::string message;
-        std::vector<feature::DocumentLink> links;
-
-        bool success = co_await async::submit([&params, &pch, &message, &links] -> bool {
-            /// PCH file is written until destructing, Add a single block
-            /// for it.
-            auto unit = compile(params, pch);
-            if(!unit) {
-                message = std::move(unit.error());
-                return false;
-            }
-
-            links = feature::document_links(*unit);
-            /// TODO: index PCH file, etc
-            return true;
-        });
-
-        if(!success) {
-            log::warn("Building PCH fails for {}, Because: {}", path, message);
-            for(auto& diagnostic: *diagnostics) {
-                log::warn("{}", diagnostic.message);
-            }
-            co_return false;
-        }
-
-        log::info("Building PCH successfully for {}", path);
-
-        /// Update the built PCH info.
-        open_file->pch = std::move(pch);
-        open_file->pch_includes = std::move(links);
-
-        /// Resume waiters on this event.
-        open_file->pch_built_event.set();
-        open_file->pch_built_event.clear();
-
-        co_return true;
-    };
-
-    open_file = &opening_files[file];
 
     /// If there is already an PCH build task, cancel it.
     auto& task = open_file->pch_build_task;
@@ -257,13 +264,10 @@ async::Task<bool> Server::build_pch(std::string file, std::string content) {
     }
 
     /// Schedule the new building task.
-    task = PCHBuildTask(info, open_file, file, bound, std::move(content), open_file->diagnostics);
-
+    task = build_pch_impl(info, open_file, file, bound, std::move(content), open_file->diagnostics);
     if(co_await task) {
-        /// FIXME: At this point, task has already been finished, destroy it
-        /// directly.
+        /// FIXME: At this point, task has already been finished, destroy it directly.
         task.release().destroy();
-
         co_return true;
     }
 
@@ -272,7 +276,7 @@ async::Task<bool> Server::build_pch(std::string file, std::string content) {
 }
 
 async::Task<> Server::build_ast(std::string path, std::string content) {
-    auto file = &opening_files[path];
+    auto file = opening_files[path];
 
     /// Try get the lock, the waiter on the lock will be resumed when
     /// guard is destroyed.
@@ -284,12 +288,11 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
         co_return;
     }
 
-    auto pch = opening_files[path].pch;
+    auto pch = opening_files[path]->pch;
     if(!pch) {
         log::fatal("Expected PCH built at this point");
     }
 
-    file = &opening_files[path];
     CompilationParams params;
     params.arguments = database.get_command(path, true, true).arguments;
     params.add_remapped_file(path, content);
@@ -311,7 +314,6 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     /// FIXME: Index the source file.
     /// co_await indexer.index(*ast);
 
-    file = &opening_files[path];
     /// Update built AST info.
     file->ast = std::make_shared<CompilationUnit>(std::move(*ast));
 
@@ -321,11 +323,11 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     log::info("Building AST successfully for {}", path);
 }
 
-async::Task<OpenFile*> Server::add_document(std::string path, std::string content) {
+async::Task<std::shared_ptr<OpenFile>> Server::add_document(std::string path, std::string content) {
     auto& openFile = opening_files[path];
-    openFile.content = content;
+    openFile->content = content;
 
-    auto& task = openFile.ast_build_task;
+    auto& task = openFile->ast_build_task;
 
     /// If there is already an AST build task, cancel it.
     if(!task.empty()) {
@@ -343,12 +345,11 @@ async::Task<OpenFile*> Server::add_document(std::string path, std::string conten
     task = build_ast(std::move(path), std::move(content));
     task.schedule();
 
-    co_return &opening_files[path];
+    co_return openFile;
 }
 
-async::Task<> Server::publish_diagnostics(std::string path, OpenFile* file) {
+async::Task<> Server::publish_diagnostics(std::string path, std::shared_ptr<OpenFile> file) {
     auto guard = co_await file->ast_built_lock.try_lock();
-    file = &opening_files[path];
     if(file->ast) {
         auto diagnostics = feature::diagnostics(kind, mapping, *file->ast);
         co_await notify("textDocument/publishDiagnostics",
@@ -363,7 +364,7 @@ async::Task<> Server::on_did_open(proto::DidOpenTextDocumentParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto file = co_await add_document(path, std::move(params.textDocument.text));
     if(file->diagnostics) {
-        co_await publish_diagnostics(path, file);
+        co_await publish_diagnostics(path, std::move(file));
     }
     co_return;
 }
@@ -372,7 +373,7 @@ async::Task<> Server::on_did_change(proto::DidChangeTextDocumentParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto file = co_await add_document(path, std::move(params.contentChanges[0].text));
     if(file->diagnostics) {
-        co_await publish_diagnostics(path, file);
+        co_await publish_diagnostics(path, std::move(file));
     }
     co_return;
 }
