@@ -17,16 +17,23 @@ namespace {
 
 namespace cl = llvm::cl;
 
+cl::OptionCategory unittest_category("Clice Unittest Options");
+
 cl::opt<std::string> test_dir("test-dir",
-                              cl::desc("specify the test source directory path"),
+                              cl::desc("Specify the test source directory path"),
                               cl::value_desc("path"),
-                              cl::Required);
+                              cl::Required,
+                              cl::cat(unittest_category));
 
-cl::opt<std::string> resource_dir("resource-dir", cl::desc("Resource dir path"));
+cl::opt<std::string> resource_dir("resource-dir",
+                                  cl::desc("Resource dir path"),
+                                  cl::cat(unittest_category));
 
-cl::opt<std::string> test_filter("test_filter");
+cl::opt<std::string> test_filter("test_filter",
+                                 cl::desc("A glob pattern to run subset of tests"),
+                                 cl::cat(unittest_category));
 
-cl::opt<bool> enable_example("enable-example", cl::init(false));
+cl::opt<bool> enable_example("enable-example", cl::init(false), cl::cat(unittest_category));
 
 std::optional<GlobPattern> pattern;
 
@@ -161,6 +168,7 @@ int Runner::run_tests() {
 
 int main(int argc, const char* argv[]) {
     llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
+    llvm::cl::HideUnrelatedOptions(unittest_category);
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
 
     if(!test_filter.empty()) {
