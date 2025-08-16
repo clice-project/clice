@@ -37,9 +37,12 @@ private:
 
 private:
     bool failed = false;
+    bool skipped = false;
+
     std::string curr_suite_name;
     std::uint32_t curr_tests_count = 0;
     std::uint32_t total_tests_count = 0;
+    std::uint32_t curr_filtered_tests_count = 0;
     std::chrono::milliseconds curr_test_duration;
     std::chrono::milliseconds totol_test_duration;
     std::unordered_map<std::string_view, std::vector<Suite>> suites;

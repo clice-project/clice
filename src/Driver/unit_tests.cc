@@ -5,28 +5,30 @@
 #include "Support/GlobPattern.h"
 #include <print>
 
-namespace clice {
+using namespace clice;
+using namespace clice::testing;
 
-namespace cl {
+namespace {
 
-llvm::cl::opt<std::string> test_dir("test-dir",
-                                    llvm::cl::desc("specify the test source directory path"),
-                                    llvm::cl::value_desc("path"),
-                                    llvm::cl::Required);
+namespace cl = llvm::cl;
 
-llvm::cl::opt<std::string> resource_dir("resource-dir", llvm::cl::desc("Resource dir path"));
+cl::opt<std::string> test_dir("test-dir",
+                              cl::desc("specify the test source directory path"),
+                              cl::value_desc("path"),
+                              cl::Required);
 
-llvm::cl::opt<std::string> test_filter("test_filter");
+cl::opt<std::string> resource_dir("resource-dir", cl::desc("Resource dir path"));
 
-clice::GlobPattern filter_pattern;
+cl::opt<std::string> test_filter("test_filter");
 
-}  // namespace cl
+/// A string to hold output....
+std::string output_buffer;
 
-namespace testing {
+std::optional<GlobPattern> pattern;
 
-llvm::StringRef test_dir() {
-    return cl::test_dir;
-}
+}  // namespace
+
+namespace clice::testing {
 
 Runner& Runner::instance() {
     static Runner runner;
@@ -38,21 +40,34 @@ void Runner::add_suite(std::string_view name, Suite suite) {
 }
 
 void Runner::run_test(std::string_view name, Test test) {
-    using namespace std::chrono;
+    std::string full_name = std::format("{}.{}", curr_suite_name, name);
+
+    /// If this test if filter, directly return.
+    if(!pattern || !pattern->match(full_name)) {
+        curr_tests_count += 1;
+        curr_filtered_tests_count += 1;
+        return;
+    }
 
     failed = false;
 
-    std::println("\033[32m[ RUN      ] {}.{}\033[0m", curr_suite_name, name);
+    using namespace std::chrono;
+
+    std::format_to(std::back_inserter(output_buffer),
+                   "\033[32m[ RUN      ] {}.{}\033[0m\n",
+                   curr_suite_name,
+                   name);
     auto begin = system_clock::now();
 
     test();
 
     auto duration = duration_cast<milliseconds>(system_clock::now() - begin);
-    std::println("\033[32m[   {} ] {}.{} ({} ms)\033[0m",
-                 failed ? "FAILED" : "    OK",
-                 curr_suite_name,
-                 name,
-                 duration.count());
+    std::format_to(std::back_inserter(output_buffer),
+                   "\033[32m[   {} ] {}.{} ({} ms)\033[0m\n",
+                   failed ? "FAILED" : "    OK",
+                   curr_suite_name,
+                   name,
+                   duration.count());
 
     /// Update test information.
     curr_tests_count += 1;
@@ -68,60 +83,66 @@ void Runner::fail(std::string expression, std::source_location location) {
 
 int Runner::run_tests() {
     /// Register all tests.
-    println("\033[32m[----------] Global test environment set-up.\033[0m");
+    std::println("\033[32m[----------] Global test environment set-up.\033[0m");
 
     for(auto& [suite_name, suite]: suites) {
+        output_buffer.clear();
+
         curr_suite_name = suite_name;
         curr_tests_count = 0;
+        curr_filtered_tests_count = 0;
         curr_test_duration = std::chrono::milliseconds();
 
-        std::println("\033[32m[----------] tests from {}\033[0m", suite_name);
+        std::format_to(std::back_inserter(output_buffer),
+                       "\033[32m[----------] tests from {}\033[0m\n",
+                       suite_name);
+
         for(auto& callback: suite) {
             callback();
         }
-        std::println("\033[32m[----------] {} tests from {} ({} ms total)\033[0m\n",
-                     total_tests_count,
-                     suite_name,
-                     totol_test_duration.count());
+
+        std::format_to(std::back_inserter(output_buffer),
+                       "\033[32m[----------] {} tests from {} ({} ms total)\033[0m\n\n",
+                       total_tests_count,
+                       suite_name,
+                       totol_test_duration.count());
+
+        /// If all tests in this suite case are filtered, we skip output of it.
+        if(curr_filtered_tests_count != curr_tests_count) {
+            std::print("{}", output_buffer);
+        }
     }
 
-    println("\033[32m[----------] Global test environment tear-down\033[0m");
-    println("\033[32m[==========] {} tests from {} test suites ran. ({} ms total)\033[0m",
-            total_tests_count,
-            suites.size(),
-            totol_test_duration.count());
+    std::println("\033[32m[----------] Global test environment tear-down\033[0m");
+    std::println("\033[32m[==========] {} tests from {} test suites ran. ({} ms total)\033[0m",
+                 total_tests_count,
+                 suites.size(),
+                 totol_test_duration.count());
 
     return 0;
 }
 
-}  // namespace testing
-
-}  // namespace clice
+}  // namespace clice::testing
 
 int main(int argc, const char* argv[]) {
-    using namespace clice;
+    llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
+    llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
 
-    // llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
-    // llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
-    //
-    // if(!cl::test_filter.empty()) {
-    //    if(auto pattern = GlobPattern::create(cl::test_filter)) {
-    //        cl::filter_pattern = std::move(*pattern);
-    //    } else {
-    //        llvm::outs() << "Invaild pattern: {}" << cl::test_filter << "\n";
-    //    }
-    //}
-    //
-    // if(!cl::resource_dir.empty()) {
-    //    fs::resource_dir = cl::resource_dir.getValue();
-    //} else {
-    //    if(auto result = fs::init_resource_dir(argv[0]); !result) {
-    //        llvm::outs() << std::format("Failed to get resource directory, because {}\n",
-    //                                    result.error());
-    //        return 1;
-    //    }
-    //}
-    //
+    if(!test_filter.empty()) {
+        if(auto result = GlobPattern::create(test_filter)) {
+            pattern.emplace(std::move(*result));
+        }
+    }
 
-    return testing::Runner::instance().run_tests();
+    if(resource_dir.empty()) {
+        fs::resource_dir = resource_dir;
+    } else {
+        if(auto result = fs::init_resource_dir(argv[0]); !result) {
+            std::println("Failed to get resource directory, because {}", result.error());
+            return 1;
+        }
+    }
+
+    using namespace clice::testing;
+    return Runner::instance().run_tests();
 }
