@@ -155,7 +155,7 @@ int main(int argc, const char* argv[]) {
         }
     }
 
-    if(resource_dir.empty()) {
+    if(!resource_dir.empty()) {
         fs::resource_dir = resource_dir;
     } else {
         if(auto result = fs::init_resource_dir(argv[0]); !result) {
