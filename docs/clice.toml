@@ -13,6 +13,10 @@
     # Compile commands directories to search for compile_commands.json files.
     compile_commands_dirs = ["${workspace}/build"]
 
+    # Maximum number of active files to keep in memory. If the number of active files
+    # exceeds this limit, the least recently used files will be removed. 
+    # The default value is 8. Whatever the number you set, the minimum is 1, the maximum is 512.
+    max_active_file = 8
 
 # Cache configuration for storing precompiled headers and modules.
 [cache]

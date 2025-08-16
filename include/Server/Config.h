@@ -17,6 +17,7 @@ void init(std::string_view workplace);
 
 struct ServerOptions {
     std::vector<std::string> compile_commands_dirs = {"${workspace}/build"};
+    size_t max_active_file = 8;
 };
 
 struct CacheOptions {
