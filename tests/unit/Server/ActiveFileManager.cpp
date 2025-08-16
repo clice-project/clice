@@ -5,77 +5,104 @@ namespace clice::testing {
 
 namespace {
 
-TEST(ActiveFileManager, Basic) {
-    ActiveFileManager manager;
+suite<"ActiveFileManager"> active_file_manager = [] {
+    using Manager = ActiveFileManager;
 
-    EXPECT_EQ(manager.max_size(), ActiveFileManager::DefaultMaxActiveFileNum);
-    manager.set_capability(0);
+    test("MaxSize") = [] {
+        Manager actives;
 
-    EXPECT_GE(manager.max_size(), 1);
-    manager.set_capability(std::numeric_limits<size_t>::max());
+        expect(that % actives.max_size() == Manager::DefaultMaxActiveFileNum);
 
-    EXPECT_LE(manager.max_size(), ActiveFileManager::UnlimitedActiveFileNum);
-}
+        actives.set_capability(0);
+        expect(that % actives.max_size() == 1);
 
-TEST(ActiveFileManager, LruAlgorithm) {
-    ActiveFileManager manager;
-    manager.set_capability(1);
-    EXPECT_EQ(manager.size(), 0);
+        actives.set_capability(std::numeric_limits<size_t>::max());
+        expect(that % actives.max_size() <= Manager::UnlimitedActiveFileNum);
+    };
 
-    auto& first = manager.add("first", OpenFile{.version = 1});
-    EXPECT_EQ(manager.size(), 1);
-    EXPECT_TRUE(manager.contains("first"));
-    EXPECT_EQ(first->version, 1);
+    test("LruAlgorithm") = [] {
+        Manager actives;
+        actives.set_capability(1);
 
-    auto& second = manager.add("second", OpenFile{.version = 2});
-    EXPECT_EQ(manager.size(), 1);
-    EXPECT_EQ(manager.size(), manager.max_size());
-    EXPECT_FALSE(manager.contains("first"));
-    EXPECT_TRUE(manager.contains("second"));
+        expect(that % actives.size() == 0);
 
-    EXPECT_EQ(second->version, 2);
-}
+        auto& first = actives.add("first", OpenFile{.version = 1});
+        expect(that % actives.size() == 1);
+        expect(that % actives.contains("first") == true);
+        expect(that % first->version == 1);
 
-TEST(ActiveFileManager, Iterator) {
-    ActiveFileManager manager;
+        auto& second = actives.add("second", OpenFile{.version = 2});
+        expect(that % actives.size() == 1);
+    };
 
-    constexpr static size_t TotalInsertedNum = 10;
-    constexpr static size_t MaxActiveFileNum = 3;
-    manager.set_capability(MaxActiveFileNum);
+    test("IteratorBasic") = [] {
+        Manager actives;
+        actives.set_capability(3);
 
-    // insert file from (1 .. TotalInsertedNum).
-    // so there should be (TotalInsertedNum - MaxActiveFileNum) after inserted
-    for(uint32_t i = 1; i <= TotalInsertedNum; i++) {
-        std::string fpath = std::format("{}", i);
-        OpenFile object{.version = i};
+        actives.add("first", OpenFile{.version = 1});
+        actives.add("second", OpenFile{.version = 2});
+        actives.add("third", OpenFile{.version = 3});
+        expect(that % actives.size() == 3);
 
-        auto& inseted = manager.add(fpath, std::move(object));
-        std::optional new_added_entry = manager.get(fpath);
-        ASSERT_TRUE(new_added_entry.has_value());
-        auto new_added = std::move(new_added_entry).value();
-        EXPECT_EQ(inseted, new_added);
+        auto iter = actives.begin();
+        expect(that % iter != actives.end());
+        expect(that % iter->first == "third");
+        expect(that % iter->second->version == 3);
 
-        EXPECT_NE(new_added, nullptr);
-        EXPECT_EQ(new_added->version, i);
-
-        auto& [path, openfile] = *manager.begin();
-        EXPECT_EQ(path, fpath);
-        EXPECT_EQ(openfile->version, new_added->version);
-    }
-
-    EXPECT_EQ(manager.size(), manager.max_size());
-
-    // the remain file should be in reversed order.
-    auto iter = manager.begin();
-    int i = TotalInsertedNum;
-    while(iter != manager.end()) {
-        auto& [path, openfile] = *iter;
-        EXPECT_EQ(path, std::to_string(i));
-        EXPECT_EQ(openfile->version, i);
         iter++;
-        i--;
-    }
-}
+        expect(that % iter != actives.end());
+        expect(that % iter->first == "second");
+        expect(that % iter->second->version == 2);
+
+        iter++;
+        expect(that % iter != actives.end());
+        expect(that % iter->first == "first");
+        expect(that % iter->second->version == 1);
+
+        iter++;
+        expect(iter == actives.end());
+    };
+
+    test("IteratorCheck") = [] {
+        ActiveFileManager manager;
+
+        constexpr static size_t TotalInsertedNum = 10;
+        constexpr static size_t MaxActiveFileNum = 3;
+        manager.set_capability(MaxActiveFileNum);
+
+        // insert file from (1 .. TotalInsertedNum).
+        // so there should be (TotalInsertedNum - MaxActiveFileNum) after inserted
+        for(uint32_t i = 1; i <= TotalInsertedNum; i++) {
+            std::string fpath = std::format("{}", i);
+            OpenFile object{.version = i};
+
+            auto& inseted = manager.add(fpath, std::move(object));
+            std::optional new_added_entry = manager.get_or_add(fpath);
+            expect(that % new_added_entry.has_value());
+            auto new_added = std::move(new_added_entry).value();
+            expect(that % inseted == new_added);
+            expect(that % new_added != nullptr);
+            expect(that % new_added->version == i);
+
+            auto& [path, openfile] = *manager.begin();
+            expect(that % path == fpath);
+            expect(that % openfile->version == new_added->version);
+        }
+
+        expect(that % manager.size() == manager.max_size());
+
+        // the remain file should be in reversed order.
+        auto iter = manager.begin();
+        int i = TotalInsertedNum;
+        while(iter != manager.end()) {
+            auto& [path, openfile] = *iter;
+            expect(that % path == std::to_string(i));
+            expect(that % openfile->version == i);
+            iter++;
+            i--;
+        }
+    };
+};
 
 }  // namespace
 }  // namespace clice::testing

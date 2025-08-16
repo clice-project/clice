@@ -65,6 +65,7 @@ public:
 
     /// Set the maximum active file count and it will be clamped to [1, UnlimitedActiveFileNum].
     void set_capability(size_t size) {
+        // Use static_cast to make MSVC happy.
         capability = std::clamp(size, static_cast<size_t>(1), UnlimitedActiveFileNum);
     }
 
@@ -78,17 +79,11 @@ public:
         return index.size();
     }
 
-    [[nodiscard]] std::optional<ActiveFile> get(llvm::StringRef path);
-
     /// Try get OpenFile from manager, default construct one if not exists.
     [[nodiscard]] ActiveFile& get_or_add(llvm::StringRef path);
 
     /// Add a OpenFile to the manager.
     ActiveFile& add(llvm::StringRef path, OpenFile file);
-
-    ActiveFile& operator[] (llvm::StringRef path) {
-        return get_or_add(path);
-    }
 
     [[nodiscard]] bool contains(llvm::StringRef path) const {
         return index.contains(path);

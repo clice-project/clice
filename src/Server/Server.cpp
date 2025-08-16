@@ -3,17 +3,6 @@
 
 namespace clice {
 
-std::optional<ActiveFileManager::ActiveFile> ActiveFileManager::get(llvm::StringRef path) {
-    auto iter = index.find(path);
-    if(iter == index.end()) {
-        return std::nullopt;
-    }
-
-    /// If the file is in the chain, move it to the front.
-    items.splice(items.begin(), items, iter->second);
-    return iter->second->second;
-}
-
 ActiveFileManager::ActiveFile& ActiveFileManager::lru_put_impl(llvm::StringRef path,
                                                                OpenFile file) {
     /// If the file is not in the chain, create a new OpenFile.

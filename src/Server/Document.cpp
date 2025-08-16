@@ -67,7 +67,7 @@ void Server::load_cache_info() {
             }
 
             /// Update the PCH info.
-            opening_files[*file]->pch = std::move(info);
+            opening_files.get_or_add(*file)->pch = std::move(info);
         }
     }
 
@@ -165,7 +165,7 @@ bool check_pch_update(llvm::StringRef content,
 }
 
 /// The actual PCH build task.
-async::Task<bool> build_pch_impl(CompilationDatabase::LookupInfo& info,
+async::Task<bool> build_pch_task(CompilationDatabase::LookupInfo& info,
                                  std::shared_ptr<OpenFile> open_file,
                                  std::string path,
                                  std::uint32_t bound,
@@ -241,7 +241,7 @@ async::Task<bool> build_pch_impl(CompilationDatabase::LookupInfo& info,
 async::Task<bool> Server::build_pch(std::string file, std::string content) {
     auto bound = compute_preamble_bound(content);
     auto info = database.get_command(file, true, true);
-    auto& open_file = opening_files[file];
+    auto& open_file = opening_files.get_or_add(file);
 
     /// Check update ...
     if(open_file->pch && !check_pch_update(content, bound, info, *open_file->pch)) {
@@ -264,7 +264,7 @@ async::Task<bool> Server::build_pch(std::string file, std::string content) {
     }
 
     /// Schedule the new building task.
-    task = build_pch_impl(info, open_file, file, bound, std::move(content), open_file->diagnostics);
+    task = build_pch_task(info, open_file, file, bound, std::move(content), open_file->diagnostics);
     if(co_await task) {
         /// FIXME: At this point, task has already been finished, destroy it directly.
         task.release().destroy();
@@ -276,7 +276,7 @@ async::Task<bool> Server::build_pch(std::string file, std::string content) {
 }
 
 async::Task<> Server::build_ast(std::string path, std::string content) {
-    auto file = opening_files[path];
+    auto file = opening_files.get_or_add(path);
 
     /// Try get the lock, the waiter on the lock will be resumed when
     /// guard is destroyed.
@@ -288,7 +288,7 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
         co_return;
     }
 
-    auto pch = opening_files[path]->pch;
+    auto pch = file->pch;
     if(!pch) {
         log::fatal("Expected PCH built at this point");
     }
@@ -324,7 +324,7 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
 }
 
 async::Task<std::shared_ptr<OpenFile>> Server::add_document(std::string path, std::string content) {
-    auto& openFile = opening_files[path];
+    auto& openFile = opening_files.get_or_add(path);
     openFile->content = content;
 
     auto& task = openFile->ast_build_task;
