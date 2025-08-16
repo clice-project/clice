@@ -1,109 +1,141 @@
 #pragma once
 
-#include "gtest/gtest.h"
+#include "TExpr.h"
+#include "LocationChain.h"
 #include "Support/JSON.h"
 #include "Support/Format.h"
 #include "Support/Compare.h"
 #include "Support/FileSystem.h"
-#include "Test/LocationChain.h"
+#include "Support/FixedString.h"
+#include "llvm/ADT/FunctionExtras.h"
 
 namespace clice::testing {
 
-#undef EXPECT_TRUE
-#undef EXPECT_FALSE
-#undef ASSERT_TRUE
-#undef ASSERT_FALSE
-#undef EXPECT_EQ
-#undef EXPECT_NE
-#undef ASSERT_EQ
-#undef ASSERT_NE
+struct may_failure;
 
-llvm::StringRef test_dir();
+class Runner {
+public:
+    static Runner& instance();
 
-template <typename LHS, typename RHS>
-inline std::string diff(const LHS& lhs, const RHS& rhs) {
-    std::string left;
-    if constexpr(json::serializable<LHS>) {
-        llvm::raw_string_ostream(left) << json::serialize(lhs);
-    } else {
-        left = "cannot dump value";
+    using Suite = void (*)();
+    using Test = llvm::unique_function<void()>;
+
+    void add_suite(std::string_view name, Suite suite);
+
+    void on_test(std::string_view name, Test test, bool skipped);
+
+    /// Current test is failed, continue to execute the next test in the suite.
+    void fail(const may_failure& failure);
+
+    bool fatal_error_occured() {
+        return curr_fatal;
     }
 
-    SCOPED_TRACE("Verifying link at index 0");
-    std::string right;
-    if constexpr(json::serializable<RHS>) {
-        llvm::raw_string_ostream(right) << json::serialize(rhs);
-    } else {
-        right = "cannot dump value";
+    /// Run all test suites.
+    int run_tests();
+
+private:
+    Runner() = default;
+    Runner(const Runner&) = delete;
+    Runner(Runner&&) = delete;
+
+private:
+    bool curr_failed = false;
+    bool skipped = false;
+    bool curr_fatal = false;
+
+    /// Whether all tests in this test suite are skipped.
+    bool all_skipped = true;
+
+    std::string curr_suite_name;
+    std::uint32_t curr_tests_count = 0;
+    std::uint32_t curr_failed_tests_count = 0;
+    std::uint32_t total_tests_count = 0;
+    std::uint32_t total_suites_count = 0;
+    std::uint32_t total_failed_tests_count = 0;
+    std::chrono::milliseconds curr_test_duration;
+    std::chrono::milliseconds total_test_duration;
+    std::unordered_map<std::string_view, std::vector<Suite>> suites;
+};
+
+template <fixed_string suite_name>
+struct suite {
+    template <typename Suite>
+    suite(Suite suite) {
+        static_assert(std::convertible_to<Suite, Runner::Suite>, "Suite must be stateless!");
+        Runner::instance().add_suite(suite_name, suite);
+    }
+};
+
+struct test {
+    test(std::string_view name) : name(name) {}
+
+    template <typename Test>
+    void operator= (Test&& test) {
+        Runner::instance().on_test(name, std::forward<Test>(test), skipped);
     }
 
-    return std::format("left : {}\nright: {}\n", left, right);
-}
+    bool skipped = false;
+    std::string name;
+};
 
-inline void EXPECT_FAILURE(std::string message, LocationChain chain = LocationChain()) {
-    chain.backtrace();
-    GTEST_MESSAGE_AT_("", 0, message.c_str(), ::testing::TestPartResult::kNonFatalFailure);
-}
+struct may_failure {
+    bool failed = false;
+    bool fatal = false;
+    std::string expression;
+    std::source_location location;
 
-inline void ASSERT_FAILURE(std::string message, LocationChain chain = LocationChain()) {
-    chain.backtrace();
-    GTEST_MESSAGE_AT_("", 0, message.c_str(), ::testing::TestPartResult::kFatalFailure);
-    std::abort();
-}
-
-inline void EXPECT_TRUE(auto&& value, LocationChain chain = LocationChain()) {
-    if(!static_cast<bool>(value)) {
-        EXPECT_FAILURE("EXPECT true!", chain);
+    ~may_failure() {
+        Runner::instance().fail(*this);
     }
-}
+};
 
-inline void EXPECT_FALSE(auto&& value, LocationChain chain = LocationChain()) {
-    if(static_cast<bool>(value)) {
-        EXPECT_FAILURE("EXPECT false!", chain);
-    }
-}
+inline struct {
+    template <typename TExpr>
+    may_failure operator() (const TExpr& expr,
+                            std::source_location location = std::source_location::current()) {
+        bool failed = false;
+        std::string expression = "false";
 
-inline void ASSERT_TRUE(auto&& value, LocationChain chain = LocationChain()) {
-    if(!static_cast<bool>(value)) {
-        ASSERT_FAILURE("ASSERT true!", chain);
-        if constexpr(requires { value.error(); }) {
-            clice::println("{}", value.error());
+        if constexpr(is_expr_v<TExpr>) {
+            auto result = expr();
+            if(!static_cast<bool>(result)) {
+                failed = true;
+
+                /// TODO: use pretty print, if the expression is too long.
+                expression = std::format("{}", expr);
+            }
+        } else {
+            if(!static_cast<bool>(expr)) {
+                failed = true;
+            }
         }
-    }
-}
 
-inline void ASSERT_FALSE(auto&& value, LocationChain chain = LocationChain()) {
-    if(static_cast<bool>(value)) {
-        ASSERT_FAILURE("ASSERT false!", chain);
+        return may_failure{failed, false, expression, location};
     }
-}
+} expect;
 
-template <typename LHS, typename RHS>
-inline void EXPECT_EQ(const LHS& lhs, const RHS& rhs, LocationChain chain = LocationChain()) {
-    if(!refl::equal(lhs, rhs)) {
-        EXPECT_FAILURE(diff(lhs, rhs), chain);
+inline struct {
+    test&& operator/ (test&& test) {
+        test.skipped = true;
+        return std::move(test);
     }
-}
+} skip;
 
-template <typename LHS, typename RHS>
-inline void EXPECT_NE(const LHS& lhs, const RHS& rhs, LocationChain chain = LocationChain()) {
-    if(refl::equal(lhs, rhs)) {
-        EXPECT_FAILURE(diff(lhs, rhs), chain);
+inline struct {
+    may_failure&& operator/ (may_failure&& failure) {
+        failure.fatal = true;
+        return std::move(failure);
     }
-}
+} fatal;
 
-template <typename LHS, typename RHS>
-inline void ASSERT_EQ(const LHS& lhs, const RHS& rhs, LocationChain chain = LocationChain()) {
-    if(!refl::equal(lhs, rhs)) {
-        ASSERT_FAILURE(diff(lhs, rhs), chain);
+struct that_t {
+    template <typename TExpr>
+    constexpr decltype(auto) operator% (const TExpr& expr) const {
+        return expr;
     }
-}
+};
 
-template <typename LHS, typename RHS>
-inline void ASSERT_NE(const LHS& lhs, const RHS& rhs, LocationChain chain = LocationChain()) {
-    if(refl::equal(lhs, rhs)) {
-        ASSERT_FAILURE(diff(lhs, rhs), chain);
-    }
-}
+inline that_t that;
 
 }  // namespace clice::testing

@@ -15,51 +15,53 @@ struct Line {
     Point end;
 };
 
-TEST(Support, Equal) {
-    constexpr Point p1{1, 2};
-    constexpr Point p2{1, 2};
-    constexpr Point p3{2, 3};
+suite<"Compare"> compare = [] {
+    test("Equal") = [] {
+        constexpr Point p1{1, 2};
+        constexpr Point p2{1, 2};
+        constexpr Point p3{2, 3};
 
-    static_assert(refl::equal(p1, p2));
-    static_assert(!refl::equal(p1, p3));
+        static_assert(refl::equal(p1, p2));
+        static_assert(!refl::equal(p1, p3));
 
-    constexpr Line l1{
-        {1, 2},
-        {3, 4}
-    };
-    constexpr Line l2{
-        {1, 2},
-        {3, 4}
-    };
-    constexpr Line l3{
-        {1, 2},
-        {4, 5}
-    };
+        constexpr Line l1{
+            {1, 2},
+            {3, 4}
+        };
+        constexpr Line l2{
+            {1, 2},
+            {3, 4}
+        };
+        constexpr Line l3{
+            {1, 2},
+            {4, 5}
+        };
 
-    static_assert(refl::equal(l1, l2));
-    static_assert(!refl::equal(l1, l3));
-}
-
-TEST(Support, Less) {
-    constexpr Point p1{1, 2};
-    constexpr Point p2{2, 3};
-
-    static_assert(refl::less(p1, p2));
-    static_assert(!refl::less(p2, p1));
-
-    constexpr Line l1{
-        {1, 2},
-        {3, 4}
-    };
-    constexpr Line l2{
-        {1, 2},
-        {4, 5}
+        static_assert(refl::equal(l1, l2));
+        static_assert(!refl::equal(l1, l3));
     };
 
-    static_assert(refl::less(l1, l2));
-    static_assert(!refl::less(l2, l1));
-}
+    test("Less") = [] {
+        constexpr Point p1{1, 2};
+        constexpr Point p2{2, 3};
+
+        static_assert(refl::less(p1, p2));
+        static_assert(!refl::less(p2, p1));
+
+        constexpr Line l1{
+            {1, 2},
+            {3, 4}
+        };
+        constexpr Line l2{
+            {1, 2},
+            {4, 5}
+        };
+
+        static_assert(refl::less(l1, l2));
+        static_assert(!refl::less(l2, l1));
+    };
+};
 
 }  // namespace
 
-}  // namespace clice
+}  // namespace clice::testing

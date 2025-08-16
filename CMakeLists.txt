@@ -41,8 +41,13 @@ if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
 endif()
 
-set(CLICE_CXX_FLAGS "-fno-rtti;-fno-exceptions;-Wno-deprecated-declarations")
+set(CLICE_CXX_FLAGS "-fno-rtti;-fno-exceptions;-Wno-deprecated-declarations;-Wno-undefined-inline;")
 set(CLICE_LINKER_FLAGS "")
+
+if(CLICE_USE_LIBCXX)
+    list(APPEND CLICE_CXX_FLAGS "-stdlib=libc++")
+    list(APPEND CLICE_LINKER_FLAGS "-stdlib=libc++")
+endif()
 
 # Build-type specific flags
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -131,14 +136,7 @@ if(CLICE_ENABLE_TEST)
     add_executable(unit_tests "${CLICE_TEST_SOURCES}" "${CMAKE_SOURCE_DIR}/src/Driver/unit_tests.cc")
     target_include_directories(unit_tests PUBLIC "${CMAKE_SOURCE_DIR}")
 
-    FetchContent_Declare(
-        googletest
-        GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG v1.17.x
-    )
-    FetchContent_MakeAvailable(googletest)
-
-    target_link_libraries(unit_tests PRIVATE gtest_main GTest::gtest clice-core)
+    target_link_libraries(unit_tests PRIVATE clice-core)
     target_compile_options(unit_tests PUBLIC ${CLICE_CXX_FLAGS})
     target_link_options(unit_tests PUBLIC ${CLICE_LINKER_FLAGS})
 
