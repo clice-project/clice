@@ -41,8 +41,13 @@ if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
 endif()
 
-set(CLICE_CXX_FLAGS "-fno-rtti;-fno-exceptions;-Wno-deprecated-declarations")
-set(CLICE_LINKER_FLAGS "")
+set(CLICE_CXX_FLAGS "-fno-rtti;-fno-exceptions;-Wno-deprecated-declarations;-Wno-undefined-inline;-stdlib=libc++")
+set(CLICE_LINKER_FLAGS "-stdlib=libc++")
+
+if(CLICE_USE_LIBCXX)
+    list(APPEND CLICE_CXX_FLAGS "-stdlib=libc++")
+    list(APPEND CLICE_LINKER_FLAGS "-stdlib=libc++")
+endif()
 
 # Build-type specific flags
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")

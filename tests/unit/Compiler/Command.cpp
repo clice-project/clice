@@ -159,7 +159,7 @@ suite<"Command"> command = [] {
     };
 
     test("QueryDriver") = [] {
-#if __linux__
+#ifdef _GLIBCXX_RELEASE
         using namespace std::literals;
 
         CompilationDatabase database;
@@ -185,7 +185,6 @@ suite<"Command"> command = [] {
 
         info = database.query_driver("clang++");
         expect(that % info);
-
 #endif
     };
 

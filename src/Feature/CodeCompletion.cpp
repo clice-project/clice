@@ -182,7 +182,10 @@ CompletionItemKind completion_kind(const clang::NamedDecl* decl) {
         case clang::Decl::HLSLBuffer: {
             llvm_unreachable("Invalid code completion item, NamedDecl is expected");
         }
+        case clang::Decl::OutlinedFunction: break;
     }
+
+    std::unreachable();
 }
 
 /// Calculate the final code completion result.
