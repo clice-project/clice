@@ -51,11 +51,10 @@ void Runner::on_test(std::string_view name, Test test, bool skipped) {
         return;
     }
 
+    /// If there is any test in the suite, we print the suite start info.
     if(all_skipped) {
-        all_skipped = false;
-
-        /// If there is any test in the suite, we print the suite info.
         std::println("{}[----------] tests from {}{}", GREEN, curr_suite_name, CLEAR);
+        all_skipped = false;
     }
 
     if(skipped) {
@@ -64,7 +63,9 @@ void Runner::on_test(std::string_view name, Test test, bool skipped) {
         return;
     }
 
-    failed = false;
+    /// Reset whether this test is failed or fatal.
+    curr_failed = false;
+    curr_fatal = false;
 
     using namespace std::chrono;
 
@@ -75,8 +76,8 @@ void Runner::on_test(std::string_view name, Test test, bool skipped) {
 
     auto duration = duration_cast<milliseconds>(system_clock::now() - begin);
     std::println("{}[   {} ] {} ({} ms){}",
-                 failed ? RED : GREEN,
-                 failed ? "FAILED" : "    OK",
+                 curr_failed ? RED : GREEN,
+                 curr_failed ? "FAILED" : "    OK",
                  full_name,
                  duration.count(),
                  CLEAR);
@@ -87,17 +88,30 @@ void Runner::on_test(std::string_view name, Test test, bool skipped) {
 
     curr_test_duration += duration;
     totol_test_duration += duration;
+
+    if(curr_failed) {
+        curr_failed_tests_count += 1;
+        total_failed_tests_count += 1;
+    }
 }
 
-void Runner::fail(std::string expression, std::source_location location) {
-    failed = true;
-    std::println("{}Failure at {}:{}:{}! [{}]{}",
-                 RED,
-                 location.file_name(),
-                 location.line(),
-                 location.column(),
-                 expression,
-                 CLEAR);
+void Runner::fail(const may_failure& failure) {
+    if(failure.failed) {
+        curr_failed = true;
+        std::println("{}Failure at {}:{}:{}! [{}]{}",
+                     RED,
+                     failure.location.file_name(),
+                     failure.location.line(),
+                     failure.location.column(),
+                     failure.expression,
+                     CLEAR);
+    }
+
+    if(failure.fatal) {
+        curr_fatal = true;
+        std::println("{}--> Test stopped due to fatal error.{}", RED, CLEAR);
+        std::exit(1);
+    }
 }
 
 int Runner::run_tests() {
@@ -109,9 +123,11 @@ int Runner::run_tests() {
             continue;
         }
 
+        curr_fatal = false;
         all_skipped = true;
         curr_suite_name = suite_name;
         curr_tests_count = 0;
+        curr_failed_tests_count = 0;
         curr_test_duration = std::chrono::milliseconds();
 
         for(auto& callback: suite) {
@@ -138,7 +154,7 @@ int Runner::run_tests() {
                  totol_test_duration.count(),
                  CLEAR);
 
-    return 0;
+    return total_failed_tests_count != 0;
 }
 
 }  // namespace clice::testing
@@ -146,8 +162,6 @@ int Runner::run_tests() {
 int main(int argc, const char* argv[]) {
     llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
-
-    println("{}", enable_example.getValue());
 
     if(!test_filter.empty()) {
         if(auto result = GlobPattern::create(test_filter)) {

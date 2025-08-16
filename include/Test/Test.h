@@ -11,6 +11,8 @@
 
 namespace clice::testing {
 
+struct may_failure;
+
 class Runner {
 public:
     static Runner& instance();
@@ -22,13 +24,12 @@ public:
 
     void on_test(std::string_view name, Test test, bool skipped);
 
-    void on_skip(std::string_view name);
-
     /// Current test is failed, continue to execute the next test in the suite.
-    void fail(std::string expression, std::source_location location);
+    void fail(const may_failure& failure);
 
-    /// Current test is fatal error, exit.
-    void fatal(std::string expression, std::source_location location);
+    bool fatal_error_occured() {
+        return curr_fatal;
+    }
 
     /// Run all test suites.
     int run_tests();
@@ -39,16 +40,19 @@ private:
     Runner(Runner&&) = delete;
 
 private:
-    bool failed = false;
+    bool curr_failed = false;
     bool skipped = false;
+    bool curr_fatal = false;
 
     /// Whether all tests in this test suite are skipped.
     bool all_skipped = true;
 
     std::string curr_suite_name;
     std::uint32_t curr_tests_count = 0;
+    std::uint32_t curr_failed_tests_count = 0;
     std::uint32_t total_tests_count = 0;
     std::uint32_t total_suites_count = 0;
+    std::uint32_t total_failed_tests_count = 0;
     std::chrono::milliseconds curr_test_duration;
     std::chrono::milliseconds totol_test_duration;
     std::unordered_map<std::string_view, std::vector<Suite>> suites;
@@ -63,21 +67,6 @@ struct suite {
     }
 };
 
-template <typename TExpr>
-void expect(const TExpr& expr, std::source_location location = std::source_location::current()) {
-    if constexpr(is_expr_v<TExpr>) {
-        auto result = expr();
-        if(!static_cast<bool>(result)) {
-            /// TODO: use pretty print, if the expression is too long.
-            Runner::instance().fail(std::format("{}", expr), location);
-        }
-    } else {
-        if(!static_cast<bool>(expr)) {
-            Runner::instance().fail("false", location);
-        }
-    }
-}
-
 struct test {
     test(std::string_view name) : name(name) {}
 
@@ -90,14 +79,55 @@ struct test {
     std::string name;
 };
 
-struct skip_t {
+struct may_failure {
+    bool failed = false;
+    bool fatal = false;
+    std::string expression;
+    std::source_location location;
+
+    ~may_failure() {
+        Runner::instance().fail(*this);
+    }
+};
+
+inline struct {
+    template <typename TExpr>
+    may_failure operator() (const TExpr& expr,
+                            std::source_location location = std::source_location::current()) {
+        bool failed = false;
+        std::string expression = "false";
+
+        if constexpr(is_expr_v<TExpr>) {
+            auto result = expr();
+            if(!static_cast<bool>(result)) {
+                failed = true;
+
+                /// TODO: use pretty print, if the expression is too long.
+                expression = std::format("{}", expr);
+            }
+        } else {
+            if(!static_cast<bool>(expr)) {
+                failed = true;
+            }
+        }
+
+        return may_failure{failed, false, expression, location};
+    }
+} expect;
+
+inline struct {
     test&& operator/ (test&& test) {
         test.skipped = true;
         return std::move(test);
     }
-};
+} skip;
 
-inline skip_t skip;
+inline struct {
+    may_failure&& operator/ (may_failure&& failure) {
+        failure.fatal = true;
+        return std::move(failure);
+    }
+} fatal;
 
 struct that_t {
     template <typename TExpr>
