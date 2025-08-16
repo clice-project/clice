@@ -41,8 +41,8 @@ if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
 endif()
 
-set(CLICE_CXX_FLAGS "-fno-rtti;-fno-exceptions;-Wno-deprecated-declarations;-Wno-undefined-inline;-stdlib=libc++")
-set(CLICE_LINKER_FLAGS "-stdlib=libc++")
+set(CLICE_CXX_FLAGS "-fno-rtti;-fno-exceptions;-Wno-deprecated-declarations;-Wno-undefined-inline;")
+set(CLICE_LINKER_FLAGS "")
 
 if(CLICE_USE_LIBCXX)
     list(APPEND CLICE_CXX_FLAGS "-stdlib=libc++")

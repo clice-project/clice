@@ -179,13 +179,11 @@ CompletionItemKind completion_kind(const clang::NamedDecl* decl) {
         case clang::Decl::ObjCImplementation:
         case clang::Decl::ObjCCompatibleAlias:
 
+        case clang::Decl::OutlinedFunction:
         case clang::Decl::HLSLBuffer: {
-            llvm_unreachable("Invalid code completion item, NamedDecl is expected");
+            std::unreachable();
         }
-        case clang::Decl::OutlinedFunction: break;
     }
-
-    std::unreachable();
 }
 
 /// Calculate the final code completion result.
