@@ -20,7 +20,9 @@ public:
 
     void add_suite(std::string_view name, Suite suite);
 
-    void run_test(std::string_view name, Test test);
+    void on_test(std::string_view name, Test test, bool skipped);
+
+    void on_skip(std::string_view name);
 
     /// Current test is failed, continue to execute the next test in the suite.
     void fail(std::string expression, std::source_location location);
@@ -28,6 +30,7 @@ public:
     /// Current test is fatal error, exit.
     void fatal(std::string expression, std::source_location location);
 
+    /// Run all test suites.
     int run_tests();
 
 private:
@@ -39,10 +42,13 @@ private:
     bool failed = false;
     bool skipped = false;
 
+    /// Whether all tests in this test suite are skipped.
+    bool all_skipped = true;
+
     std::string curr_suite_name;
     std::uint32_t curr_tests_count = 0;
     std::uint32_t total_tests_count = 0;
-    std::uint32_t curr_filtered_tests_count = 0;
+    std::uint32_t total_suites_count = 0;
     std::chrono::milliseconds curr_test_duration;
     std::chrono::milliseconds totol_test_duration;
     std::unordered_map<std::string_view, std::vector<Suite>> suites;
@@ -59,8 +65,16 @@ struct suite {
 
 template <typename TExpr>
 void expect(const TExpr& expr, std::source_location location = std::source_location::current()) {
-    if(!bool(expr)) {
-        std::abort();
+    if constexpr(is_expr_v<TExpr>) {
+        auto result = expr();
+        if(!static_cast<bool>(result)) {
+            /// TODO: use pretty print, if the expression is too long.
+            Runner::instance().fail(std::format("{}", expr), location);
+        }
+    } else {
+        if(!static_cast<bool>(expr)) {
+            Runner::instance().fail("false", location);
+        }
     }
 }
 
@@ -69,11 +83,21 @@ struct test {
 
     template <typename Test>
     void operator= (Test&& test) {
-        Runner::instance().run_test(name, std::forward<Test>(test));
+        Runner::instance().on_test(name, std::forward<Test>(test), skipped);
     }
 
+    bool skipped = false;
     std::string name;
 };
+
+struct skip_t {
+    test&& operator/ (test&& test) {
+        test.skipped = true;
+        return std::move(test);
+    }
+};
+
+inline skip_t skip;
 
 struct that_t {
     template <typename TExpr>
@@ -82,6 +106,6 @@ struct that_t {
     }
 };
 
-constexpr inline that_t that;
+inline that_t that;
 
 }  // namespace clice::testing

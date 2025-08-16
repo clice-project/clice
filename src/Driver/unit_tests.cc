@@ -8,6 +8,11 @@
 using namespace clice;
 using namespace clice::testing;
 
+constexpr static std::string_view GREEN = "\033[32m";
+constexpr static std::string_view YELLOW = "\033[33m";
+constexpr static std::string_view RED = "\033[31m";
+constexpr static std::string_view CLEAR = "\033[0m";
+
 namespace {
 
 namespace cl = llvm::cl;
@@ -21,8 +26,7 @@ cl::opt<std::string> resource_dir("resource-dir", cl::desc("Resource dir path"))
 
 cl::opt<std::string> test_filter("test_filter");
 
-/// A string to hold output....
-std::string output_buffer;
+cl::opt<bool> enable_example("enable-example", cl::init(false));
 
 std::optional<GlobPattern> pattern;
 
@@ -39,13 +43,24 @@ void Runner::add_suite(std::string_view name, Suite suite) {
     suites[name].emplace_back(suite);
 }
 
-void Runner::run_test(std::string_view name, Test test) {
+void Runner::on_test(std::string_view name, Test test, bool skipped) {
     std::string full_name = std::format("{}.{}", curr_suite_name, name);
 
     /// If this test if filter, directly return.
-    if(!pattern || !pattern->match(full_name)) {
-        curr_tests_count += 1;
-        curr_filtered_tests_count += 1;
+    if(pattern && !pattern->match(full_name)) {
+        return;
+    }
+
+    if(all_skipped) {
+        all_skipped = false;
+
+        /// If there is any test in the suite, we print the suite info.
+        std::println("{}[----------] tests from {}{}", GREEN, curr_suite_name, CLEAR);
+    }
+
+    if(skipped) {
+        /// If this test is marked as skipped, only print skip information.
+        std::println("{}[ SKIPPED  ] {}{}", YELLOW, full_name, CLEAR);
         return;
     }
 
@@ -53,21 +68,18 @@ void Runner::run_test(std::string_view name, Test test) {
 
     using namespace std::chrono;
 
-    std::format_to(std::back_inserter(output_buffer),
-                   "\033[32m[ RUN      ] {}.{}\033[0m\n",
-                   curr_suite_name,
-                   name);
+    std::println("{}[ RUN      ] {}.{}{}", GREEN, curr_suite_name, name, CLEAR);
     auto begin = system_clock::now();
 
     test();
 
     auto duration = duration_cast<milliseconds>(system_clock::now() - begin);
-    std::format_to(std::back_inserter(output_buffer),
-                   "\033[32m[   {} ] {}.{} ({} ms)\033[0m\n",
-                   failed ? "FAILED" : "    OK",
-                   curr_suite_name,
-                   name,
-                   duration.count());
+    std::println("{}[   {} ] {} ({} ms){}",
+                 failed ? RED : GREEN,
+                 failed ? "FAILED" : "    OK",
+                 full_name,
+                 duration.count(),
+                 CLEAR);
 
     /// Update test information.
     curr_tests_count += 1;
@@ -79,45 +91,52 @@ void Runner::run_test(std::string_view name, Test test) {
 
 void Runner::fail(std::string expression, std::source_location location) {
     failed = true;
+    std::println("{}Failure at {}:{}:{}! [{}]{}",
+                 RED,
+                 location.file_name(),
+                 location.line(),
+                 location.column(),
+                 expression,
+                 CLEAR);
 }
 
 int Runner::run_tests() {
     /// Register all tests.
-    std::println("\033[32m[----------] Global test environment set-up.\033[0m");
+    std::println("{}[----------] Global test environment set-up.{}", GREEN, CLEAR);
 
     for(auto& [suite_name, suite]: suites) {
-        output_buffer.clear();
+        if(!enable_example && suite_name == "TEST.Example") {
+            continue;
+        }
 
+        all_skipped = true;
         curr_suite_name = suite_name;
         curr_tests_count = 0;
-        curr_filtered_tests_count = 0;
         curr_test_duration = std::chrono::milliseconds();
-
-        std::format_to(std::back_inserter(output_buffer),
-                       "\033[32m[----------] tests from {}\033[0m\n",
-                       suite_name);
 
         for(auto& callback: suite) {
             callback();
         }
 
-        std::format_to(std::back_inserter(output_buffer),
-                       "\033[32m[----------] {} tests from {} ({} ms total)\033[0m\n\n",
-                       total_tests_count,
-                       suite_name,
-                       totol_test_duration.count());
-
-        /// If all tests in this suite case are filtered, we skip output of it.
-        if(curr_filtered_tests_count != curr_tests_count) {
-            std::print("{}", output_buffer);
+        /// If there is any test in the suite, we print the suite info.
+        if(!all_skipped) {
+            total_suites_count += 1;
+            std::println("{}[----------] {} tests from {} ({} ms total)\n{}",
+                         GREEN,
+                         curr_tests_count,
+                         suite_name,
+                         totol_test_duration.count(),
+                         CLEAR);
         }
     }
 
-    std::println("\033[32m[----------] Global test environment tear-down\033[0m");
-    std::println("\033[32m[==========] {} tests from {} test suites ran. ({} ms total)\033[0m",
+    std::println("{}[----------] Global test environment tear-down{}", GREEN, CLEAR);
+    std::println("{}[==========] {} tests from {} test suites ran. ({} ms total){}",
+                 GREEN,
                  total_tests_count,
-                 suites.size(),
-                 totol_test_duration.count());
+                 total_suites_count,
+                 totol_test_duration.count(),
+                 CLEAR);
 
     return 0;
 }
@@ -127,6 +146,8 @@ int Runner::run_tests() {
 int main(int argc, const char* argv[]) {
     llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
+
+    println("{}", enable_example.getValue());
 
     if(!test_filter.empty()) {
         if(auto result = GlobPattern::create(test_filter)) {
