@@ -54,7 +54,7 @@ private:
     std::uint32_t total_suites_count = 0;
     std::uint32_t total_failed_tests_count = 0;
     std::chrono::milliseconds curr_test_duration;
-    std::chrono::milliseconds totol_test_duration;
+    std::chrono::milliseconds total_test_duration;
     std::unordered_map<std::string_view, std::vector<Suite>> suites;
 };
 

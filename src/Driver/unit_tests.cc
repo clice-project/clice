@@ -87,7 +87,7 @@ void Runner::on_test(std::string_view name, Test test, bool skipped) {
     total_tests_count += 1;
 
     curr_test_duration += duration;
-    totol_test_duration += duration;
+    total_test_duration += duration;
 
     if(curr_failed) {
         curr_failed_tests_count += 1;
@@ -141,7 +141,7 @@ int Runner::run_tests() {
                          GREEN,
                          curr_tests_count,
                          suite_name,
-                         totol_test_duration.count(),
+                         total_test_duration.count(),
                          CLEAR);
         }
     }
@@ -151,7 +151,7 @@ int Runner::run_tests() {
                  GREEN,
                  total_tests_count,
                  total_suites_count,
-                 totol_test_duration.count(),
+                 total_test_duration.count(),
                  CLEAR);
 
     return total_failed_tests_count != 0;
