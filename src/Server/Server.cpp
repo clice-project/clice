@@ -3,6 +3,46 @@
 
 namespace clice {
 
+ActiveFileManager::ActiveFile& ActiveFileManager::lru_put_impl(llvm::StringRef path,
+                                                               OpenFile file) {
+    /// If the file is not in the chain, create a new OpenFile.
+    if(items.size() >= capability) {
+        /// If the size exceeds the maximum size, remove the last element.
+        index.erase(items.back().first);
+        items.pop_back();
+    }
+    items.emplace_front(path, std::make_shared<OpenFile>(std::move(file)));
+
+    // fix the ownership of the StringRef of the path.
+    auto [added, _] = index.insert({path, items.begin()});
+    items.front().first = added->getKey();
+
+    return items.front().second;
+}
+
+ActiveFileManager::ActiveFile& ActiveFileManager::get_or_add(llvm::StringRef path) {
+    auto iter = index.find(path);
+    if(iter == index.end()) {
+        return lru_put_impl(path, OpenFile{});
+    }
+
+    // If the file is in the chain, move it to the front.
+    items.splice(items.begin(), items, iter->second);
+    return iter->second->second;
+}
+
+ActiveFileManager::ActiveFile& ActiveFileManager::add(llvm::StringRef path, OpenFile file) {
+    auto iter = index.find(path);
+    if(iter == index.end()) {
+        return lru_put_impl(path, std::move(file));
+    }
+    iter->second->second = std::make_shared<OpenFile>(std::move(file));
+
+    // If the file is in the chain, move it to the front.
+    items.splice(items.begin(), items, iter->second);
+    return iter->second->second;
+}
+
 async::Task<> Server::request(llvm::StringRef method, json::Value params) {
     co_await async::net::write(json::Object{
         {"jsonrpc", "2.0"            },

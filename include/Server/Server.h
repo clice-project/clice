@@ -39,6 +39,82 @@ struct OpenFile {
     std::unique_ptr<OpenFile> next;
 };
 
+/// A manager for all OpenFile with LRU cache.
+class ActiveFileManager {
+public:
+    /// Use shared_ptr to manage the lifetime of OpenFile object in async function.
+    using ActiveFile = std::shared_ptr<OpenFile>;
+
+    /// A double-linked list to store all opened files. While the `first` field of pair (each node
+    /// of list) refers to a key in `index`, the `second` field refers to the OpenFile object.
+    /// In another word, the `index` holds the ownership of path and the `items` holds the
+    /// ownership of OpenFile object.
+    using ListContainer = std::list<std::pair<llvm::StringRef, ActiveFile>>;
+
+    struct ActiveFileIterator : public ListContainer::const_iterator {};
+
+    constexpr static size_t DefaultMaxActiveFileNum = 8;
+    constexpr static size_t UnlimitedActiveFileNum = 512;
+
+public:
+    /// Create an ActiveFileManager with a default size.
+    ActiveFileManager() : capability(DefaultMaxActiveFileNum) {}
+
+    ActiveFileManager(const ActiveFileManager&) = delete;
+    ActiveFileManager& operator= (const ActiveFileManager&) = delete;
+
+    /// Set the maximum active file count and it will be clamped to [1, UnlimitedActiveFileNum].
+    void set_capability(size_t size) {
+        // Use static_cast to make MSVC happy.
+        capability = std::clamp(size, static_cast<size_t>(1), UnlimitedActiveFileNum);
+    }
+
+    /// Get the maximum size of the cache.
+    size_t max_size() const {
+        return capability;
+    }
+
+    /// Get the current size of the cache.
+    size_t size() const {
+        return index.size();
+    }
+
+    /// Try get OpenFile from manager, default construct one if not exists.
+    [[nodiscard]] ActiveFile& get_or_add(llvm::StringRef path);
+
+    /// Add a OpenFile to the manager.
+    ActiveFile& add(llvm::StringRef path, OpenFile file);
+
+    [[nodiscard]] bool contains(llvm::StringRef path) const {
+        return index.contains(path);
+    }
+
+    ActiveFileIterator begin() const {
+        return ActiveFileIterator(items.begin());
+    }
+
+    ActiveFileIterator end() const {
+        return ActiveFileIterator(items.end());
+    }
+
+private:
+    ActiveFile& lru_put_impl(llvm::StringRef path, OpenFile file);
+
+private:
+    /// The maximum size of the cache.
+    size_t capability;
+
+    /// The first element is the most recently used, and the last
+    /// element is the least recently used.
+    /// When a file is accessed, it will be moved to the front of the list.
+    /// When a new file is added, if the size exceeds the maximum size,
+    /// the last element will be removed.
+    ListContainer items;
+
+    /// A map from path to the iterator of the list.
+    llvm::StringMap<ListContainer::iterator> index;
+};
+
 class Server {
 public:
     Server();
@@ -106,10 +182,10 @@ private:
 
     async::Task<> build_ast(std::string file, std::string content);
 
-    async::Task<OpenFile*> add_document(std::string path, std::string content);
+    async::Task<std::shared_ptr<OpenFile>> add_document(std::string path, std::string content);
 
 private:
-    async::Task<> publish_diagnostics(std::string path, OpenFile* file);
+    async::Task<> publish_diagnostics(std::string path, std::shared_ptr<OpenFile> file);
 
     async::Task<> on_did_open(proto::DidOpenTextDocumentParams params);
 
@@ -146,8 +222,8 @@ private:
     /// The compilation database.
     CompilationDatabase database;
 
-    /// All opening files, TODO: use a LRU cache.
-    llvm::StringMap<OpenFile> opening_files;
+    /// All opening files.
+    ActiveFileManager opening_files;
 
     PathMapping mapping;
 };
