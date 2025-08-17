@@ -1,9 +1,21 @@
 name: format
 
 on:
-  pull_request:
   push:
     branches: [main]
+    paths:
+      - .clang-format
+      - "include/**"
+      - "src/**"
+      - "tests/**"
+
+  pull_request:
+    branches: [main]
+    paths:
+      - .clang-format
+      - "include/**"
+      - "src/**"
+      - "tests/**"
 
 jobs:
   check:
