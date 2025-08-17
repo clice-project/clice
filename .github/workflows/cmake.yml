@@ -5,16 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    paths-ignore:
-      - "docs"
-      - "scripts"
-      - ".clang-format"
-      - ".clangd"
-      - ".gitignore"
-      - "LICENSE"
-      - "README.md"
-      - ".github/workflows/xmake.yml"
-      - "xmake.lua"
+    paths:
+      - ".github/workflows/cmake.yml"
+      - "include"
+      - "src"
+      - "tests"
+      - "CMakeLists.txt"
 
 jobs:
   build:
