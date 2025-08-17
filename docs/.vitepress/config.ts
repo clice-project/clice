@@ -18,7 +18,6 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
     ],
-
     sidebar: {
       "/zh/": [
         genSidebar('zh', 'design', { title: 'Design' }),
