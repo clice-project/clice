@@ -3,6 +3,13 @@ name: xmake
 on:
   push:
     branches: [main]
+    paths:
+      - ".github/workflows/xmake.yml"
+      - "include"
+      - "src"
+      - "tests"
+      - "xmake.lua"
+
   pull_request:
     branches: [main]
     paths:
