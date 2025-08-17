@@ -1,24 +1,10 @@
 #pragma once
 
 #include <format>
-
+#include <print>
 #include "Support/JSON.h"
 #include "Support/Ranges.h"
 #include "llvm/Support/Error.h"
-
-namespace clice {
-
-template <typename... Args>
-void print(std::format_string<Args...> fmt, Args&&... args) {
-    llvm::outs() << std::vformat(fmt.get(), std::make_format_args(args...));
-}
-
-template <typename... Args>
-void println(std::format_string<Args...> fmt, Args&&... args) {
-    llvm::outs() << std::vformat(fmt.get(), std::make_format_args(args...)) << '\n';
-}
-
-}  // namespace clice
 
 template <>
 struct std::formatter<llvm::StringRef> : std::formatter<std::string_view> {
@@ -171,7 +157,7 @@ std::string pretty_dump(const Object& object, std::size_t indent = 2) {
     std::string repr = dump(object);
     auto json = json::parse(repr);
     if(!json) {
-        clice::println("{} {}", json.takeError(), repr);
+        std::println("{} {}", json.takeError(), repr);
         std::abort();
     }
     llvm::SmallString<128> buffer = {std::format("{{0:{}}}", indent)};

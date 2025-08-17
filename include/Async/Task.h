@@ -317,10 +317,10 @@ public:
     void stacktrace() {
         promise_base* handle = core;
         while(handle) {
-            clice::println("{}:{}:{}",
-                           handle->location.file_name(),
-                           handle->location.line(),
-                           handle->location.function_name());
+            std::println("{}:{}:{}",
+                         handle->location.file_name(),
+                         handle->location.line(),
+                         handle->location.function_name());
             handle = handle->continuation;
         }
     }
