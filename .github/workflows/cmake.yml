@@ -5,18 +5,18 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/cmake.yml"
-      - "include"
-      - "src"
-      - "tests"
+      - "include/**"
+      - "src/**"
+      - "tests/**"
       - "CMakeLists.txt"
 
   pull_request:
     branches: [main]
     paths:
       - ".github/workflows/cmake.yml"
-      - "include"
-      - "src"
-      - "tests"
+      - "include/**"
+      - "src/**"
+      - "tests/**"
       - "CMakeLists.txt"
 
 jobs:

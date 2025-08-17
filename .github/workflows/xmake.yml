@@ -5,18 +5,18 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/xmake.yml"
-      - "include"
-      - "src"
-      - "tests"
+      - "include/**"
+      - "src/**"
+      - "tests/**"
       - "xmake.lua"
 
   pull_request:
     branches: [main]
     paths:
       - ".github/workflows/xmake.yml"
-      - "include"
-      - "src"
-      - "tests"
+      - "include/**"
+      - "src/**"
+      - "tests/**"
       - "xmake.lua"
 
 jobs:
