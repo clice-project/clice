@@ -21,14 +21,14 @@ export default defineConfig({
 
     sidebar: {
       "/zh/": [
-        genSidebar('zh/design', { title: 'Design' }),
-        genSidebar('zh/dev', { title: 'Development' }),
-        genSidebar('zh/guide', { title: 'Guide' }),
+        genSidebar('zh', 'design', { title: 'Design' }),
+        genSidebar('zh', 'dev', { title: 'Development' }),
+        genSidebar('zh', 'guide', { title: 'Guide' }),
       ],
       "/": [
-        genSidebar('en/design', { title: 'Design' }),
-        genSidebar('en/dev', { title: 'Development' }),
-        genSidebar('en/guide', { title: 'Guide' }),
+        genSidebar('en', 'design', { title: 'Design' }),
+        genSidebar('en', 'dev', { title: 'Development' }),
+        genSidebar('en', 'guide', { title: 'Guide' }),
       ],
     },
     socialLinks: [
