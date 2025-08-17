@@ -24,7 +24,9 @@ export const genSidebar = (
 
         return {
             text: title,
-            link: `/${dirPath}/${file.replace('.md', '')}`
+            /// Make sure link for en is actually root, beacuse Github Pages
+            /// doesn't support redirect url.
+            link: `/${dirPath.replace("en/", "")}/${file.replace('.md', '')}`
         }
     })
 
