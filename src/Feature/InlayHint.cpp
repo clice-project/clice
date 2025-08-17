@@ -162,10 +162,10 @@ public:
         // return LocalSourceRange{sourceLocToPosition(SM, Spelled->front().location()),
         //              sourceLocToPosition(SM, Spelled->back().endLocation())};
 
-        return unit
-            .decompose_range(
-                clang::SourceRange(Spelled->front().location(), Spelled->back().endLocation()))
-            .second;
+        auto [fid, begin] = unit.decompose_location(Spelled->front().location());
+        auto [fid2, end] = unit.decompose_location(Spelled->back().endLocation());
+
+        return LocalSourceRange{begin, end};
     }
 
     void addBlockEndHint(SourceRange BraceRange,
@@ -627,6 +627,9 @@ public:
             return true;
         }
 
+        const auto& x = 1;
+        auto y = 1;
+
         if(auto* AT = D->getType()->getContainedAutoType()) {
             if(AT->isDeduced() && !D->getType()->isDependentType()) {
                 // Our current approach is to place the hint on the variable
@@ -848,6 +851,9 @@ InlayHints inlay_hints(CompilationUnit& unit, LocalSourceRange target) {
     std::vector<InlayHint> hints;
     InlayHintVisitor visitor(hints, unit, target);
     visitor.TraverseDecl(unit.tu());
+    ranges::sort(hints, refl::less);
+    auto sub_range = ranges::unique(hints, refl::equal);
+    hints.erase(sub_range.begin(), sub_range.end());
     return hints;
 }
 

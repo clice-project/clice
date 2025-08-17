@@ -84,16 +84,22 @@ struct may_failure {
     bool fatal = false;
     std::string expression;
     std::source_location location;
+    std::string message;
+
+    may_failure& operator<< (std::string message) {
+        this->message += std::move(message);
+        return *this;
+    }
 
     ~may_failure() {
         Runner::instance().fail(*this);
     }
 };
 
-inline struct {
+constexpr inline struct {
     template <typename TExpr>
     may_failure operator() (const TExpr& expr,
-                            std::source_location location = std::source_location::current()) {
+                            std::source_location location = std::source_location::current()) const {
         bool failed = false;
         std::string expression = "false";
 
@@ -115,16 +121,18 @@ inline struct {
     }
 } expect;
 
-inline struct {
-    test&& operator/ (test&& test) {
+constexpr inline struct {
+    test&& operator/ (test&& test) const {
         test.skipped = true;
         return std::move(test);
     }
 } skip;
 
-inline struct {
-    may_failure&& operator/ (may_failure&& failure) {
-        failure.fatal = true;
+constexpr inline struct {
+    may_failure&& operator/ (may_failure&& failure) const {
+        if(failure.failed) {
+            failure.fatal = true;
+        }
         return std::move(failure);
     }
 } fatal;

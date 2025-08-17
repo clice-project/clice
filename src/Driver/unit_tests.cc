@@ -112,6 +112,7 @@ void Runner::fail(const may_failure& failure) {
                      failure.location.column(),
                      failure.expression,
                      CLEAR);
+        std::println("{}", failure.message);
     }
 
     if(failure.fatal) {
