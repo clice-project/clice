@@ -1,9 +1,19 @@
 name: format
 
 on:
-  pull_request:
   push:
     branches: [main]
+    paths:
+      - "include"
+      - "src"
+      - "tests"
+
+  pull_request:
+    branches: [main]
+    paths:
+      - "include"
+      - "src"
+      - "tests"
 
 jobs:
   check:
