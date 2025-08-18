@@ -59,7 +59,7 @@ public:
         /// Add new symbol.
         auto& symbol = frame.cursor->emplace_back();
         symbol.kind = SymbolKind::from(decl);
-        symbol.name = ast::display_name_of(ND);
+        symbol.name = ast::name_of(ND);
         symbol.selectionRange = selectionRange;
         symbol.range = selectionRange;
 

@@ -233,7 +233,7 @@ index::SymbolID CompilationUnit::getSymbolID(const clang::NamedDecl* decl) {
         hash = llvm::xxh3_64bits(USR);
         impl->symbolHashCache.try_emplace(decl, hash);
     }
-    return index::SymbolID{hash, ast::display_name_of(decl)};
+    return index::SymbolID{hash, ast::name_of(decl)};
 }
 
 index::SymbolID CompilationUnit::getSymbolID(const clang::MacroInfo* macro) {

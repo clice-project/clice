@@ -65,7 +65,7 @@ std::string getSourceCode(CompilationUnit& unit, const clang::NamedDecl* decl) {
 Hover hover(CompilationUnit& unit, const clang::NamedDecl* decl) {
     return Hover{
         .kind = SymbolKind::from(decl),
-        .name = ast::display_name_of(decl),
+        .name = ast::name_of(decl),
         .items = getHoverItems(unit, decl),
         .document = getDocument(unit, decl),
         .qualifier = getQualifier(unit, decl),

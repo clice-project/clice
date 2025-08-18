@@ -13,12 +13,12 @@ namespace {
 enum class HintSide { Left, Right };
 
 bool isExpandedFromParameterPack(const clang::ParmVarDecl* D) {
-    return ast::getUnderlyingPackType(D) != nullptr;
+    return ast::underlying_pack_type(D) != nullptr;
 }
 
 // for a ParmVarDecl from a function declaration, returns the corresponding
 // ParmVarDecl from the definition if possible, nullptr otherwise.
-const clang::ParmVarDecl* getParamDefinition(const clang::ParmVarDecl* param) {
+const clang::ParmVarDecl* param_definition(const clang::ParmVarDecl* param) {
     if(auto* callee = dyn_cast<clang::FunctionDecl>(param->getDeclContext())) {
         if(auto* def = callee->getDefinition()) {
             auto i = std::distance(callee->param_begin(), llvm::find(callee->parameters(), param));
@@ -276,7 +276,7 @@ private:
                 // If the parameter is unnamed in the declaration:
                 // attempt to get its name from the definition
                 if(simple_name.empty()) {
-                    if(const auto* def = getParamDefinition(param)) {
+                    if(const auto* def = param_definition(param)) {
                         simple_name = ast::identifier_of(*def);
                     }
                 }
@@ -330,7 +330,7 @@ public:
 
         if(callee.decl) {
             Params = maybeDropCxxExplicitObjectParameters(callee.decl->parameters());
-            ForwardedParamsStorage = ast::resolveForwardingParameters(callee.decl);
+            ForwardedParamsStorage = ast::resolve_forwarding_params(callee.decl);
             ForwardedParams = maybeDropCxxExplicitObjectParameters(ForwardedParamsStorage);
         } else {
             Params = maybeDropCxxExplicitObjectParameters(callee.loc.getParams());
@@ -562,43 +562,53 @@ public:
         return Base::TraversePseudoObjectExpr(expr);
     }
 
-    bool VisitNamespaceDecl(clang::NamespaceDecl* D) {
+    bool VisitNamespaceDecl(clang::NamespaceDecl* decl) {
         if(options.block_end) {
             // For namespace, the range actually starts at the namespace keyword. But
             // it should be fine since it's usually very short.
-            builder.add_block_end_hint(D->getSourceRange(),
+            builder.add_block_end_hint(decl->getSourceRange(),
                                        "namespace",
-                                       ast::identifier_of(*D),
+                                       ast::identifier_of(*decl),
                                        "");
         }
         return true;
     }
 
-    bool VisitTagDecl(clang::TagDecl* D) {
-        if(options.block_end && D->isThisDeclarationADefinition()) {
-            std::string DeclPrefix = D->getKindName().str();
-            if(const auto* ED = dyn_cast<clang::EnumDecl>(D)) {
-                if(ED->isScoped())
-                    DeclPrefix += ED->isScopedUsingClassTag() ? " class" : " struct";
+    bool VisitTagDecl(clang::TagDecl* decl) {
+        if(options.block_end && decl->isThisDeclarationADefinition()) {
+            std::string prefix = decl->getKindName().str();
+
+            if(const auto* enum_decl = dyn_cast<clang::EnumDecl>(decl)) {
+                if(enum_decl->isScoped()) {
+                    prefix += enum_decl->isScopedUsingClassTag() ? " class" : " struct";
+                }
             };
-            builder.add_block_end_hint(D->getBraceRange(), DeclPrefix, ast::identifier_of(*D), ";");
+
+            builder.add_block_end_hint(decl->getBraceRange(),
+                                       prefix,
+                                       ast::identifier_of(*decl),
+                                       ";");
         }
         return true;
     }
 
-    bool VisitFunctionDecl(clang::FunctionDecl* D) {
-        if(auto* FPT = llvm::dyn_cast<clang::FunctionProtoType>(D->getType().getTypePtr())) {
-            if(!FPT->hasTrailingReturn()) {
-                if(auto FTL = D->getFunctionTypeLoc())
-                    builder.add_return_type_hint(D, FTL.getRParenLoc());
+    bool VisitFunctionDecl(clang::FunctionDecl* decl) {
+        if(auto* proto_type = llvm::dyn_cast<clang::FunctionProtoType>(decl->getType())) {
+            if(!proto_type->hasTrailingReturn()) {
+                if(auto FTL = decl->getFunctionTypeLoc()) {
+                    builder.add_return_type_hint(decl, FTL.getRParenLoc());
+                }
             }
         }
 
-        if(options.block_end && D->isThisDeclarationADefinition()) {
+        if(options.block_end && decl->isThisDeclarationADefinition()) {
             // We use `printName` here to properly print name of ctor/dtor/operator
             // overload.
-            if(const clang::Stmt* body = D->getBody()) {
-                builder.add_block_end_hint(body->getSourceRange(), "", ast::print_name(D), "");
+            if(const clang::Stmt* body = decl->getBody()) {
+                builder.add_block_end_hint(body->getSourceRange(),
+                                           "",
+                                           ast::display_name_of(decl),
+                                           "");
             }
         }
 
