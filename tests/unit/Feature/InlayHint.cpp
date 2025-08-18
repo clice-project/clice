@@ -17,7 +17,7 @@ suite<"InlayHint"> inlay_hint = [] {
         tester.compile_with_pch("-std=c++23");
 
         LocalSourceRange range = LocalSourceRange(0, tester.unit->interested_content().size());
-        hints = feature::inlay_hints(*tester.unit, range);
+        hints = feature::inlay_hints(*tester.unit, range, {});
 
         hints2.clear();
         for(auto& hint: hints) {

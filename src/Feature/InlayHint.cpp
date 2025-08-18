@@ -9,40 +9,21 @@ namespace clice::feature {
 
 namespace {
 
-using namespace clang;
-
 // For now, inlay hints are always anchored at the left or right of their range.
 enum class HintSide { Left, Right };
 
-bool isExpandedFromParameterPack(const ParmVarDecl* D) {
+bool isExpandedFromParameterPack(const clang::ParmVarDecl* D) {
     return ast::getUnderlyingPackType(D) != nullptr;
-}
-
-template <typename R>
-std::string joinAndTruncate(const R& Range, size_t MaxLength) {
-    std::string Out;
-    llvm::raw_string_ostream OS(Out);
-    llvm::ListSeparator Sep(", ");
-    for(auto&& Element: Range) {
-        OS << Sep;
-        if(Out.size() + Element.size() >= MaxLength) {
-            OS << "...";
-            break;
-        }
-        OS << Element;
-    }
-    OS.flush();
-    return Out;
 }
 
 // for a ParmVarDecl from a function declaration, returns the corresponding
 // ParmVarDecl from the definition if possible, nullptr otherwise.
-const static ParmVarDecl* getParamDefinition(const ParmVarDecl* P) {
-    if(auto* Callee = dyn_cast<FunctionDecl>(P->getDeclContext())) {
-        if(auto* Def = Callee->getDefinition()) {
-            auto I = std::distance(Callee->param_begin(), llvm::find(Callee->parameters(), P));
-            if(I < (int)Callee->getNumParams()) {
-                return Def->getParamDecl(I);
+const clang::ParmVarDecl* getParamDefinition(const clang::ParmVarDecl* param) {
+    if(auto* callee = dyn_cast<clang::FunctionDecl>(param->getDeclContext())) {
+        if(auto* def = callee->getDefinition()) {
+            auto i = std::distance(callee->param_begin(), llvm::find(callee->parameters(), param));
+            if(i < (int)callee->getNumParams()) {
+                return def->getParamDecl(i);
             }
         }
     }
@@ -51,29 +32,30 @@ const static ParmVarDecl* getParamDefinition(const ParmVarDecl* P) {
 
 // If "E" spells a single unqualified identifier, return that name.
 // Otherwise, return an empty string.
-static StringRef getSpelledIdentifier(const Expr* E) {
-    E = E->IgnoreUnlessSpelledInSource();
+llvm::StringRef spelled_identifier_of(const clang::Expr* expr) {
+    expr = expr->IgnoreUnlessSpelledInSource();
 
-    if(auto* DRE = dyn_cast<DeclRefExpr>(E))
+    if(auto* DRE = dyn_cast<clang::DeclRefExpr>(expr))
         if(!DRE->getQualifier())
             return ast::identifier_of(*DRE->getDecl());
 
-    if(auto* ME = dyn_cast<MemberExpr>(E))
+    if(auto* ME = dyn_cast<clang::MemberExpr>(expr))
         if(!ME->getQualifier() && ME->isImplicitAccess())
             return ast::identifier_of(*ME->getMemberDecl());
 
     return {};
 }
 
-using NameVec = SmallVector<StringRef, 8>;
-
-static bool isSetter(const FunctionDecl* callee, const NameVec& ParamNames) {
-    if(ParamNames.size() != 1)
+bool is_setter(const clang::FunctionDecl* callee,
+               const llvm::SmallVector<llvm::StringRef, 8>& names) {
+    if(names.size() != 1) {
         return false;
+    }
 
-    StringRef Name = ast::identifier_of(*callee);
-    if(!Name.starts_with_insensitive("set"))
+    llvm::StringRef name = ast::identifier_of(*callee);
+    if(!name.starts_with_insensitive("set")) {
         return false;
+    }
 
     // In addition to checking that the function has one parameter and its
     // name starts with "set", also check that the part after "set" matches
@@ -86,19 +68,18 @@ static bool isSetter(const FunctionDecl* callee, const NameVec& ParamNames) {
     //   void setExceptionHandler(EHFunc exception_handler);
     // We could improve this by replacing `equals_insensitive` with some
     // `sloppy_equals` which ignores case and also skips underscores.
-    StringRef WhatItIsSetting = Name.substr(3).ltrim("_");
-    return WhatItIsSetting.equals_insensitive(ParamNames[0]);
+    return name.substr(3).ltrim("_").equals_insensitive(names[0]);
 }
 
 // Checks if the callee is one of the builtins
 // addressof, as_const, forward, move(_if_noexcept)
-static bool isSimpleBuiltin(const FunctionDecl* Callee) {
-    switch(Callee->getBuiltinID()) {
-        case Builtin::BIaddressof:
-        case Builtin::BIas_const:
-        case Builtin::BIforward:
-        case Builtin::BImove:
-        case Builtin::BImove_if_noexcept: return true;
+static bool isSimpleBuiltin(const clang::FunctionDecl* callee) {
+    switch(callee->getBuiltinID()) {
+        case clang::Builtin::BIaddressof:
+        case clang::Builtin::BIas_const:
+        case clang::Builtin::BIforward:
+        case clang::Builtin::BImove:
+        case clang::Builtin::BImove_if_noexcept: return true;
         default: return false;
     }
 }
@@ -106,8 +87,8 @@ static bool isSimpleBuiltin(const FunctionDecl* Callee) {
 struct Callee {
     // Only one of Decl or Loc is set.
     // Loc is for calls through function pointers.
-    const FunctionDecl* decl = nullptr;
-    FunctionProtoTypeLoc loc;
+    const clang::FunctionDecl* decl = nullptr;
+    clang::FunctionProtoTypeLoc loc;
 };
 
 class Builder {
@@ -128,7 +109,7 @@ public:
 
 private:
     // Get the range of the main file that *exactly* corresponds to R.
-    std::optional<LocalSourceRange> getHintRange(SourceRange R) {
+    std::optional<LocalSourceRange> getHintRange(clang::SourceRange R) {
         const auto& SM = unit.context().getSourceManager();
         auto Spelled = unit.token_buffer().spelledForExpanded(unit.expanded_tokens(R));
         // TokenBuffer will return null if e.g. R corresponds to only part of a
@@ -157,14 +138,14 @@ private:
     // 2. After "}", if the trimmed trailing text is exactly
     // `OptionalPunctuation`, say ";". The range of "} ... ;" is returned.
     // Otherwise, the hint shouldn't be shown.
-    std::optional<LocalSourceRange> computeBlockEndHintRange(SourceRange BraceRange,
-                                                             StringRef OptionalPunctuation) {
+    std::optional<LocalSourceRange> computeBlockEndHintRange(clang::SourceRange brace_range,
+                                                             llvm::StringRef OptionalPunctuation) {
         constexpr unsigned HintMinLineLimit = 2;
 
         auto& SM = unit.context().getSourceManager();
         auto [BlockBeginFileId, BlockBeginOffset] =
-            SM.getDecomposedLoc(SM.getFileLoc(BraceRange.getBegin()));
-        auto RBraceLoc = SM.getFileLoc(BraceRange.getEnd());
+            SM.getDecomposedLoc(SM.getFileLoc(brace_range.getBegin()));
+        auto RBraceLoc = SM.getFileLoc(brace_range.getEnd());
         auto [RBraceFileId, RBraceOffset] = SM.getDecomposedLoc(RBraceLoc);
 
         // Because we need to check the block satisfies the minimum line limit, we
@@ -174,11 +155,12 @@ private:
         if(BlockBeginFileId != unit.interested_file() || RBraceFileId != unit.interested_file())
             return std::nullopt;
 
-        StringRef RestOfLine = unit.interested_content().substr(RBraceOffset).split('\n').first;
+        llvm::StringRef RestOfLine =
+            unit.interested_content().substr(RBraceOffset).split('\n').first;
         if(!RestOfLine.starts_with("}"))
             return std::nullopt;
 
-        StringRef TrimmedTrailingText = RestOfLine.drop_front().trim();
+        llvm::StringRef TrimmedTrailingText = RestOfLine.drop_front().trim();
         if(!TrimmedTrailingText.empty() && TrimmedTrailingText != OptionalPunctuation)
             return std::nullopt;
 
@@ -190,7 +172,7 @@ private:
             return std::nullopt;
 
         // This is what we attach the hint to, usually "}" or "};".
-        StringRef HintRangeText =
+        llvm::StringRef HintRangeText =
             RestOfLine.take_front(TrimmedTrailingText.empty()
                                       ? 1
                                       : TrimmedTrailingText.bytes_end() - RestOfLine.bytes_begin());
@@ -202,14 +184,14 @@ private:
 
     /// Check whether the expr has a param name comment before it.
     /// The typical format is `/*name=*/`.
-    bool has_param_name_comment(const Expr* expr, StringRef name) {
+    bool has_param_name_comment(const clang::Expr* expr, llvm::StringRef name) {
         auto location = unit.file_location(expr->getBeginLoc());
         auto [fid, offset] = unit.decompose_location(location);
         if(fid != unit.interested_file()) {
             return false;
         }
 
-        StringRef content = unit.interested_content().substr(0, offset);
+        llvm::StringRef content = unit.interested_content().substr(0, offset);
 
         // Allow whitespace between comment and expression.
         content = content.rtrim();
@@ -232,13 +214,13 @@ private:
         return content.ends_with("/*");
     }
 
-    bool shouldHintName(const Expr* Arg, StringRef ParamName) {
+    bool shouldHintName(const clang::Expr* Arg, llvm::StringRef ParamName) {
         if(ParamName.empty())
             return false;
 
         // If the argument expression is a single name and it matches the
         // parameter name exactly, omit the name hint.
-        if(ParamName == getSpelledIdentifier(Arg))
+        if(ParamName == spelled_identifier_of(Arg))
             return false;
 
         // Exclude argument expressions preceded by a /*paramName*/.
@@ -248,7 +230,8 @@ private:
         return true;
     }
 
-    bool shouldHintReference(const ParmVarDecl* param, const ParmVarDecl* forwarded_param) {
+    bool shouldHintReference(const clang::ParmVarDecl* param,
+                             const clang::ParmVarDecl* forwarded_param) {
         // We add a & hint only when the argument is passed as mutable reference.
         // For parameters that are not part of an expanded pack, this is
         // straightforward. For expanded pack parameters, it's likely that they will
@@ -278,26 +261,26 @@ private:
                !isExpandedFromParameterPack(forwarded_param);
     }
 
-    using NameVec = SmallVector<StringRef, 8>;
+    using NameVec = llvm::SmallVector<llvm::StringRef, 8>;
 
-    NameVec chooseParameterNames(ArrayRef<const ParmVarDecl*> Parameters) {
+    NameVec chooseParameterNames(llvm::ArrayRef<const clang::ParmVarDecl*> params) {
         NameVec ParameterNames;
-        for(const auto* P: Parameters) {
-            if(isExpandedFromParameterPack(P)) {
+        for(const auto* param: params) {
+            if(isExpandedFromParameterPack(param)) {
                 // If we haven't resolved a pack paramater (e.g. foo(Args... args)) to a
                 // non-pack parameter, then hinting as foo(args: 1, args: 2, args: 3) is
                 // unlikely to be useful.
                 ParameterNames.emplace_back();
             } else {
-                auto SimpleName = ast::identifier_of(*P);
+                auto simple_name = ast::identifier_of(*param);
                 // If the parameter is unnamed in the declaration:
                 // attempt to get its name from the definition
-                if(SimpleName.empty()) {
-                    if(const auto* PD = getParamDefinition(P)) {
-                        SimpleName = ast::identifier_of(*PD);
+                if(simple_name.empty()) {
+                    if(const auto* def = getParamDefinition(param)) {
+                        simple_name = ast::identifier_of(*def);
                     }
                 }
-                ParameterNames.emplace_back(SimpleName);
+                ParameterNames.emplace_back(simple_name);
             }
         }
 
@@ -312,8 +295,8 @@ private:
 
 public:
     void add_params(Callee callee,
-                    SourceLocation RParenOrBraceLoc,
-                    llvm::ArrayRef<const Expr*> args) {
+                    clang::SourceLocation RParenOrBraceLoc,
+                    llvm::ArrayRef<const clang::Expr*> args) {
         assert(callee.decl || callee.loc);
 
         if((!options.parameters && !options.default_arguments) || args.size() == 0) {
@@ -329,15 +312,16 @@ public:
             }
         }
 
-        SmallVector<std::string> FormattedDefaultArgs;
+        llvm::SmallVector<std::string> formatted_default_args;
         bool HasNonDefaultArgs = false;
 
-        ArrayRef<const ParmVarDecl*> Params, ForwardedParams;
+        llvm::ArrayRef<const clang::ParmVarDecl*> Params, ForwardedParams;
         // Resolve parameter packs to their forwarded parameter
-        SmallVector<const ParmVarDecl*> ForwardedParamsStorage;
+        llvm::SmallVector<const clang::ParmVarDecl*> ForwardedParamsStorage;
 
         auto maybeDropCxxExplicitObjectParameters =
-            [](ArrayRef<const ParmVarDecl*> params) -> ArrayRef<const ParmVarDecl*> {
+            [](llvm::ArrayRef<const clang::ParmVarDecl*> params)
+            -> llvm::ArrayRef<const clang::ParmVarDecl*> {
             if(!params.empty() && params.front()->isExplicitObjectParameter()) {
                 params = params.drop_front(1);
             }
@@ -358,7 +342,7 @@ public:
         // Exclude setters (i.e. functions with one argument whose name begins with
         // "set"), and builtins like std::move/forward/... as their parameter name
         // is also not likely to be interesting.
-        if(callee.decl && (isSetter(callee.decl, param_names) || isSimpleBuiltin(callee.decl)))
+        if(callee.decl && (is_setter(callee.decl, param_names) || isSimpleBuiltin(callee.decl)))
             return;
 
         for(size_t i = 0; i < param_names.size() && i < args.size(); ++i) {
@@ -369,17 +353,17 @@ public:
                 break;
             }
 
-            StringRef Name = param_names[i];
+            llvm::StringRef Name = param_names[i];
             const bool NameHint = shouldHintName(args[i], Name) && options.parameters;
             const bool ReferenceHint =
                 shouldHintReference(Params[i], ForwardedParams[i]) && options.parameters;
 
-            const bool IsDefault = isa<CXXDefaultArgExpr>(args[i]);
+            const bool IsDefault = llvm::isa<clang::CXXDefaultArgExpr>(args[i]);
             HasNonDefaultArgs |= !IsDefault;
             if(IsDefault) {
                 if(options.default_arguments) {
                     const auto SourceText = clang::Lexer::getSourceText(
-                        CharSourceRange::getTokenRange(Params[i]->getDefaultArgRange()),
+                        clang::CharSourceRange::getTokenRange(Params[i]->getDefaultArgRange()),
                         unit.context().getSourceManager(),
                         unit.lang_options());
                     const auto Abbrev =
@@ -387,9 +371,10 @@ public:
                             ? "..."
                             : SourceText;
                     if(NameHint)
-                        FormattedDefaultArgs.emplace_back(llvm::formatv("{0}: {1}", Name, Abbrev));
+                        formatted_default_args.emplace_back(
+                            llvm::formatv("{0}: {1}", Name, Abbrev));
                     else
-                        FormattedDefaultArgs.emplace_back(llvm::formatv("{0}", Abbrev));
+                        formatted_default_args.emplace_back(llvm::formatv("{0}", Abbrev));
                 }
             } else if(NameHint || ReferenceHint) {
                 add_inlay_hint(args[i]->getSourceRange(),
@@ -401,21 +386,33 @@ public:
             }
         }
 
-        if(!FormattedDefaultArgs.empty()) {
-            std::string Hint = joinAndTruncate(FormattedDefaultArgs, options.type_name_limit);
-            add_inlay_hint(SourceRange{RParenOrBraceLoc},
+        if(!formatted_default_args.empty()) {
+            std::string hint;
+            llvm::raw_string_ostream os(hint);
+            llvm::ListSeparator sep(", ");
+            for(auto&& element: formatted_default_args) {
+                os << sep;
+                if(hint.size() + element.size() >= options.type_name_limit) {
+                    os << "...";
+                    break;
+                }
+                os << element;
+            }
+            os.flush();
+
+            add_inlay_hint(clang::SourceRange(RParenOrBraceLoc),
                            HintSide::Left,
                            InlayHintKind::DefaultArgument,
                            HasNonDefaultArgs ? ", " : "",
-                           Hint,
+                           hint,
                            "");
         }
     }
 
-    void add_block_end_hint(SourceRange BraceRange,
-                            StringRef DeclPrefix,
-                            StringRef Name,
-                            StringRef OptionalPunctuation) {
+    void add_block_end_hint(clang::SourceRange BraceRange,
+                            llvm::StringRef DeclPrefix,
+                            llvm::StringRef Name,
+                            llvm::StringRef OptionalPunctuation) {
         auto HintRange = computeBlockEndHintRange(BraceRange, OptionalPunctuation);
         if(!HintRange)
             return;
@@ -432,15 +429,15 @@ public:
         add_inlay_hint(*HintRange, HintSide::Right, InlayHintKind::BlockEnd, " // ", Label, "");
     }
 
-    void mark_block_end(const Stmt* Body, llvm::StringRef Label, llvm::StringRef Name = "") {
-        if(const auto* CS = llvm::dyn_cast_or_null<CompoundStmt>(Body)) {
+    void mark_block_end(const clang::Stmt* Body, llvm::StringRef Label, llvm::StringRef Name = "") {
+        if(const auto* CS = llvm::dyn_cast_or_null<clang::CompoundStmt>(Body)) {
             add_block_end_hint(CS->getSourceRange(), Label, Name, "");
         }
     }
 
     // We pass HintSide rather than SourceLocation because we want to ensure
     // it is in the same file as the common file range.
-    void add_inlay_hint(SourceRange R,
+    void add_inlay_hint(clang::SourceRange R,
                         HintSide Side,
                         InlayHintKind Kind,
                         llvm::StringRef Prefix,
@@ -476,7 +473,7 @@ public:
         result.push_back(std::move(hint));
     }
 
-    void add_type_hint(SourceRange R, QualType T, llvm::StringRef Prefix) {
+    void add_type_hint(clang::SourceRange R, clang::QualType T, llvm::StringRef Prefix) {
         if(!options.deduced_types || T.isNull())
             return;
 
@@ -502,7 +499,7 @@ public:
                            /*Suffix=*/"");
     }
 
-    void add_designator_hint(SourceRange R, llvm::StringRef Text) {
+    void add_designator_hint(clang::SourceRange R, llvm::StringRef Text) {
         add_inlay_hint(R,
                        HintSide::Left,
                        InlayHintKind::Designator,
@@ -511,7 +508,7 @@ public:
                        /*Suffix=*/"=");
     }
 
-    void add_return_type_hint(FunctionDecl* D, SourceRange Range) {
+    void add_return_type_hint(clang::FunctionDecl* D, clang::SourceRange Range) {
         auto* AT = D->getReturnType()->getContainedAutoType();
         if(!AT || AT->getDeducedType().isNull())
             return;
@@ -565,7 +562,7 @@ public:
         return Base::TraversePseudoObjectExpr(expr);
     }
 
-    bool VisitNamespaceDecl(NamespaceDecl* D) {
+    bool VisitNamespaceDecl(clang::NamespaceDecl* D) {
         if(options.block_end) {
             // For namespace, the range actually starts at the namespace keyword. But
             // it should be fine since it's usually very short.
@@ -577,10 +574,10 @@ public:
         return true;
     }
 
-    bool VisitTagDecl(TagDecl* D) {
+    bool VisitTagDecl(clang::TagDecl* D) {
         if(options.block_end && D->isThisDeclarationADefinition()) {
             std::string DeclPrefix = D->getKindName().str();
-            if(const auto* ED = dyn_cast<EnumDecl>(D)) {
+            if(const auto* ED = dyn_cast<clang::EnumDecl>(D)) {
                 if(ED->isScoped())
                     DeclPrefix += ED->isScopedUsingClassTag() ? " class" : " struct";
             };
@@ -589,8 +586,8 @@ public:
         return true;
     }
 
-    bool VisitFunctionDecl(FunctionDecl* D) {
-        if(auto* FPT = llvm::dyn_cast<FunctionProtoType>(D->getType().getTypePtr())) {
+    bool VisitFunctionDecl(clang::FunctionDecl* D) {
+        if(auto* FPT = llvm::dyn_cast<clang::FunctionProtoType>(D->getType().getTypePtr())) {
             if(!FPT->hasTrailingReturn()) {
                 if(auto FTL = D->getFunctionTypeLoc())
                     builder.add_return_type_hint(D, FTL.getRParenLoc());
@@ -600,17 +597,18 @@ public:
         if(options.block_end && D->isThisDeclarationADefinition()) {
             // We use `printName` here to properly print name of ctor/dtor/operator
             // overload.
-            if(const Stmt* Body = D->getBody())
-                builder.add_block_end_hint(Body->getSourceRange(), "", ast::print_name(D), "");
+            if(const clang::Stmt* body = D->getBody()) {
+                builder.add_block_end_hint(body->getSourceRange(), "", ast::print_name(D), "");
+            }
         }
 
         return true;
     }
 
-    bool VisitVarDecl(VarDecl* var) {
+    bool VisitVarDecl(clang::VarDecl* var) {
         // Do not show hints for the aggregate in a structured binding,
         // but show hints for the individual bindings.
-        if(auto* decl = dyn_cast<DecompositionDecl>(var)) {
+        if(auto* decl = dyn_cast<clang::DecompositionDecl>(var)) {
             for(auto* binding: decl->bindings()) {
                 // For structured bindings, print canonical types. This is important
                 // because for bindings that use the tuple_element protocol, the
@@ -655,7 +653,7 @@ public:
         return true;
     }
 
-    bool VisitCXXConstructExpr(CXXConstructExpr* E) {
+    bool VisitCXXConstructExpr(clang::CXXConstructExpr* E) {
         // Weed out constructor calls that don't look like a function call with
         // an argument list, by checking the validity of getParenOrBraceRange().
         // Also weed out std::initializer_list constructors as there are no names
@@ -676,41 +674,42 @@ public:
         return true;
     }
 
-    bool VisitCallExpr(CallExpr* E) {
+    bool VisitCallExpr(clang::CallExpr* expr) {
         if(!options.parameters) {
             return true;
         }
 
-        auto isFunctionObjectCallExpr = [](CallExpr* E) {
-            if(auto* CallExpr = dyn_cast<CXXOperatorCallExpr>(E)) {
-                return CallExpr->getOperator() == OverloadedOperatorKind::OO_Call;
+        auto isFunctionObjectCallExpr = [](clang::CallExpr* E) {
+            if(auto* CallExpr = dyn_cast<clang::CXXOperatorCallExpr>(E)) {
+                return CallExpr->getOperator() == clang::OverloadedOperatorKind::OO_Call;
             }
 
             return false;
         };
 
-        bool is_functor = isFunctionObjectCallExpr(E);
+        bool is_functor = isFunctionObjectCallExpr(expr);
 
         // Do not show parameter hints for user-defined literals or
         // operator calls except for operator(). (Among other reasons, the resulting
         // hints can look awkward, e.g. the expression can itself be a function
         // argument and then we'd get two hints side by side).
-        if((isa<CXXOperatorCallExpr>(E) && !is_functor) || isa<UserDefinedLiteral>(E))
+        if((llvm::isa<clang::CXXOperatorCallExpr>(expr) && !is_functor) ||
+           llvm::isa<clang::UserDefinedLiteral>(expr))
             return true;
 
         /// FIXME: Use template resolver here.
-        if(E->isTypeDependent() || E->isValueDependent()) {
+        if(expr->isTypeDependent() || expr->isValueDependent()) {
             return true;
         }
 
-        auto callee_decl = E->getCalleeDecl();
+        auto callee_decl = expr->getCalleeDecl();
 
         Callee callee;
-        if(const auto* FD = dyn_cast<FunctionDecl>(callee_decl)) {
+        if(const auto* FD = llvm::dyn_cast<clang::FunctionDecl>(callee_decl)) {
             callee.decl = FD;
-        } else if(const auto* FTD = dyn_cast<FunctionTemplateDecl>(callee_decl)) {
+        } else if(const auto* FTD = llvm::dyn_cast<clang::FunctionTemplateDecl>(callee_decl)) {
             callee.decl = FTD->getTemplatedDecl();
-        } else if(FunctionProtoTypeLoc loc = ast::getPrototypeLoc(E->getCallee())) {
+        } else if(clang::FunctionProtoTypeLoc loc = ast::getPrototypeLoc(expr->getCallee())) {
             callee.loc = loc;
         } else {
             return true;
@@ -726,26 +725,26 @@ public:
         // implied object argument ([over.call.func]), the list of provided
         // arguments is preceded by the implied object argument for the purposes of
         // this correspondence...
-        llvm::ArrayRef<const Expr*> args = {E->getArgs(), E->getNumArgs()};
+        llvm::ArrayRef<const clang::Expr*> args = {expr->getArgs(), expr->getNumArgs()};
 
         // We don't have the implied object argument through a function pointer either.
-        if(const auto* method = dyn_cast_or_null<CXXMethodDecl>(callee.decl)) {
+        if(const auto* method = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(callee.decl)) {
             if(is_functor || method->hasCXXExplicitFunctionObjectParameter()) {
                 args = args.drop_front(1);
             }
         }
 
-        builder.add_params(callee, E->getRParenLoc(), args);
+        builder.add_params(callee, expr->getRParenLoc(), args);
         return true;
     }
 
-    bool VisitForStmt(ForStmt* S) {
+    bool VisitForStmt(clang::ForStmt* S) {
         if(options.block_end) {
             std::string name;
             // Common case: for (int I = 0; I < N; I++). Use "I" as the name.
-            if(auto* DS = llvm::dyn_cast_or_null<DeclStmt>(S->getInit());
+            if(auto* DS = llvm::dyn_cast_or_null<clang::DeclStmt>(S->getInit());
                DS && DS->isSingleDecl()) {
-                name = ast::identifier_of(llvm::cast<NamedDecl>(*DS->getSingleDecl()));
+                name = ast::identifier_of(llvm::cast<clang::NamedDecl>(*DS->getSingleDecl()));
             } else {
                 name = ast::summarize_expr(S->getCond());
             }
@@ -754,34 +753,34 @@ public:
         return true;
     }
 
-    bool VisitCXXForRangeStmt(CXXForRangeStmt* S) {
+    bool VisitCXXForRangeStmt(clang::CXXForRangeStmt* S) {
         if(options.block_end) {
             builder.mark_block_end(S->getBody(), "for", ast::identifier_of(*S->getLoopVariable()));
         }
         return true;
     }
 
-    bool VisitWhileStmt(WhileStmt* S) {
+    bool VisitWhileStmt(clang::WhileStmt* S) {
         if(options.block_end)
             builder.mark_block_end(S->getBody(), "while", ast::summarize_expr(S->getCond()));
         return true;
     }
 
-    bool VisitSwitchStmt(SwitchStmt* S) {
+    bool VisitSwitchStmt(clang::SwitchStmt* S) {
         if(options.block_end)
             builder.mark_block_end(S->getBody(), "switch", ast::summarize_expr(S->getCond()));
         return true;
     }
 
-    bool VisitIfStmt(IfStmt* S) {
+    bool VisitIfStmt(clang::IfStmt* S) {
         if(options.block_end) {
-            if(const auto* ElseIf = llvm::dyn_cast_or_null<IfStmt>(S->getElse())) {
+            if(const auto* ElseIf = llvm::dyn_cast_or_null<clang::IfStmt>(S->getElse())) {
                 else_ifs.insert(ElseIf);
             }
 
             // Don't use markBlockEnd: the relevant range is [then.begin, else.end].
-            if(const auto* EndCS =
-                   llvm::dyn_cast<CompoundStmt>(S->getElse() ? S->getElse() : S->getThen())) {
+            if(const auto* EndCS = llvm::dyn_cast<clang::CompoundStmt>(
+                   S->getElse() ? S->getElse() : S->getThen())) {
                 builder.add_block_end_hint({S->getThen()->getBeginLoc(), EndCS->getRBracLoc()},
                                            "if",
                                            else_ifs.contains(S) ? ""
@@ -792,10 +791,10 @@ public:
         return true;
     }
 
-    bool VisitLambdaExpr(LambdaExpr* E) {
-        FunctionDecl* D = E->getCallOperator();
+    bool VisitLambdaExpr(clang::LambdaExpr* E) {
+        clang::FunctionDecl* D = E->getCallOperator();
         if(!E->hasExplicitResultType()) {
-            SourceLocation TypeHintLoc;
+            clang::SourceLocation TypeHintLoc;
             if(!E->hasExplicitParameters())
                 TypeHintLoc = E->getIntroducerRange().getEnd();
             else if(auto FTL = D->getFunctionTypeLoc())
@@ -806,7 +805,7 @@ public:
         return true;
     }
 
-    bool VisitInitListExpr(InitListExpr* expr) {
+    bool VisitInitListExpr(clang::InitListExpr* expr) {
         // We receive the syntactic form here (shouldVisitImplicitCode() is false).
         // This is the one we will ultimately attach designators to.
         // It may have subobject initializers inlined without braces. The *semantic*
@@ -814,11 +813,13 @@ public:
         // getUnwrittenDesignators will look at the semantic form to determine the
         // labels.
         assert(expr->isSyntacticForm() && "RAV should not visit implicit code!");
-        if(!options.designators)
+        if(!options.designators) {
             return true;
+        }
 
-        if(expr->isIdiomaticZeroInitializer(AST.getLangOpts()))
+        if(expr->isIdiomaticZeroInitializer(unit.lang_options())) {
             return true;
+        }
 
         /// FIXME:
         // llvm::DenseMap<SourceLocation, std::string> Designators =
@@ -833,9 +834,9 @@ public:
         return true;
     }
 
-    bool VisitTypeLoc(TypeLoc TL) {
-        if(const auto* DT = llvm::dyn_cast<DecltypeType>(TL.getType()))
-            if(QualType UT = DT->getUnderlyingType(); !UT->isDependentType())
+    bool VisitTypeLoc(clang::TypeLoc TL) {
+        if(const auto* DT = llvm::dyn_cast<clang::DecltypeType>(TL.getType()))
+            if(clang::QualType UT = DT->getUnderlyingType(); !UT->isDependentType())
                 builder.add_type_hint(TL.getSourceRange(), UT, ": ");
         return true;
     }
@@ -845,7 +846,7 @@ public:
 private:
     Builder& builder;
     CompilationUnit& unit;
-    ASTContext& AST;
+    clang::ASTContext& AST;
     config::InlayHintsOptions options;
 
     // If/else chains are tricky.
@@ -854,14 +855,15 @@ private:
     //   } // mark as "cond1" or "cond2"?
     // For now, the answer is neither, just mark as "if".
     // The ElseIf is a different IfStmt that doesn't know about the outer one.
-    llvm::DenseSet<const IfStmt*> else_ifs;  // not eligible for names
+    llvm::DenseSet<const clang::IfStmt*> else_ifs;  // not eligible for names
 };
 
 }  // namespace
 
-InlayHints inlay_hints(CompilationUnit& unit, LocalSourceRange target) {
+InlayHints inlay_hints(CompilationUnit& unit,
+                       LocalSourceRange target,
+                       const config::InlayHintsOptions& options) {
     std::vector<InlayHint> hints;
-    config::InlayHintsOptions options;
     Builder builder(hints, unit, target, options);
     InlayHintVisitor visitor(builder, unit, target);
     visitor.TraverseDecl(unit.tu());

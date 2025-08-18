@@ -52,6 +52,8 @@ struct InlayHint {
 
 using InlayHints = std::vector<InlayHint>;
 
-InlayHints inlay_hints(CompilationUnit& unit, LocalSourceRange target);
+InlayHints inlay_hints(CompilationUnit& unit,
+                       LocalSourceRange target,
+                       const config::InlayHintsOptions& options);
 
 }  // namespace clice::feature
