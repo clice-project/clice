@@ -30,8 +30,7 @@ struct Bar {
 )";
 
         tester.add_main("main.cpp", content);
-        tester.compile_with_pch();
-
+        expect(that % tester.compile_with_pch() == true);
         expect(that % tester.unit->top_level_decls().size() == 4);
     };
 
