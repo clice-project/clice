@@ -1,11 +1,11 @@
 #pragma once
 
+#include "Support/Enum.h"
 #include <expected>
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/ADT/ArrayRef.h"
-#include <deque>
 
 namespace clice {
 
@@ -18,6 +18,18 @@ public:
         Create,
         Update,
         Delete,
+    };
+
+    struct QueryDriverError : refl::Enum<QueryDriverError> {
+        enum Kind : std::uint8_t {
+            NotFoundInPATH,
+            FailToCreateTempFile,
+            InvokeFail,
+            OutputFileNotReadable,
+            InvalidOutputFormat,
+        };
+
+        using Enum::Enum;
     };
 
     struct CommandInfo {
@@ -61,7 +73,7 @@ public:
 
     /// Query the compiler driver and return its driver info.
     auto query_driver(this Self& self, llvm::StringRef driver)
-        -> std::expected<DriverInfo, std::string>;
+        -> std::expected<DriverInfo, std::pair<QueryDriverError, std::string>>;
 
     /// Update with arguments.
     auto update_command(this Self& self,

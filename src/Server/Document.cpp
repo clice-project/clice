@@ -105,7 +105,7 @@ void Server::save_cache_info() {
     }
 
     auto clean_up = llvm::make_scope_exit([&temp_path]() {
-        if(auto errc = llvm::sys::fs::remove(temp_path); errc != std::error_code{}) {
+        if(auto errc = llvm::sys::fs::remove(temp_path)) {
             log::warn("Fail to remove temporary file: {}", errc.message());
         }
     });

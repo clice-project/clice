@@ -164,6 +164,16 @@ suite<"Command"> command = [] {
 
         CompilationDatabase database;
         auto info = database.query_driver("g++");
+        if(!info) {
+            auto& [kind, message] = info.error();
+            /// If driver not installed or not found in PATH, skip the following test to avoid
+            /// failures on developer's machine, but never skip the test in CI.
+            if(kind == CompilationDatabase::QueryDriverError::NotFoundInPATH &&
+               !std::getenv("CI")) {
+                return;
+            }
+        }
+
         expect(that % info);
 
         expect(that % info->target == llvm::StringRef("x86_64-linux-gnu"));
