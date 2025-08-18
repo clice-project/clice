@@ -19,8 +19,12 @@ const clang::NamedDecl* instantiated_from(const clang::NamedDecl* decl);
 
 const clang::NamedDecl* normalize(const clang::NamedDecl* decl);
 
+llvm::StringRef identifier_of(const clang::NamedDecl& D);
+
+llvm::StringRef identifier_of(clang::QualType T);
+
 /// Get the name of the decl.
-std::string name_of(const clang::NamedDecl* decl);
+std::string display_name_of(const clang::NamedDecl* decl);
 
 /// To response go-to-type-definition request. Some decls actually have a type
 /// for example the result of `typeof(var)` is the type of `var`. This function
@@ -44,16 +48,16 @@ std::string print_template_specialization_args(const clang::NamedDecl* decl);
 
 std::string print_name(const clang::NamedDecl* decl);
 
-clang::TemplateTypeParmTypeLoc get_contained_auto_param_type(clang::TypeLoc TL);
+/// Recursively strips all pointers, references, and array extents from
+/// a TypeLoc. e.g., for "const int*(&)[3]", the result will be location
+/// "for int".
+auto unwrap_type(clang::TypeLoc type, bool unwrap_function_type = true) -> clang::TypeLoc;
 
-clang::NamedDecl* get_only_instantiation(clang::NamedDecl* TemplatedDecl);
+auto get_only_instantiation(clang::NamedDecl* TemplatedDecl) -> clang::NamedDecl*;
 
-/// getSimpleName() returns the plain identifier for an entity, if any.
-llvm::StringRef getSimpleName(const clang::DeclarationName& DN);
-llvm::StringRef getSimpleName(const clang::NamedDecl& D);
-llvm::StringRef getSimpleName(clang::QualType T);
+auto get_only_instantiation(clang::ParmVarDecl* decl) -> clang::ParmVarDecl*;
 
-std::string summarizeExpr(const clang::Expr* E);
+std::string summarize_expr(const clang::Expr* E);
 
 // Returns the template parameter pack type from an instantiated function
 // template, if it exists, nullptr otherwise.

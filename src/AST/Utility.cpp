@@ -150,7 +150,7 @@ const clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
     return decl;
 }
 
-std::string name_of(const clang::NamedDecl* decl) {
+std::string display_name_of(const clang::NamedDecl* decl) {
     llvm::SmallString<128> result;
 
     auto name = decl->getDeclName();
@@ -398,26 +398,26 @@ std::string print_name(const clang::NamedDecl* decl) {
     return Out.str();
 }
 
-clang::TemplateTypeParmTypeLoc get_contained_auto_param_type(clang::TypeLoc TL) {
-    if(auto QTL = TL.getAs<clang::QualifiedTypeLoc>()) {
-        return get_contained_auto_param_type(QTL.getUnqualifiedLoc());
-    }
-
-    if(llvm::isa<clang::PointerType, clang::ReferenceType, clang::ParenType>(TL.getTypePtr())) {
-        return get_contained_auto_param_type(TL.getNextTypeLoc());
-    }
-
-    if(auto FTL = TL.getAs<clang::FunctionTypeLoc>()) {
-        return get_contained_auto_param_type(FTL.getReturnLoc());
-    }
-
-    if(auto TTPTL = TL.getAs<clang::TemplateTypeParmTypeLoc>()) {
-        if(TTPTL.getTypePtr()->getDecl()->isImplicit()) {
-            return TTPTL;
+auto unwrap_type(clang::TypeLoc type, bool unwrap_function_type) -> clang::TypeLoc {
+    while(true) {
+        if(auto qualified = type.getAs<clang::QualifiedTypeLoc>()) {
+            type = qualified.getUnqualifiedLoc();
+        } else if(auto reference = type.getAs<clang::ReferenceTypeLoc>()) {
+            type = reference.getPointeeLoc();
+        } else if(auto pointer = type.getAs<clang::PointerTypeLoc>()) {
+            type = pointer.getPointeeLoc();
+        } else if(auto paren = type.getAs<clang::ParenTypeLoc>()) {
+            type = paren.getInnerLoc();
+        } else if(auto array = type.getAs<clang::ConstantArrayTypeLoc>()) {
+            type = array.getElementLoc();
+        } else if(auto proto = type.getAs<clang::FunctionProtoTypeLoc>();
+                  proto && unwrap_function_type) {
+            type = proto.getReturnLoc();
+        } else {
+            break;
         }
     }
-
-    return {};
+    return type;
 }
 
 template <typename TemplateDeclTy>
@@ -445,6 +445,31 @@ clang::NamedDecl* get_only_instantiation(clang::NamedDecl* TemplatedDecl) {
     return nullptr;
 }
 
+auto get_only_instantiation(clang::ParmVarDecl* decl) -> clang::ParmVarDecl* {
+    auto* TemplateFunction = llvm::dyn_cast<clang::FunctionDecl>(decl->getDeclContext());
+    if(!TemplateFunction)
+        return nullptr;
+    auto* InstantiatedFunction =
+        llvm::dyn_cast_or_null<clang::FunctionDecl>(ast::get_only_instantiation(TemplateFunction));
+    if(!InstantiatedFunction)
+        return nullptr;
+
+    unsigned ParamIdx = 0;
+    for(auto* Param: TemplateFunction->parameters()) {
+        // Can't reason about param indexes in the presence of preceding packs.
+        // And if this param is a pack, it may expand to multiple params.
+        if(Param->isParameterPack())
+            return nullptr;
+        if(Param == decl)
+            break;
+        ++ParamIdx;
+    }
+    assert(ParamIdx < TemplateFunction->getNumParams() && "Couldn't find param in list?");
+    assert(ParamIdx < InstantiatedFunction->getNumParams() &&
+           "Instantiated function has fewer (non-pack) parameters?");
+    return InstantiatedFunction->getParamDecl(ParamIdx);
+}
+
 // getSimpleName() returns the plain identifier for an entity, if any.
 llvm::StringRef getSimpleName(const clang::DeclarationName& DN) {
     if(clang::IdentifierInfo* Ident = DN.getAsIdentifierInfo())
@@ -452,13 +477,13 @@ llvm::StringRef getSimpleName(const clang::DeclarationName& DN) {
     return "";
 }
 
-llvm::StringRef getSimpleName(const clang::NamedDecl& D) {
+llvm::StringRef identifier_of(const clang::NamedDecl& D) {
     return getSimpleName(D.getDeclName());
 }
 
-llvm::StringRef getSimpleName(clang::QualType T) {
+llvm::StringRef identifier_of(clang::QualType T) {
     if(const auto* ET = llvm::dyn_cast<clang::ElaboratedType>(T))
-        return getSimpleName(ET->getNamedType());
+        return identifier_of(ET->getNamedType());
     if(const auto* BT = llvm::dyn_cast<clang::BuiltinType>(T)) {
         clang::PrintingPolicy PP(clang::LangOptions{});
         PP.adjustForCPlusPlus();
@@ -469,7 +494,7 @@ llvm::StringRef getSimpleName(clang::QualType T) {
     return "";
 }
 
-std::string summarizeExpr(const clang::Expr* E) {
+std::string summarize_expr(const clang::Expr* E) {
     using namespace clang;
 
     struct Namer : ConstStmtVisitor<Namer, std::string> {
@@ -481,11 +506,11 @@ std::string summarizeExpr(const clang::Expr* E) {
 
         // Any sort of decl reference, we just use the unqualified name.
         std::string VisitMemberExpr(const MemberExpr* E) {
-            return ast::getSimpleName(*E->getMemberDecl()).str();
+            return ast::identifier_of(*E->getMemberDecl()).str();
         }
 
         std::string VisitDeclRefExpr(const DeclRefExpr* E) {
-            return ast::getSimpleName(*E->getFoundDecl()).str();
+            return ast::identifier_of(*E->getFoundDecl()).str();
         }
 
         std::string VisitCallExpr(const CallExpr* E) {
@@ -501,11 +526,11 @@ std::string summarizeExpr(const clang::Expr* E) {
         }
 
         std::string VisitCXXFunctionalCastExpr(const CXXFunctionalCastExpr* E) {
-            return ast::getSimpleName(E->getType()).str();
+            return ast::identifier_of(E->getType()).str();
         }
 
         std::string VisitCXXTemporaryObjectExpr(const CXXTemporaryObjectExpr* E) {
-            return ast::getSimpleName(E->getType()).str();
+            return ast::identifier_of(E->getType()).str();
         }
 
         // Step through implicit nodes that clang doesn't classify as such.
