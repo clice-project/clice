@@ -16,52 +16,52 @@ struct DumpConfig {
 
 auto dump = [](HeaderIndex& index, DumpConfig config) {
     if(config.enable_total) {
-        println("\n---------------------------Total Info---------------------------");
-        println("file count: {}", index.file_count());
-        println("header context count: {}", index.header_context_count());
-        println("canonical context count: {}", index.canonical_context_count());
-        println("symbol count: {}", index.symbols.size());
-        println("occurrence count: {}", index.occurrences.size());
+        std::println("\n---------------------------Total Info---------------------------");
+        std::println("file count: {}", index.file_count());
+        std::println("header context count: {}", index.header_context_count());
+        std::println("canonical context count: {}", index.canonical_context_count());
+        std::println("symbol count: {}", index.symbols.size());
+        std::println("occurrence count: {}", index.occurrences.size());
     }
 
     if(config.enable_contexts) {
-        println("\n--------------------------Contexts Info-------------------------");
+        std::println("\n--------------------------Contexts Info-------------------------");
         for(auto& [path, contents]: index.header_contexts) {
-            println("{}:", path);
+            std::println("{}:", path);
             for(auto& context: contents) {
-                println("   include: {}, hctx_id: {}, cctx_id: {}",
-                        context.include,
-                        context.hctx_id,
-                        context.cctx_id);
+                std::println("   include: {}, hctx_id: {}, cctx_id: {}",
+                             context.include,
+                             context.hctx_id,
+                             context.cctx_id);
             }
         }
     }
 
     if(config.enable_symbol) {
-        println("\n-------------------------Symbols Info--------------------------");
+        std::println("\n-------------------------Symbols Info--------------------------");
         for(auto& [symbol_id, symbol]: index.symbols) {
-            clice::println("symbol: {}, kind: {}", symbol.name, symbol.kind.name());
+            std::println("symbol: {}, kind: {}", symbol.name, symbol.kind.name());
             for(auto& relation: symbol.relations) {
                 if(relation.ctx.is_dependent()) {
                     auto context = index.dependent_elem_states[relation.ctx.offset()];
-                    clice::println("   kind: {}, context: {:#b}",
-                                   relation.kind.name(),
-                                   context.to_ulong());
+                    std::println("   kind: {}, context: {:#b}",
+                                 relation.kind.name(),
+                                 context.to_ulong());
                 }
             }
         }
     }
 
     if(config.enable_occurrence) {
-        println("\n-------------------------Occurrences Info--------------------------");
+        std::println("\n-------------------------Occurrences Info--------------------------");
         for(auto& [range, occurrences]: index.occurrences) {
-            println("occurrence: {} {}", range.begin, range.end);
+            std::println("occurrence: {} {}", range.begin, range.end);
             for(auto& occurrence: occurrences) {
                 if(occurrence.ctx.is_dependent()) {
                     auto context = index.dependent_elem_states[occurrence.ctx.offset()];
-                    println("   target: {}, context: {:#b}",
-                            occurrence.target_symbol,
-                            context.to_ulong());
+                    std::println("   target: {}, context: {:#b}",
+                                 occurrence.target_symbol,
+                                 context.to_ulong());
                 }
             }
         }

@@ -88,7 +88,7 @@ struct Tester {
             if(!unit) {
                 llvm::outs() << unit.error() << "\n";
                 for(auto& diag: *params.diagnostics) {
-                    clice::println("{}", diag.message);
+                    std::println("{}", diag.message);
                 }
                 return false;
             }

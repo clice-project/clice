@@ -50,8 +50,8 @@ struct InlayHint {
     std::vector<index::SymbolID> parts;
 };
 
-using InlayHints = std::vector<InlayHint>;
-
-InlayHints inlay_hints(CompilationUnit& unit, LocalSourceRange target);
+auto inlay_hint(CompilationUnit& unit,
+                LocalSourceRange target,
+                const config::InlayHintsOptions& options) -> std::vector<InlayHint>;
 
 }  // namespace clice::feature

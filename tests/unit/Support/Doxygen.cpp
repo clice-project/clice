@@ -69,27 +69,27 @@ suite<"Doxygen"> doxygen = [] {
 )";
             auto [di, md] = strip_doxygen_info(raw_comment);
             expect(di.get_block_command_comments().size() == 0);
-            clice::println("Rest:\n```{}```", md);
+            std::println("Rest:\n```{}```", md);
         }
 
         // ParamCommandComment
         {
             constexpr auto raw_comment = R"( @)";
-            clice::println("Processing raw comment: `{}`", raw_comment);
+            std::println("Processing raw comment: `{}`", raw_comment);
             auto [di, md] = strip_doxygen_info(raw_comment);
-            clice::println("Rest:\n```\n{}\n```\n", md);
+            std::println("Rest:\n```\n{}\n```\n", md);
         }
 
         {
             constexpr auto raw_comment = R"( @param)";
-            clice::println("Processing raw comment: `{}`", raw_comment);
+            std::println("Processing raw comment: `{}`", raw_comment);
             auto [di, md] = strip_doxygen_info(raw_comment);
-            clice::println("Rest:\n```\n{}\n```\n", md);
+            std::println("Rest:\n```\n{}\n```\n", md);
         }
 
         {
             constexpr auto raw_comment = R"( @param[in,out] foo doc for foo)";
-            clice::println("Processing raw comment: `{}`", raw_comment);
+            std::println("Processing raw comment: `{}`", raw_comment);
             auto [di, md] = strip_doxygen_info(raw_comment);
             expect(md.size() == 0);
             auto info_foo = di.find_param_info("foo");
@@ -98,7 +98,7 @@ suite<"Doxygen"> doxygen = [] {
                 llvm::StringRef doc = info_foo.value()->content;
                 expect(info_foo.value()->direction ==
                        DoxygenInfo::ParamCommandCommentContent::ParamDirection::InOut);
-                clice::println("Doc:\n```\n{}\n```\n", doc);
+                std::println("Doc:\n```\n{}\n```\n", doc);
             }
         }
 
@@ -121,7 +121,7 @@ suite<"Doxygen"> doxygen = [] {
                 llvm::StringRef doc = info_foo.value()->content;
                 expect(info_foo.value()->direction ==
                        DoxygenInfo::ParamCommandCommentContent::ParamDirection::Out);
-                clice::println("Doc:\n```\n{}\n```", doc);
+                std::println("Doc:\n```\n{}\n```", doc);
             }
 
             auto info_bar = di.find_param_info("bar");
@@ -130,7 +130,7 @@ suite<"Doxygen"> doxygen = [] {
                 llvm::StringRef doc = info_bar.value()->content;
                 expect(info_bar.value()->direction ==
                        DoxygenInfo::ParamCommandCommentContent::ParamDirection::In);
-                clice::println("Doc:\n```\n{}\n```", doc);
+                std::println("Doc:\n```\n{}\n```", doc);
             }
 
             auto info_baz = di.find_param_info("baz");
@@ -146,7 +146,7 @@ suite<"Doxygen"> doxygen = [] {
 
     test("DoxygenParserIntegrated") = [&] {
         {
-            clice::println("##################################################################");
+            std::println("##################################################################");
             constexpr auto raw_comment = R"(
  @brief Calculates the area of a rectangle.
 
@@ -171,13 +171,13 @@ suite<"Doxygen"> doxygen = [] {
  details 2 blah blah... line2
         )";
             auto [di, md] = strip_doxygen_info(raw_comment);
-            clice::println("Markdown After Stripping:\n```\n{}\n```", md);
+            std::println("Markdown After Stripping:\n```\n{}\n```", md);
             auto info_width = di.find_param_info("width");
             expect(info_width.has_value());
             if(info_width.has_value()) {
                 expect(info_width.value()->direction ==
                        DoxygenInfo::ParamCommandCommentContent::ParamDirection::In);
-                clice::println("Doc for `width`:\n```\n{}\n```", info_width.value()->content);
+                std::println("Doc for `width`:\n```\n{}\n```", info_width.value()->content);
             }
 
             auto info_height = di.find_param_info("height");
@@ -185,28 +185,28 @@ suite<"Doxygen"> doxygen = [] {
             if(info_height.has_value()) {
                 expect(info_height.value()->direction ==
                        DoxygenInfo::ParamCommandCommentContent::ParamDirection::In);
-                clice::println("Doc for `height`:\n```\n{}\n```", info_height.value()->content);
+                std::println("Doc for `height`:\n```\n{}\n```", info_height.value()->content);
             }
 
             auto bcc_list = di.get_block_command_comments();
             expect(bcc_list.size() == 3);
 
-            clice::println("RegularTags:");
+            std::println("RegularTags:");
             for(auto& [tag_name, content]: bcc_list) {
-                clice::println("=================================");
-                clice::println("Tag name: `{}`", tag_name);
+                std::println("=================================");
+                std::println("Tag name: `{}`", tag_name);
                 for(auto& item: content) {
-                    clice::println("Item:\n```\n{}\n```", item.content);
+                    std::println("Item:\n```\n{}\n```", item.content);
                 }
-                clice::println("=================================");
+                std::println("=================================");
             }
 
             auto ret_info = di.get_return_info();
             expect(ret_info.has_value());
             if(ret_info.has_value()) {
-                clice::println("Doc for return value:\n```\n{}\n```", ret_info.value());
+                std::println("Doc for return value:\n```\n{}\n```", ret_info.value());
             }
-            clice::println("##################################################################");
+            std::println("##################################################################");
         }
 
         // Full test
@@ -268,13 +268,13 @@ suite<"Doxygen"> doxygen = [] {
  @return doc for return value
 )";
             auto [di, md] = strip_doxygen_info(raw_comment);
-            clice::println("Markdown After Stripping:\n```\n{}\n```", md);
+            std::println("Markdown After Stripping:\n```\n{}\n```", md);
             auto info_foo = di.find_param_info("foo");
             expect(info_foo.has_value());
             if(info_foo.has_value()) {
                 expect(info_foo.value()->direction ==
                        DoxygenInfo::ParamCommandCommentContent::ParamDirection::In);
-                clice::println("Doc for `foo`:\n```\n{}\n```", info_foo.value()->content);
+                std::println("Doc for `foo`:\n```\n{}\n```", info_foo.value()->content);
             }
 
             auto info_bar = di.find_param_info("bar");
@@ -282,7 +282,7 @@ suite<"Doxygen"> doxygen = [] {
             if(info_bar.has_value()) {
                 expect(info_bar.value()->direction ==
                        DoxygenInfo::ParamCommandCommentContent::ParamDirection::Out);
-                clice::println("Doc for `bar`:\n```\n{}\n```", info_bar.value()->content);
+                std::println("Doc for `bar`:\n```\n{}\n```", info_bar.value()->content);
             }
 
             auto info_baz = di.find_param_info("baz");
@@ -290,7 +290,7 @@ suite<"Doxygen"> doxygen = [] {
             if(info_baz.has_value()) {
                 expect(info_baz.value()->direction ==
                        DoxygenInfo::ParamCommandCommentContent::ParamDirection::InOut);
-                clice::println("Doc for `baz`:\n```\n{}\n```", info_baz.value()->content);
+                std::println("Doc for `baz`:\n```\n{}\n```", info_baz.value()->content);
             }
 
             auto info_awa = di.find_param_info("awa");
@@ -298,28 +298,28 @@ suite<"Doxygen"> doxygen = [] {
             if(info_awa.has_value()) {
                 expect(info_awa.value()->direction ==
                        DoxygenInfo::ParamCommandCommentContent::ParamDirection::Unspecified);
-                clice::println("Doc for `awa`:\n```\n{}\n```", info_awa.value()->content);
+                std::println("Doc for `awa`:\n```\n{}\n```", info_awa.value()->content);
             }
 
             auto bcc_list = di.get_block_command_comments();
             expect(bcc_list.size() == 4);
 
-            clice::println("RegularTags:");
+            std::println("RegularTags:");
             for(auto& [tag_name, content]: bcc_list) {
-                clice::println("=================================");
-                clice::println("Tag name: `{}`", tag_name);
+                std::println("=================================");
+                std::println("Tag name: `{}`", tag_name);
                 for(auto& item: content) {
-                    clice::println("Item:\n```\n{}\n```", item.content);
+                    std::println("Item:\n```\n{}\n```", item.content);
                 }
-                clice::println("=================================");
+                std::println("=================================");
             }
 
             auto ret_info = di.get_return_info();
             expect(ret_info.has_value());
             if(ret_info.has_value()) {
-                clice::println("Doc for return value:\n```\n{}\n```", ret_info.value());
+                std::println("Doc for return value:\n```\n{}\n```", ret_info.value());
             }
-            clice::println("##################################################################");
+            std::println("##################################################################");
         }
     };
 };

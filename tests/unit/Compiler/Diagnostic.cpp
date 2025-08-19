@@ -97,7 +97,7 @@ suite<"Diagnostic"> diagnostic = [] {
         expect(that % !unit->diagnostics().empty());
 
         /// for(auto& diag: unit->diagnostics()) {
-        ///     clice::println("{}", diag.message);
+        ///     std::println("{}", diag.message);
         /// }
     };
 
