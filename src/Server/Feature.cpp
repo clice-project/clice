@@ -217,6 +217,8 @@ async::Task<json::Value> Server::on_inlay_hint(proto::InlayHintParams params) {
         for(auto& hint: hints) {
             auto& back = result.emplace_back(converter.toPosition(hint.offset));
             back.label.emplace_back(std::move(hint.parts[0].name));
+
+            /// FIXME: Determine the set of possible kinds; for now, we'll use Type.
             back.kind = proto::InlayHintKind::Type;
         }
 

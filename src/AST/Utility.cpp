@@ -255,18 +255,16 @@ std::string name_of(const clang::NamedDecl* decl) {
 clang::QualType type_of(const clang::NamedDecl* decl) {
     using namespace clang;
 
-    if(auto VD = dyn_cast<ValueDecl>(decl)) {
-        return VD->getType();
-    } else if(auto FD = dyn_cast<FieldDecl>(decl)) {
-        return FD->getType();
-    } else if(auto ECD = dyn_cast<EnumConstantDecl>(decl)) {
-        return ECD->getType();
-    } else if(auto TD = dyn_cast<TypedefNameDecl>(decl)) {
-        return TD->getUnderlyingType();
-    } else if(auto CCD = dyn_cast<CXXConstructorDecl>(decl)) {
-        return CCD->getThisType();
-    } else if(auto CDD = dyn_cast<CXXDestructorDecl>(decl)) {
-        return CDD->getThisType();
+    if(auto value = dyn_cast<ValueDecl>(decl)) {
+        if(isa<VarDecl, BindingDecl, FieldDecl, EnumConstantDecl>(value)) {
+            return value->getType();
+        } else if(auto ctor = dyn_cast<CXXConstructorDecl>(decl)) {
+            return ctor->getThisType();
+        } else if(auto dtor = dyn_cast<CXXDestructorDecl>(decl)) {
+            return dtor->getThisType();
+        }
+    } else if(auto type = dyn_cast<TypeDecl>(decl)) {
+        return QualType(type->getTypeForDecl(), 0);
     }
 
     return clang::QualType();
@@ -290,7 +288,7 @@ auto decl_of(clang::QualType type) -> const clang::NamedDecl* {
 #include "clang/AST/TypeNodes.inc"
     }
 
-    /// FIXME: Handle Template Specialization type
+    /// FIXME: Handle Template Specialization type in the future
     /// if(auto TST = type->getAs<clang::TemplateSpecializationType>()) {
     ///    auto decl = TST->getTemplateName().getAsTemplateDecl();
     ///    if(type->isDependentType()) {
