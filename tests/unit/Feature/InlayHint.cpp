@@ -7,8 +7,8 @@ namespace {
 
 suite<"InlayHint"> inlay_hint = [] {
     Tester tester;
-    feature::InlayHints hints;
-    llvm::DenseMap<std::uint32_t, feature::InlayHint> hints2;
+    std::vector<feature::InlayHint> hints;
+    llvm::DenseMap<std::uint32_t, feature::InlayHint> hints_map;
 
     auto run = [&](llvm::StringRef code,
                    std::source_location location = std::source_location::current()) {
@@ -17,11 +17,11 @@ suite<"InlayHint"> inlay_hint = [] {
         tester.compile_with_pch("-std=c++23");
 
         LocalSourceRange range = LocalSourceRange(0, tester.unit->interested_content().size());
-        hints = feature::inlay_hints(*tester.unit, range, {});
+        hints = feature::inlay_hint(*tester.unit, range, {});
 
-        hints2.clear();
+        hints_map.clear();
         for(auto& hint: hints) {
-            hints2[hint.offset] = hint;
+            hints_map[hint.offset] = hint;
         }
 
         if(!tester.unit->diagnostics().empty()) {
@@ -46,8 +46,8 @@ suite<"InlayHint"> inlay_hint = [] {
                            llvm::StringRef name,
                            std::source_location location = std::source_location::current()) {
         auto offset = tester.point(pos);
-        auto it = hints2.find(offset);
-        fatal / expect(it != hints2.end(), location)
+        auto it = hints_map.find(offset);
+        fatal / expect(it != hints_map.end(), location)
             << std::format("offset is {}\n", offset) << pretty_dump(hints);
 
         auto& parts = it->second.parts;

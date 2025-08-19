@@ -44,9 +44,9 @@ auto decl_of(clang::QualType type) -> const clang::NamedDecl*;
 /// "for int".
 auto unwrap_type(clang::TypeLoc type, bool unwrap_function_type = true) -> clang::TypeLoc;
 
-auto get_only_instantiation(clang::NamedDecl* TemplatedDecl) -> clang::NamedDecl*;
+auto get_only_instantiation(clang::NamedDecl* templated_decl) -> clang::NamedDecl*;
 
-auto get_only_instantiation(clang::ParmVarDecl* decl) -> clang::ParmVarDecl*;
+auto get_only_instantiation(clang::ParmVarDecl* param) -> clang::ParmVarDecl*;
 
 std::string summarize_expr(const clang::Expr* E);
 
@@ -58,16 +58,12 @@ const clang::TemplateTypeParmType* underlying_pack_type(const clang::ParmVarDecl
 // Returns the parameters that are forwarded from the template parameters.
 // For example, `template <typename... Args> void foo(Args... args)` will return
 // the `args` parameters.
-auto resolve_forwarding_params(const clang::FunctionDecl* D, unsigned max_depth = 10)
+auto resolve_forwarding_params(const clang::FunctionDecl* decl, unsigned max_depth = 10)
     -> llvm::SmallVector<const clang::ParmVarDecl*>;
-
-// Determines if any intermediate type in desugaring QualType QT is of
-// substituted template parameter type. Ignore pointer or reference wrappers.
-bool isSugaredTemplateParameter(clang::QualType QT);
 
 // A simple wrapper for `clang::desugarForDiagnostic` that provides optional
 // semantic.
-std::optional<clang::QualType> desugar(clang::ASTContext& AST, clang::QualType QT);
+std::optional<clang::QualType> desugar(clang::ASTContext& context, clang::QualType type);
 
 // Apply a series of heuristic methods to determine whether or not a QualType QT
 // is suitable for desugaring (e.g. getting the real name behind the using-alias
@@ -76,12 +72,12 @@ std::optional<clang::QualType> desugar(clang::ASTContext& AST, clang::QualType Q
 //
 // This could be refined further. See
 // https://github.com/clangd/clangd/issues/1298.
-clang::QualType maybeDesugar(clang::ASTContext& AST, clang::QualType QT);
+clang::QualType maybe_desugar(clang::ASTContext& context, clang::QualType type);
 
 // Given a callee expression `Fn`, if the call is through a function pointer,
 // try to find the declaration of the corresponding function pointer type,
 // so that we can recover argument names from it.
 // FIXME: This function is mostly duplicated in SemaCodeComplete.cpp; unify.
-clang::FunctionProtoTypeLoc getPrototypeLoc(clang::Expr* Fn);
+clang::FunctionProtoTypeLoc proto_type_loc(clang::Expr* expr);
 
 }  // namespace clice::ast

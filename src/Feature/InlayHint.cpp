@@ -109,27 +109,25 @@ public:
 
 private:
     // Get the range of the main file that *exactly* corresponds to R.
-    std::optional<LocalSourceRange> getHintRange(clang::SourceRange R) {
-        const auto& SM = unit.context().getSourceManager();
-        auto Spelled = unit.token_buffer().spelledForExpanded(unit.expanded_tokens(R));
-        // TokenBuffer will return null if e.g. R corresponds to only part of a
-        // macro expansion.
-        if(!Spelled || Spelled->empty())
+    std::optional<LocalSourceRange> hint_range(clang::SourceRange R) {
+        auto tokens = unit.spelled_tokens(R);
+
+        if(tokens.empty()) {
             return std::nullopt;
+        }
+
+        auto begin = tokens.front().location();
+        auto end = tokens.back().endLocation();
+
+        auto [begin_fid, begin_offset] = unit.decompose_location(tokens.front().location());
+        auto [end_fid, end_offset] = unit.decompose_location(tokens.back().endLocation());
 
         // Hint must be within the main file, not e.g. a non-preamble include.
-        if(SM.getFileID(Spelled->front().location()) != SM.getMainFileID() ||
-           SM.getFileID(Spelled->back().location()) != SM.getMainFileID())
+        if(begin_fid != end_fid || begin_fid != unit.interested_file()) {
             return std::nullopt;
+        }
 
-        /// FIXME:
-        // return LocalSourceRange{sourceLocToPosition(SM, Spelled->front().location()),
-        //              sourceLocToPosition(SM, Spelled->back().endLocation())};
-
-        auto [fid, begin] = unit.decompose_location(Spelled->front().location());
-        auto [fid2, end] = unit.decompose_location(Spelled->back().endLocation());
-
-        return LocalSourceRange{begin, end};
+        return LocalSourceRange{begin_offset, end_offset};
     }
 
     // Compute the LSP range to attach the block end hint to, if any allowed.
@@ -138,8 +136,8 @@ private:
     // 2. After "}", if the trimmed trailing text is exactly
     // `OptionalPunctuation`, say ";". The range of "} ... ;" is returned.
     // Otherwise, the hint shouldn't be shown.
-    std::optional<LocalSourceRange> computeBlockEndHintRange(clang::SourceRange brace_range,
-                                                             llvm::StringRef OptionalPunctuation) {
+    std::optional<LocalSourceRange> compute_block_end_range(clang::SourceRange brace_range,
+                                                            llvm::StringRef optional_punctuation) {
         constexpr unsigned HintMinLineLimit = 2;
 
         auto& SM = unit.context().getSourceManager();
@@ -161,7 +159,7 @@ private:
             return std::nullopt;
 
         llvm::StringRef TrimmedTrailingText = RestOfLine.drop_front().trim();
-        if(!TrimmedTrailingText.empty() && TrimmedTrailingText != OptionalPunctuation)
+        if(!TrimmedTrailingText.empty() && TrimmedTrailingText != optional_punctuation)
             return std::nullopt;
 
         auto BlockBeginLine = SM.getLineNumber(BlockBeginFileId, BlockBeginOffset);
@@ -413,7 +411,7 @@ public:
                             llvm::StringRef DeclPrefix,
                             llvm::StringRef Name,
                             llvm::StringRef OptionalPunctuation) {
-        auto HintRange = computeBlockEndHintRange(BraceRange, OptionalPunctuation);
+        auto HintRange = compute_block_end_range(BraceRange, OptionalPunctuation);
         if(!HintRange)
             return;
 
@@ -443,7 +441,7 @@ public:
                         llvm::StringRef Prefix,
                         llvm::StringRef Label,
                         llvm::StringRef Suffix) {
-        auto LSPRange = getHintRange(R);
+        auto LSPRange = hint_range(R);
         if(!LSPRange)
             return;
 
@@ -477,7 +475,7 @@ public:
         if(!options.deduced_types || T.isNull())
             return;
 
-        auto Desugared = ast::maybeDesugar(unit.context(), T);
+        auto Desugared = ast::maybe_desugar(unit.context(), T);
         std::string TypeName = Desugared.getAsString(policy);
 
         auto should_print = [&](llvm::StringRef TypeName) {
@@ -523,14 +521,15 @@ private:
     clang::PrintingPolicy policy;
 };
 
-class InlayHintVisitor : public FilteredASTVisitor<InlayHintVisitor> {
+class Visitor : public FilteredASTVisitor<Visitor> {
 public:
-    using Base = FilteredASTVisitor<InlayHintVisitor>;
+    using Base = FilteredASTVisitor<Visitor>;
 
-    InlayHintVisitor(Builder& builder,
-                     CompilationUnit& unit,
-                     std::optional<LocalSourceRange> restrict_range) :
-        Base(unit, true), builder(builder), unit(unit), AST(unit.context()) {}
+    Visitor(Builder& builder,
+            CompilationUnit& unit,
+            std::optional<LocalSourceRange> restrict_range,
+            const config::InlayHintsOptions& options) :
+        Base(unit, true), builder(builder), unit(unit), options(options) {}
 
 public:
     // Carefully recurse into PseudoObjectExprs, which typically incorporate
@@ -719,7 +718,7 @@ public:
             callee.decl = FD;
         } else if(const auto* FTD = llvm::dyn_cast<clang::FunctionTemplateDecl>(callee_decl)) {
             callee.decl = FTD->getTemplatedDecl();
-        } else if(clang::FunctionProtoTypeLoc loc = ast::getPrototypeLoc(expr->getCallee())) {
+        } else if(clang::FunctionProtoTypeLoc loc = ast::proto_type_loc(expr->getCallee())) {
             callee.loc = loc;
         } else {
             return true;
@@ -856,8 +855,7 @@ public:
 private:
     Builder& builder;
     CompilationUnit& unit;
-    clang::ASTContext& AST;
-    config::InlayHintsOptions options;
+    const config::InlayHintsOptions& options;
 
     // If/else chains are tricky.
     //   if (cond1) {
@@ -870,12 +868,13 @@ private:
 
 }  // namespace
 
-InlayHints inlay_hints(CompilationUnit& unit,
-                       LocalSourceRange target,
-                       const config::InlayHintsOptions& options) {
+auto inlay_hint(CompilationUnit& unit,
+                LocalSourceRange target,
+                const config::InlayHintsOptions& options) -> std::vector<InlayHint> {
     std::vector<InlayHint> hints;
+
     Builder builder(hints, unit, target, options);
-    InlayHintVisitor visitor(builder, unit, target);
+    Visitor visitor(builder, unit, target, options);
     visitor.TraverseDecl(unit.tu());
 
     ranges::sort(hints, refl::less);

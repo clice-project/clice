@@ -122,21 +122,32 @@ public:
     /// Create a file location with given file id and offset.
     auto create_location(clang::FileID fid, std::uint32_t offset) -> clang::SourceLocation;
 
+    using TokenRange = llvm::ArrayRef<clang::syntax::Token>;
+
     /// Get the spelled tokens(raw token) of the file id.
-    auto spelled_tokens(clang::FileID fid) -> llvm::ArrayRef<clang::syntax::Token>;
+    auto spelled_tokens(clang::FileID fid) -> TokenRange;
+
+    /// Return the spelled tokens corresponding to the range.
+    auto spelled_tokens(clang::SourceRange range) -> TokenRange;
 
     /// The spelled tokens that overlap or touch a spelling location Loc.
     /// This always returns 0-2 tokens.
-    auto spelled_tokens_touch(clang::SourceLocation location)
-        -> llvm::ArrayRef<clang::syntax::Token>;
+    auto spelled_tokens_touch(clang::SourceLocation location) -> TokenRange;
 
-    auto expanded_tokens() -> llvm::ArrayRef<clang::syntax::Token>;
+    /// All tokens produced by the preprocessor after all macro replacements,
+    /// directives, etc. Source locations found in the clang AST will always
+    /// point to one of these tokens.
+    /// Tokens are in TU order (per SourceManager::isBeforeInTranslationUnit()).
+    /// FIXME: figure out how to handle token splitting, e.g. '>>' can be split
+    ///        into two '>' tokens by the parser. However, TokenBuffer currently
+    ///        keeps it as a single '>>' token.
+    auto expanded_tokens() -> TokenRange;
 
-    /// Get the expanded tokens(after preprocessing) of the file id.
-    auto expanded_tokens(clang::SourceRange range) -> llvm::ArrayRef<clang::syntax::Token>;
+    /// Returns the subrange of expandedTokens() corresponding to the closed
+    /// token range R.
+    auto expanded_tokens(clang::SourceRange range) -> TokenRange;
 
-    auto expansions_overlapping(llvm::ArrayRef<clang::syntax::Token>)
-        -> std::vector<clang::syntax::TokenBuffer::Expansion>;
+    auto expansions_overlapping(TokenRange) -> std::vector<clang::syntax::TokenBuffer::Expansion>;
 
     /// Get the token length.
     auto token_length(clang::SourceLocation location) -> std::uint32_t;

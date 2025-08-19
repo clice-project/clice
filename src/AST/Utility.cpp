@@ -936,12 +936,14 @@ auto resolve_forwarding_params(const clang::FunctionDecl* D, unsigned MaxDepth)
     return {params.begin(), params.end()};
 }
 
-bool isSugaredTemplateParameter(clang::QualType QT) {
-    static auto PeelWrapper = [](clang::QualType QT) {
+// Determines if any intermediate type in desugaring QualType QT is of
+// substituted template parameter type. Ignore pointer or reference wrappers.
+static bool isSugaredTemplateParameter(clang::QualType type) {
+    static auto peel_wrapper = [](clang::QualType type) {
         // Neither `PointerType` nor `ReferenceType` is considered as sugared
         // type. Peel it.
-        clang::QualType Peeled = QT->getPointeeType();
-        return Peeled.isNull() ? QT : Peeled;
+        clang::QualType peeled = type->getPointeeType();
+        return peeled.isNull() ? type : peeled;
     };
 
     // This is a bit tricky: we traverse the type structure and find whether or
@@ -969,80 +971,94 @@ bool isSugaredTemplateParameter(clang::QualType QT) {
     // As such, we always prefer the desugared over the pointee for next type
     // in the iteration. It could avoid the getPointeeType's implicit desugaring.
     while(true) {
-        if(QT->getAs<clang::SubstTemplateTypeParmType>())
+        if(type->getAs<clang::SubstTemplateTypeParmType>()) {
             return true;
-        clang::QualType Desugared = QT->getLocallyUnqualifiedSingleStepDesugaredType();
-        if(Desugared != QT)
-            QT = Desugared;
-        else if(auto Peeled = PeelWrapper(Desugared); Peeled != QT)
-            QT = Peeled;
-        else
+        }
+
+        clang::QualType desugared = type->getLocallyUnqualifiedSingleStepDesugaredType();
+        if(desugared != type) {
+            type = desugared;
+        } else if(auto peeled = peel_wrapper(desugared); peeled != type) {
+            type = peeled;
+        } else {
             break;
+        }
     }
 
     return false;
 }
 
-std::optional<clang::QualType> desugar(clang::ASTContext& AST, clang::QualType QT) {
+std::optional<clang::QualType> desugar(clang::ASTContext& context, clang::QualType type) {
     bool ShouldAKA = false;
-    auto Desugared = clang::desugarForDiagnostic(AST, QT, ShouldAKA);
-    if(!ShouldAKA)
+    auto Desugared = clang::desugarForDiagnostic(context, type, ShouldAKA);
+    if(!ShouldAKA) {
         return std::nullopt;
+    }
+
     return Desugared;
 }
 
-clang::QualType maybeDesugar(clang::ASTContext& AST, clang::QualType QT) {
+clang::QualType maybe_desugar(clang::ASTContext& context, clang::QualType type) {
     // Prefer desugared type for name that aliases the template parameters.
     // This can prevent things like printing opaque `: type` when accessing std
     // containers.
-    if(isSugaredTemplateParameter(QT))
-        return desugar(AST, QT).value_or(QT);
+    if(isSugaredTemplateParameter(type)) {
+        return desugar(context, type).value_or(type);
+    }
 
     // Prefer desugared type for `decltype(expr)` specifiers.
-    if(QT->isDecltypeType())
-        return QT.getCanonicalType();
+    if(type->isDecltypeType()) {
+        return type.getCanonicalType();
+    }
 
-    if(const auto* AT = QT->getContainedAutoType())
-        if(!AT->getDeducedType().isNull() && AT->getDeducedType()->isDecltypeType())
-            return QT.getCanonicalType();
-
-    return QT;
-}
-
-clang::FunctionProtoTypeLoc getPrototypeLoc(clang::Expr* Fn) {
-    clang::TypeLoc Target;
-    clang::Expr* NakedFn = Fn->IgnoreParenCasts();
-    if(const auto* T = NakedFn->getType().getTypePtr()->getAs<clang::TypedefType>()) {
-        Target = T->getDecl()->getTypeSourceInfo()->getTypeLoc();
-    } else if(const auto* DR = llvm::dyn_cast<clang::DeclRefExpr>(NakedFn)) {
-        const auto* D = DR->getDecl();
-        if(const auto* const VD = llvm::dyn_cast<clang::VarDecl>(D)) {
-            Target = VD->getTypeSourceInfo()->getTypeLoc();
+    if(const auto* AT = type->getContainedAutoType()) {
+        if(!AT->getDeducedType().isNull() && AT->getDeducedType()->isDecltypeType()) {
+            return type.getCanonicalType();
         }
     }
 
-    if(!Target)
+    return type;
+}
+
+clang::FunctionProtoTypeLoc proto_type_loc(clang::Expr* expr) {
+    clang::TypeLoc target;
+    clang::Expr* naked_fn = expr->IgnoreParenCasts();
+
+    if(const auto* T = naked_fn->getType().getTypePtr()->getAs<clang::TypedefType>()) {
+        target = T->getDecl()->getTypeSourceInfo()->getTypeLoc();
+    } else if(const auto* DR = llvm::dyn_cast<clang::DeclRefExpr>(naked_fn)) {
+        const auto* D = DR->getDecl();
+        if(const auto* const VD = llvm::dyn_cast<clang::VarDecl>(D)) {
+            target = VD->getTypeSourceInfo()->getTypeLoc();
+        }
+    }
+
+    if(!target) {
         return {};
+    }
 
     // Unwrap types that may be wrapping the function type
     while(true) {
-        if(auto P = Target.getAs<clang::PointerTypeLoc>()) {
-            Target = P.getPointeeLoc();
+        if(auto p = target.getAs<clang::PointerTypeLoc>()) {
+            target = p.getPointeeLoc();
             continue;
         }
-        if(auto A = Target.getAs<clang::AttributedTypeLoc>()) {
-            Target = A.getModifiedLoc();
+
+        if(auto a = target.getAs<clang::AttributedTypeLoc>()) {
+            target = a.getModifiedLoc();
             continue;
         }
-        if(auto P = Target.getAs<clang::ParenTypeLoc>()) {
-            Target = P.getInnerLoc();
+
+        if(auto p = target.getAs<clang::ParenTypeLoc>()) {
+            target = p.getInnerLoc();
             continue;
         }
+
         break;
     }
 
-    if(auto F = Target.getAs<clang::FunctionProtoTypeLoc>()) {
-        return F;
+    if(auto f = target.getAs<clang::FunctionProtoTypeLoc>()) {
+        return f;
     }
 
     return {};
