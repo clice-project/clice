@@ -311,7 +311,7 @@ auto decl_of(clang::QualType type) -> const clang::NamedDecl* {
     ///    return instantiated_from(TST->getAsCXXRecordDecl());
     ///}
 
-    std::unreachable();
+    return nullptr;
 }
 
 auto get_qualifier_loc(const clang::NamedDecl* decl) -> clang::NestedNameSpecifierLoc {

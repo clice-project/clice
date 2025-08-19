@@ -179,7 +179,7 @@ private:
             trailing_text.empty() ? 1 : trailing_text.bytes_end() - rest_of_line.bytes_begin());
 
         /// FIXME: Handle case, if RBraceLoc is from macro expansion.
-        return LocalSourceRange(block_begin_offset, rbrace_offset + text.size());
+        return LocalSourceRange(rbrace_offset, rbrace_offset + text.size());
     }
 
     /// Check whether the expr has a param name comment before it.

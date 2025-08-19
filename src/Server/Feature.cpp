@@ -1,12 +1,13 @@
-#include "Feature/DocumentSymbol.h"
-#include "Feature/FoldingRange.h"
 #include "Server/Server.h"
 #include "Server/Convert.h"
 #include "Compiler/Compilation.h"
 #include "Feature/CodeCompletion.h"
 #include "Feature/Hover.h"
 #include "Feature/DocumentLink.h"
+#include "Feature/DocumentSymbol.h"
+#include "Feature/FoldingRange.h"
 #include "Feature/SemanticToken.h"
+#include "Feature/InlayHint.h"
 
 namespace clice {
 
@@ -186,6 +187,40 @@ async::Task<json::Value> Server::on_semantic_token(proto::SemanticTokensParams p
     co_return co_await async::submit([kind = this->kind, &ast] {
         auto tokens = feature::semantic_tokens(*ast);
         return proto::to_json(kind, ast->interested_content(), tokens);
+    });
+}
+
+async::Task<json::Value> Server::on_inlay_hint(proto::InlayHintParams params) {
+    auto path = mapping.to_path(params.textDocument.uri);
+    auto opening_file = opening_files.get_or_add(path);
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
+
+    auto ast = opening_file->ast;
+    if(!ast) {
+        co_return json::Value(nullptr);
+    }
+
+    co_return co_await async::submit([kind = this->kind, &params, &ast] {
+        auto content = ast->interested_content();
+
+        LocalSourceRange range{
+            to_offset(kind, content, params.range.start),
+            to_offset(kind, content, params.range.end),
+        };
+
+        auto hints = feature::inlay_hint(*ast, range, {});
+
+        PositionConverter converter(content, kind);
+
+        std::vector<proto::InlayHint> result;
+
+        for(auto& hint: hints) {
+            auto& back = result.emplace_back(converter.toPosition(hint.offset));
+            back.label.emplace_back(std::move(hint.parts[0].name));
+            back.kind = proto::InlayHintKind::Type;
+        }
+
+        return json::serialize(result);
     });
 }
 

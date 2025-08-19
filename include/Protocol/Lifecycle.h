@@ -163,7 +163,7 @@ struct ServerCapabilities {
     /// FIXME: InlineValueOptions inlineValueProvider;
 
     /// The server provides inlay hints.
-    /// FIXME: InlayHintOptions inlayHintProvider;
+    InlayHintOptions inlayHintProvider;
 
     /// The server has support for pull model diagnostics.
     /// FIXME: DiagnosticOptions diagnosticProvider;

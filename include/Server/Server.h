@@ -208,6 +208,8 @@ private:
 
     async::Task<json::Value> on_semantic_token(proto::SemanticTokensParams params);
 
+    async::Task<json::Value> on_inlay_hint(proto::InlayHintParams params);
+
 private:
     /// The current request id.
     std::uint32_t id = 0;

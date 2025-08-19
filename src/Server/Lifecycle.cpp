@@ -71,6 +71,10 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
         capabilities.semanticTokensProvider.legend.tokenTypes.emplace_back(std::move(type));
     }
 
+    /// Inlay hint
+    /// FIXME: Resolve to make hint clickable.
+    capabilities.inlayHintProvider.resolveProvider = false;
+
     co_return json::serialize(result);
 }
 
