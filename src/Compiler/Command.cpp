@@ -104,7 +104,7 @@ llvm::SmallVector<llvm::StringRef, 4> driver_invocation_argv(llvm::StringRef dri
     /// } else if (driver.starts_with("cl") || driver.starts_with("clang-cl")) {
     ///      return {"/Bv"};
     /// }
-    return {"-E", "-v", "-xc++", "/dev/null"};
+    return {driver, "-E", "-v", "-xc++", "/dev/null"};
 }
 
 using QueryDriverError = CompilationDatabase::QueryDriverError;
@@ -175,7 +175,7 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
     std::optional<llvm::StringRef> redirects[] = {{""}, {""}, {""}};
     redirects[is_std_err ? 2 : 1] = output_path.str();
 
-    auto argv = driver_invocation_argv(driver);
+    llvm::SmallVector argv = driver_invocation_argv(driver);
     std::string message;
     if(int RC = llvm::sys::ExecuteAndWait(driver,
                                           argv,
@@ -548,7 +548,6 @@ auto CompilationDatabase::get_command(this Self& self,
     }
 
     info.arguments.emplace_back(file.data());
-
     return info;
 }
 
