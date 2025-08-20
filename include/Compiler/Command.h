@@ -20,11 +20,11 @@ public:
         Delete,
     };
 
-    struct QueryDriverError : refl::Enum<QueryDriverError> {
+    struct QueryDriverErrorKind : refl::Enum<QueryDriverErrorKind> {
         enum Kind : std::uint8_t {
             NotFoundInPATH,
             FailToCreateTempFile,
-            InvokeFail,
+            InvokeDriverFail,
             OutputFileNotReadable,
             InvalidOutputFormat,
         };
@@ -61,6 +61,13 @@ public:
         std::vector<const char*> arguments;
     };
 
+    struct QueryDriverError {
+        QueryDriverErrorKind kind;
+        std::string driver;
+        std::string detail;
+        std::optional<std::string> output_file;
+    };
+
     CompilationDatabase();
 
     auto save_string(this Self& self, llvm::StringRef string) -> llvm::StringRef;
@@ -73,7 +80,7 @@ public:
 
     /// Query the compiler driver and return its driver info.
     auto query_driver(this Self& self, llvm::StringRef driver)
-        -> std::expected<DriverInfo, std::pair<QueryDriverError, std::string>>;
+        -> std::expected<DriverInfo, QueryDriverError>;
 
     /// Update with arguments.
     auto update_command(this Self& self,
@@ -144,3 +151,21 @@ struct DenseMapInfo<llvm::ArrayRef<const char*>> {
 };
 
 }  // namespace llvm
+
+template <>
+struct std::formatter<clice::CompilationDatabase::QueryDriverError> :
+    std::formatter<std::string_view> {
+    using Base = std::formatter<std::string_view>;
+
+    template <typename FormatContext>
+    auto format(clice::CompilationDatabase::QueryDriverError& e, FormatContext& ctx) const {
+        return std::format_to(
+            ctx.out(),
+            "QueryDriverError{{ kind: {}, driver: {}, detail: {}, output_file: {} }}",
+            e.kind.name(),
+            e.driver,
+            e.detail,
+            e.output_file.value_or("<no file>"));
+    }
+};
+
