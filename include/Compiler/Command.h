@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Support/Enum.h"
+#include "Support/Format.h"
 #include <expected>
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
@@ -154,7 +155,7 @@ struct DenseMapInfo<llvm::ArrayRef<const char*>> {
 
 template <>
 struct std::formatter<clice::CompilationDatabase::QueryDriverError> :
-    std::formatter<std::string_view> {
+    std::formatter<llvm::StringRef> {
     using Base = std::formatter<std::string_view>;
 
     template <typename FormatContext>
