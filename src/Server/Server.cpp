@@ -144,12 +144,13 @@ async::Task<> Server::on_receive(json::Value value) {
     }
 
     /// Handle request and notification separately.
-    /// TODO: Record the time of handling request and notification.
     auto it = callbacks.find(method);
     if(it == callbacks.end()) {
         log::info("Ignore unhandled method: {}", method);
         co_return;
     }
+
+    auto start_time = std::chrono::steady_clock::now();
 
     if(id) {
         log::info("Handling request: {}", method);
@@ -161,6 +162,10 @@ async::Task<> Server::on_receive(json::Value value) {
         auto result = co_await it->second(*this, std::move(params));
         log::info("Handled notification: {}", method);
     }
+
+    auto end_time = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    log::info("Method {} took {} ms", method, duration.count());
 
     co_return;
 }
