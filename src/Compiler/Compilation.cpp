@@ -84,8 +84,6 @@ public:
     using clang::WrapperFrontendAction::EndSourceFile;
 
 private:
-    /// Whether we need to collect top level declarations.
-    bool need_collect;
     std::vector<clang::Decl*>* top_level_decls;
     std::shared_ptr<std::atomic_bool> stop;
 };
@@ -271,7 +269,6 @@ CompilationResult preprocess(CompilationParams& params) {
 }
 
 CompilationResult compile(CompilationParams& params) {
-    const bool collect_top_level_decls = params.output_file.empty();
     return run_clang<clang::SyntaxOnlyAction>(params);
 }
 
