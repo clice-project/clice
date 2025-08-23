@@ -7,9 +7,20 @@ namespace {
 
 suite<"SignatureHelp"> signature_help = [] {
     Tester tester;
+    proto::SignatureHelp help;
 
-    test("SignatureHelp") = [&] {
-        const char* code = R"cpp(
+    auto run = [&](llvm::StringRef code) {
+        tester.clear();
+        tester.add_main("main.cpp", code);
+        tester.prepare();
+
+        tester.params.completion = {"main.cpp", tester.nameless_points()[0]};
+
+        help = feature::signature_help(tester.params, {});
+    };
+
+    test("Simple") = [&] {
+        run(R"cpp(
 void foo();
 
 void foo(int x);
@@ -17,22 +28,14 @@ void foo(int x);
 void foo(int x, int y);
 
 int main() {
-    foo(1, 2);
+    foo($);
 }
-)cpp";
+)cpp");
 
-        CompilationParams params;
-        params.arguments = {"clang++", "-std=c++20", "main.cpp"};
-        params.add_remapped_file("main.cpp", code);
-        /// params.completion = {"main.cpp", 9, 10};
-
-        /// config::SignatureHelpOption options = {};
-        /// auto result = feature::signatureHelp(params, options);
-        ///  EXPECT
-        ///  foo(int x, int y)
-        ///  foo(int x)
-        ///  foo()
+        expect(eq(help.signatures.size(), 3));
     };
+
+    /// FIXME: Add more tests.
 };
 
 }  // namespace
