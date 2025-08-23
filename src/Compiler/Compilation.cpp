@@ -257,7 +257,7 @@ CompilationResult run_clang(CompilationParams& params,
         .top_level_decls = std::move(top_level_decls),
     };
 
-    CompilationUnit unit(CompilationUnit::Content, impl);
+    CompilationUnit unit(params.kind, impl);
     after_execute(unit);
     return unit;
 }
