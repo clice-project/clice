@@ -76,6 +76,7 @@ async::Task<json::Value> Server::on_signature_help(proto::SignatureHelpParams pa
     {
         /// Set compilation params ... .
         CompilationParams params;
+        params.kind = CompilationUnit::Completion;
         params.arguments = database.get_command(path, true).arguments;
         params.add_remapped_file(path, content);
         params.pch = {pch->path, pch->preamble.size()};
