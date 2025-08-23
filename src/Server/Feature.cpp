@@ -80,13 +80,7 @@ async::Task<json::Value> Server::on_signature_help(proto::SignatureHelpParams pa
         params.completion = {path, offset};
 
         co_return co_await async::submit([kind = this->kind, &content, &params] {
-            auto items = feature::signature_help(params, {});
-            proto::SignatureHelp help;
-            help.activeSignature = 0;
-            auto& sig = help.signatures.emplace_back();
-            sig.label = "Test\nI am a vector!";
-            sig.activeParameter = 0;
-            sig.parameters.emplace_back().label = {0, 4};
+            auto help = feature::signature_help(params, {});
             return json::serialize(help);
         });
     }

@@ -281,33 +281,31 @@ const clang::NamedDecl* decl_of_impl(const void* T) {
 }
 
 auto decl_of(clang::QualType type) -> const clang::NamedDecl* {
+    if(auto TST = type->getAs<clang::TemplateSpecializationType>()) {
+        auto decl = TST->getTemplateName().getAsTemplateDecl();
+        if(type->isDependentType()) {
+            return decl;
+        }
+
+        /// For a template specialization type, the template name is possibly a `ClassTemplateDecl`
+        ///  `TypeAliasTemplateDecl` or `TemplateTemplateParmDecl` and `BuiltinTemplateDecl`.
+        if(llvm::isa<clang::TypeAliasTemplateDecl>(decl)) {
+            return decl->getTemplatedDecl();
+        }
+
+        if(llvm::isa<clang::TemplateTemplateParmDecl, clang::BuiltinTemplateDecl>(decl)) {
+            return decl;
+        }
+
+        return instantiated_from(TST->getAsCXXRecordDecl());
+    }
+
     switch(type->getTypeClass()) {
 #define ABSTRACT_TYPE(TY, BASE)
 #define TYPE(TY, BASE)                                                                             \
     case clang::Type::TY: return decl_of_impl(llvm::cast<clang::TY##Type>(type));
 #include "clang/AST/TypeNodes.inc"
     }
-
-    /// FIXME: Handle Template Specialization type in the future
-    /// if(auto TST = type->getAs<clang::TemplateSpecializationType>()) {
-    ///    auto decl = TST->getTemplateName().getAsTemplateDecl();
-    ///    if(type->isDependentType()) {
-    ///        return decl;
-    ///    }
-    ///
-    ///    /// For a template specialization type, the template name is possibly a
-    ///    `ClassTemplateDecl`
-    ///    ///  `TypeAliasTemplateDecl` or `TemplateTemplateParmDecl` and `BuiltinTemplateDecl`.
-    ///    if(llvm::isa<clang::TypeAliasTemplateDecl>(decl)) {
-    ///        return decl->getTemplatedDecl();
-    ///    }
-    ///
-    ///    if(llvm::isa<clang::TemplateTemplateParmDecl, clang::BuiltinTemplateDecl>(decl)) {
-    ///        return decl;
-    ///    }
-    ///
-    ///    return instantiated_from(TST->getAsCXXRecordDecl());
-    ///}
 
     return nullptr;
 }
