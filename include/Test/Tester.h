@@ -31,7 +31,7 @@ struct Tester {
         sources.add_sources(content);
     }
 
-    bool compile(llvm::StringRef standard = "-std=c++20") {
+    void prepare(llvm::StringRef standard = "-std=c++20") {
         auto command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
 
         database.update_command("fake", src_path, command);
@@ -46,6 +46,10 @@ struct Tester {
                 params.add_remapped_file(path, source.content);
             }
         }
+    }
+
+    bool compile(llvm::StringRef standard = "-std=c++20") {
+        prepare(standard);
 
         auto info = clice::compile(params);
         if(!info) {

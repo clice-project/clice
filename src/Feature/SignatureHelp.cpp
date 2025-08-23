@@ -7,33 +7,6 @@ namespace clice::feature {
 
 namespace {
 
-// Returns the index of the parameter matching argument number "Arg.
-// This is usually just "Arg", except for variadic functions/templates, where
-// "Arg" might be higher than the number of parameters. When that happens, we
-// assume the last parameter is variadic and assume all further args are
-// part of it.
-int param_index(const clang::CodeCompleteConsumer::OverloadCandidate& candidate, int arg) {
-    int params_count = candidate.getNumParams();
-    if(auto* T = candidate.getFunctionType()) {
-        if(auto* proto = T->getAs<clang::FunctionProtoType>()) {
-            if(proto->isVariadic()) {
-                params_count += 1;
-            }
-        }
-    }
-    return std::min(arg, std::max(params_count - 1, 0));
-}
-
-class Builder {
-public:
-    Builder(proto::SignatureHelp& result) : result(result) {
-        // std::vector<int>(1, 2,)
-    }
-
-private:
-    proto::SignatureHelp& result;
-};
-
 class Collector final : public clang::CodeCompleteConsumer {
 public:
     Collector(proto::SignatureHelp& help, clang::CodeCompleteOptions complete_options) :
@@ -195,6 +168,8 @@ public:
 
             signature.label = buffer.str();
         }
+
+        /// FIXME: Sort the result according the params num and kind ...
     }
 
     clang::CodeCompletionAllocator& getAllocator() final {
