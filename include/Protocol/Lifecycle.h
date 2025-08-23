@@ -85,7 +85,7 @@ struct ServerCapabilities {
     HoverOptions hoverProvider;
 
     /// The server provides signature help support.
-    /// FIXME: SignatureHelpOptions signatureHelpProvider;
+    SignatureHelpOptions signatureHelpProvider;
 
     /// The server provides go to declaration support.
     /// FIXME: DeclarationOptions declarationProvider;
@@ -123,10 +123,10 @@ struct ServerCapabilities {
     /// FIXME: DocumentColorOptions colorProvider;
 
     /// The server provides document formatting.
-    /// FIXME: DocumentFormattingOptions documentFormattingProvider;
+    DocumentFormattingOptions documentFormattingProvider;
 
     /// The server provides document range formatting.
-    /// FIXME: DocumentRangeFormattingOptions documentRangeFormattingProvider;
+    DocumentRangeFormattingOptions documentRangeFormattingProvider;
 
     /// The server provides document formatting on typing.
     /// FIXME: DocumentOnTypeFormattingOptions documentOnTypeFormattingProvider;
@@ -163,7 +163,7 @@ struct ServerCapabilities {
     /// FIXME: InlineValueOptions inlineValueProvider;
 
     /// The server provides inlay hints.
-    /// FIXME: InlayHintOptions inlayHintProvider;
+    InlayHintOptions inlayHintProvider;
 
     /// The server has support for pull model diagnostics.
     /// FIXME: DiagnosticOptions diagnosticProvider;

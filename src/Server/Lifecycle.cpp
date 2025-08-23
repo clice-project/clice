@@ -53,11 +53,18 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     /// Hover
     capabilities.hoverProvider = true;
 
+    /// SignatureHelp
+    capabilities.signatureHelpProvider.triggerCharacters = {"(", ")", "{", "}", "<", ">", ","};
+
     /// DocumentSymbol
     capabilities.documentSymbolProvider = {};
 
     /// DocumentLink
     capabilities.documentLinkProvider.resolveProvider = false;
+
+    /// Formatting
+    capabilities.documentFormattingProvider = true;
+    capabilities.documentRangeFormattingProvider = true;
 
     /// FoldingRange
     capabilities.foldingRangeProvider = true;
@@ -70,6 +77,10 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
         type[0] = std::tolower(type[0]);
         capabilities.semanticTokensProvider.legend.tokenTypes.emplace_back(std::move(type));
     }
+
+    /// Inlay hint
+    /// FIXME: Resolve to make hint clickable.
+    capabilities.inlayHintProvider.resolveProvider = false;
 
     co_return json::serialize(result);
 }

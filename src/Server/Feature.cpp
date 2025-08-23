@@ -1,16 +1,19 @@
-#include "Feature/DocumentSymbol.h"
-#include "Feature/FoldingRange.h"
+#include "Feature/Formatting.h"
 #include "Server/Server.h"
 #include "Server/Convert.h"
 #include "Compiler/Compilation.h"
 #include "Feature/CodeCompletion.h"
 #include "Feature/Hover.h"
+#include "Feature/SignatureHelp.h"
 #include "Feature/DocumentLink.h"
+#include "Feature/DocumentSymbol.h"
+#include "Feature/FoldingRange.h"
 #include "Feature/SemanticToken.h"
+#include "Feature/InlayHint.h"
 
 namespace clice {
 
-async::Task<json::Value> Server::on_completion(proto::CompletionParams params) {
+auto Server::on_completion(proto::CompletionParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
 
@@ -37,7 +40,7 @@ async::Task<json::Value> Server::on_completion(proto::CompletionParams params) {
     }
 }
 
-async::Task<json::Value> Server::on_hover(proto::HoverParams params) {
+auto Server::on_hover(proto::HoverParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
     auto guard = co_await opening_file->ast_built_lock.try_lock();
@@ -59,7 +62,33 @@ async::Task<json::Value> Server::on_hover(proto::HoverParams params) {
     });
 }
 
-async::Task<json::Value> Server::on_document_symbol(proto::DocumentSymbolParams params) {
+async::Task<json::Value> Server::on_signature_help(proto::SignatureHelpParams params) {
+    auto path = mapping.to_path(params.textDocument.uri);
+    auto opening_file = opening_files.get_or_add(path);
+
+    if(!opening_file->pch_build_task.empty()) {
+        co_await opening_file->pch_built_event;
+    }
+
+    auto& content = opening_file->content;
+    auto offset = to_offset(kind, content, params.position);
+    auto& pch = opening_file->pch;
+    {
+        /// Set compilation params ... .
+        CompilationParams params;
+        params.arguments = database.get_command(path, true).arguments;
+        params.add_remapped_file(path, content);
+        params.pch = {pch->path, pch->preamble.size()};
+        params.completion = {path, offset};
+
+        co_return co_await async::submit([kind = this->kind, &content, &params] {
+            auto help = feature::signature_help(params, {});
+            return json::serialize(help);
+        });
+    }
+}
+
+auto Server::on_document_symbol(proto::DocumentSymbolParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
 
@@ -107,7 +136,7 @@ async::Task<json::Value> Server::on_document_symbol(proto::DocumentSymbolParams 
     });
 }
 
-async::Task<json::Value> Server::on_document_link(proto::DocumentLinkParams params) {
+auto Server::on_document_link(proto::DocumentLinkParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
     auto guard = co_await opening_file->ast_built_lock.try_lock();
@@ -133,6 +162,32 @@ async::Task<json::Value> Server::on_document_link(proto::DocumentLinkParams para
             result.emplace_back(converter.lookup(link.range), mapping.to_uri(link.file));
         }
         return json::serialize(result);
+    });
+}
+
+auto Server::on_document_format(proto::DocumentFormattingParams params) -> Result {
+    auto path = mapping.to_path(params.textDocument.uri);
+    auto opening_file = opening_files.get_or_add(path);
+
+    auto content = opening_file->content;
+    co_return co_await async::submit([&, kind = this->kind] {
+        auto edits = feature::document_format(path, content, std::nullopt);
+        /// FIXME: adjust position encoding...
+        return json::serialize(edits);
+    });
+}
+
+auto Server::on_document_range_format(proto::DocumentRangeFormattingParams params) -> Result {
+    auto path = mapping.to_path(params.textDocument.uri);
+    auto opening_file = opening_files.get_or_add(path);
+
+    auto content = opening_file->content;
+    co_return co_await async::submit([&, kind = this->kind] {
+        auto begin = to_offset(kind, content, params.range.start);
+        auto end = to_offset(kind, content, params.range.end);
+        auto edits = feature::document_format(path, content, LocalSourceRange(begin, end));
+        /// FIXME: adjust position encoding...
+        return json::serialize(edits);
     });
 }
 
@@ -174,7 +229,7 @@ async::Task<json::Value> Server::on_folding_range(proto::FoldingRangeParams para
     });
 }
 
-async::Task<json::Value> Server::on_semantic_token(proto::SemanticTokensParams params) {
+auto Server::on_semantic_token(proto::SemanticTokensParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
     auto guard = co_await opening_file->ast_built_lock.try_lock();
@@ -187,6 +242,42 @@ async::Task<json::Value> Server::on_semantic_token(proto::SemanticTokensParams p
     co_return co_await async::submit([kind = this->kind, &ast] {
         auto tokens = feature::semantic_tokens(*ast);
         return proto::to_json(kind, ast->interested_content(), tokens);
+    });
+}
+
+auto Server::on_inlay_hint(proto::InlayHintParams params) -> Result {
+    auto path = mapping.to_path(params.textDocument.uri);
+    auto opening_file = opening_files.get_or_add(path);
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
+
+    auto ast = opening_file->ast;
+    if(!ast) {
+        co_return json::Value(nullptr);
+    }
+
+    co_return co_await async::submit([kind = this->kind, &params, &ast] {
+        auto content = ast->interested_content();
+
+        LocalSourceRange range{
+            to_offset(kind, content, params.range.start),
+            to_offset(kind, content, params.range.end),
+        };
+
+        auto hints = feature::inlay_hint(*ast, range, {});
+
+        PositionConverter converter(content, kind);
+
+        std::vector<proto::InlayHint> result;
+
+        for(auto& hint: hints) {
+            auto& back = result.emplace_back(converter.toPosition(hint.offset));
+            back.label.emplace_back(std::move(hint.parts[0].name));
+
+            /// FIXME: Determine the set of possible kinds; for now, we'll use Type.
+            back.kind = proto::InlayHintKind::Type;
+        }
+
+        return json::serialize(result);
     });
 }
 

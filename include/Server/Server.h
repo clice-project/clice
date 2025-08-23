@@ -196,17 +196,27 @@ private:
     async::Task<> on_did_close(proto::DidCloseTextDocumentParams params);
 
 private:
-    async::Task<json::Value> on_completion(proto::CompletionParams params);
+    using Result = async::Task<json::Value>;
 
-    async::Task<json::Value> on_hover(proto::HoverParams params);
+    auto on_completion(proto::CompletionParams params) -> Result;
 
-    async::Task<json::Value> on_document_symbol(proto::DocumentSymbolParams params);
+    auto on_hover(proto::HoverParams params) -> Result;
 
-    async::Task<json::Value> on_document_link(proto::DocumentLinkParams params);
+    auto on_signature_help(proto::SignatureHelpParams params) -> Result;
 
-    async::Task<json::Value> on_folding_range(proto::FoldingRangeParams params);
+    auto on_document_symbol(proto::DocumentSymbolParams params) -> Result;
 
-    async::Task<json::Value> on_semantic_token(proto::SemanticTokensParams params);
+    auto on_document_link(proto::DocumentLinkParams params) -> Result;
+
+    auto on_document_format(proto::DocumentFormattingParams params) -> Result;
+
+    auto on_document_range_format(proto::DocumentRangeFormattingParams params) -> Result;
+
+    auto on_folding_range(proto::FoldingRangeParams params) -> Result;
+
+    auto on_semantic_token(proto::SemanticTokensParams params) -> Result;
+
+    auto on_inlay_hint(proto::InlayHintParams params) -> Result;
 
 private:
     /// The current request id.

@@ -1,4 +1,5 @@
 #include "AST/Utility.h"
+#include "Support/Format.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclObjC.h"
@@ -50,6 +51,11 @@ bool is_templated(const clang::Decl* decl) {
     }
 
     return false;
+}
+
+bool is_anonymous(const clang::NamedDecl* decl) {
+    auto name = decl->getDeclName();
+    return name.isIdentifier() && !name.getAsIdentifierInfo();
 }
 
 const static clang::CXXRecordDecl* getDeclContextForTemplateInstationPattern(const clang::Decl* D) {
@@ -150,6 +156,40 @@ const clang::NamedDecl* normalize(const clang::NamedDecl* decl) {
     return decl;
 }
 
+llvm::StringRef simple_name(const clang::DeclarationName& name) {
+    if(clang::IdentifierInfo* Ident = name.getAsIdentifierInfo()) {
+        return Ident->getName();
+    }
+
+    return "";
+}
+
+llvm::StringRef identifier_of(const clang::NamedDecl& D) {
+    if(clang::IdentifierInfo* identifier = D.getIdentifier()) {
+        return identifier->getName();
+    }
+
+    return "";
+}
+
+llvm::StringRef identifier_of(clang::QualType type) {
+    if(const auto* ET = llvm::dyn_cast<clang::ElaboratedType>(type)) {
+        return identifier_of(ET->getNamedType());
+    }
+
+    if(const auto* BT = llvm::dyn_cast<clang::BuiltinType>(type)) {
+        clang::PrintingPolicy PP(clang::LangOptions{});
+        PP.adjustForCPlusPlus();
+        return BT->getName(PP);
+    }
+
+    if(const auto* D = decl_of(type)) {
+        return identifier_of(*D);
+    }
+
+    return "";
+}
+
 std::string name_of(const clang::NamedDecl* decl) {
     llvm::SmallString<128> result;
 
@@ -213,75 +253,35 @@ std::string name_of(const clang::NamedDecl* decl) {
 }
 
 clang::QualType type_of(const clang::NamedDecl* decl) {
-    if(auto VD = llvm::dyn_cast<clang::VarDecl>(decl)) {
-        return VD->getType();
-    }
+    using namespace clang;
 
-    if(auto FD = llvm::dyn_cast<clang::FieldDecl>(decl)) {
-        return FD->getType();
-    }
-
-    if(auto ECD = llvm::dyn_cast<clang::EnumConstantDecl>(decl)) {
-        return ECD->getType();
-    }
-
-    if(auto BD = llvm::dyn_cast<clang::BindingDecl>(decl)) {
-        return BD->getType();
-    }
-
-    if(auto TD = llvm::dyn_cast<clang::TypedefNameDecl>(decl)) {
-        return TD->getUnderlyingType();
-    }
-
-    if(auto CCD = llvm::dyn_cast<clang::CXXConstructorDecl>(decl)) {
-        return CCD->getThisType();
-    }
-
-    if(auto CDD = llvm::dyn_cast<clang::CXXDestructorDecl>(decl)) {
-        return CDD->getThisType();
+    if(auto value = dyn_cast<ValueDecl>(decl)) {
+        if(isa<VarDecl, BindingDecl, FieldDecl, EnumConstantDecl>(value)) {
+            return value->getType();
+        } else if(auto ctor = dyn_cast<CXXConstructorDecl>(decl)) {
+            return ctor->getThisType();
+        } else if(auto dtor = dyn_cast<CXXDestructorDecl>(decl)) {
+            return dtor->getThisType();
+        }
+    } else if(auto type = dyn_cast<TypeDecl>(decl)) {
+        return QualType(type->getTypeForDecl(), 0);
     }
 
     return clang::QualType();
 }
 
-// getDeclForType() returns the decl responsible for Type's spelling.
-// This is the inverse of ASTContext::getTypeDeclType().
 template <typename Ty>
     requires requires(Ty* T) { T->getDecl(); }
-const clang::NamedDecl* get_decl_for_type_impl(const Ty* T) {
+const clang::NamedDecl* decl_of_impl(const Ty* T) {
     return T->getDecl();
 }
 
-const clang::NamedDecl* get_decl_for_type_impl(const void* T) {
+const clang::NamedDecl* decl_of_impl(const void* T) {
     return nullptr;
 }
 
-const clang::NamedDecl* get_decl_for_type(const clang::Type* T) {
-    switch(T->getTypeClass()) {
-#define ABSTRACT_TYPE(TY, BASE)
-#define TYPE(TY, BASE)                                                                             \
-    case clang::Type::TY: return get_decl_for_type_impl(llvm::cast<clang::TY##Type>(T));
-#include "clang/AST/TypeNodes.inc"
-    }
-    llvm_unreachable("Unknown TypeClass enum");
-}
-
-const clang::NamedDecl* decl_of(clang::QualType type) {
-    if(type.isNull()) {
-        return nullptr;
-    }
-
-    if(auto RT = type->getAs<clang::TagType>()) {
-        return RT->getDecl();
-    }
-
-    if(auto TT = type->getAs<clang::TagType>()) {
-        return TT->getDecl();
-    }
-
-    /// FIXME:
+auto decl_of(clang::QualType type) -> const clang::NamedDecl* {
     if(auto TST = type->getAs<clang::TemplateSpecializationType>()) {
-
         auto decl = TST->getTemplateName().getAsTemplateDecl();
         if(type->isDependentType()) {
             return decl;
@@ -300,15 +300,17 @@ const clang::NamedDecl* decl_of(clang::QualType type) {
         return instantiated_from(TST->getAsCXXRecordDecl());
     }
 
+    switch(type->getTypeClass()) {
+#define ABSTRACT_TYPE(TY, BASE)
+#define TYPE(TY, BASE)                                                                             \
+    case clang::Type::TY: return decl_of_impl(llvm::cast<clang::TY##Type>(type));
+#include "clang/AST/TypeNodes.inc"
+    }
+
     return nullptr;
 }
 
-bool is_anonymous(const clang::NamedDecl* decl) {
-    auto name = decl->getDeclName();
-    return name.isIdentifier() && !name.getAsIdentifierInfo();
-}
-
-clang::NestedNameSpecifierLoc get_qualifier_loc(const clang::NamedDecl* decl) {
+auto get_qualifier_loc(const clang::NamedDecl* decl) -> clang::NestedNameSpecifierLoc {
     if(auto* V = llvm::dyn_cast<clang::DeclaratorDecl>(decl)) {
         return V->getQualifierLoc();
     }
@@ -343,81 +345,93 @@ auto get_template_specialization_args(const clang::NamedDecl* decl)
 }
 
 std::string print_template_specialization_args(const clang::NamedDecl* decl) {
-    std::string TemplateArgs;
-    llvm::raw_string_ostream OS(TemplateArgs);
-    clang::PrintingPolicy Policy(decl->getASTContext().getLangOpts());
-    if(auto Args = ast::get_template_specialization_args(decl)) {
-        printTemplateArgumentList(OS, *Args, Policy);
-    } else if(auto* Cls = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(decl)) {
+    std::string template_args;
+    llvm::raw_string_ostream os(template_args);
+    clang::PrintingPolicy policy(decl->getASTContext().getLangOpts());
+
+    if(auto args = get_template_specialization_args(decl)) {
+        printTemplateArgumentList(os, *args, policy);
+    } else if(auto* cls = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(decl)) {
         // FIXME: Fix cases when getTypeAsWritten returns null inside clang AST,
         // e.g. friend decls. Currently we fallback to Template Arguments without
         // location information.
-        printTemplateArgumentList(OS, Cls->getTemplateArgs().asArray(), Policy);
+        printTemplateArgumentList(os, cls->getTemplateArgs().asArray(), policy);
     }
-    return TemplateArgs;
+
+    return template_args;
 }
 
-std::string print_name(const clang::NamedDecl* decl) {
-    std::string Name;
-    llvm::raw_string_ostream Out(Name);
-    clang::PrintingPolicy PP(decl->getASTContext().getLangOpts());
+std::string display_name_of(const clang::NamedDecl* decl) {
+    std::string name;
+    llvm::raw_string_ostream out(name);
+    clang::PrintingPolicy policy(decl->getASTContext().getLangOpts());
+
     // We don't consider a class template's args part of the constructor name.
-    PP.SuppressTemplateArgsInCXXConstructors = true;
+    policy.SuppressTemplateArgsInCXXConstructors = true;
 
     // Handle 'using namespace'. They all have the same name - <using-directive>.
     if(auto* UD = llvm::dyn_cast<clang::UsingDirectiveDecl>(decl)) {
-        Out << "using namespace ";
+        out << "using namespace ";
         if(auto* Qual = UD->getQualifier())
-            Qual->print(Out, PP);
-        UD->getNominatedNamespaceAsWritten()->printName(Out);
-        return Out.str();
+            Qual->print(out, policy);
+        UD->getNominatedNamespaceAsWritten()->printName(out);
+        return out.str();
     }
 
-    if(ast::is_anonymous(decl)) {
+    if(is_anonymous(decl)) {
         // Come up with a presentation for an anonymous entity.
-        if(isa<clang::NamespaceDecl>(decl))
+        if(llvm::isa<clang::NamespaceDecl>(decl)) {
             return "(anonymous namespace)";
-        if(auto* Cls = llvm::dyn_cast<clang::RecordDecl>(decl)) {
-            if(Cls->isLambda())
-                return "(lambda)";
-            return ("(anonymous " + Cls->getKindName() + ")").str();
         }
-        if(isa<clang::EnumDecl>(decl))
+
+        if(auto* cls = llvm::dyn_cast<clang::RecordDecl>(decl)) {
+            if(cls->isLambda()) {
+                return "(lambda)";
+            }
+
+            return std::format("(anonymous {})", cls->getKindName());
+        }
+
+        if(llvm::isa<clang::EnumDecl>(decl)) {
             return "(anonymous enum)";
+        }
+
         return "(anonymous)";
     }
 
     // Print nested name qualifier if it was written in the source code.
-    if(auto* Qualifier = ast::get_qualifier_loc(decl).getNestedNameSpecifier())
-        Qualifier->print(Out, PP);
-    // Print the name itself.
-    decl->getDeclName().print(Out, PP);
-    // Print template arguments.
-    Out << ast::print_template_specialization_args(decl);
+    if(auto* qualifier = get_qualifier_loc(decl).getNestedNameSpecifier()) {
+        qualifier->print(out, policy);
+    }
 
-    return Out.str();
+    // Print the name itself.
+    decl->getDeclName().print(out, policy);
+    // Print template arguments.
+    out << print_template_specialization_args(decl);
+
+    return out.str();
 }
 
-clang::TemplateTypeParmTypeLoc get_contained_auto_param_type(clang::TypeLoc TL) {
-    if(auto QTL = TL.getAs<clang::QualifiedTypeLoc>()) {
-        return get_contained_auto_param_type(QTL.getUnqualifiedLoc());
-    }
-
-    if(llvm::isa<clang::PointerType, clang::ReferenceType, clang::ParenType>(TL.getTypePtr())) {
-        return get_contained_auto_param_type(TL.getNextTypeLoc());
-    }
-
-    if(auto FTL = TL.getAs<clang::FunctionTypeLoc>()) {
-        return get_contained_auto_param_type(FTL.getReturnLoc());
-    }
-
-    if(auto TTPTL = TL.getAs<clang::TemplateTypeParmTypeLoc>()) {
-        if(TTPTL.getTypePtr()->getDecl()->isImplicit()) {
-            return TTPTL;
+auto unwrap_type(clang::TypeLoc type, bool unwrap_function_type) -> clang::TypeLoc {
+    while(true) {
+        if(auto qualified = type.getAs<clang::QualifiedTypeLoc>()) {
+            type = qualified.getUnqualifiedLoc();
+        } else if(auto reference = type.getAs<clang::ReferenceTypeLoc>()) {
+            type = reference.getPointeeLoc();
+        } else if(auto pointer = type.getAs<clang::PointerTypeLoc>()) {
+            type = pointer.getPointeeLoc();
+        } else if(auto paren = type.getAs<clang::ParenTypeLoc>()) {
+            type = paren.getInnerLoc();
+        } else if(auto array = type.getAs<clang::ConstantArrayTypeLoc>()) {
+            type = array.getElementLoc();
+        } else if(auto proto = type.getAs<clang::FunctionProtoTypeLoc>();
+                  proto && unwrap_function_type) {
+            type = proto.getReturnLoc();
+        } else {
+            break;
         }
     }
-
-    return {};
+    return type;
 }
 
 template <typename TemplateDeclTy>
@@ -445,31 +459,32 @@ clang::NamedDecl* get_only_instantiation(clang::NamedDecl* TemplatedDecl) {
     return nullptr;
 }
 
-// getSimpleName() returns the plain identifier for an entity, if any.
-llvm::StringRef getSimpleName(const clang::DeclarationName& DN) {
-    if(clang::IdentifierInfo* Ident = DN.getAsIdentifierInfo())
-        return Ident->getName();
-    return "";
-}
+auto get_only_instantiation(clang::ParmVarDecl* decl) -> clang::ParmVarDecl* {
+    auto* TemplateFunction = llvm::dyn_cast<clang::FunctionDecl>(decl->getDeclContext());
+    if(!TemplateFunction)
+        return nullptr;
+    auto* InstantiatedFunction =
+        llvm::dyn_cast_or_null<clang::FunctionDecl>(get_only_instantiation(TemplateFunction));
+    if(!InstantiatedFunction)
+        return nullptr;
 
-llvm::StringRef getSimpleName(const clang::NamedDecl& D) {
-    return getSimpleName(D.getDeclName());
-}
-
-llvm::StringRef getSimpleName(clang::QualType T) {
-    if(const auto* ET = llvm::dyn_cast<clang::ElaboratedType>(T))
-        return getSimpleName(ET->getNamedType());
-    if(const auto* BT = llvm::dyn_cast<clang::BuiltinType>(T)) {
-        clang::PrintingPolicy PP(clang::LangOptions{});
-        PP.adjustForCPlusPlus();
-        return BT->getName(PP);
+    unsigned ParamIdx = 0;
+    for(auto* Param: TemplateFunction->parameters()) {
+        // Can't reason about param indexes in the presence of preceding packs.
+        // And if this param is a pack, it may expand to multiple params.
+        if(Param->isParameterPack())
+            return nullptr;
+        if(Param == decl)
+            break;
+        ++ParamIdx;
     }
-    if(const auto* D = ast::get_decl_for_type(T.getTypePtr()))
-        return getSimpleName(D->getDeclName());
-    return "";
+    assert(ParamIdx < TemplateFunction->getNumParams() && "Couldn't find param in list?");
+    assert(ParamIdx < InstantiatedFunction->getNumParams() &&
+           "Instantiated function has fewer (non-pack) parameters?");
+    return InstantiatedFunction->getParamDecl(ParamIdx);
 }
 
-std::string summarizeExpr(const clang::Expr* E) {
+std::string summarize_expr(const clang::Expr* E) {
     using namespace clang;
 
     struct Namer : ConstStmtVisitor<Namer, std::string> {
@@ -481,11 +496,11 @@ std::string summarizeExpr(const clang::Expr* E) {
 
         // Any sort of decl reference, we just use the unqualified name.
         std::string VisitMemberExpr(const MemberExpr* E) {
-            return ast::getSimpleName(*E->getMemberDecl()).str();
+            return identifier_of(*E->getMemberDecl()).str();
         }
 
         std::string VisitDeclRefExpr(const DeclRefExpr* E) {
-            return ast::getSimpleName(*E->getFoundDecl()).str();
+            return identifier_of(*E->getFoundDecl()).str();
         }
 
         std::string VisitCallExpr(const CallExpr* E) {
@@ -493,19 +508,19 @@ std::string summarizeExpr(const clang::Expr* E) {
         }
 
         std::string VisitCXXDependentScopeMemberExpr(const CXXDependentScopeMemberExpr* E) {
-            return ast::getSimpleName(E->getMember()).str();
+            return simple_name(E->getMember()).str();
         }
 
         std::string VisitDependentScopeDeclRefExpr(const DependentScopeDeclRefExpr* E) {
-            return ast::getSimpleName(E->getDeclName()).str();
+            return simple_name(E->getDeclName()).str();
         }
 
         std::string VisitCXXFunctionalCastExpr(const CXXFunctionalCastExpr* E) {
-            return ast::getSimpleName(E->getType()).str();
+            return identifier_of(E->getType()).str();
         }
 
         std::string VisitCXXTemporaryObjectExpr(const CXXTemporaryObjectExpr* E) {
-            return ast::getSimpleName(E->getType()).str();
+            return identifier_of(E->getType()).str();
         }
 
         // Step through implicit nodes that clang doesn't classify as such.
@@ -629,39 +644,47 @@ std::string summarizeExpr(const clang::Expr* E) {
     return Namer{}.Visit(E);
 }
 
-// returns true for `X` in `template <typename... X> void foo()`
-bool isTemplateTypeParameterPack(clang::NamedDecl* D) {
-    if(const auto* TTPD = llvm::dyn_cast<clang::TemplateTypeParmDecl>(D)) {
-        return TTPD->isParameterPack();
-    }
-    return false;
-}
+// Returns the template parameter pack type from an instantiated function
+// template, if it exists, nullptr otherwise.
+const clang::TemplateTypeParmType* function_pack_type(const clang::FunctionDecl* callee) {
+    // returns true for `X` in `template <typename... X> void foo()`
+    auto is_type_pack = [](clang::NamedDecl* decl) {
+        if(const auto* TTPD = llvm::dyn_cast<clang::TemplateTypeParmDecl>(decl)) {
+            return TTPD->isParameterPack();
+        }
+        return false;
+    };
 
-const clang::TemplateTypeParmType* getFunctionPackType(const clang::FunctionDecl* Callee) {
-    if(const auto* TemplateDecl = Callee->getPrimaryTemplate()) {
-        auto TemplateParams = TemplateDecl->getTemplateParameters()->asArray();
+    if(const auto* decl = callee->getPrimaryTemplate()) {
+        auto template_params = decl->getTemplateParameters()->asArray();
         // find the template parameter pack from the back
-        const auto It = std::find_if(TemplateParams.rbegin(),
-                                     TemplateParams.rend(),
-                                     isTemplateTypeParameterPack);
-        if(It != TemplateParams.rend()) {
-            const auto* TTPD = llvm::dyn_cast<clang::TemplateTypeParmDecl>(*It);
+        const auto it =
+            std::ranges::find_if(template_params.rbegin(), template_params.rend(), is_type_pack);
+        if(it != template_params.rend()) {
+            const auto* TTPD = llvm::dyn_cast<clang::TemplateTypeParmDecl>(*it);
             return TTPD->getTypeForDecl()->castAs<clang::TemplateTypeParmType>();
         }
     }
+
     return nullptr;
 }
 
-const clang::TemplateTypeParmType* getUnderlyingPackType(const clang::ParmVarDecl* Param) {
-    const auto* PlainType = Param->getType().getTypePtr();
-    if(auto* RT = llvm::dyn_cast<clang::ReferenceType>(PlainType))
-        PlainType = RT->getPointeeTypeAsWritten().getTypePtr();
-    if(const auto* SubstType = llvm::dyn_cast<clang::SubstTemplateTypeParmType>(PlainType)) {
-        const auto* ReplacedParameter = SubstType->getReplacedParameter();
-        if(ReplacedParameter->isParameterPack()) {
-            return ReplacedParameter->getTypeForDecl()->castAs<clang::TemplateTypeParmType>();
+// Returns the template parameter pack type that this parameter was expanded
+// from (if in the Args... or Args&... or Args&&... form), if this is the case,
+// nullptr otherwise.
+const clang::TemplateTypeParmType* underlying_pack_type(const clang::ParmVarDecl* param) {
+    const auto* type = param->getType().getTypePtr();
+    if(auto* ref_type = llvm::dyn_cast<clang::ReferenceType>(type)) {
+        type = ref_type->getPointeeTypeAsWritten().getTypePtr();
+    }
+
+    if(const auto* subst_type = llvm::dyn_cast<clang::SubstTemplateTypeParmType>(type)) {
+        const auto* decl = subst_type->getReplacedParameter();
+        if(decl->isParameterPack()) {
+            return decl->getTypeForDecl()->castAs<clang::TemplateTypeParmType>();
         }
     }
+
     return nullptr;
 }
 
@@ -686,7 +709,7 @@ const clang::TemplateTypeParmType* getUnderlyingPackType(const clang::ParmVarDec
 class ForwardingCallVisitor : public clang::RecursiveASTVisitor<ForwardingCallVisitor> {
 public:
     ForwardingCallVisitor(llvm::ArrayRef<const clang::ParmVarDecl*> Parameters) :
-        Parameters{Parameters}, PackType{ast::getUnderlyingPackType(Parameters.front())} {}
+        Parameters{Parameters}, PackType{underlying_pack_type(Parameters.front())} {}
 
     bool VisitCallExpr(clang::CallExpr* E) {
         auto* Callee = getCalleeDeclOrUniqueOverload(E);
@@ -748,10 +771,10 @@ private:
             Callee->parameters().slice(*PackLocation, Parameters.size());
         // Check whether the function has a parameter pack as the last template
         // parameter
-        if(const auto* TTPT = ast::getFunctionPackType(Callee)) {
+        if(const auto* TTPT = function_pack_type(Callee)) {
             // In this case: Separate the parameters into head, pack and tail
             auto IsExpandedPack = [&](const clang::ParmVarDecl* P) {
-                return ast::getUnderlyingPackType(P) == TTPT;
+                return underlying_pack_type(P) == TTPT;
             };
             ForwardingInfo FI;
             FI.Head = MatchingParams.take_until(IsExpandedPack);
@@ -846,21 +869,22 @@ private:
     }
 };
 
-llvm::SmallVector<const clang::ParmVarDecl*>
-    resolveForwardingParameters(const clang::FunctionDecl* D, unsigned MaxDepth) {
-    auto Parameters = D->parameters();
+auto resolve_forwarding_params(const clang::FunctionDecl* D, unsigned MaxDepth)
+    -> llvm::SmallVector<const clang::ParmVarDecl*> {
+    auto params = D->parameters();
+
     // If the function has a template parameter pack
-    if(const auto* TTPT = ast::getFunctionPackType(D)) {
+    if(const auto* TTPT = function_pack_type(D)) {
         // Split the parameters into head, pack and tail
         auto IsExpandedPack = [TTPT](const clang::ParmVarDecl* P) {
-            return ast::getUnderlyingPackType(P) == TTPT;
+            return underlying_pack_type(P) == TTPT;
         };
-        llvm::ArrayRef<const clang::ParmVarDecl*> Head = Parameters.take_until(IsExpandedPack);
+        llvm::ArrayRef<const clang::ParmVarDecl*> Head = params.take_until(IsExpandedPack);
         llvm::ArrayRef<const clang::ParmVarDecl*> Pack =
-            Parameters.drop_front(Head.size()).take_while(IsExpandedPack);
+            params.drop_front(Head.size()).take_while(IsExpandedPack);
         llvm::ArrayRef<const clang::ParmVarDecl*> Tail =
-            Parameters.drop_front(Head.size() + Pack.size());
-        llvm::SmallVector<const clang::ParmVarDecl*> Result(Parameters.size());
+            params.drop_front(Head.size() + Pack.size());
+        llvm::SmallVector<const clang::ParmVarDecl*> Result(params.size());
         // Fill in non-pack parameters
         auto* HeadIt = std::copy(Head.begin(), Head.end(), Result.begin());
         auto TailIt = std::copy(Tail.rbegin(), Tail.rend(), Result.rbegin());
@@ -894,7 +918,7 @@ llvm::SmallVector<const clang::ParmVarDecl*>
                 if(const auto* Template = CurrentFunction->getPrimaryTemplate()) {
                     bool NewFunction = SeenTemplates.insert(Template).second;
                     if(!NewFunction) {
-                        return {Parameters.begin(), Parameters.end()};
+                        return {params.begin(), params.end()};
                     }
                 }
             }
@@ -905,15 +929,17 @@ llvm::SmallVector<const clang::ParmVarDecl*>
         assert(TailIt.base() == HeadIt);
         return Result;
     }
-    return {Parameters.begin(), Parameters.end()};
+    return {params.begin(), params.end()};
 }
 
-bool isSugaredTemplateParameter(clang::QualType QT) {
-    static auto PeelWrapper = [](clang::QualType QT) {
+// Determines if any intermediate type in desugaring QualType QT is of
+// substituted template parameter type. Ignore pointer or reference wrappers.
+static bool isSugaredTemplateParameter(clang::QualType type) {
+    static auto peel_wrapper = [](clang::QualType type) {
         // Neither `PointerType` nor `ReferenceType` is considered as sugared
         // type. Peel it.
-        clang::QualType Peeled = QT->getPointeeType();
-        return Peeled.isNull() ? QT : Peeled;
+        clang::QualType peeled = type->getPointeeType();
+        return peeled.isNull() ? type : peeled;
     };
 
     // This is a bit tricky: we traverse the type structure and find whether or
@@ -941,80 +967,94 @@ bool isSugaredTemplateParameter(clang::QualType QT) {
     // As such, we always prefer the desugared over the pointee for next type
     // in the iteration. It could avoid the getPointeeType's implicit desugaring.
     while(true) {
-        if(QT->getAs<clang::SubstTemplateTypeParmType>())
+        if(type->getAs<clang::SubstTemplateTypeParmType>()) {
             return true;
-        clang::QualType Desugared = QT->getLocallyUnqualifiedSingleStepDesugaredType();
-        if(Desugared != QT)
-            QT = Desugared;
-        else if(auto Peeled = PeelWrapper(Desugared); Peeled != QT)
-            QT = Peeled;
-        else
+        }
+
+        clang::QualType desugared = type->getLocallyUnqualifiedSingleStepDesugaredType();
+        if(desugared != type) {
+            type = desugared;
+        } else if(auto peeled = peel_wrapper(desugared); peeled != type) {
+            type = peeled;
+        } else {
             break;
+        }
     }
 
     return false;
 }
 
-std::optional<clang::QualType> desugar(clang::ASTContext& AST, clang::QualType QT) {
+std::optional<clang::QualType> desugar(clang::ASTContext& context, clang::QualType type) {
     bool ShouldAKA = false;
-    auto Desugared = clang::desugarForDiagnostic(AST, QT, ShouldAKA);
-    if(!ShouldAKA)
+    auto Desugared = clang::desugarForDiagnostic(context, type, ShouldAKA);
+    if(!ShouldAKA) {
         return std::nullopt;
+    }
+
     return Desugared;
 }
 
-clang::QualType maybeDesugar(clang::ASTContext& AST, clang::QualType QT) {
+clang::QualType maybe_desugar(clang::ASTContext& context, clang::QualType type) {
     // Prefer desugared type for name that aliases the template parameters.
     // This can prevent things like printing opaque `: type` when accessing std
     // containers.
-    if(ast::isSugaredTemplateParameter(QT))
-        return desugar(AST, QT).value_or(QT);
+    if(isSugaredTemplateParameter(type)) {
+        return desugar(context, type).value_or(type);
+    }
 
     // Prefer desugared type for `decltype(expr)` specifiers.
-    if(QT->isDecltypeType())
-        return QT.getCanonicalType();
+    if(type->isDecltypeType()) {
+        return type.getCanonicalType();
+    }
 
-    if(const auto* AT = QT->getContainedAutoType())
-        if(!AT->getDeducedType().isNull() && AT->getDeducedType()->isDecltypeType())
-            return QT.getCanonicalType();
-
-    return QT;
-}
-
-clang::FunctionProtoTypeLoc getPrototypeLoc(clang::Expr* Fn) {
-    clang::TypeLoc Target;
-    clang::Expr* NakedFn = Fn->IgnoreParenCasts();
-    if(const auto* T = NakedFn->getType().getTypePtr()->getAs<clang::TypedefType>()) {
-        Target = T->getDecl()->getTypeSourceInfo()->getTypeLoc();
-    } else if(const auto* DR = llvm::dyn_cast<clang::DeclRefExpr>(NakedFn)) {
-        const auto* D = DR->getDecl();
-        if(const auto* const VD = llvm::dyn_cast<clang::VarDecl>(D)) {
-            Target = VD->getTypeSourceInfo()->getTypeLoc();
+    if(const auto* AT = type->getContainedAutoType()) {
+        if(!AT->getDeducedType().isNull() && AT->getDeducedType()->isDecltypeType()) {
+            return type.getCanonicalType();
         }
     }
 
-    if(!Target)
+    return type;
+}
+
+clang::FunctionProtoTypeLoc proto_type_loc(clang::Expr* expr) {
+    clang::TypeLoc target;
+    clang::Expr* naked_fn = expr->IgnoreParenCasts();
+
+    if(const auto* T = naked_fn->getType().getTypePtr()->getAs<clang::TypedefType>()) {
+        target = T->getDecl()->getTypeSourceInfo()->getTypeLoc();
+    } else if(const auto* DR = llvm::dyn_cast<clang::DeclRefExpr>(naked_fn)) {
+        const auto* D = DR->getDecl();
+        if(const auto* const VD = llvm::dyn_cast<clang::VarDecl>(D)) {
+            target = VD->getTypeSourceInfo()->getTypeLoc();
+        }
+    }
+
+    if(!target) {
         return {};
+    }
 
     // Unwrap types that may be wrapping the function type
     while(true) {
-        if(auto P = Target.getAs<clang::PointerTypeLoc>()) {
-            Target = P.getPointeeLoc();
+        if(auto p = target.getAs<clang::PointerTypeLoc>()) {
+            target = p.getPointeeLoc();
             continue;
         }
-        if(auto A = Target.getAs<clang::AttributedTypeLoc>()) {
-            Target = A.getModifiedLoc();
+
+        if(auto a = target.getAs<clang::AttributedTypeLoc>()) {
+            target = a.getModifiedLoc();
             continue;
         }
-        if(auto P = Target.getAs<clang::ParenTypeLoc>()) {
-            Target = P.getInnerLoc();
+
+        if(auto p = target.getAs<clang::ParenTypeLoc>()) {
+            target = p.getInnerLoc();
             continue;
         }
+
         break;
     }
 
-    if(auto F = Target.getAs<clang::FunctionProtoTypeLoc>()) {
-        return F;
+    if(auto f = target.getAs<clang::FunctionProtoTypeLoc>()) {
+        return f;
     }
 
     return {};

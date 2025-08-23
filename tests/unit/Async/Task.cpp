@@ -89,7 +89,7 @@ suite<"Async"> suite = [] {
         auto task1 = [&]() -> async::Task<> {
             x = 1;
             co_await async::sleep(300);
-            clice::println("Task1 done");
+            std::println("Task1 done");
             x = 2;
         };
 

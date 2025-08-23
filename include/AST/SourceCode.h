@@ -46,6 +46,10 @@ struct LocalSourceRange {
 
     constexpr bool operator== (const LocalSourceRange& other) const = default;
 
+    constexpr auto length() {
+        return end - begin;
+    }
+
     constexpr bool contains(uint32_t offset) const {
         return offset >= begin && offset <= end;
     }
