@@ -53,6 +53,9 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     /// Hover
     capabilities.hoverProvider = true;
 
+    /// SignatureHelp
+    capabilities.signatureHelpProvider.triggerCharacters = {"(", ")", "{", "}", "<", ">", ","};
+
     /// DocumentSymbol
     capabilities.documentSymbolProvider = {};
 

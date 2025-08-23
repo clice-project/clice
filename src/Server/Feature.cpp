@@ -3,6 +3,7 @@
 #include "Compiler/Compilation.h"
 #include "Feature/CodeCompletion.h"
 #include "Feature/Hover.h"
+#include "Feature/SignatureHelp.h"
 #include "Feature/DocumentLink.h"
 #include "Feature/DocumentSymbol.h"
 #include "Feature/FoldingRange.h"
@@ -57,6 +58,38 @@ async::Task<json::Value> Server::on_hover(proto::HoverParams params) {
 
         return json::serialize(result);
     });
+}
+
+async::Task<json::Value> Server::on_signature_help(proto::SignatureHelpParams params) {
+    auto path = mapping.to_path(params.textDocument.uri);
+    auto opening_file = opening_files.get_or_add(path);
+
+    if(!opening_file->pch_build_task.empty()) {
+        co_await opening_file->pch_built_event;
+    }
+
+    auto& content = opening_file->content;
+    auto offset = to_offset(kind, content, params.position);
+    auto& pch = opening_file->pch;
+    {
+        /// Set compilation params ... .
+        CompilationParams params;
+        params.arguments = database.get_command(path, true).arguments;
+        params.add_remapped_file(path, content);
+        params.pch = {pch->path, pch->preamble.size()};
+        params.completion = {path, offset};
+
+        co_return co_await async::submit([kind = this->kind, &content, &params] {
+            auto items = feature::signature_help(params, {});
+            proto::SignatureHelp help;
+            help.activeSignature = 0;
+            auto& sig = help.signatures.emplace_back();
+            sig.label = "Test\nI am a vector!";
+            sig.activeParameter = 0;
+            sig.parameters.emplace_back().label = {0, 4};
+            return json::serialize(help);
+        });
+    }
 }
 
 async::Task<json::Value> Server::on_document_symbol(proto::DocumentSymbolParams params) {

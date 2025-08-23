@@ -85,7 +85,7 @@ struct ServerCapabilities {
     HoverOptions hoverProvider;
 
     /// The server provides signature help support.
-    /// FIXME: SignatureHelpOptions signatureHelpProvider;
+    SignatureHelpOptions signatureHelpProvider;
 
     /// The server provides go to declaration support.
     /// FIXME: DeclarationOptions declarationProvider;

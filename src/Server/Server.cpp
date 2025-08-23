@@ -108,6 +108,7 @@ Server::Server() {
 
     register_callback<&Server::on_completion>("textDocument/completion");
     register_callback<&Server::on_hover>("textDocument/hover");
+    register_callback<&Server::on_signature_help>("textDocument/signatureHelp");
     register_callback<&Server::on_document_symbol>("textDocument/documentSymbol");
     register_callback<&Server::on_document_link>("textDocument/documentLink");
     register_callback<&Server::on_folding_range>("textDocument/foldingRange");

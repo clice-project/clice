@@ -200,6 +200,8 @@ private:
 
     async::Task<json::Value> on_hover(proto::HoverParams params);
 
+    async::Task<json::Value> on_signature_help(proto::SignatureHelpParams params);
+
     async::Task<json::Value> on_document_symbol(proto::DocumentSymbolParams params);
 
     async::Task<json::Value> on_document_link(proto::DocumentLinkParams params);

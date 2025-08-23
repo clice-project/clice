@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "llvm/ADT/StringRef.h"
+#include "Protocol/Feature/SignatureHelp.h"
 
 namespace clice {
 
@@ -17,12 +18,8 @@ struct SignatureHelpOption {};
 
 namespace feature {
 
-struct SignatureHelpItem {};
-
-using SignatureHelpResult = std::vector<SignatureHelpItem>;
-
-SignatureHelpResult signatureHelp(CompilationParams& params,
-                                  const config::SignatureHelpOption& option);
+proto::SignatureHelp signature_help(CompilationParams& params,
+                                    const config::SignatureHelpOption& option);
 
 }  // namespace feature
 
