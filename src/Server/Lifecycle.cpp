@@ -62,6 +62,10 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     /// DocumentLink
     capabilities.documentLinkProvider.resolveProvider = false;
 
+    /// Formatting
+    capabilities.documentFormattingProvider = true;
+    capabilities.documentRangeFormattingProvider = true;
+
     /// FoldingRange
     capabilities.foldingRangeProvider = true;
 
