@@ -1,3 +1,4 @@
+#include "Feature/Formatting.h"
 #include "Server/Server.h"
 #include "Server/Convert.h"
 #include "Compiler/Compilation.h"
@@ -12,7 +13,7 @@
 
 namespace clice {
 
-async::Task<json::Value> Server::on_completion(proto::CompletionParams params) {
+auto Server::on_completion(proto::CompletionParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
 
@@ -38,7 +39,7 @@ async::Task<json::Value> Server::on_completion(proto::CompletionParams params) {
     }
 }
 
-async::Task<json::Value> Server::on_hover(proto::HoverParams params) {
+auto Server::on_hover(proto::HoverParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
     auto guard = co_await opening_file->ast_built_lock.try_lock();
@@ -86,7 +87,7 @@ async::Task<json::Value> Server::on_signature_help(proto::SignatureHelpParams pa
     }
 }
 
-async::Task<json::Value> Server::on_document_symbol(proto::DocumentSymbolParams params) {
+auto Server::on_document_symbol(proto::DocumentSymbolParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
 
@@ -134,7 +135,7 @@ async::Task<json::Value> Server::on_document_symbol(proto::DocumentSymbolParams 
     });
 }
 
-async::Task<json::Value> Server::on_document_link(proto::DocumentLinkParams params) {
+auto Server::on_document_link(proto::DocumentLinkParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
     auto guard = co_await opening_file->ast_built_lock.try_lock();
@@ -160,6 +161,32 @@ async::Task<json::Value> Server::on_document_link(proto::DocumentLinkParams para
             result.emplace_back(converter.lookup(link.range), mapping.to_uri(link.file));
         }
         return json::serialize(result);
+    });
+}
+
+auto Server::on_document_format(proto::DocumentFormattingParams params) -> Result {
+    auto path = mapping.to_path(params.textDocument.uri);
+    auto opening_file = opening_files.get_or_add(path);
+
+    auto content = opening_file->content;
+    co_return co_await async::submit([&, kind = this->kind] {
+        auto edits = feature::document_format(path, content, std::nullopt);
+        /// FIXME: adjust position encoding...
+        return json::serialize(edits);
+    });
+}
+
+auto Server::on_document_range_format(proto::DocumentRangeFormattingParams params) -> Result {
+    auto path = mapping.to_path(params.textDocument.uri);
+    auto opening_file = opening_files.get_or_add(path);
+
+    auto content = opening_file->content;
+    co_return co_await async::submit([&, kind = this->kind] {
+        auto begin = to_offset(kind, content, params.range.start);
+        auto end = to_offset(kind, content, params.range.end);
+        auto edits = feature::document_format(path, content, LocalSourceRange(begin, end));
+        /// FIXME: adjust position encoding...
+        return json::serialize(edits);
     });
 }
 
@@ -201,7 +228,7 @@ async::Task<json::Value> Server::on_folding_range(proto::FoldingRangeParams para
     });
 }
 
-async::Task<json::Value> Server::on_semantic_token(proto::SemanticTokensParams params) {
+auto Server::on_semantic_token(proto::SemanticTokensParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
     auto guard = co_await opening_file->ast_built_lock.try_lock();
@@ -217,7 +244,7 @@ async::Task<json::Value> Server::on_semantic_token(proto::SemanticTokensParams p
     });
 }
 
-async::Task<json::Value> Server::on_inlay_hint(proto::InlayHintParams params) {
+auto Server::on_inlay_hint(proto::InlayHintParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
     auto guard = co_await opening_file->ast_built_lock.try_lock();

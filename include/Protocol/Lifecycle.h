@@ -123,10 +123,10 @@ struct ServerCapabilities {
     /// FIXME: DocumentColorOptions colorProvider;
 
     /// The server provides document formatting.
-    /// FIXME: DocumentFormattingOptions documentFormattingProvider;
+    DocumentFormattingOptions documentFormattingProvider;
 
     /// The server provides document range formatting.
-    /// FIXME: DocumentRangeFormattingOptions documentRangeFormattingProvider;
+    DocumentRangeFormattingOptions documentRangeFormattingProvider;
 
     /// The server provides document formatting on typing.
     /// FIXME: DocumentOnTypeFormattingOptions documentOnTypeFormattingProvider;
