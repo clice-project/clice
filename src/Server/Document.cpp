@@ -183,6 +183,7 @@ async::Task<bool> build_pch_task(CompilationDatabase::LookupInfo& info,
     diagnostics->clear();
 
     CompilationParams params;
+    params.kind = CompilationUnit::Preamble;
     params.output_file = path::join(config::cache.dir, path::filename(path) + ".pch");
     params.arguments = std::move(info.arguments);
     params.diagnostics = diagnostics;
@@ -294,6 +295,7 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     }
 
     CompilationParams params;
+    params.kind = CompilationUnit::Content;
     params.arguments = database.get_command(path, true, true).arguments;
     params.add_remapped_file(path, content);
     params.pch = {pch->path, pch->preamble.size()};

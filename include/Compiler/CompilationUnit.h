@@ -28,9 +28,9 @@ public:
         /// From building precompiled module for the module interface unit.
         ModuleInterface,
 
-        /// From building normal AST for source file, interested file and top level
+        /// From building normal AST for source file(except preamble), interested file and top level
         /// declarations are available.
-        SyntaxOnly,
+        Content,
 
         /// From running code completion for the source file(preamble is applied).
         Completion,
