@@ -15,13 +15,10 @@ class ProxyASTConsumer final : public clang::MultiplexConsumer {
 public:
     ProxyASTConsumer(std::unique_ptr<clang::ASTConsumer> consumer,
                      clang::CompilerInstance& instance,
-                     std::vector<clang::Decl*>& top_level_decls,
+                     std::vector<clang::Decl*>* top_level_decls,
                      std::shared_ptr<std::atomic_bool> stop) :
         clang::MultiplexConsumer(std::move(consumer)), instance(instance),
-        src_mgr(instance.getSourceManager()), top_level_decls(top_level_decls), stop(stop) {
-        /// FIXME: We may want to use a more explicit way to judge this.
-        need_collect = instance.getFrontendOpts().OutputFile.empty();
-    }
+        src_mgr(instance.getSourceManager()), top_level_decls(top_level_decls), stop(stop) {}
 
     void collect_decl(clang::Decl* decl) {
         auto location = decl->getLocation();
@@ -32,12 +29,12 @@ public:
         location = src_mgr.getExpansionLoc(location);
         auto fid = src_mgr.getFileID(location);
         if(fid == src_mgr.getPreambleFileID() || fid == src_mgr.getMainFileID()) {
-            top_level_decls.push_back(decl);
+            top_level_decls->push_back(decl);
         }
     }
 
     auto HandleTopLevelDecl(clang::DeclGroupRef group) -> bool final {
-        if(need_collect) {
+        if(top_level_decls) {
             if(group.isDeclGroup()) {
                 for(auto decl: group) {
                     collect_decl(decl);
@@ -57,24 +54,25 @@ public:
     }
 
 private:
-    bool need_collect;
     clang::CompilerInstance& instance;
     clang::SourceManager& src_mgr;
-    std::vector<clang::Decl*>& top_level_decls;
+
+    /// Non-nullptr if we need collect the top level declarations.
+    std::vector<clang::Decl*>* top_level_decls;
+
     std::shared_ptr<std::atomic_bool> stop;
 };
 
 class ProxyAction final : public clang::WrapperFrontendAction {
 public:
     ProxyAction(std::unique_ptr<clang::FrontendAction> action,
+                std::vector<clang::Decl*>* top_level_decls,
                 std::shared_ptr<std::atomic_bool> stop) :
-        clang::WrapperFrontendAction(std::move(action)), stop(std::move(stop)) {}
+        clang::WrapperFrontendAction(std::move(action)), top_level_decls(top_level_decls),
+        stop(std::move(stop)) {}
 
     auto CreateASTConsumer(clang::CompilerInstance& instance, llvm::StringRef file)
         -> std::unique_ptr<clang::ASTConsumer> final {
-
-        bool need_collect = instance.getFrontendOpts().OutputFile.empty();
-
         return std::make_unique<ProxyASTConsumer>(
             WrapperFrontendAction::CreateASTConsumer(instance, file),
             instance,
@@ -85,12 +83,8 @@ public:
     /// Make this public.
     using clang::WrapperFrontendAction::EndSourceFile;
 
-    auto pop_decls() {
-        return std::move(top_level_decls);
-    }
-
 private:
-    std::vector<clang::Decl*> top_level_decls;
+    std::vector<clang::Decl*>* top_level_decls;
     std::shared_ptr<std::atomic_bool> stop;
 };
 
@@ -148,10 +142,16 @@ auto create_invocation(CompilationParams& params,
     return invocation;
 }
 
-template <typename Action>
+/// Do nothing before or after compile state.
+constexpr static auto no_hook = [](auto& /*ignore*/) {
+};
+
+template <typename Action,
+          typename BeforeExecute = decltype(no_hook),
+          typename AfterExecute = decltype(no_hook)>
 CompilationResult run_clang(CompilationParams& params,
-                            const auto& before_execute,
-                            const auto& after_execute) {
+                            const BeforeExecute& before_execute = no_hook,
+                            const AfterExecute& after_execute = no_hook) {
     auto diagnostics =
         params.diagnostics ? params.diagnostics : std::make_shared<std::vector<Diagnostic>>();
     auto diagnostic_engine =
@@ -181,7 +181,16 @@ CompilationResult run_clang(CompilationParams& params,
     /// Adjust the compiler instance, for example, set preamble or modules.
     before_execute(*instance);
 
-    auto action = std::make_unique<ProxyAction>(std::make_unique<Action>(), params.stop);
+    /// Frontend information ...
+    std::vector<clang::Decl*> top_level_decls;
+    llvm::DenseMap<clang::FileID, Directive> directives;
+    std::optional<clang::syntax::TokenCollector> token_collector;
+
+    auto action = std::make_unique<ProxyAction>(
+        std::make_unique<Action>(),
+        /// We only collect top level declarations for parse main file.
+        params.kind == CompilationUnit::Content ? &top_level_decls : nullptr,
+        params.stop);
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         return std::unexpected("Fail to begin source file");
@@ -192,18 +201,12 @@ CompilationResult run_clang(CompilationParams& params,
 
     /// `BeginSourceFile` may create new preprocessor, so all operations related to preprocessor
     /// should be done after `BeginSourceFile`.
-
-    /// Collect directives.
-    llvm::DenseMap<clang::FileID, Directive> directives;
     Directive::attach(pp, directives);
-
-    /// Collect tokens.
-    std::optional<clang::syntax::TokenCollector> tok_collector;
 
     /// It is not necessary to collect tokens if we are running code completion.
     /// And in fact will cause assertion failure.
     if(!instance->hasCodeCompletionConsumer()) {
-        tok_collector.emplace(pp);
+        token_collector.emplace(pp);
     }
 
     if(auto error = action->Execute()) {
@@ -227,9 +230,9 @@ CompilationResult run_clang(CompilationParams& params,
         return std::unexpected("Compilation is canceled.");
     }
 
-    std::optional<clang::syntax::TokenBuffer> tok_buf;
-    if(tok_collector) {
-        tok_buf = std::move(*tok_collector).consume();
+    std::optional<clang::syntax::TokenBuffer> token_buffer;
+    if(token_collector) {
+        token_buffer = std::move(*token_collector).consume();
     }
 
     /// FIXME: getDependencies currently return ArrayRef<std::string>, which actually results in
@@ -240,15 +243,13 @@ CompilationResult run_clang(CompilationParams& params,
         resolver.emplace(instance->getSema());
     }
 
-    auto top_level_decls = action->pop_decls();
-
     auto impl = new CompilationUnit::Impl{
         .interested = pp.getSourceManager().getMainFileID(),
         .src_mgr = instance->getSourceManager(),
         .action = std::move(action),
         .instance = std::move(instance),
         .m_resolver = std::move(resolver),
-        .buffer = std::move(tok_buf),
+        .buffer = std::move(token_buffer),
         .m_directives = std::move(directives),
         .pathCache = llvm::DenseMap<clang::FileID, llvm::StringRef>(),
         .symbolHashCache = llvm::DenseMap<const void*, std::uint64_t>(),
@@ -256,7 +257,7 @@ CompilationResult run_clang(CompilationParams& params,
         .top_level_decls = std::move(top_level_decls),
     };
 
-    CompilationUnit unit(CompilationUnit::SyntaxOnly, impl);
+    CompilationUnit unit(params.kind, impl);
     after_execute(unit);
     return unit;
 }
@@ -264,11 +265,11 @@ CompilationResult run_clang(CompilationParams& params,
 }  // namespace
 
 CompilationResult preprocess(CompilationParams& params) {
-    return run_clang<clang::PreprocessOnlyAction>(params, [](auto&) {}, [](auto&) {});
+    return run_clang<clang::PreprocessOnlyAction>(params);
 }
 
 CompilationResult compile(CompilationParams& params) {
-    return run_clang<clang::SyntaxOnlyAction>(params, [](auto&) {}, [](auto&) {});
+    return run_clang<clang::SyntaxOnlyAction>(params);
 }
 
 CompilationResult compile(CompilationParams& params, PCHInfo& out) {
@@ -342,18 +343,13 @@ CompilationResult complete(CompilationParams& params, clang::CodeCompleteConsume
         column += 1;
     }
 
-    return run_clang<clang::SyntaxOnlyAction>(
-        params,
-        [&](clang::CompilerInstance& instance) {
-            /// Set options to run code completion.
-            instance.getFrontendOpts().CodeCompletionAt.FileName = std::move(file);
-            instance.getFrontendOpts().CodeCompletionAt.Line = line;
-            instance.getFrontendOpts().CodeCompletionAt.Column = column;
-            instance.setCodeCompletionConsumer(consumer);
-        },
-        [&](CompilationUnit& unit) {
-            ///
-        });
+    return run_clang<clang::SyntaxOnlyAction>(params, [&](clang::CompilerInstance& instance) {
+        /// Set options to run code completion.
+        instance.getFrontendOpts().CodeCompletionAt.FileName = std::move(file);
+        instance.getFrontendOpts().CodeCompletionAt.Line = line;
+        instance.getFrontendOpts().CodeCompletionAt.Column = column;
+        instance.setCodeCompletionConsumer(consumer);
+    });
 }
 
 }  // namespace clice

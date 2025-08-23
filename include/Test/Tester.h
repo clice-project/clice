@@ -35,6 +35,7 @@ struct Tester {
         auto command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
 
         database.update_command("fake", src_path, command);
+        params.kind = CompilationUnit::Content;
         params.arguments = database.get_command(src_path, true, true).arguments;
 
         for(auto& [file, source]: sources.all_files) {
@@ -65,6 +66,7 @@ struct Tester {
         auto command = std::format("clang++ {} {} -fms-extensions", standard, src_path);
 
         database.update_command("fake", src_path, command);
+        params.kind = CompilationUnit::Preamble;
         params.arguments = database.get_command(src_path, true, true).arguments;
 
         auto path = fs::createTemporaryFile("clice", "pch");
@@ -100,6 +102,7 @@ struct Tester {
 
         /// Build AST
         params.output_file.clear();
+        params.kind = CompilationUnit::Content;
         params.pch = {info.path, info.preamble.size()};
         for(auto& [file, source]: sources.all_files) {
             if(file == src_path) {

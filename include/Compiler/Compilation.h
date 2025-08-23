@@ -12,6 +12,9 @@ class CodeCompleteConsumer;
 namespace clice {
 
 struct CompilationParams {
+    /// The kind of this compilation.
+    CompilationUnit::Kind kind;
+
     /// Output file path.
     llvm::SmallString<128> output_file;
 
