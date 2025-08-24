@@ -256,6 +256,44 @@ inline std::uint32_t to_offset(clice::PositionEncodingKind kind,
 
 namespace clice::proto {
 
+inline SymbolKind kind_map(clice::SymbolKind kind) {
+    switch(kind.kind()) {
+        case clice::SymbolKind::Comment: return SymbolKind::String;
+        case clice::SymbolKind::Number: return SymbolKind::Number;
+        case clice::SymbolKind::Character: return SymbolKind::String;
+        case clice::SymbolKind::String: return SymbolKind::String;
+        case clice::SymbolKind::Keyword: return SymbolKind::Variable;
+        case clice::SymbolKind::Directive: return SymbolKind::Variable;
+        case clice::SymbolKind::Header: return SymbolKind::String;
+        case clice::SymbolKind::Module: return SymbolKind::Module;
+        case clice::SymbolKind::Macro: return SymbolKind::Function;
+        case clice::SymbolKind::MacroParameter: return SymbolKind::Variable;
+        case clice::SymbolKind::Namespace: return SymbolKind::Namespace;
+        case clice::SymbolKind::Class: return SymbolKind::Class;
+        case clice::SymbolKind::Struct: return SymbolKind::Struct;
+        case clice::SymbolKind::Union: return SymbolKind::Class;
+        case clice::SymbolKind::Enum: return SymbolKind::Enum;
+        case clice::SymbolKind::Type: return SymbolKind::TypeParameter;
+        case clice::SymbolKind::Field: return SymbolKind::Field;
+        case clice::SymbolKind::EnumMember: return SymbolKind::EnumMember;
+        case clice::SymbolKind::Function: return SymbolKind::Function;
+        case clice::SymbolKind::Method: return SymbolKind::Method;
+        case clice::SymbolKind::Variable: return SymbolKind::Variable;
+        case clice::SymbolKind::Parameter: return SymbolKind::Variable;
+        case clice::SymbolKind::Label: return SymbolKind::Variable;
+        case clice::SymbolKind::Concept: return SymbolKind::TypeParameter;
+        case clice::SymbolKind::Attribute: return SymbolKind::Variable;
+        case clice::SymbolKind::Operator:
+        case clice::SymbolKind::Paren:
+        case clice::SymbolKind::Bracket:
+        case clice::SymbolKind::Brace:
+        case clice::SymbolKind::Angle: return SymbolKind::Operator;
+        case clice::SymbolKind::Conflict:
+        case clice::SymbolKind::Invalid:
+        default: return SymbolKind::Null;
+    }
+}
+
 json::Value to_json(clice::PositionEncodingKind kind,
                     llvm::StringRef content,
                     llvm::ArrayRef<feature::SemanticToken> tokens);

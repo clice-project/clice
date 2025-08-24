@@ -253,7 +253,7 @@ SemanticTokens semantic_tokens(CompilationUnit& unit) {
     return std::move(collector.result);
 }
 
-index::Shared<SemanticTokens> indexSemanticToken(CompilationUnit& unit) {
+index::Shared<SemanticTokens> index_semantic_token(CompilationUnit& unit) {
     SemanticTokensCollector collector(unit, false);
     for(auto fid: unit.files()) {
         collector.highlight(fid);

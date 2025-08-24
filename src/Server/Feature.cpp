@@ -43,21 +43,26 @@ auto Server::on_completion(proto::CompletionParams params) -> Result {
 auto Server::on_hover(proto::HoverParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
-    auto guard = co_await opening_file->ast_built_lock.try_lock();
+    auto version = opening_file->version;
 
-    auto offset = to_offset(kind, opening_file->content, params.position);
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
     auto ast = opening_file->ast;
-    if(!ast) {
+
+    if(opening_file->version != version || !ast) {
         co_return json::Value(nullptr);
     }
 
+    auto offset = to_offset(kind, opening_file->content, params.position);
+
     co_return co_await async::submit([kind = this->kind, offset, &ast] {
         auto hover = feature::hover(*ast, offset);
+        if(hover.kind == SymbolKind::Invalid) {
+            return json::Value(nullptr);
+        }
 
         proto::Hover result;
         result.contents.kind = "markdown";
         result.contents.value = std::format("{}: {}", hover.kind.name(), hover.name);
-
         return json::serialize(result);
     });
 }
@@ -92,10 +97,12 @@ async::Task<json::Value> Server::on_signature_help(proto::SignatureHelpParams pa
 auto Server::on_document_symbol(proto::DocumentSymbolParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
+    auto version = opening_file->version;
 
     auto guard = co_await opening_file->ast_built_lock.try_lock();
     auto ast = opening_file->ast;
-    if(!ast) {
+
+    if(opening_file->version != version || !ast) {
         co_return json::Value(nullptr);
     }
 
@@ -112,9 +119,7 @@ auto Server::on_document_symbol(proto::DocumentSymbolParams params) -> Result {
         proto::DocumentSymbol result;
         result.name = std::move(symbol.name);
         result.detail = std::move(symbol.detail);
-
-        /// FIXME: Add kind map.
-        result.kind = static_cast<proto::SymbolKind>(symbol.kind.value());
+        result.kind = proto::kind_map(symbol.kind.kind());
         result.range = to_range(symbol.range);
         result.selectionRange = to_range(symbol.selectionRange);
 
@@ -140,10 +145,12 @@ auto Server::on_document_symbol(proto::DocumentSymbolParams params) -> Result {
 auto Server::on_document_link(proto::DocumentLinkParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
-    auto guard = co_await opening_file->ast_built_lock.try_lock();
+    auto version = opening_file->version;
 
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
     auto ast = opening_file->ast;
-    if(!ast) {
+
+    if(opening_file->version != version || !ast) {
         co_return json::Value(nullptr);
     }
 
@@ -195,10 +202,12 @@ auto Server::on_document_range_format(proto::DocumentRangeFormattingParams param
 async::Task<json::Value> Server::on_folding_range(proto::FoldingRangeParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
-    auto guard = co_await opening_file->ast_built_lock.try_lock();
+    auto version = opening_file->version;
 
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
     auto ast = opening_file->ast;
-    if(!ast) {
+
+    if(opening_file->version != version || !ast) {
         co_return json::Value(nullptr);
     }
 
@@ -233,10 +242,12 @@ async::Task<json::Value> Server::on_folding_range(proto::FoldingRangeParams para
 auto Server::on_semantic_token(proto::SemanticTokensParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
-    auto guard = co_await opening_file->ast_built_lock.try_lock();
+    auto version = opening_file->version;
 
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
     auto ast = opening_file->ast;
-    if(!ast) {
+
+    if(opening_file->version != version || !ast) {
         co_return json::Value(nullptr);
     }
 
@@ -249,10 +260,12 @@ auto Server::on_semantic_token(proto::SemanticTokensParams params) -> Result {
 auto Server::on_inlay_hint(proto::InlayHintParams params) -> Result {
     auto path = mapping.to_path(params.textDocument.uri);
     auto opening_file = opening_files.get_or_add(path);
-    auto guard = co_await opening_file->ast_built_lock.try_lock();
+    auto version = opening_file->version;
 
+    auto guard = co_await opening_file->ast_built_lock.try_lock();
     auto ast = opening_file->ast;
-    if(!ast) {
+
+    if(opening_file->version != version || !ast) {
         co_return json::Value(nullptr);
     }
 
@@ -264,7 +277,7 @@ auto Server::on_inlay_hint(proto::InlayHintParams params) -> Result {
             to_offset(kind, content, params.range.end),
         };
 
-        auto hints = feature::inlay_hint(*ast, range, {});
+        auto hints = feature::inlay_hints(*ast, range, {});
 
         PositionConverter converter(content, kind);
 

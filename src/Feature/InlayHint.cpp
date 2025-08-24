@@ -879,9 +879,9 @@ private:
 
 }  // namespace
 
-auto inlay_hint(CompilationUnit& unit,
-                LocalSourceRange target,
-                const config::InlayHintsOptions& options) -> std::vector<InlayHint> {
+auto inlay_hints(CompilationUnit& unit,
+                 LocalSourceRange target,
+                 const config::InlayHintsOptions& options) -> std::vector<InlayHint> {
     std::vector<InlayHint> hints;
 
     Builder builder(hints, unit, target, options);

@@ -1,11 +1,12 @@
-name: nightly
+name: release
 
 permissions:
   contents: write
 
 on:
   push:
-    branches: [non-existent-branch]
+    tags:
+      - 'v*'
 
 jobs:
   package:
@@ -86,5 +87,5 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build/xpack/clice/${{ matrix.artifact_name }}
           asset_name: ${{ matrix.asset_name }}
-          tag: nightly
+          tag: ${{ github.ref }}
           overwrite: true

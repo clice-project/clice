@@ -185,8 +185,6 @@ private:
     async::Task<std::shared_ptr<OpenFile>> add_document(std::string path, std::string content);
 
 private:
-    async::Task<> publish_diagnostics(std::string path, std::shared_ptr<OpenFile> file);
-
     async::Task<> on_did_open(proto::DidOpenTextDocumentParams params);
 
     async::Task<> on_did_change(proto::DidChangeTextDocumentParams params);
