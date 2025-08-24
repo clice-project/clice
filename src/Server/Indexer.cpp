@@ -46,9 +46,12 @@ async::Task<> Indexer::index(CompilationUnit& unit) {
 }
 
 async::Task<> Indexer::index(llvm::StringRef file) {
+    CommandOptions options;
+    options.file = file;
+
     CompilationParams params;
     params.kind = CompilationUnit::Indexing;
-    params.arguments = database.get_command(file).arguments;
+    params.arguments = database.get_command(options).arguments;
 
     auto AST = co_await async::submit([&] { return compile(params); });
 

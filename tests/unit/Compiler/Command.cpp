@@ -57,8 +57,13 @@ void parse_and_dump(llvm::StringRef command) {
 suite<"Command"> command = [] {
     auto expect_strip = [](llvm::StringRef argv, llvm::StringRef result) {
         CompilationDatabase database;
-        database.update_command("fake/", "main.cpp", argv);
-        expect(that % printArgv(database.get_command("main.cpp").arguments) == result);
+        llvm::StringRef file = "main.cpp";
+        database.update_command("fake/", file, argv);
+
+        CommandOptions options;
+        options.file = "main.cpp";
+        options.suppress_log = true;
+        expect(that % printArgv(database.get_command(options).arguments) == result);
     };
 
     test("GetOptionID") = [] {
@@ -140,8 +145,13 @@ suite<"Command"> command = [] {
         database.update_command("fake", "test.cpp", "clang++ -std=c++23 test.cpp"sv);
         database.update_command("fake", "test2.cpp", "clang++ -std=c++23 test2.cpp"sv);
 
-        auto command1 = database.get_command("test.cpp").arguments;
-        auto command2 = database.get_command("test2.cpp").arguments;
+        CommandOptions options;
+        options.suppress_log = true;
+
+        options.file = "test.cpp";
+        auto command1 = database.get_command(options).arguments;
+        options.file = "test2.cpp";
+        auto command2 = database.get_command(options).arguments;
         expect(that % command1.size() == 3);
         expect(that % command2.size() == 3);
 
@@ -161,7 +171,7 @@ suite<"Command"> command = [] {
     test("QueryDriver") = [] {
 #ifdef _GLIBCXX_RELEASE
         using namespace std::literals;
-        using ErrorKind = CompilationDatabase::QueryDriverErrorKind;
+        using ErrorKind = CompilationDatabase::QueryDriverError::ErrorKind;
 
         CompilationDatabase database;
         auto info = database.query_driver("g++");

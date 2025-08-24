@@ -10,6 +10,21 @@
 
 namespace clice {
 
+struct CommandOptions {
+    /// The file to get command for.
+    llvm::StringRef file;
+
+    /// Attach resource directory to the command.
+    bool resource_dir = false;
+
+    /// Query the compiler driver for additional information, such as system includes and target.
+    bool query_driver = false;
+
+    /// Suppress the warning log if failed to query driver info.
+    /// Set true in unittests to avoid cluttering test output.
+    bool suppress_log = false;
+};
+
 class CompilationDatabase {
 public:
     using Self = CompilationDatabase;
@@ -19,18 +34,6 @@ public:
         Create,
         Update,
         Delete,
-    };
-
-    struct QueryDriverErrorKind : refl::Enum<QueryDriverErrorKind> {
-        enum Kind : std::uint8_t {
-            NotFoundInPATH,
-            FailToCreateTempFile,
-            InvokeDriverFail,
-            OutputFileNotReadable,
-            InvalidOutputFormat,
-        };
-
-        using Enum::Enum;
     };
 
     struct CommandInfo {
@@ -63,10 +66,20 @@ public:
     };
 
     struct QueryDriverError {
-        QueryDriverErrorKind kind;
-        std::string driver;
+        struct ErrorKind : refl::Enum<ErrorKind> {
+            enum Kind : std::uint8_t {
+                NotFoundInPATH,
+                FailToCreateTempFile,
+                InvokeDriverFail,
+                OutputFileNotReadable,
+                InvalidOutputFormat,
+            };
+
+            using Enum::Enum;
+        };
+
+        ErrorKind kind;
         std::string detail;
-        std::optional<std::string> output_file;
     };
 
     CompilationDatabase();
@@ -99,10 +112,7 @@ public:
     auto load_commands(this Self& self, llvm::StringRef json_content)
         -> std::expected<std::vector<UpdateInfo>, std::string>;
 
-    auto get_command(this Self& self,
-                     llvm::StringRef file,
-                     bool resource_dir = false,
-                     bool query_driver = false) -> LookupInfo;
+    auto get_command(this Self& self, CommandOptions options) -> LookupInfo;
 
 private:
     /// The memory pool to hold all cstring and command list.
@@ -159,13 +169,7 @@ struct std::formatter<clice::CompilationDatabase::QueryDriverError> :
 
     template <typename FormatContext>
     auto format(clice::CompilationDatabase::QueryDriverError& e, FormatContext& ctx) const {
-        return std::format_to(
-            ctx.out(),
-            "QueryDriverError{{ kind: {}, driver: {}, detail: {}, output_file: {} }}",
-            e.kind.name(),
-            e.driver,
-            e.detail,
-            e.output_file.value_or("<no file>"));
+        return std::format_to(ctx.out(), "{} {}", e.kind.name(), e.detail);
     }
 };
 
