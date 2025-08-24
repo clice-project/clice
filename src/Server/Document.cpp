@@ -47,8 +47,9 @@ void Server::load_cache_info() {
             auto mtime = object->getNumber("mtime");
             auto deps = object->getArray("deps");
             auto arguments = object->getArray("arguments");
+            auto includes = object->get("includes");
 
-            if(!file || !path || !preamble || !mtime || !deps || !arguments) {
+            if(!file || !path || !preamble || !mtime || !deps || !arguments || !includes) {
                 continue;
             }
 
@@ -67,7 +68,10 @@ void Server::load_cache_info() {
             }
 
             /// Update the PCH info.
-            opening_files.get_or_add(*file)->pch = std::move(info);
+            auto opening_file = opening_files.get_or_add(*file);
+            opening_file->pch = std::move(info);
+            opening_file->pch_includes =
+                json::deserialize<decltype(opening_file->pch_includes)>(*includes);
         }
     }
 
@@ -92,6 +96,7 @@ void Server::save_cache_info() {
         object["mtime"] = pch.mtime;
         object["deps"] = json::serialize(pch.deps);
         object["arguments"] = json::serialize(pch.arguments);
+        object["includes"] = json::serialize(open_file->pch_includes);
 
         json["pchs"].getAsArray()->emplace_back(std::move(object));
     }
@@ -313,6 +318,15 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
         co_return;
     }
 
+    /// Send diagnostics
+    auto diagnostics = co_await async::submit(
+        [&, kind = this->kind] { return feature::diagnostics(kind, mapping, *ast); });
+    co_await notify("textDocument/publishDiagnostics",
+                    json::Object{
+                        {"uri",         mapping.to_uri(path)  },
+                        {"diagnostics", std::move(diagnostics)},
+    });
+
     /// FIXME: Index the source file.
     /// co_await indexer.index(*ast);
 
@@ -350,33 +364,15 @@ async::Task<std::shared_ptr<OpenFile>> Server::add_document(std::string path, st
     co_return openFile;
 }
 
-async::Task<> Server::publish_diagnostics(std::string path, std::shared_ptr<OpenFile> file) {
-    auto guard = co_await file->ast_built_lock.try_lock();
-    if(file->ast) {
-        auto diagnostics = feature::diagnostics(kind, mapping, *file->ast);
-        co_await notify("textDocument/publishDiagnostics",
-                        json::Object{
-                            {"uri",         mapping.to_uri(path)  },
-                            {"diagnostics", std::move(diagnostics)},
-        });
-    }
-}
-
 async::Task<> Server::on_did_open(proto::DidOpenTextDocumentParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto file = co_await add_document(path, std::move(params.textDocument.text));
-    if(file->diagnostics) {
-        co_await publish_diagnostics(path, std::move(file));
-    }
     co_return;
 }
 
 async::Task<> Server::on_did_change(proto::DidChangeTextDocumentParams params) {
     auto path = mapping.to_path(params.textDocument.uri);
     auto file = co_await add_document(path, std::move(params.contentChanges[0].text));
-    if(file->diagnostics) {
-        co_await publish_diagnostics(path, std::move(file));
-    }
     co_return;
 }
 
