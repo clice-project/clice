@@ -341,6 +341,7 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
 
 async::Task<std::shared_ptr<OpenFile>> Server::add_document(std::string path, std::string content) {
     auto& openFile = opening_files.get_or_add(path);
+    openFile->version += 1;
     openFile->content = content;
 
     auto& task = openFile->ast_build_task;

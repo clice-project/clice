@@ -9,6 +9,41 @@ namespace clice::feature {
 
 namespace {
 
+std::string symbol_detail(clang::ASTContext& Ctx, const clang::NamedDecl& ND) {
+    clang::PrintingPolicy policy(Ctx.getPrintingPolicy());
+    policy.SuppressScope = true;
+    policy.SuppressUnwrittenScope = true;
+    policy.AnonymousTagLocations = false;
+    policy.PolishForDeclaration = true;
+
+    std::string detail;
+    llvm::raw_string_ostream os(detail);
+    if(ND.getDescribedTemplateParams()) {
+        os << "template ";
+    }
+
+    if(const auto* VD = dyn_cast<clang::ValueDecl>(&ND)) {
+        // FIXME: better printing for dependent type
+        if(isa<clang::CXXConstructorDecl>(VD)) {
+            std::string type = VD->getType().getAsString(policy);
+            // Print constructor type as "(int)" instead of "void (int)".
+            llvm::StringRef without_void = type;
+            without_void.consume_front("void ");
+            os << without_void;
+        } else if(!isa<clang::CXXDestructorDecl>(VD)) {
+            VD->getType().print(os, policy);
+        }
+    } else if(const auto* TD = dyn_cast<clang::TagDecl>(&ND)) {
+        os << TD->getKindName();
+    } else if(isa<clang::TypedefNameDecl>(&ND)) {
+        os << "type alias";
+    } else if(isa<clang::ConceptDecl>(&ND)) {
+        os << "concept";
+    }
+
+    return detail;
+}
+
 /// Use DFS to traverse the AST and collect document symbols.
 class DocumentSymbolCollector : public FilteredASTVisitor<DocumentSymbolCollector> {
 
@@ -50,8 +85,12 @@ public:
         }
 
         auto ND = llvm::cast<clang::NamedDecl>(decl);
-        auto [fid, selectionRange] =
+        auto [fid, selection_range] =
             unit.decompose_range(unit.expansion_location(ND->getLocation()));
+        auto [fid2, range] = unit.decompose_expansion_range(ND->getSourceRange());
+        if(fid != fid2) {
+            return true;
+        }
 
         auto& frame = interested_only ? result : sharedResult[fid];
         auto cursor = frame.cursor;
@@ -59,9 +98,10 @@ public:
         /// Add new symbol.
         auto& symbol = frame.cursor->emplace_back();
         symbol.kind = SymbolKind::from(decl);
-        symbol.name = ast::name_of(ND);
-        symbol.selectionRange = selectionRange;
-        symbol.range = selectionRange;
+        symbol.name = ast::display_name_of(ND);
+        symbol.detail = symbol_detail(unit.context(), *ND);
+        symbol.selectionRange = selection_range;
+        symbol.range = range;
 
         /// Adjust the node.
         frame.cursor = &symbol.children;
@@ -86,7 +126,7 @@ public:
 
 }  // namespace
 
-DocumentSymbols document_symbols(CompilationUnit& unit) {
+DocumentSymbols document_symbol(CompilationUnit& unit) {
     DocumentSymbolCollector collector(unit, true);
     collector.TraverseDecl(unit.tu());
 
