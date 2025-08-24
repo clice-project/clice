@@ -199,10 +199,10 @@ package("llvm")
         if has_config("release") then
             if is_plat("windows") then
                 add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release-lto.7z")
-                add_versions("20.1.5", "499b2e1e37c6dcccbc9d538cea5a222b552d599f54bb523adea8594d7837d02b")
+                add_versions("20.1.5", "0548c0e3f613d1ec853d493870e68c7d424d70442d144fb35b99dc65fc682918")
             elseif is_plat("linux") then
                 add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release-lto.tar.xz")
-                add_versions("20.1.5", "5ff442434e9c1fbe67c9c2bd13284ef73590aa984bb74bcdfcec4404e5074b70")
+                add_versions("20.1.5", "37bc9680df5b766de6367c3c690fe8be993e94955341e63fb5ee6a3132080059")
             elseif is_plat("macosx") then
                 add_urls("https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release-lto.tar.xz")
                 add_versions("20.1.5", "f1c16076e0841b9e40cf21352d6661c7167bf6a76fa646b0fcba67e05bec2e7c")
