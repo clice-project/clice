@@ -95,21 +95,42 @@ std::optional<std::uint32_t> CompilationDatabase::get_option_id(llvm::StringRef 
     }
 }
 
+namespace {
+
+llvm::SmallVector<llvm::StringRef, 4> driver_invocation_argv(llvm::StringRef driver) {
+    /// FIXME: MSVC command:` cl /Bv`, should we support it?
+    /// if (driver.starts_with("gcc") || driver.starts_with("g++") || driver.starts_with("clang")) {
+    ///      return {"-E", "-v", "-xc++", "/dev/null"};
+    /// } else if (driver.starts_with("cl") || driver.starts_with("clang-cl")) {
+    ///      return {"/Bv"};
+    /// }
+    return {driver, "-E", "-v", "-xc++", "/dev/null"};
+}
+
+using QueryDriverError = CompilationDatabase::QueryDriverError;
+using ErrorKind = CompilationDatabase::QueryDriverError::ErrorKind;
+
+auto unexpected(ErrorKind kind, std::string message) {
+    return std::unexpected<QueryDriverError>({kind, std::move(message)});
+};
+
+}  // namespace
+
 auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
-    -> std::expected<DriverInfo, std::string> {
-    llvm::SmallString<128> buffer;
-
-    /// FIXME: Should we use a better way?
-    if(auto error = fs::real_path(driver, buffer)) {
-        auto result = llvm::sys::findProgramByName(driver);
-        if(!result) {
-            return std::unexpected(std::format("{}", result.getError()));
-        } else {
-            buffer = *result;
+    -> std::expected<DriverInfo, QueryDriverError> {
+    {
+        /// FIXME: Should we use a better way?
+        llvm::SmallString<128> absolute_path;
+        if(auto error = fs::real_path(driver, absolute_path)) {
+            auto result = llvm::sys::findProgramByName(driver);
+            if(!result) {
+                return unexpected(ErrorKind::NotFoundInPATH, result.getError().message());
+            }
+            absolute_path = *result;
         }
-    }
 
-    driver = self.save_string(buffer);
+        driver = self.save_string(absolute_path);
+    }
 
     auto it = self.driver_infos.find(driver.data());
     if(it != self.driver_infos.end()) {
@@ -120,18 +141,26 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
 
     llvm::SmallString<128> output_path;
     if(auto error = llvm::sys::fs::createTemporaryFile("system-includes", "clice", output_path)) {
-        return std::unexpected(std::format("{}", error));
+        return unexpected(ErrorKind::FailToCreateTempFile, error.message());
     }
 
-    auto clean_up = llvm::make_scope_exit([&output_path]() { fs::remove(output_path); });
+    // If we fail to get the driver infomation, keep the output file for user to debug.
+    bool keep_output_file = true;
+    auto clean_up = llvm::make_scope_exit([&output_path, &keep_output_file]() {
+        if(keep_output_file) {
+            return;
+        }
+
+        if(auto errc = llvm::sys::fs::remove(output_path)) {
+            log::warn("Fail to remove temporary file: {}", errc.message());
+        }
+    });
 
     bool is_std_err = true;
-
     std::optional<llvm::StringRef> redirects[] = {{""}, {""}, {""}};
     redirects[is_std_err ? 2 : 1] = output_path.str();
 
-    llvm::StringRef argv[] = {driver, "-E", "-v", "-xc++", "/dev/null"};
-
+    llvm::SmallVector argv = driver_invocation_argv(driver);
     std::string message;
     if(int RC = llvm::sys::ExecuteAndWait(driver,
                                           argv,
@@ -140,12 +169,12 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
                                           /*SecondsToWait=*/0,
                                           /*MemoryLimit=*/0,
                                           &message)) {
-        return std::unexpected(std::format("{}", message));
+        return unexpected(ErrorKind::InvokeDriverFail, std::move(message));
     }
 
     auto file = llvm::MemoryBuffer::getFile(output_path);
     if(!file) {
-        return std::unexpected(std::format("{}", file.getError()));
+        return unexpected(ErrorKind::OutputFileNotReadable, file.getError().message());
     }
 
     llvm::StringRef content = file.get()->getBuffer();
@@ -191,12 +220,15 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
     }
 
     if(!found_start_marker) {
-        return std::unexpected("Start marker not found...");
+        return unexpected(ErrorKind::InvalidOutputFormat, "Start marker not found...");
     }
 
     if(in_includes_block) {
-        return std::unexpected("End marker not found...");
+        return unexpected(ErrorKind::InvalidOutputFormat, "End marker not found...");
     }
+
+    // Get driver information success, remove temporary file.
+    keep_output_file = false;
 
     llvm::SmallVector<const char*, 8> includes;
     for(auto include: system_includes) {
@@ -415,10 +447,8 @@ auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_co
     return infos;
 }
 
-auto CompilationDatabase::get_command(this Self& self,
-                                      llvm::StringRef file,
-                                      bool resource_dir,
-                                      bool query_driver) -> LookupInfo {
+auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, CommandOptions options)
+    -> LookupInfo {
     LookupInfo info;
 
     file = self.save_string(file);
@@ -439,8 +469,9 @@ auto CompilationDatabase::get_command(this Self& self,
         info.arguments.emplace_back(self.save_string(argument).data());
     };
 
-    if(query_driver) {
-        if(auto driver_info = self.query_driver(info.arguments[0])) {
+    if(options.query_driver) {
+        llvm::StringRef driver = info.arguments[0];
+        if(auto driver_info = self.query_driver(driver)) {
             append_argument("-nostdlibinc");
 
             /// FIXME: Use target information here, this is useful for cross compilation.
@@ -450,18 +481,16 @@ auto CompilationDatabase::get_command(this Self& self,
                 append_argument("-I");
                 append_argument(system_header);
             }
-        } else {
-            /// FIXME: Error handle here.
-            log::warn("Fail query info for {}, because", info.arguments[0], driver_info.error());
+        } else if(!options.suppress_log) {
+            log::warn("Failed to query driver:{}, error:{}", driver, driver_info.error());
         }
     }
 
-    if(resource_dir) {
+    if(options.resource_dir) {
         append_argument(std::format("-resource-dir={}", fs::resource_dir));
     }
 
     info.arguments.emplace_back(file.data());
-
     return info;
 }
 

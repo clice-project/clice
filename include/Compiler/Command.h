@@ -1,13 +1,26 @@
 #pragma once
 
+#include "Support/Enum.h"
+#include "Support/Format.h"
 #include <expected>
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/ADT/ArrayRef.h"
-#include <deque>
 
 namespace clice {
+
+struct CommandOptions {
+    /// Attach resource directory to the command.
+    bool resource_dir = false;
+
+    /// Query the compiler driver for additional information, such as system includes and target.
+    bool query_driver = false;
+
+    /// Suppress the warning log if failed to query driver info.
+    /// Set true in unittests to avoid cluttering test output.
+    bool suppress_log = false;
+};
 
 class CompilationDatabase {
 public:
@@ -49,6 +62,23 @@ public:
         std::vector<const char*> arguments;
     };
 
+    struct QueryDriverError {
+        struct ErrorKind : refl::Enum<ErrorKind> {
+            enum Kind : std::uint8_t {
+                NotFoundInPATH,
+                FailToCreateTempFile,
+                InvokeDriverFail,
+                OutputFileNotReadable,
+                InvalidOutputFormat,
+            };
+
+            using Enum::Enum;
+        };
+
+        ErrorKind kind;
+        std::string detail;
+    };
+
     CompilationDatabase();
 
     auto save_string(this Self& self, llvm::StringRef string) -> llvm::StringRef;
@@ -61,7 +91,7 @@ public:
 
     /// Query the compiler driver and return its driver info.
     auto query_driver(this Self& self, llvm::StringRef driver)
-        -> std::expected<DriverInfo, std::string>;
+        -> std::expected<DriverInfo, QueryDriverError>;
 
     /// Update with arguments.
     auto update_command(this Self& self,
@@ -79,10 +109,8 @@ public:
     auto load_commands(this Self& self, llvm::StringRef json_content)
         -> std::expected<std::vector<UpdateInfo>, std::string>;
 
-    auto get_command(this Self& self,
-                     llvm::StringRef file,
-                     bool resource_dir = false,
-                     bool query_driver = false) -> LookupInfo;
+    auto get_command(this Self& self, llvm::StringRef file, CommandOptions options = {})
+        -> LookupInfo;
 
 private:
     /// The memory pool to hold all cstring and command list.
@@ -132,3 +160,14 @@ struct DenseMapInfo<llvm::ArrayRef<const char*>> {
 };
 
 }  // namespace llvm
+
+template <>
+struct std::formatter<clice::CompilationDatabase::QueryDriverError> :
+    std::formatter<llvm::StringRef> {
+
+    template <typename FormatContext>
+    auto format(clice::CompilationDatabase::QueryDriverError& e, FormatContext& ctx) const {
+        return std::format_to(ctx.out(), "{} {}", e.kind.name(), e.detail);
+    }
+};
+

@@ -110,7 +110,7 @@ void Server::save_cache_info() {
     }
 
     auto clean_up = llvm::make_scope_exit([&temp_path]() {
-        if(auto errc = llvm::sys::fs::remove(temp_path); errc != std::error_code{}) {
+        if(auto errc = llvm::sys::fs::remove(temp_path)) {
             log::warn("Fail to remove temporary file: {}", errc.message());
         }
     });
@@ -245,8 +245,12 @@ async::Task<bool> build_pch_task(CompilationDatabase::LookupInfo& info,
 }  // namespace
 
 async::Task<bool> Server::build_pch(std::string file, std::string content) {
+    CommandOptions options;
+    options.resource_dir = true;
+    options.query_driver = true;
+    auto info = database.get_command(file, options);
+
     auto bound = compute_preamble_bound(content);
-    auto info = database.get_command(file, true, true);
     auto& open_file = opening_files.get_or_add(file);
 
     /// Check update ...
@@ -299,9 +303,13 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
         log::fatal("Expected PCH built at this point");
     }
 
+    CommandOptions options;
+    options.resource_dir = true;
+    options.query_driver = true;
+
     CompilationParams params;
     params.kind = CompilationUnit::Content;
-    params.arguments = database.get_command(path, true, true).arguments;
+    params.arguments = database.get_command(path, options).arguments;
     params.add_remapped_file(path, content);
     params.pch = {pch->path, pch->preamble.size()};
     file->diagnostics->clear();
