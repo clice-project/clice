@@ -33,7 +33,6 @@ if(NOT DEFINED LLVM_INSTALL_PATH OR LLVM_INSTALL_PATH EQUAL "")
     if(NOT LLVM_VERSION MATCHES "^20\\.1\\..*$" OR NOT LLVM_VERSION STRLESS "20.1.6")
         message(FATAL_ERROR "Incompatible LLVM version found: ${LLVM_VERSION}, expecting: 20.1.0 <= v < 20.1.6")
     else()
-        # check minor version
         message(STATUS "Found compatible LLVM version: ${LLVM_VERSION}")
     endif()
 
