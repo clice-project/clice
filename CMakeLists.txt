@@ -7,9 +7,66 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
 # set llvm-libs install path
-if(NOT DEFINED LLVM_INSTALL_PATH OR LLVM_INSTALL_PATH STREQUAL "")
-    message(FATAL_ERROR "Error: The variable LLVM_INSTALL_PATH is not set. Please specify it with -DLLVM_INSTALL_PATH=<value>.")
+if(NOT DEFINED LLVM_INSTALL_PATH OR LLVM_INSTALL_PATH EQUAL "")
+    message(WARNING "LLVM_INSTALL_PATH is not set. Trying to detect system LLVM installation using llvm-config.")
+
+    # Try to find llvm-config
+    find_program(LLVM_CONFIG_EXEC llvm-config)
+    if(NOT LLVM_CONFIG_EXEC)
+        message(FATAL_ERROR "llvm-config not found. Please set -DLLVM_INSTALL_PATH=<path>.")
+    endif()
+    message(STATUS "Found llvm-config: ${LLVM_CONFIG_EXEC}")
+
+    # Get LLVM version
+    execute_process(
+        COMMAND "${LLVM_CONFIG_EXEC}" --version
+        OUTPUT_VARIABLE LLVM_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_VARIABLE LLVM_VERSION_ERROR
+        RESULT_VARIABLE LLVM_VERSION_RESULT
+    )
+    if(LLVM_VERSION_RESULT OR LLVM_VERSION EQUAL "")
+        message(FATAL_ERROR "Failed to get LLVM version: ${LLVM_VERSION_ERROR}")
+    endif()
+
+    # Check version is below 20.1.6
+    if(NOT LLVM_VERSION MATCHES "^20\\.1\\..*$" OR NOT LLVM_VERSION STRLESS "20.1.6")
+        message(FATAL_ERROR "Incompatible LLVM version found: ${LLVM_VERSION}, expecting: 20.1.0 <= v < 20.1.6")
+    else()
+        # check minor version
+        message(STATUS "Found compatible LLVM version: ${LLVM_VERSION}")
+    endif()
+
+    # Get LLVM install prefix
+    execute_process(
+        COMMAND "${LLVM_CONFIG_EXEC}" --prefix
+        OUTPUT_VARIABLE LLVM_INSTALL_PATH_DETECTED
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_VARIABLE LLVM_PREFIX_ERROR
+        RESULT_VARIABLE LLVM_PREFIX_RESULT
+    )
+    if(LLVM_PREFIX_RESULT OR LLVM_INSTALL_PATH_DETECTED EQUAL "")
+        message(FATAL_ERROR "Failed to get LLVM install prefix: ${LLVM_PREFIX_ERROR}")
+    endif()
+    
+    # Get LLVM cmake files prefix
+    execute_process(
+        COMMAND "${LLVM_CONFIG_EXEC}" --cmakedir
+        OUTPUT_VARIABLE LLVM_CMAKE_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_VARIABLE LLVM_CMAKE_DIR_ERROR
+        RESULT_VARIABLE LLVM_CMAKE_DIR_RESULT
+    )
+    if(LLVM_CMAKE_DIR_RESULT OR LLVM_CMAKE_DIR STREQUAL "")
+        message(FATAL_ERROR "Failed to get LLVM cmake files prefix: ${LLVM_CMAKE_DIR_ERROR}")
+    endif()
+
+    set(LLVM_INSTALL_PATH "${LLVM_INSTALL_PATH_DETECTED}" CACHE PATH "Path to LLVM installation" FORCE)
+    set(LLVM_CMAKE_DIR "${LLVM_CMAKE_DIR}" CACHE PATH "Path to LLVM CMake files" FORCE)
+
+    message(STATUS "Detected LLVM_INSTALL_PATH: ${LLVM_INSTALL_PATH}, cmake files path: ${LLVM_CMAKE_DIR}")
 endif()
+
 get_filename_component(LLVM_INSTALL_PATH "${LLVM_INSTALL_PATH}" ABSOLUTE)
 
 if(NOT EXISTS "${LLVM_INSTALL_PATH}")
@@ -17,7 +74,13 @@ if(NOT EXISTS "${LLVM_INSTALL_PATH}")
 endif()
 message(STATUS "Found llvm-libs ${LLVM_INSTALL_PATH}")
 
-set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
+if (EXISTS "${LLVM_CMAKE_DIR}")
+    # add to CMAKE_PREFIX_PATH
+    set(CMAKE_PREFIX_PATH "${LLVM_CMAKE_DIR}")
+else()
+    set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
+endif()
+message(STATUS "CMake prefix path: ${CMAKE_PREFIX_PATH}")
 
 # install dependencies
 include(FetchContent)
@@ -36,6 +99,9 @@ FetchContent_Declare(
     GIT_TAG v1.x
 )
 FetchContent_MakeAvailable(tomlplusplus libuv)
+
+message(STATUS "Found tomlplusplus: ${tomlplusplus_SOURCE_DIR}")
+message(STATUS "Found libuv: ${libuv_SOURCE_DIR}")
 
 if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
@@ -86,6 +152,7 @@ add_library(clice-core STATIC "${CLICE_SOURCES}")
 # set llvm include and lib path
 add_library(llvm-libs INTERFACE IMPORTED)
 target_include_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/include")
+message(STATUS "LLVM include path: ${LLVM_INSTALL_PATH}/include")
 if(WIN32)
     target_compile_definitions(llvm-libs INTERFACE "CLANG_BUILD_STATIC")
     target_link_libraries(llvm-libs INTERFACE version ntdll)
