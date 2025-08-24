@@ -447,10 +447,11 @@ auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_co
     return infos;
 }
 
-auto CompilationDatabase::get_command(this Self& self, CommandOptions options) -> LookupInfo {
+auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, CommandOptions options)
+    -> LookupInfo {
     LookupInfo info;
 
-    llvm::StringRef file = self.save_string(options.file);
+    file = self.save_string(file);
     auto it = self.command_infos.find(file.data());
     if(it != self.command_infos.end()) {
         info.dictionary = it->second.dictionary;

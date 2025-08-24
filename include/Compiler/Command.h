@@ -11,9 +11,6 @@
 namespace clice {
 
 struct CommandOptions {
-    /// The file to get command for.
-    llvm::StringRef file;
-
     /// Attach resource directory to the command.
     bool resource_dir = false;
 
@@ -112,7 +109,8 @@ public:
     auto load_commands(this Self& self, llvm::StringRef json_content)
         -> std::expected<std::vector<UpdateInfo>, std::string>;
 
-    auto get_command(this Self& self, CommandOptions options) -> LookupInfo;
+    auto get_command(this Self& self, llvm::StringRef file, CommandOptions options = {})
+        -> LookupInfo;
 
 private:
     /// The memory pool to hold all cstring and command list.

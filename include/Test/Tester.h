@@ -38,11 +38,10 @@ struct Tester {
         params.kind = CompilationUnit::Content;
 
         CommandOptions options;
-        options.file = src_path;
         options.resource_dir = true;
         options.query_driver = true;
         options.suppress_log = true;
-        params.arguments = database.get_command(options).arguments;
+        params.arguments = database.get_command(src_path, options).arguments;
 
         for(auto& [file, source]: sources.all_files) {
             if(file == src_path) {
@@ -75,11 +74,10 @@ struct Tester {
         params.kind = CompilationUnit::Preamble;
 
         CommandOptions options;
-        options.file = src_path;
         options.resource_dir = true;
         options.query_driver = true;
         options.suppress_log = true;
-        params.arguments = database.get_command(options).arguments;
+        params.arguments = database.get_command(src_path, options).arguments;
 
         auto path = fs::createTemporaryFile("clice", "pch");
         if(!path) {

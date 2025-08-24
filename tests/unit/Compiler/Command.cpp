@@ -61,9 +61,8 @@ suite<"Command"> command = [] {
         database.update_command("fake/", file, argv);
 
         CommandOptions options;
-        options.file = "main.cpp";
         options.suppress_log = true;
-        expect(that % printArgv(database.get_command(options).arguments) == result);
+        expect(that % printArgv(database.get_command(file, options).arguments) == result);
     };
 
     test("GetOptionID") = [] {
@@ -147,11 +146,8 @@ suite<"Command"> command = [] {
 
         CommandOptions options;
         options.suppress_log = true;
-
-        options.file = "test.cpp";
-        auto command1 = database.get_command(options).arguments;
-        options.file = "test2.cpp";
-        auto command2 = database.get_command(options).arguments;
+        auto command1 = database.get_command("test.cpp", options).arguments;
+        auto command2 = database.get_command("test2.cpp", options).arguments;
         expect(that % command1.size() == 3);
         expect(that % command2.size() == 3);
 
