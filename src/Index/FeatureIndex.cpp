@@ -61,7 +61,7 @@ feature::DocumentSymbols FeatureIndex::documentSymbols() const {
 Shared<std::vector<char>> FeatureIndex::build(CompilationUnit& unit) {
     Shared<memory::FeatureIndex> indices;
 
-    for(auto&& [fid, result]: feature::indexSemanticToken(unit)) {
+    for(auto&& [fid, result]: feature::index_semantic_token(unit)) {
         indices[fid].tokens = std::move(result);
     }
 

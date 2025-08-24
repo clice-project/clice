@@ -131,7 +131,7 @@ auto Server::on_document_symbol(proto::DocumentSymbolParams params) -> Result {
     };
 
     co_return co_await async::submit([&ast, &transform] {
-        auto symbols = feature::document_symbol(*ast);
+        auto symbols = feature::document_symbols(*ast);
 
         std::vector<proto::DocumentSymbol> result;
         for(auto& symbol: symbols) {
@@ -277,7 +277,7 @@ auto Server::on_inlay_hint(proto::InlayHintParams params) -> Result {
             to_offset(kind, content, params.range.end),
         };
 
-        auto hints = feature::inlay_hint(*ast, range, {});
+        auto hints = feature::inlay_hints(*ast, range, {});
 
         PositionConverter converter(content, kind);
 

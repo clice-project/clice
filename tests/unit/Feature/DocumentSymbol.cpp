@@ -15,7 +15,7 @@ suite<"DocumentSymbol"> document_symbol = [] {
         tester.add_main("main.cpp", code);
         tester.compile_with_pch();
         expect(that % tester.unit.has_value());
-        symbols = feature::document_symbol(*tester.unit);
+        symbols = feature::document_symbols(*tester.unit);
     };
 
     auto total_size_wrapper = [](const std::vector<feature::DocumentSymbol>& result) -> size_t {

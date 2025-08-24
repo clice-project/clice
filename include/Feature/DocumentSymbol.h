@@ -29,7 +29,7 @@ struct DocumentSymbol {
 using DocumentSymbols = std::vector<DocumentSymbol>;
 
 /// Generate document symbols for only interested file.
-DocumentSymbols document_symbol(CompilationUnit& unit);
+DocumentSymbols document_symbols(CompilationUnit& unit);
 
 /// Generate document symbols for all file in unit.
 index::Shared<DocumentSymbols> index_document_symbol(CompilationUnit& unit);

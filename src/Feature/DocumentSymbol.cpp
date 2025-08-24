@@ -126,7 +126,7 @@ public:
 
 }  // namespace
 
-DocumentSymbols document_symbol(CompilationUnit& unit) {
+DocumentSymbols document_symbols(CompilationUnit& unit) {
     DocumentSymbolCollector collector(unit, true);
     collector.TraverseDecl(unit.tu());
 
