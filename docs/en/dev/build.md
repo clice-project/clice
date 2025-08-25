@@ -116,8 +116,10 @@ $ ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="<LLVM_INSTALL
 
 - Run integration tests:
 
+We use [uv](https://github.com/astral-sh/uv) to manage Python dependencies and versions.
+
 ```bash
-$ pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clice --resource-dir="<LLVM_INSTALL_PATH>/lib/clang/20"
+$ uv run pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clice --resource-dir="<LLVM_INSTALL_PATH>/lib/clang/20"
 ```
 
 > resource-dir is clang's built-in header file folder

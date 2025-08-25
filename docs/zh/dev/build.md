@@ -116,17 +116,18 @@ $ ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="<LLVM_INSTALL
 
 - 运行集成测试
 
+我们使用 [uv](https://github.com/astral-sh/uv) 管理 python 依赖和版本。
+
 ```bash
-$ pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clice --resource-dir="<LLVM_INSTALL_PATH>/lib/clang/20"
+$ uv run pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clice --resource-dir="<LLVM_INSTALL_PATH>/lib/clang/20"
 ```
 
 > resource-dir 是 clang 的内置头文件文件夹
 
-或者，如果你使用 xmake 作为构建系统，可以直接通过 xmake 运行测试
+或者，如果你使用 xmake 作为构建系统，可以直接通过 xmake 运行测试：
 
 ```shell
 $ xmake test --verbose
-$ xmake run unit_tests --verbose
-$ xmake test integration_tests/default --verbose
+$ xmake run --verbose unit_tests
+$ xmake test --verbose integration_tests/default
 ```
-
