@@ -13,6 +13,7 @@ function(fetch_private_clang_files)
         message(STATUS "Found private clang files presents, skip downloading.")
         return()
     endif()
+
     message(WARNING "Private clang files not found, try fetch from llvm-project source...")
 
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/clang/lib/Sema")
@@ -65,14 +66,23 @@ endfunction()
 
 function(install_prebuilt_llvm)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.llvm")
+    
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(LLVM_BUILD_TYPE "debug")
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(LLVM_BUILD_TYPE "release")
+    else()
+        set(LLVM_BUILD_TYPE "release-lto")
+    endif()
 
     if(WIN32)
-        set(LLVM_PACKAGE "x64-windows-msvc-release.7z")
+        set(LLVM_PACKAGE "x64-windows-msvc-${LLVM_BUILD_TYPE}.7z")
     elseif(APPLE)
-        set(LLVM_PACKAGE "arm64-macosx-apple-release.tar.xz")
+        set(LLVM_PACKAGE "arm64-macosx-apple-${LLVM_BUILD_TYPE}.tar.xz")
     elseif(UNIX)
-        set(LLVM_PACKAGE "x86_64-linux-gnu-release.tar.xz")
+        set(LLVM_PACKAGE "x86_64-linux-gnu-${LLVM_BUILD_TYPE}.tar.xz")
     endif()
+
     message(STATUS "Downloading pre-built LLVM package file ${LLVM_PACKAGE}, please wait...")
 
     file(
