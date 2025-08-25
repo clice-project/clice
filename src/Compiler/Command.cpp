@@ -148,6 +148,7 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
     bool keep_output_file = true;
     auto clean_up = llvm::make_scope_exit([&output_path, &keep_output_file]() {
         if(keep_output_file) {
+            log::warn("Query driver failed, output file:{}", output_path);
             return;
         }
 
@@ -398,11 +399,11 @@ auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_co
 
     auto json = json::parse(json_content);
     if(!json) {
-        return std::unexpected(std::format("Fail to parse json: {}", json.takeError()));
+        return std::unexpected(std::format("parse json failed: {}", json.takeError()));
     }
 
     if(json->kind() != json::Value::Array) {
-        return std::unexpected("Compilation Database must be an array of object");
+        return std::unexpected("compile_commands.json must be an array of object");
     }
 
     /// FIXME: warn illegal item.
@@ -457,29 +458,24 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
         info.dictionary = it->second.dictionary;
         info.arguments = it->second.arguments;
     } else {
-        /// FIXME: Use a better way to handle fallback command.
-        info.dictionary = {};
-        info.arguments = {
-            self.save_string("clang++").data(),
-            self.save_string("-std=c++20").data(),
-        };
+        info = self.guess_or_fallback(file);
     }
 
-    auto append_argument = [&](llvm::StringRef argument) {
+    auto record = [&info, &self](llvm::StringRef argument) {
         info.arguments.emplace_back(self.save_string(argument).data());
     };
 
     if(options.query_driver) {
         llvm::StringRef driver = info.arguments[0];
         if(auto driver_info = self.query_driver(driver)) {
-            append_argument("-nostdlibinc");
+            record("-nostdlibinc");
 
             /// FIXME: Use target information here, this is useful for cross compilation.
 
             /// FIXME: Cache -I so that we can append directly, avoid duplicate lookup.
             for(auto& system_header: driver_info->system_includes) {
-                append_argument("-I");
-                append_argument(system_header);
+                record("-I");
+                record(system_header);
             }
         } else if(!options.suppress_log) {
             log::warn("Failed to query driver:{}, error:{}", driver, driver_info.error());
@@ -487,10 +483,37 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
     }
 
     if(options.resource_dir) {
-        append_argument(std::format("-resource-dir={}", fs::resource_dir));
+        record(std::format("-resource-dir={}", fs::resource_dir));
     }
 
     info.arguments.emplace_back(file.data());
+    /// TODO: apply rules in clice.toml.
+    return info;
+}
+
+auto CompilationDatabase::guess_or_fallback(this Self& self, llvm::StringRef file) -> LookupInfo {
+    // Try to guess command from other file in same directory or parent directory
+    llvm::StringRef dir = path::parent_path(file);
+    while(!dir.empty()) {
+        for(const auto& [other_file, info]: self.command_infos) {
+            if(llvm::StringRef other = other_file; !other.starts_with(dir)) {
+                continue;
+            }
+            log::info("Guess command for:{}, from existed file: {}", file, other_file);
+            return LookupInfo{info.dictionary, info.arguments};
+        }
+        dir = path::parent_path(dir);
+    }
+
+    /// FIXME: use a better default case.
+    // Fallback to default case.
+    LookupInfo info;
+    info.dictionary = {};
+    info.arguments = {
+        self.save_string("clang++").data(),
+        self.save_string("-std=c++20").data(),
+    };
+
     return info;
 }
 
