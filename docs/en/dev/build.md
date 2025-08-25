@@ -150,3 +150,36 @@ $ LLVM_INSTALL_DIR=./build/.packages/l/llvm/20.1.5/0181167384bb4acb9e781210294c3
     --executable=./build/linux/x86_64/debug/clice \
     --resource-dir=$LLVM_INSTALL_DIR
 ```
+
+## Building Docker Image
+
+Use the following command to build docker image:
+
+```bash
+$ docker build -t clice .
+```
+
+Run docker image by running the following command:
+
+```bash
+$ docker run --rm -it clice --help
+OVERVIEW: clice is a new generation of language server for C/C++
+...
+```
+
+The directory structure of the docker image is as follows:
+
+```
+/opt/clice
+├── bin
+│   ├── clice -> /usr/local/bin/clice
+├── include
+├── lib
+├── LICENSE
+├── README.md
+```
+
+Hint: launch clice in the docker container by running the following command:
+
+```bash
+$ docker run --rm -it --entrypoint bash clice
