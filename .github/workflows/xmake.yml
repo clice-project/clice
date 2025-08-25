@@ -66,6 +66,9 @@ jobs:
         run: |
           xmake build --verbose --diagnosis --all
 
+      - name: Install uv for integration tests
+        uses: astral-sh/setup-uv@v6
+
       - name: Run tests
         run: xmake test --verbose
 
@@ -98,6 +101,9 @@ jobs:
       - name: Build clice
         run: |
           xmake build --verbose --diagnosis --all
+
+      - name: Install uv for integration tests
+        uses: astral-sh/setup-uv@v6
 
       - name: Run tests
         run: xmake test --verbose
@@ -136,6 +142,9 @@ jobs:
       - name: Build clice
         run: |
           xmake build --verbose --diagnosis --all
+
+      - name: Install uv for integration tests
+        uses: astral-sh/setup-uv@v6
 
       - name: Run tests
         run: |
