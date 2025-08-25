@@ -131,3 +131,37 @@ $ xmake test --verbose
 $ xmake run --verbose unit_tests
 $ xmake test --verbose integration_tests/default
 ```
+
+## Building Docker Image
+
+你可以通过以下命令构建 docker 镜像：
+
+```bash
+$ docker build -t clice .
+```
+
+运行 docker 镜像：
+
+```bash
+$ docker run --rm -it clice --help
+OVERVIEW: clice is a new generation of language server for C/C++
+...
+```
+
+docker 镜像的目录结构如下：
+
+```
+/opt/clice
+├── bin
+│   ├── clice -> /usr/local/bin/clice
+├── include
+├── lib
+├── LICENSE
+├── README.md
+```
+
+提示：可以通过以下命令进入 clice 容器：
+
+```bash
+$ docker run --rm -it --entrypoint bash clice
+```
