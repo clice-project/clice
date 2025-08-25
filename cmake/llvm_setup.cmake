@@ -73,11 +73,14 @@ function(install_prebuilt_llvm)
     elseif(UNIX)
         set(LLVM_PACKAGE "x86_64-linux-gnu-release.tar.xz")
     endif()
+    message(STATUS "Downloading pre-built LLVM package file ${LLVM_PACKAGE}, please wait...")
 
     file(
         DOWNLOAD "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/${LLVM_PACKAGE}" "${CMAKE_CURRENT_BINARY_DIR}/${LLVM_PACKAGE}"
         SHOW_PROGRESS
     )
+
+    message(STATUS "Decompressing pre-built LLVM package file ${LLVM_PACKAGE}, please wait...")
     execute_process(
         COMMAND "${CMAKE_COMMAND}" -E tar xvf "${CMAKE_CURRENT_BINARY_DIR}/${LLVM_PACKAGE}"
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.llvm"
