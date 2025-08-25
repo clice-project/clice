@@ -6,10 +6,15 @@
 
 mkdir -p ./.llvm
 
+version="release"
+if [ "$1" = "--debug" ]; then
+  version="debug"
+fi
+
 if [ "$(uname -m)" = "x86_64" ] && [ "$(uname -s)" = "Linux" ]; then
-  curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/x86_64-linux-gnu-release.tar.xz" | tar -xJ -C ./.llvm
+  curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/x86_64-linux-gnu-$version.tar.xz" | tar -xJ -C ./.llvm
 elif [ "$(uname -m)" = "arm64" ] && [ "$(uname -s)" = "Darwin" ]; then
-  curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-debug.tar.xz" | tar -xJ -C ./.llvm
+  curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-$version.tar.xz" | tar -xJ -C ./.llvm
 else
   echo "Unsupported platform: $(uname -m)-$(uname -s)"
   exit 1
