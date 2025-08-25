@@ -49,7 +49,7 @@ void load_compile_commands(CompilationDatabase& database,
             return false;
         }
 
-        if(try_load(dir)) {
+        if(try_load(dir.string())) {
             return true;
         }
 
