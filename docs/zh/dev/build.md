@@ -116,10 +116,10 @@ $ ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="<LLVM_INSTALL
 
 - 运行集成测试
 
-我们使用 [uv](https://github.com/astral-sh/uv) 管理 python 依赖和版本。
+我们推荐使用 [uv](https://github.com/astral-sh/uv) 管理 python 依赖和版本。如果不想下载 uv，请参考 `pyproject.toml` 下载所需的 python 版本和依赖。
 
 ```bash
-$ uv run pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clice --resource-dir="<LLVM_INSTALL_PATH>/lib/clang/20"
+$ pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clice --resource-dir="<LLVM_INSTALL_PATH>/lib/clang/20"
 ```
 
 > resource-dir 是 clang 的内置头文件文件夹
