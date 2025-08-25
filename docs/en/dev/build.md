@@ -131,3 +131,37 @@ $ xmake test --verbose
 $ xmake run --verbose unit_tests
 $ xmake test --verbose integration_tests/default
 ```
+
+## Building Docker Image
+
+You can build the docker image by running the following command:
+
+```bash
+$ docker build -t clice .
+```
+
+Run the docker image by running the following command:
+
+```bash
+$ docker run --rm -it clice --help
+OVERVIEW: clice is a new generation of language server for C/C++
+...
+```
+
+The directory structure of the docker image is as follows:
+
+```
+/opt/clice
+├── bin
+│   ├── clice -> /usr/local/bin/clice
+├── include
+├── lib
+├── LICENSE
+├── README.md
+```
+
+Hint: launch clice in the docker container by running the following command:
+
+```bash
+$ docker run --rm -it --entrypoint bash clice
+```
