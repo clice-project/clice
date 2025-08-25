@@ -138,7 +138,7 @@ Examples:
     # Get build configuration
     config = get_build_config(args.build_type)
     
-    print(f"=== LLVM Build Configuration ===")
+    print("=== LLVM Build Configuration ===")
     print(f"Build type: {args.build_type}")
     print(f"Build directory: {config['build_dir']}")
     print(f"Install directory: {config['install_dir']}")
