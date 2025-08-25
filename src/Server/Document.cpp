@@ -328,8 +328,8 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
 
     /// Run Clang-Tidy
     if(config::server.clang_tidy) {
-        log::fatal(
-            "clang-tidy is not supported yet. Tracked in https://github.com/clice-project/clice/issues/90.");
+        log::warn(
+            "clang-tidy is not fully supported yet. Tracked in https://github.com/clice-project/clice/issues/90.");
     }
 
     /// Send diagnostics
