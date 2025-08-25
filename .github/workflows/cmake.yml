@@ -34,8 +34,8 @@ jobs:
         with:
           buckets: main
           apps: ninja
-
-      - name: Setup libstdc++ & cmake & ninja
+      
+      - name: Setup llvm & libstdc++ & cmake & ninja
         if: matrix.os == 'ubuntu-24.04'
         run: |
           sudo apt update
@@ -44,13 +44,15 @@ jobs:
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
           sudo update-alternatives --set gcc /usr/bin/gcc-14
           sudo update-alternatives --set g++ /usr/bin/g++-14
-
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 20 all
           sudo apt install -y cmake ninja-build
 
-      - name: Setup lld
+      - name: Setup llvm@20 and lld
         if: matrix.os == 'macos-15'
         run: |
-          brew install lld@20
+          brew install llvm@20 lld@20
 
       - name: Set up Python
         if: matrix.os == 'windows-2025'
