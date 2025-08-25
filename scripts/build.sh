@@ -12,6 +12,10 @@
 # ```
 
 # Specify the `LLVM_INSTALL_PATH` to use a custom LLVM build.
+# To get `.llvm` directory, you can run the following command:
+# ```bash
+# scripts/download-prebuilts.sh
+# ```
 LLVM_INSTALL_PATH="$PWD/.llvm"
 # Specify the build directory.
 BUILD_DIR="build"
