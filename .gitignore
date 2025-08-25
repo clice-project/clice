@@ -45,3 +45,5 @@ tests/unit/Local/
 **/node_modules
 docs/.vitepress/dist
 docs/.vitepress/cache
+
+scripts/build-*.sh
