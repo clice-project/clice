@@ -1,3 +1,5 @@
+include_guard()
+
 function(fetch_private_clang_files)
     # files to fetch:
     # clang/lib/Sema/CoroutineStmtBuilder.h
@@ -14,14 +16,17 @@ function(fetch_private_clang_files)
     message(WARNING "Private clang files not found, try fetch from llvm-project source...")
 
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/clang/lib/Sema")
-    execute_process(
-        COMMAND curl -L "https://raw.githubusercontent.com/llvm/llvm-project/7b09d7b446383b71b63d429b21ee45ba389c5134/clang/lib/Sema/CoroutineStmtBuilder.h" -o "${CMAKE_CURRENT_BINARY_DIR}/include/clang/Sema/CoroutineStmtBuilder.h"
+    file(
+        DOWNLOAD "https://raw.githubusercontent.com/llvm/llvm-project/7b09d7b446383b71b63d429b21ee45ba389c5134/clang/lib/Sema/CoroutineStmtBuilder.h" "${CMAKE_CURRENT_BINARY_DIR}/include/clang/Sema/CoroutineStmtBuilder.h"
+        SHOW_PROGRESS
     )
-    execute_process(
-        COMMAND curl -L "https://raw.githubusercontent.com/llvm/llvm-project/7b09d7b446383b71b63d429b21ee45ba389c5134/clang/lib/Sema/TypeLocBuilder.h" -o "${CMAKE_CURRENT_BINARY_DIR}/include/clang/Sema/TypeLocBuilder.h"
+    file(
+        DOWNLOAD "https://raw.githubusercontent.com/llvm/llvm-project/7b09d7b446383b71b63d429b21ee45ba389c5134/clang/lib/Sema/TypeLocBuilder.h" "${CMAKE_CURRENT_BINARY_DIR}/include/clang/Sema/TypeLocBuilder.h"
+        SHOW_PROGRESS
     )
-    execute_process(
-        COMMAND curl -L "https://raw.githubusercontent.com/llvm/llvm-project/7b09d7b446383b71b63d429b21ee45ba389c5134/clang/lib/Sema/TreeTransform.h" -o "${CMAKE_CURRENT_BINARY_DIR}/include/clang/Sema/TreeTransform.h"
+    file(
+        DOWNLOAD "https://raw.githubusercontent.com/llvm/llvm-project/7b09d7b446383b71b63d429b21ee45ba389c5134/clang/lib/Sema/TreeTransform.h" "${CMAKE_CURRENT_BINARY_DIR}/include/clang/Sema/TreeTransform.h"
+        SHOW_PROGRESS
     )
 
     # add to include directories
@@ -39,7 +44,7 @@ function(detect_llvm result)
         OUTPUT_VARIABLE LLVM_VERSION
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    if(NOT LLVM_VERSION STREQUAL "20.1.5")
+    if(NOT LLVM_VERSION VERSION_EQUAL "20.1.5")
         set(${result} FALSE PARENT_SCOPE)
         return()
     endif()
@@ -60,33 +65,24 @@ endfunction()
 
 function(install_prebuilt_llvm)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.llvm")
+
     if(WIN32)
-        find_program(SevenZip_EXEC 7z)
-        if(NOT SevenZip_EXEC)
-            message(WARNING "7z not found. Please install 7z to continue.")
-            return()
-        endif()
-        execute_process(
-            COMMAND curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/x64-windows-msvc-release.7z" -o "${CMAKE_CURRENT_BINARY_DIR}/x64-windows-msvc-release.7z"
-        )
-        execute_process(
-            COMMAND 7z x "${CMAKE_CURRENT_BINARY_DIR}/x64-windows-msvc-release.7z" -o"${CMAKE_CURRENT_BINARY_DIR}/.llvm"
-        )
+        set(LLVM_PACKAGE "x64-windows-msvc-release.7z")
     elseif(APPLE)
-        execute_process(
-            COMMAND curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release.tar.xz" -o "${CMAKE_CURRENT_BINARY_DIR}/arm64-macosx-apple-release.tar.xz"
-        )
-        execute_process(
-            COMMAND tar -xJf "${CMAKE_CURRENT_BINARY_DIR}/arm64-macosx-apple-release.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/.llvm"
-        )
+        set(LLVM_PACKAGE "arm64-macosx-apple-release.tar.xz")
     elseif(UNIX)
-        execute_process(
-            COMMAND curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/x86_64-linux-gnu-release.tar.xz" -o "${CMAKE_CURRENT_BINARY_DIR}/x86_64-linux-release.tar.xz"
-        )
-        execute_process(
-            COMMAND tar -xJf "${CMAKE_CURRENT_BINARY_DIR}/x86_64-linux-release.tar.xz" -C "${CMAKE_CURRENT_BINARY_DIR}/.llvm"
-        )
+        set(LLVM_PACKAGE "x86_64-linux-gnu-release.tar.xz")
     endif()
+
+    file(
+        DOWNLOAD "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/${LLVM_PACKAGE}" "${CMAKE_CURRENT_BINARY_DIR}/${LLVM_PACKAGE}"
+        SHOW_PROGRESS
+    )
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E tar xvf "${CMAKE_CURRENT_BINARY_DIR}/${LLVM_PACKAGE}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.llvm"
+    )
+
     set(LLVM_INSTALL_PATH "${CMAKE_CURRENT_BINARY_DIR}/.llvm" CACHE PATH "Path to LLVM installation" FORCE)
     set(LLVM_CMAKE_DIR "${LLVM_INSTALL_PATH}/lib/cmake/llvm" CACHE PATH "Path to LLVM CMake files" FORCE)
     message(STATUS "LLVM installation path set to: ${LLVM_INSTALL_PATH}")
