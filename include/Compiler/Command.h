@@ -113,6 +113,10 @@ public:
         -> LookupInfo;
 
 private:
+    /// If file not found in CDB file, try to guess commands or use the default case.
+    auto guess_or_fallback(this Self& self, llvm::StringRef file) -> LookupInfo;
+
+private:
     /// The memory pool to hold all cstring and command list.
     llvm::BumpPtrAllocator allocator;
 
@@ -128,10 +132,10 @@ private:
     llvm::DenseSet<std::uint32_t> filtered_options;
 
     /// A map between file path and its canonical command list.
-    llvm::DenseMap<const void*, CommandInfo> command_infos;
+    llvm::DenseMap<const char*, CommandInfo> command_infos;
 
     /// A map between driver path and its query driver info.
-    llvm::DenseMap<const void*, DriverInfo> driver_infos;
+    llvm::DenseMap<const char*, DriverInfo> driver_infos;
 };
 
 }  // namespace clice
