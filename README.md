@@ -20,7 +20,7 @@ Beyond performance, clice provides instantiation-aware template processing, supp
 
 Download the latest `clice` binary from the [releases page](https://github.com/clice-project/clice/releases) and install the [vscode extension](https://marketplace.visualstudio.com/items?itemName=ykiko.clice-vscode). Then, add the following configuration to your `.vscode/settings.json` file:
 
-```cpp
+```json
 {
     // Optional: Set this to an empty string to turn off the clangd.
     "clangd.path": "",
