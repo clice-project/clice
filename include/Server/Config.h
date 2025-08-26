@@ -5,6 +5,7 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringMap.h"
 
 namespace clice::config {
 
@@ -30,6 +31,14 @@ struct IndexOptions {
     std::string dir = "${workspace}/.clice/index";
 };
 
+/// Configures what clang-tidy checks to run and options to use with them.
+struct ClangTidyOptions {
+    // A comma-separated list of globs specify which clang-tidy checks to run.
+    std::string checks;
+    llvm::StringMap<std::string> check_options;
+    std::string fast_check_filter = "strict";
+};
+
 struct Rule {
     std::string pattern;
     std::vector<std::string> append;
@@ -44,6 +53,7 @@ extern llvm::StringRef binary;
 extern llvm::StringRef llvm_version;
 extern llvm::StringRef workspace;
 
+extern const ClangTidyOptions& clang_tidy;
 extern const ServerOptions& server;
 extern const CacheOptions& cache;
 extern const IndexOptions& index;
