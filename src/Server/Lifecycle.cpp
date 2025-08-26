@@ -53,7 +53,13 @@ void load_compile_commands(CompilationDatabase& database,
             return true;
         }
 
-        for(const auto& entry: stdfs::directory_iterator(dir)) {
+        std::error_code ec;
+        for(const auto& entry: stdfs::directory_iterator(dir, ec)) {
+            if(ec) {
+                log::warn("Error iterating directory: {}, {}, skipped", dir.string(), ec.message());
+                continue;
+            }
+
             if(self(entry.path())) {
                 return true;
             }

@@ -494,26 +494,28 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
 auto CompilationDatabase::guess_or_fallback(this Self& self, llvm::StringRef file) -> LookupInfo {
     // Try to guess command from other file in same directory or parent directory
     llvm::StringRef dir = path::parent_path(file);
-    while(!dir.empty()) {
+
+    // Search up to 3 levels of parent directories
+    int up_level = 0;
+    while(!dir.empty() && up_level < 3) {
+        // If any file in the directory has a command, use that command
         for(const auto& [other_file, info]: self.command_infos) {
-            if(llvm::StringRef other = other_file; !other.starts_with(dir)) {
-                continue;
+            if(llvm::StringRef other = other_file; other.starts_with(dir)) {
+                log::info("Guess command for:{}, from existed file: {}", file, other_file);
+                return LookupInfo{info.dictionary, info.arguments};
             }
-            log::info("Guess command for:{}, from existed file: {}", file, other_file);
-            return LookupInfo{info.dictionary, info.arguments};
         }
         dir = path::parent_path(dir);
+        up_level += 1;
     }
 
     /// FIXME: use a better default case.
     // Fallback to default case.
     LookupInfo info;
-    info.dictionary = {};
-    info.arguments = {
-        self.save_string("clang++").data(),
-        self.save_string("-std=c++20").data(),
-    };
-
+    constexpr const char* fallback[] = {"clang++", "-std=c++20"};
+    for(const char* arg: fallback) {
+        info.arguments.emplace_back(self.save_string(arg).data());
+    }
     return info;
 }
 
