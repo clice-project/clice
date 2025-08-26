@@ -1,10 +1,14 @@
+#include "Support/Logger.h"
 #include "CompilationUnitImpl.h"
 #include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
 #include "Compiler/Diagnostic.h"
+#include "Compiler/Tidy.h"
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/MultiplexConsumer.h"
+
+#include "TidyImpl.h"
 
 namespace clice {
 
@@ -64,12 +68,15 @@ private:
 };
 
 class ProxyAction final : public clang::WrapperFrontendAction {
+    std::unique_ptr<tidy::ClangTidyChecker> checker;
+
 public:
     ProxyAction(std::unique_ptr<clang::FrontendAction> action,
                 std::vector<clang::Decl*>* top_level_decls,
-                std::shared_ptr<std::atomic_bool> stop) :
+                std::shared_ptr<std::atomic_bool> stop,
+                std::unique_ptr<tidy::ClangTidyChecker> checker) :
         clang::WrapperFrontendAction(std::move(action)), top_level_decls(top_level_decls),
-        stop(std::move(stop)) {}
+        stop(std::move(stop)), checker(std::move(checker)) {}
 
     auto CreateASTConsumer(clang::CompilerInstance& instance, llvm::StringRef file)
         -> std::unique_ptr<clang::ASTConsumer> final {
@@ -80,8 +87,13 @@ public:
             std::move(stop));
     }
 
-    /// Make this public.
-    using clang::WrapperFrontendAction::EndSourceFile;
+    void EndSourceFile() {
+        // Must be called before EndSourceFile because the ast context can be destroyed later.
+        if(checker) {
+            checker->CTFinder.matchAST(getCompilerInstance().getASTContext());
+        }
+        clang::WrapperFrontendAction::EndSourceFile();
+    }
 
 private:
     std::vector<clang::Decl*>* top_level_decls;
@@ -154,10 +166,11 @@ CompilationResult run_clang(CompilationParams& params,
                             const AfterExecute& after_execute = no_hook) {
     auto diagnostics =
         params.diagnostics ? params.diagnostics : std::make_shared<std::vector<Diagnostic>>();
+    auto [collector, diagnostic_client] = Diagnostic::create(diagnostics);
     auto diagnostic_engine =
         clang::CompilerInstance::createDiagnostics(*params.vfs,
                                                    new clang::DiagnosticOptions(),
-                                                   Diagnostic::create(diagnostics));
+                                                   diagnostic_client);
 
     auto invocation = create_invocation(params, diagnostic_engine);
     if(!invocation) {
@@ -167,6 +180,13 @@ CompilationResult run_clang(CompilationParams& params,
     auto instance = std::make_unique<clang::CompilerInstance>();
     instance->setInvocation(std::move(invocation));
     instance->setDiagnostics(diagnostic_engine.get());
+
+    /// Setup clang-tidy
+    std::unique_ptr<tidy::ClangTidyChecker> checker;
+    if(params.clang_tidy) {
+        tidy::TidyParams params;
+        checker = tidy::configure(*instance, params);
+    }
 
     if(auto remapping = clang::createVFSFromCompilerInvocation(instance->getInvocation(),
                                                                instance->getDiagnostics(),
@@ -190,14 +210,15 @@ CompilationResult run_clang(CompilationParams& params,
         std::make_unique<Action>(),
         /// We only collect top level declarations for parse main file.
         params.kind == CompilationUnit::Content ? &top_level_decls : nullptr,
-        params.stop);
+        params.stop,
+        std::move(checker));
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         return std::unexpected("Fail to begin source file");
     }
 
     auto& pp = instance->getPreprocessor();
-    /// FIXME: clang-tidy, include-fixer, etc?
+    /// FIXME: include-fixer, etc?
 
     /// `BeginSourceFile` may create new preprocessor, so all operations related to preprocessor
     /// should be done after `BeginSourceFile`.
