@@ -1,25 +1,34 @@
-# clice: a powerful and efficient language server for c/c++
+<!-- Begin section: Overview -->
 
-clice is a new language server for c/c++. It is still in the early stages of development, so just wait for a few months.
+# clice
 
-Current progress is recorded in issues, feel free to share your ideas and suggestions!
+![C++ Standard](https://img.shields.io/badge/C++-23-blue.svg)
+[![GitHub license](https://img.shields.io/github/license/clice-project/clice)](https://github.com/clice-project/clice/blob/main/LICENSE)
+[![Actions status](https://github.com/clice-project/clice/workflows/CI/badge.svg)](https://github.com/clice-project/clice/actions)
+[![Documentation](https://img.shields.io/badge/view-documentation-blue)](https://clice.io)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/clice-project/clice)
+[![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?logo=discord&logoColor=white)](https://discord.gg/PA3UxW2VA3)
 
-# Why write a new language server?
+clice is a next-generation language server designed for modern C++. Through excellent asynchronous task scheduling and intelligent caching, it achieves a lower memory footprint and faster response times.
 
-In VSCode, there are mainly three C++ plugins: cpp-tools, ccls, and clangd. Based on my experience, **clangd > ccls > cpptools**. However, this doesn't mean it has no shortcomings. In fact, compared to CLion's clangd (CLion uses its own private clangd branch), clangd has a significant gap.
+Beyond performance, clice provides instantiation-aware template processing, supports switching header contexts between different source files (including non-self-contained headers), and offers comprehensive support for C++20 modules, from code completion to go-to-definition. Our goal is to provide C++ developers with a truly fast, precise, and intelligent development companion.
 
-Given this, why not contribute to clangd instead of writing a new one? The main reasons are:
+> [!IMPORTANT]
+> Support for header contexts and C++20 modules are core features currently under active development. They will be progressively refined in upcoming releases. Stay tuned!
 
-Clangd was initially maintained by several Google employees: [Sam McCall](https://github.com/sam-mccall), [kadircet](https://github.com/kadircet), and [hokein](https://github.com/hokein). They mainly addressed Google's internal needs, and more complex requests from other users often had very low priority. Moreover, starting from 2023, these employees seem to have been reassigned to other projects. Clangd now has only one passionate, voluntary maintainer: [Nathan Ridge](https://github.com/HighCommander4). But he also has his own work to attend to, and his time is very limited—possibly only enough to answer some user queries in issues.
+## Getting started
 
-Some complex requirements often require large-scale modifications to clangd, and currently, there's no one available to review the related code. Such PRs might be shelved for a very long time. As far as I know, issues like adding support for C++20 modules to clangd—such as [Introduce initial support for C++20 Modules](https://github.com/llvm/llvm-project/pull/66462) — have been delayed for nearly a year. This pace is unacceptable to me. So the current situation is that making significant changes to clangd and merging them into the mainline is very difficult.
+Download clice from releases and install [vscode extension](https://marketplace.visualstudio.com/items?itemName=ykiko.clice-vscode), Then add `.vscode/settings.json`
 
-# Why should you choose clice?
+```cpp
+{
+    // Optional: Set this to an empty string to turn off the clangd.
+    "clangd.path": "",
 
-- Support non self contained files
-- Support more code actions
-- Support full C++20 named module
-- Support more semantic tokens
-- Better response inside template
-- Better performance and less memory usage
-- Better index format
+    // Point this to the clice binary you downloaded.
+    "clice.executable": "/path/to/your/clice/executable",
+}
+```
+
+> [!NOTE]
+> As an early version, please do not use it in a production environment. Crashes are expected, and we welcome you to submit issues.
