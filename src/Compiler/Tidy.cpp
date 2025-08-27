@@ -16,7 +16,7 @@
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/Allocator.h"
 
-#include "Server/Tidy.h"
+#include "Compiler/Tidy.h"
 
 namespace clice::tidy {
 

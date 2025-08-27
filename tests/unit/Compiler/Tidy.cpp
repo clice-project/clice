@@ -1,5 +1,5 @@
 #include "Test/Test.h"
-#include "Server/Tidy.h"
+#include "Compiler/Tidy.h"
 
 namespace clice::testing {
 
