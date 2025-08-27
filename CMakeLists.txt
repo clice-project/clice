@@ -18,9 +18,9 @@ endif()
 message(STATUS "Found llvm-libs ${LLVM_INSTALL_PATH}")
 
 if (EXISTS "${LLVM_CMAKE_DIR}")
-    set(CMAKE_PREFIX_PATH "${LLVM_CMAKE_DIR}")
+    list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 else()
-    set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
+    list(APPEND CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
 endif()
 message(STATUS "CMake prefix path: ${CMAKE_PREFIX_PATH}")
 
@@ -93,7 +93,6 @@ add_library(clice-core STATIC "${CLICE_SOURCES}")
 
 # set llvm include and lib path
 add_library(llvm-libs INTERFACE IMPORTED)
-fetch_private_clang_files()
 target_include_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/include")
 message(STATUS "LLVM include path: ${LLVM_INSTALL_PATH}/include")
 if(WIN32)
