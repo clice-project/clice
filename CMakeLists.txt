@@ -102,7 +102,9 @@ add_library(llvm-libs INTERFACE IMPORTED)
 # add to include directories
 
 # private files may downloaded and present here
-target_include_directories(llvm-libs INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/include")
+if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/include")
+    target_include_directories(llvm-libs INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/include")
+endif()
 
 target_include_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/include")
 

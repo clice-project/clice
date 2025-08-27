@@ -17,8 +17,8 @@ function(github_lookup_tag_commit REPO_OWNER REPO_NAME TAG_NAME OUTPUT_VAR)
     
     # Parse the JSON to get object type and SHA
     file(READ ${CMAKE_CURRENT_BINARY_DIR}/tag_info.json TAG_JSON)
-    parse_json_field("${TAG_JSON}" "object type" OBJECT_TYPE)
-    parse_json_field("${TAG_JSON}" "object sha" OBJECT_SHA)
+    parse_json_field("${TAG_JSON}" object "type" OBJECT_TYPE)
+    parse_json_field("${TAG_JSON}" object sha OBJECT_SHA)
     
     if(OBJECT_TYPE STREQUAL "NOTFOUND" OR OBJECT_SHA STREQUAL "NOTFOUND")
         set(${OUTPUT_VAR} "NOTFOUND" PARENT_SCOPE)
@@ -43,7 +43,7 @@ function(github_lookup_tag_commit REPO_OWNER REPO_NAME TAG_NAME OUTPUT_VAR)
         
         # Parse the annotated tag JSON to get the commit SHA
         file(READ ${CMAKE_CURRENT_BINARY_DIR}/annotated_tag_info.json ANNOTATED_TAG_JSON)
-        parse_json_field("${ANNOTATED_TAG_JSON}" "object sha" COMMIT_SHA)
+        parse_json_field("${ANNOTATED_TAG_JSON}" object sha COMMIT_SHA)
         
         if(COMMIT_SHA STREQUAL "NOTFOUND")
             set(${OUTPUT_VAR} "NOTFOUND" PARENT_SCOPE)

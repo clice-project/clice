@@ -21,53 +21,19 @@ function(download_json URL OUTPUT_FILE OUTPUT_VAR)
 endfunction()
 
 # Parse nested JSON field with error checking
-function(parse_json_field JSON_CONTENT FIELD_PATH OUTPUT_VAR)
-    string(JSON FIELD_VALUE GET ${JSON_CONTENT} ${FIELD_PATH})
+# Usage: parse_json_field("${JSON}" object "type" OUTPUT_VAR) 
+function(parse_json_field JSON_CONTENT)
+    set(ARGS "${ARGN}")
+    list(GET ARGS -1 OUTPUT_VAR)
+    list(REMOVE_AT ARGS -1)
+    
+    string(JSON FIELD_VALUE GET ${JSON_CONTENT} ${ARGS})
     if(NOT FIELD_VALUE)
-        message(WARNING "Could not parse field '${FIELD_PATH}' from JSON.")
+        string(JOIN " " FIELD_PATH_STR ${ARGS})
+        message(WARNING "Could not parse field '${FIELD_PATH_STR}' from JSON.")
         set(${OUTPUT_VAR} "NOTFOUND" PARENT_SCOPE)
         return()
     endif()
     
     set(${OUTPUT_VAR} ${FIELD_VALUE} PARENT_SCOPE)
-endfunction()
-
-# Download JSON from URL and parse specified fields
-function(download_and_parse_json URL OUTPUT_FILE FIELD_SPEC OUTPUT_VAR)
-    # Download JSON
-    download_json(${URL} ${OUTPUT_FILE} DOWNLOAD_RESULT)
-    if(DOWNLOAD_RESULT STREQUAL "NOTFOUND")
-        set(${OUTPUT_VAR} "NOTFOUND" PARENT_SCOPE)
-        return()
-    endif()
-    
-    # Read and parse JSON
-    file(READ ${OUTPUT_FILE} JSON_CONTENT)
-    parse_json_fields("${JSON_CONTENT}" "${FIELD_SPEC}" PARSED_VALUES)
-    
-    if(PARSED_VALUES STREQUAL "NOTFOUND")
-        set(${OUTPUT_VAR} "NOTFOUND" PARENT_SCOPE)
-    else()
-        set(${OUTPUT_VAR} ${PARSED_VALUES} PARENT_SCOPE)
-    endif()
-endfunction()
-
-# Parse multiple fields from JSON content
-# FIELD_SPEC format: "field1;field2;..." or single field
-function(parse_json_fields JSON_CONTENT FIELD_SPEC OUTPUT_VAR)
-    string(REPLACE ";" " " FIELDS "${FIELD_SPEC}")
-    separate_arguments(FIELD_LIST NATIVE_COMMAND ${FIELDS})
-    
-    set(PARSED_VALUES "")
-    foreach(FIELD ${FIELD_LIST})
-        string(JSON FIELD_VALUE GET ${JSON_CONTENT} ${FIELD})
-        if(NOT FIELD_VALUE)
-            message(WARNING "Could not parse field '${FIELD}' from JSON.")
-            set(${OUTPUT_VAR} "NOTFOUND" PARENT_SCOPE)
-            return()
-        endif()
-        list(APPEND PARSED_VALUES ${FIELD_VALUE})
-    endforeach()
-    
-    set(${OUTPUT_VAR} ${PARSED_VALUES} PARENT_SCOPE)
 endfunction()
