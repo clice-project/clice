@@ -1,10 +1,13 @@
 include_guard()
 
+include(${CMAKE_CURRENT_LIST_DIR}/github.cmake)
+
+# Check if LLVM version is supported
 function(check_llvm_version llvm_ver OUTPUT_VAR)
-    if ((NOT DEFINED llvm_ver) OR (llvm_ver STREQUAL ""))
+    if((NOT DEFINED llvm_ver) OR (llvm_ver STREQUAL ""))
         message(WARNING "LLVM version is not set.")
         set(${OUTPUT_VAR} FALSE PARENT_SCOPE)
-    elseif (NOT (llvm_ver VERSION_GREATER_EQUAL "20.1" AND llvm_ver VERSION_LESS "20.2"))
+    elseif(NOT (llvm_ver VERSION_GREATER_EQUAL "20.1" AND llvm_ver VERSION_LESS "20.2"))
         message(WARNING "Unsupported LLVM version: ${llvm_ver}. Only LLVM 20.1.x is supported.")
         set(${OUTPUT_VAR} FALSE PARENT_SCOPE)
     else()
@@ -12,81 +15,27 @@ function(check_llvm_version llvm_ver OUTPUT_VAR)
     endif()
 endfunction()
 
-# look up specific version's corresponding commit
+# Look up LLVM version's corresponding commit SHA
 function(lookup_commit llvm_ver OUTPUT_VAR)
     set(LLVM_TAG "llvmorg-${llvm_ver}")
-    # fetch tag info
-    set(GITHUB_API_URL "https://api.github.com/repos/llvm/llvm-project/git/ref/tags/${LLVM_TAG}")
-
-    message(STATUS "Fetching tag info from: ${GITHUB_API_URL}")
-    
-    # download tag info
-    file(DOWNLOAD 
-        ${GITHUB_API_URL}
-        ${CMAKE_CURRENT_BINARY_DIR}/tag_info.json
-        STATUS DOWNLOAD_STATUS
-        TLS_VERIFY ON
-    )
-    
-    # check download info
-    list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
-    if(NOT STATUS_CODE EQUAL 0)
-        list(GET DOWNLOAD_STATUS 1 ERROR_MSG)
-        message(WARNING "Failed to download tag info: ${ERROR_MSG}")
-        set(${OUTPUT_VAR} "NOTFOUND" PARENT_SCOPE)
-        return()
-    endif()
-    
-    # read json
-    file(READ ${CMAKE_CURRENT_BINARY_DIR}/tag_info.json TAG_INFO_JSON)
-
-    # check object type
-    string(JSON OBJECT_TYPE GET ${TAG_INFO_JSON} object type)
-    string(JSON OBJECT_SHA GET ${TAG_INFO_JSON} object sha)
-    
-    if(OBJECT_TYPE STREQUAL "commit")
-        # is commit
-        set(${OUTPUT_VAR} ${OBJECT_SHA} PARENT_SCOPE)
-    elseif(OBJECT_TYPE STREQUAL "tag")
-        # is annotated
-        set(TAG_API_URL "https://api.github.com/repos/llvm/llvm-project/git/tags/${OBJECT_SHA}")
-
-        message(STATUS "Fetching annotated tag info from: ${TAG_API_URL}")
-        file(DOWNLOAD 
-            ${TAG_API_URL}
-            ${CMAKE_CURRENT_BINARY_DIR}/annotated_tag_info.json
-            STATUS TAG_DOWNLOAD_STATUS
-            TLS_VERIFY ON
-        )
-        
-        list(GET TAG_DOWNLOAD_STATUS 0 TAG_STATUS_CODE)
-        if(NOT TAG_STATUS_CODE EQUAL 0)
-            list(GET TAG_DOWNLOAD_STATUS 1 TAG_ERROR_MSG)
-            message(WARNING "Failed to download annotated tag info: ${TAG_ERROR_MSG}")
-            set(${OUTPUT_VAR} "NOTFOUND" PARENT_SCOPE)
-            return()
-        endif()
-        
-        file(READ ${CMAKE_CURRENT_BINARY_DIR}/annotated_tag_info.json ANNOTATED_TAG_JSON)
-        string(JSON COMMIT_SHA GET ${ANNOTATED_TAG_JSON} object sha)
-        set(${OUTPUT_VAR} ${COMMIT_SHA} PARENT_SCOPE)
-    else()
-        message(WARNING "Unknown object type: ${OBJECT_TYPE}")
-        set(${OUTPUT_VAR} "NOTFOUND" PARENT_SCOPE)
-    endif()
+    github_lookup_tag_commit("llvm" "llvm-project" ${LLVM_TAG} COMMIT_SHA)
+    set(${OUTPUT_VAR} ${COMMIT_SHA} PARENT_SCOPE)
 endfunction()
 
+# Fetch private Clang header files from LLVM source
 function(fetch_private_clang_files llvm_ver)
-
     set(PRIVATE_CLANG_FILE_LIST
         "Sema/CoroutineStmtBuilder.h"
         "Sema/TypeLocBuilder.h"
         "Sema/TreeTransform.h"
     )
     
+    # Check if all files already exist
     set(PRIVATE_FILE_EXISTS TRUE)
     foreach(FILE ${PRIVATE_CLANG_FILE_LIST})
-        if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/include/clang/${FILE}")
+        if(EXISTS "${LLVM_INSTALL_PATH}/include/clang/${FILE}")
+            message(STATUS "Private clang file found in LLVM installation: ${FILE}")
+        elseif(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/include/clang/${FILE}")
             message(STATUS "Private clang file already exists: ${FILE}")
         else()
             set(PRIVATE_FILE_EXISTS FALSE)
@@ -95,36 +44,43 @@ function(fetch_private_clang_files llvm_ver)
     endforeach()
 
     if(PRIVATE_FILE_EXISTS)
-        message(STATUS "All private clang files already exist.")
+        message(STATUS "All required private clang files already exist.")
         return()
     endif()
 
-    message(WARNING "Private clang files incomplete, try fetch from llvm-project source...")
+    # Skip download in offline build mode
+    if(CLICE_OFFLINE_BUILD)
+        message(WARNING "CLICE_OFFLINE_BUILD is enabled, skipping private clang files download")
+        message(WARNING "Build may fail if required private headers are missing")
+        return()
+    endif()
 
-    set(LLVM_COMMIT "")
+    message(WARNING "Required private clang files incomplete, fetching from llvm-project source...")
+
+    # Get the commit SHA for this LLVM version
     lookup_commit(${llvm_ver} LLVM_COMMIT)
-    
     if(LLVM_COMMIT STREQUAL "NOTFOUND")
         message(WARNING "Failed to lookup commit for LLVM ${llvm_ver}, skipping private clang files download")
         return()
     endif()
 
     message(STATUS "LLVM ${llvm_ver} corresponds to commit ${LLVM_COMMIT}")
-    set(PRIVATE_FILE_COMMIT "${LLVM_COMMIT}")
 
+    # Download missing files
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/clang")
     foreach(FILE ${PRIVATE_CLANG_FILE_LIST})
         if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/include/clang/${FILE}")
-            message(STATUS "file ${FILE} does not exist, downloading...")
+            message(STATUS "Downloading ${FILE}...")
             file(
-                DOWNLOAD "https://raw.githubusercontent.com/llvm/llvm-project/${PRIVATE_FILE_COMMIT}/clang/lib/${FILE}" "${CMAKE_CURRENT_BINARY_DIR}/include/clang/${FILE}"
+                DOWNLOAD "https://raw.githubusercontent.com/llvm/llvm-project/${LLVM_COMMIT}/clang/lib/${FILE}"
+                         "${CMAKE_CURRENT_BINARY_DIR}/include/clang/${FILE}"
                 SHOW_PROGRESS
-            ) 
+            )
         endif()
     endforeach()
-
 endfunction()
 
+# Detect system-installed LLVM using llvm-config
 function(detect_llvm OUTPUT_VAR)
     find_program(LLVM_CONFIG_EXEC llvm-config)
 
@@ -133,6 +89,7 @@ function(detect_llvm OUTPUT_VAR)
         return()
     endif()
 
+    # Get LLVM version and paths
     execute_process(
         COMMAND "${LLVM_CONFIG_EXEC}" --version
         OUTPUT_VARIABLE LLVM_VERSION
@@ -149,14 +106,17 @@ function(detect_llvm OUTPUT_VAR)
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 
+    # Set cache variables
     set(LLVM_INSTALL_PATH "${LLVM_INSTALL_PATH_DETECTED}" CACHE PATH "Path to LLVM installation" FORCE)
     set(LLVM_CMAKE_DIR "${LLVM_CMAKE_DIR_DETECTED}" CACHE PATH "Path to LLVM CMake files" FORCE)
     set(${OUTPUT_VAR} ${LLVM_VERSION} PARENT_SCOPE)
 endfunction()
 
+# Download and install prebuilt LLVM binaries
 function(install_prebuilt_llvm llvm_ver)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.llvm")
     
+    # Determine build type
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(LLVM_BUILD_TYPE "debug")
     elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -165,6 +125,7 @@ function(install_prebuilt_llvm llvm_ver)
         set(LLVM_BUILD_TYPE "release-lto")
     endif()
 
+    # Determine platform-specific package name
     if(WIN32)
         set(LLVM_PACKAGE "x64-windows-msvc-${LLVM_BUILD_TYPE}.7z")
     elseif(APPLE)
@@ -173,38 +134,48 @@ function(install_prebuilt_llvm llvm_ver)
         set(LLVM_PACKAGE "x86_64-linux-gnu-${LLVM_BUILD_TYPE}.tar.xz")
     endif()
 
-    message(STATUS "Downloading pre-built LLVM package file ${LLVM_PACKAGE}, please wait...")
-
+    message(STATUS "Downloading prebuilt LLVM package: ${LLVM_PACKAGE}")
     file(
-        DOWNLOAD "https://github.com/clice-project/llvm-binary/releases/download/${llvm_ver}/${LLVM_PACKAGE}" "${CMAKE_CURRENT_BINARY_DIR}/${LLVM_PACKAGE}"
+        DOWNLOAD "https://github.com/clice-project/llvm-binary/releases/download/${llvm_ver}/${LLVM_PACKAGE}"
+                 "${CMAKE_CURRENT_BINARY_DIR}/${LLVM_PACKAGE}"
         SHOW_PROGRESS
     )
 
-    message(STATUS "Decompressing pre-built LLVM package file ${LLVM_PACKAGE}, please wait...")
+    message(STATUS "Extracting LLVM package: ${LLVM_PACKAGE}")
     execute_process(
         COMMAND "${CMAKE_COMMAND}" -E tar xvf "${CMAKE_CURRENT_BINARY_DIR}/${LLVM_PACKAGE}"
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.llvm"
     )
 
+    # Set installation paths
     set(LLVM_INSTALL_PATH "${CMAKE_CURRENT_BINARY_DIR}/.llvm" CACHE PATH "Path to LLVM installation" FORCE)
     set(LLVM_CMAKE_DIR "${LLVM_INSTALL_PATH}/lib/cmake/llvm" CACHE PATH "Path to LLVM CMake files" FORCE)
     message(STATUS "LLVM installation path set to: ${LLVM_INSTALL_PATH}")
 endfunction()
 
+# Main function to set up LLVM for the project
 function(setup_llvm)
+    # Use existing LLVM installation if path is already set
     if(DEFINED LLVM_INSTALL_PATH AND NOT LLVM_INSTALL_PATH STREQUAL "")
         message(STATUS "LLVM_INSTALL_PATH is set to ${LLVM_INSTALL_PATH}, using it directly.")
         return()
     endif()
 
+    # Try to detect system LLVM
     detect_llvm(LLVM_VERSION)
     check_llvm_version("${LLVM_VERSION}" LLVM_VERSION_OK)
 
+    # Download prebuilt LLVM if system version is not suitable
     if(NOT LLVM_VERSION_OK)
+        if(CLICE_OFFLINE_BUILD)
+            message(FATAL_ERROR "CLICE_OFFLINE_BUILD is enabled but no suitable system LLVM found. Please install LLVM 20.1.x or disable offline build mode.")
+        endif()
+        
         set(LLVM_VERSION "20.1.5")
         message(WARNING "System LLVM not found or version mismatch, downloading prebuilt LLVM...")
         install_prebuilt_llvm("${LLVM_VERSION}")
     endif()
 
+    # Fetch required private Clang headers
     fetch_private_clang_files("${LLVM_VERSION}")
 endfunction()
