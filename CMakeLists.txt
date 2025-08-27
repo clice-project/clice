@@ -99,16 +99,17 @@ add_library(clice-core STATIC "${CLICE_SOURCES}")
 # set llvm include and lib path
 add_library(llvm-libs INTERFACE IMPORTED)
 
+
+message(STATUS "LLVM include path: ${LLVM_INSTALL_PATH}/include")
 # add to include directories
+target_include_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/include")
 
 # private files may downloaded and present here
 if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/include")
+    message(STATUS "Fetched private headers to include: ${CMAKE_CURRENT_BINARY_DIR}/include")
     target_include_directories(llvm-libs INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/include")
 endif()
 
-target_include_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/include")
-
-message(STATUS "LLVM include path: ${LLVM_INSTALL_PATH}/include")
 if(WIN32)
     target_compile_definitions(llvm-libs INTERFACE "CLANG_BUILD_STATIC")
     target_link_libraries(llvm-libs INTERFACE version ntdll)

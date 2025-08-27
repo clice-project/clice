@@ -31,6 +31,9 @@
 *.out
 *.app
 
+# Evil things
+.claude
+
 # LSP & IDE
 compile_commands.json
 .vscode/
