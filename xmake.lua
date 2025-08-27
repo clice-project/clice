@@ -22,13 +22,6 @@ if has_config("dev") then
     elseif is_mode("debug") and is_plat("linux", "macosx") then
         set_policy("build.sanitizer.address", true)
     end
-
-    if has_config("enable_test") then
-        -- TODO: fix python fetch on mac (from xmake-repo python fetch)
-        if not (has_config("ci") and is_plat("macosx")) then
-            add_requires("python >=3.12", {kind = "binary"})
-        end
-    end
 end
 
 local libuv_require = "libuv"
@@ -124,48 +117,23 @@ target("integration_tests")
     set_kind("phony")
 
     add_deps("clice")
-    add_packages("python", "llvm")
+    add_packages("llvm")
 
     add_tests("default")
 
     on_test(function (target, opt)
-        import("private.action.run.runenvs")
+        import("lib.detect.find_tool")
 
-        local envs = opt.runenvs
-        if not envs then
-            local addenvs, setenvs = runenvs.make(target)
-            envs = runenvs.join(addenvs, setenvs)
-        end
-
-        local test_argv = {
+        local uv = assert(find_tool("uv"), "uv not found!")
+        local argv = {
+            "run", "pytest",
+            "--log-cli-level=INFO",
             "-s", "tests/integration",
             "--executable=" .. target:dep("clice"):targetfile(),
             "--resource-dir=" .. path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
         }
         local opt = {envs = envs, curdir = os.projectdir()}
-
-        if has_config("ci") and is_plat("macosx") then
-            os.vrun("pip install pytest pytest-asyncio pytest-xdist")
-            os.vrunv("pytest", test_argv, opt)
-        else
-            local python
-            local installdir = target:pkg("python"):installdir()
-            if installdir then
-                python = path.join(installdir, "bin/python")
-            else
-                python = "python3"
-            end
-
-            local ok = try { function()
-                os.vrunv(python, { "-c", "import pytest" })
-                return true
-            end }
-            if not ok then
-                os.vrunv(python, {"-m", "pip", "install", "pytest", "pytest-asyncio", "pytest-xdist"})
-            end
-
-            os.vrunv(python, {"-m", "pytest", table.unpack(test_argv)}, opt)
-        end
+        os.vrunv(uv.program, argv, opt)
 
         return true
     end)
