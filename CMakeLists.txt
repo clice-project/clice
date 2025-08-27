@@ -22,8 +22,10 @@ if (EXISTS "${LLVM_CMAKE_DIR}")
 else()
     list(APPEND CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
 endif()
+message(STATUS "CMake module path: ${CMAKE_MODULE_PATH}")
 message(STATUS "CMake prefix path: ${CMAKE_PREFIX_PATH}")
 
+message(STATUS "Installing other dependencies, please wait...")
 # install dependencies
 include(FetchContent)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -31,10 +33,13 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(ASAN ON CACHE BOOL "" FORCE)
 endif()
 
+message(STATUS "Fetching tomlplusplus...")
 FetchContent_Declare(
     tomlplusplus   
     GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
 )
+
+message(STATUS "Fetching libuv...")
 FetchContent_Declare(
     libuv
     GIT_REPOSITORY https://github.com/libuv/libuv.git
@@ -93,7 +98,14 @@ add_library(clice-core STATIC "${CLICE_SOURCES}")
 
 # set llvm include and lib path
 add_library(llvm-libs INTERFACE IMPORTED)
+
+# add to include directories
+
+# private files may downloaded and present here
+target_include_directories(llvm-libs INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/include")
+
 target_include_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/include")
+
 message(STATUS "LLVM include path: ${LLVM_INSTALL_PATH}/include")
 if(WIN32)
     target_compile_definitions(llvm-libs INTERFACE "CLANG_BUILD_STATIC")

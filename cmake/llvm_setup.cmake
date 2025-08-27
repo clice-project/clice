@@ -1,8 +1,19 @@
 include_guard()
 
+function(check_llvm_version llvm_ver OUTPUT_VAR)
+    if ((NOT DEFINED llvm_ver) OR (llvm_ver STREQUAL ""))
+        message(WARNING "LLVM version is not set.")
+        set(${OUTPUT_VAR} FALSE PARENT_SCOPE)
+    elseif (NOT (llvm_ver VERSION_GREATER_EQUAL "20.1" AND llvm_ver VERSION_LESS "20.2"))
+        message(WARNING "Unsupported LLVM version: ${llvm_ver}. Only LLVM 20.1.x is supported.")
+        set(${OUTPUT_VAR} FALSE PARENT_SCOPE)
+    else()
+        set(${OUTPUT_VAR} TRUE PARENT_SCOPE)
+    endif()
+endfunction()
+
 # look up specific version's corresponding commit
 function(lookup_commit llvm_ver OUTPUT_VAR)
-    # version should matches: "\d{2}\.\d+.\d+", 11.4.5, e.g.
     set(LLVM_TAG "llvmorg-${llvm_ver}")
     # fetch tag info
     set(GITHUB_API_URL "https://api.github.com/repos/llvm/llvm-project/git/ref/tags/${LLVM_TAG}")
@@ -39,7 +50,8 @@ function(lookup_commit llvm_ver OUTPUT_VAR)
     elseif(OBJECT_TYPE STREQUAL "tag")
         # is annotated
         set(TAG_API_URL "https://api.github.com/repos/llvm/llvm-project/git/tags/${OBJECT_SHA}")
-        
+
+        message(STATUS "Fetching annotated tag info from: ${TAG_API_URL}")
         file(DOWNLOAD 
             ${TAG_API_URL}
             ${CMAKE_CURRENT_BINARY_DIR}/annotated_tag_info.json
@@ -87,16 +99,23 @@ function(fetch_private_clang_files llvm_ver)
         return()
     endif()
 
-    message(WARNING "Private clang files not found, try fetch from llvm-project source...")
+    message(WARNING "Private clang files incomplete, try fetch from llvm-project source...")
 
     set(LLVM_COMMIT "")
     lookup_commit(${llvm_ver} LLVM_COMMIT)
+    
+    if(LLVM_COMMIT STREQUAL "NOTFOUND")
+        message(WARNING "Failed to lookup commit for LLVM ${llvm_ver}, skipping private clang files download")
+        return()
+    endif()
 
+    message(STATUS "LLVM ${llvm_ver} corresponds to commit ${LLVM_COMMIT}")
     set(PRIVATE_FILE_COMMIT "${LLVM_COMMIT}")
 
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/clang")
     foreach(FILE ${PRIVATE_CLANG_FILE_LIST})
         if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/include/clang/${FILE}")
+            message(STATUS "file ${FILE} does not exist, downloading...")
             file(
                 DOWNLOAD "https://raw.githubusercontent.com/llvm/llvm-project/${PRIVATE_FILE_COMMIT}/clang/lib/${FILE}" "${CMAKE_CURRENT_BINARY_DIR}/include/clang/${FILE}"
                 SHOW_PROGRESS
@@ -104,25 +123,21 @@ function(fetch_private_clang_files llvm_ver)
         endif()
     endforeach()
 
-    # add to include directories
-    target_include_directories(llvm-libs INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/include")
 endfunction()
 
-function(detect_llvm result)
+function(detect_llvm OUTPUT_VAR)
     find_program(LLVM_CONFIG_EXEC llvm-config)
+
     if(NOT LLVM_CONFIG_EXEC)
-        set(${result} "" PARENT_SCOPE)
+        set(${OUTPUT_VAR} "" PARENT_SCOPE)
         return()
     endif()
+
     execute_process(
         COMMAND "${LLVM_CONFIG_EXEC}" --version
         OUTPUT_VARIABLE LLVM_VERSION
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    if(NOT (LLVM_VERSION VERSION_GREATER_EQUAL "20.1" AND LLVM_VERSION VERSION_LESS "20.2"))
-        set(${result} "" PARENT_SCOPE)
-        return()
-    endif()
     execute_process(
         COMMAND "${LLVM_CONFIG_EXEC}" --prefix
         OUTPUT_VARIABLE LLVM_INSTALL_PATH_DETECTED
@@ -133,9 +148,10 @@ function(detect_llvm result)
         OUTPUT_VARIABLE LLVM_CMAKE_DIR_DETECTED
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
+
     set(LLVM_INSTALL_PATH "${LLVM_INSTALL_PATH_DETECTED}" CACHE PATH "Path to LLVM installation" FORCE)
     set(LLVM_CMAKE_DIR "${LLVM_CMAKE_DIR_DETECTED}" CACHE PATH "Path to LLVM CMake files" FORCE)
-    set(${result} ${LLVM_VERSION} PARENT_SCOPE)
+    set(${OUTPUT_VAR} ${LLVM_VERSION} PARENT_SCOPE)
 endfunction()
 
 function(install_prebuilt_llvm llvm_ver)
@@ -182,12 +198,13 @@ function(setup_llvm)
     endif()
 
     detect_llvm(LLVM_VERSION)
+    check_llvm_version("${LLVM_VERSION}" LLVM_VERSION_OK)
 
-    if(LLVM_VERSION STREQUAL "")
+    if(NOT LLVM_VERSION_OK)
         set(LLVM_VERSION "20.1.5")
         message(WARNING "System LLVM not found or version mismatch, downloading prebuilt LLVM...")
-        install_prebuilt_llvm(LLVM_VERSION)
+        install_prebuilt_llvm("${LLVM_VERSION}")
     endif()
 
-    fetch_private_clang_files(LLVM_VERSION)
+    fetch_private_clang_files("${LLVM_VERSION}")
 endfunction()
