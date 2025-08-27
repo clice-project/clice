@@ -22,34 +22,34 @@ namespace clice::tidy {
 
 using namespace clang::tidy;
 
-bool isRegisteredTidyCheck(llvm::StringRef Check) {
-    assert(!Check.empty());
-    assert(!Check.contains('*') && !Check.contains(',') &&
+bool isRegisteredTidyCheck(llvm::StringRef check) {
+    assert(!check.empty());
+    assert(!check.contains('*') && !check.contains(',') &&
            "isRegisteredCheck doesn't support globs");
-    assert(Check.ltrim().front() != '-');
+    assert(check.ltrim().front() != '-');
 
-    const static llvm::StringSet<llvm::BumpPtrAllocator> AllChecks = [] {
-        llvm::StringSet<llvm::BumpPtrAllocator> Result;
-        tidy::ClangTidyCheckFactories Factories;
-        for(tidy::ClangTidyModuleRegistry::entry E: tidy::ClangTidyModuleRegistry::entries())
-            E.instantiate()->addCheckFactories(Factories);
-        for(const auto& Factory: Factories)
-            Result.insert(Factory.getKey());
-        return Result;
+    const static llvm::StringSet<llvm::BumpPtrAllocator> all_checks = [] {
+        llvm::StringSet<llvm::BumpPtrAllocator> result;
+        tidy::ClangTidyCheckFactories factories;
+        for(tidy::ClangTidyModuleRegistry::entry entry: tidy::ClangTidyModuleRegistry::entries())
+            entry.instantiate()->addCheckFactories(factories);
+        for(const auto& factory: factories)
+            result.insert(factory.getKey());
+        return result;
     }();
 
-    return AllChecks.contains(Check);
+    return all_checks.contains(check);
 }
 
-std::optional<bool> isFastTidyCheck(llvm::StringRef Check) {
-    static auto& Fast = *new llvm::StringMap<bool>{
+std::optional<bool> isFastTidyCheck(llvm::StringRef check) {
+    static auto& fast = *new llvm::StringMap<bool>{
 #define FAST(CHECK, TIME) {#CHECK, true},
 #define SLOW(CHECK, TIME) {#CHECK, false},
 // todo: move me to llvm toolchain headers.
 #include "TidyFastChecks.inc"
     };
-    if(auto It = Fast.find(Check); It != Fast.end())
-        return It->second;
+    if(auto it = fast.find(check); it != fast.end())
+        return it->second;
     return std::nullopt;
 }
 
