@@ -2,7 +2,7 @@ set_xmakever("2.9.7")
 set_project("clice")
 
 set_allowedplats("windows", "linux", "macosx")
-set_allowedmodes("debug", "release")
+set_allowedmodes("debug", "release", "releasedbg")
 
 option("enable_test", {default = true})
 option("dev", {default = true})
@@ -42,7 +42,7 @@ end
 add_requires(libuv_require, "toml++")
 add_requires("llvm", {system = false})
 
-add_rules("mode.release", "mode.debug")
+add_rules("mode.release", "mode.debug", "mode.releasedbg")
 set_languages("c++23")
 add_rules("clice_build_config")
 
@@ -77,7 +77,7 @@ target("clice-core")
                 "clangToolingInclusionsStdlib",
                 "clangToolingSyntax",
         }})
-    elseif is_mode("release") then 
+    elseif is_mode("release", "releasedbg") then 
         add_packages("llvm", {public = true})
         add_ldflags("-Wl,--gc-sections")
     end 
@@ -87,6 +87,19 @@ target("clice")
     add_files("src/Driver/clice.cc")
 
     add_deps("clice-core")
+
+    on_config(function (target)
+        local llvm_dir = target:dep("clice-core"):pkg("llvm"):installdir()
+        target:add("installfiles", path.join(llvm_dir, "lib/clang/(**)"), {prefixdir = "lib/clang"})
+    end)
+
+    after_build(function (target)
+        local res_dir = path.join(target:targetdir(), "lib")
+        if not os.exists(res_dir) then
+            local llvm_dir = target:dep("clice-core"):pkg("llvm"):installdir()
+            os.vcp(path.join(llvm_dir, "lib/clang"), res_dir)
+        end
+    end)
 
 target("helper")
     set_default(false)
@@ -177,7 +190,7 @@ package("llvm")
             end
         else
             if is_plat("windows") then
-                if is_mode("release") then
+                if is_mode("release", "releasedbg") then
                     add_urls("https://github.com/clice-project/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
                     add_versions("20.1.5", "499b2e1e37c6dcccbc9d538cea5a222b552d599f54bb523adea8594d7837d02b")
                 end
@@ -231,7 +244,6 @@ if has_config("release") then
             set_extension(".tar.xz")
         end
 
-        set_bindir(".")
         set_prefixdir("clice")
 
         add_targets("clice")
