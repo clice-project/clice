@@ -7,13 +7,18 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
               params.clientInfo.name,
               params.clientInfo.verion);
 
-    if(params.workspaceFolders.empty()) {
-        log::fatal("The client should provide one workspace folder at least!");
-    }
-
     /// FIXME: adjust position encoding.
     kind = PositionEncodingKind::UTF16;
-    workspace = mapping.to_path(params.workspaceFolders[0].uri);
+    workspace = mapping.to_path(([&] -> std::string {
+        if(params.rootUri) {
+            return *params.rootUri;
+        }
+        if(params.workspaceFolders) {
+            return ((*params.workspaceFolders))[0].uri;
+        }
+
+        log::fatal("The client should provide one workspace folder or rootUri at least!");
+    })());
 
     /// Initialize configuration.
     config::init(workspace);
