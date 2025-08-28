@@ -10,11 +10,11 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     /// FIXME: adjust position encoding.
     kind = PositionEncodingKind::UTF16;
     workspace = mapping.to_path(([&] -> std::string {
-        if(params.rootUri) {
-            return *params.rootUri;
-        }
         if(params.workspaceFolders) {
             return ((*params.workspaceFolders))[0].uri;
+        }
+        if(params.rootUri) {
+            return *params.rootUri;
         }
 
         log::fatal("The client should provide one workspace folder or rootUri at least!");
