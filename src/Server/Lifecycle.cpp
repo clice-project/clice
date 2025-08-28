@@ -10,8 +10,8 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     /// FIXME: adjust position encoding.
     kind = PositionEncodingKind::UTF16;
     workspace = mapping.to_path(([&] -> std::string {
-        if(params.workspaceFolders) {
-            return ((*params.workspaceFolders))[0].uri;
+        if(params.workspaceFolders && !params.workspaceFolders->empty()) {
+            return params.workspaceFolders->front().uri;
         }
         if(params.rootUri) {
             return *params.rootUri;
