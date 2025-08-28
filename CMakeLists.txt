@@ -132,6 +132,32 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         clangLex
         clangSema
         clangSerialization
+        clangTidy
+        clangTidyUtils
+        # ALL_CLANG_TIDY_CHECKS
+        clangTidyAndroidModule
+        clangTidyAbseilModule
+        clangTidyAlteraModule
+        clangTidyBoostModule
+        clangTidyBugproneModule
+        clangTidyCERTModule
+        clangTidyConcurrencyModule
+        clangTidyCppCoreGuidelinesModule
+        clangTidyDarwinModule
+        clangTidyFuchsiaModule
+        clangTidyGoogleModule
+        clangTidyHICPPModule
+        clangTidyLinuxKernelModule
+        clangTidyLLVMModule
+        clangTidyLLVMLibcModule
+        clangTidyMiscModule
+        clangTidyModernizeModule
+        clangTidyObjCModule
+        clangTidyOpenMPModule
+        clangTidyPerformanceModule
+        clangTidyPortabilityModule
+        clangTidyReadabilityModule
+        clangTidyZirconModule
         clangTooling
         clangToolingCore
         clangToolingInclusions
