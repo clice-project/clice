@@ -67,16 +67,63 @@ private:
     std::shared_ptr<std::atomic_bool> stop;
 };
 
-class ProxyAction final : public clang::WrapperFrontendAction {
-    std::unique_ptr<tidy::ClangTidyChecker> checker;
+template <class T>
+bool isTemplateSpecializationKind(const clang::NamedDecl* D,
+                                  clang::TemplateSpecializationKind Kind) {
+    if(const auto* TD = dyn_cast<T>(D))
+        return TD->getTemplateSpecializationKind() == Kind;
+    return false;
+}
 
+bool isTemplateSpecializationKind(const clang::NamedDecl* D,
+                                  clang::TemplateSpecializationKind Kind) {
+    return isTemplateSpecializationKind<clang::FunctionDecl>(D, Kind) ||
+           isTemplateSpecializationKind<clang::CXXRecordDecl>(D, Kind) ||
+           isTemplateSpecializationKind<clang::VarDecl>(D, Kind);
+}
+
+bool isImplicitTemplateInstantiation(const clang::NamedDecl* D) {
+    return isTemplateSpecializationKind(D, clang::TSK_ImplicitInstantiation);
+}
+
+class DeclTrackingASTConsumer : public clang::ASTConsumer {
+public:
+    DeclTrackingASTConsumer(std::vector<clang::Decl*>& TopLevelDecls) :
+        TopLevelDecls(TopLevelDecls) {}
+
+    bool HandleTopLevelDecl(clang::DeclGroupRef DG) override {
+        for(clang::Decl* D: DG) {
+
+            TopLevelDecls.push_back(D);
+        }
+        return true;
+    }
+
+private:
+    std::vector<clang::Decl*>& TopLevelDecls;
+};
+
+bool isClangdTopLevelDecl(const clang::Decl* D) {
+    auto& SM = D->getASTContext().getSourceManager();
+    if(!isInsideMainFile(D->getLocation(), SM))
+        return false;
+    if(const clang::NamedDecl* ND = dyn_cast<clang::NamedDecl>(D))
+        if(isImplicitTemplateInstantiation(ND))
+            return false;
+
+    // ObjCMethodDecl are not actually top-level decls.
+    if(isa<clang::ObjCMethodDecl>(D))
+        return false;
+    return true;
+}
+
+class ProxyAction final : public clang::WrapperFrontendAction {
 public:
     ProxyAction(std::unique_ptr<clang::FrontendAction> action,
                 std::vector<clang::Decl*>* top_level_decls,
-                std::shared_ptr<std::atomic_bool> stop,
-                std::unique_ptr<tidy::ClangTidyChecker> checker) :
+                std::shared_ptr<std::atomic_bool> stop) :
         clang::WrapperFrontendAction(std::move(action)), top_level_decls(top_level_decls),
-        stop(std::move(stop)), checker(std::move(checker)) {}
+        stop(std::move(stop)) {}
 
     auto CreateASTConsumer(clang::CompilerInstance& instance, llvm::StringRef file)
         -> std::unique_ptr<clang::ASTConsumer> final {
@@ -87,13 +134,7 @@ public:
             std::move(stop));
     }
 
-    void EndSourceFile() {
-        // Must be called before EndSourceFile because the ast context can be destroyed later.
-        if(checker) {
-            checker->CTFinder.matchAST(getCompilerInstance().getASTContext());
-        }
-        clang::WrapperFrontendAction::EndSourceFile();
-    }
+    using clang::WrapperFrontendAction::EndSourceFile;
 
 private:
     std::vector<clang::Decl*>* top_level_decls;
@@ -181,13 +222,6 @@ CompilationResult run_clang(CompilationParams& params,
     instance->setInvocation(std::move(invocation));
     instance->setDiagnostics(diagnostic_engine.get());
 
-    /// Setup clang-tidy
-    std::unique_ptr<tidy::ClangTidyChecker> checker;
-    if(params.clang_tidy) {
-        tidy::TidyParams params;
-        checker = tidy::configure(*instance, params);
-    }
-
     if(auto remapping = clang::createVFSFromCompilerInvocation(instance->getInvocation(),
                                                                instance->getDiagnostics(),
                                                                params.vfs)) {
@@ -209,9 +243,8 @@ CompilationResult run_clang(CompilationParams& params,
     auto action = std::make_unique<ProxyAction>(
         std::make_unique<Action>(),
         /// We only collect top level declarations for parse main file.
-        params.kind == CompilationUnit::Content ? &top_level_decls : nullptr,
-        params.stop,
-        std::move(checker));
+        (params.clang_tidy || params.kind == CompilationUnit::Content) ? &top_level_decls : nullptr,
+        params.stop);
 
     if(!action->BeginSourceFile(*instance, instance->getFrontendOpts().Inputs[0])) {
         return std::unexpected("Fail to begin source file");
@@ -219,6 +252,13 @@ CompilationResult run_clang(CompilationParams& params,
 
     auto& pp = instance->getPreprocessor();
     /// FIXME: include-fixer, etc?
+
+    /// Setup clang-tidy
+    std::unique_ptr<tidy::ClangTidyChecker> checker;
+    if(params.clang_tidy) {
+        tidy::TidyParams params;
+        checker = tidy::configure(*instance, params);
+    }
 
     /// `BeginSourceFile` may create new preprocessor, so all operations related to preprocessor
     /// should be done after `BeginSourceFile`.
@@ -256,6 +296,25 @@ CompilationResult run_clang(CompilationParams& params,
         token_buffer = std::move(*token_collector).consume();
     }
 
+    // Must be called before EndSourceFile because the ast context can be destroyed later.
+    if(checker) {
+        auto clangd_top_level_decls = top_level_decls;
+        std::erase_if(clangd_top_level_decls,
+                      [](auto decl) { return !isClangdTopLevelDecl(decl); });
+        log::info("Clangd top level decls: {} of {}",
+                  clangd_top_level_decls.size(),
+                  top_level_decls.size());
+        // AST traversals should exclude the preamble, to avoid performance cliffs.
+        // TODO: is it okay to affect the unit-level traversal scope here?
+        instance->getASTContext().setTraversalScope(clangd_top_level_decls);
+        checker->CTFinder.matchAST(instance->getASTContext());
+    }
+
+    // XXX: This is messy: clang-tidy checks flush some diagnostics at EOF.
+    // However Action->EndSourceFile() would destroy the ASTContext!
+    // So just inform the preprocessor of EOF, while keeping everything alive.
+    pp.EndSourceFile();
+
     /// FIXME: getDependencies currently return ArrayRef<std::string>, which actually results in
     /// extra copy. It would be great to avoid this copy.
 
@@ -265,7 +324,7 @@ CompilationResult run_clang(CompilationParams& params,
     }
 
     auto impl = new CompilationUnit::Impl{
-        .interested = pp.getSourceManager().getMainFileID(),
+        .interested = instance->getSourceManager().getMainFileID(),
         .src_mgr = instance->getSourceManager(),
         .action = std::move(action),
         .instance = std::move(instance),

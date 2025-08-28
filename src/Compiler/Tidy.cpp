@@ -10,6 +10,7 @@
 /// https://github.com/llvm/llvm-project//blob/0865ecc5150b9a55ba1f9e30b6d463a66ac362a6/clang-tools-extra/clangd/ParsedAST.cpp#L547
 /// https://github.com/llvm/llvm-project//blob/0865ecc5150b9a55ba1f9e30b6d463a66ac362a6/clang-tools-extra/clangd/TidyProvider.cpp
 
+#include "Support/Logger.h"
 #include "clang-tidy/ClangTidyModuleRegistry.h"
 #include "clang-tidy/ClangTidyOptions.h"
 #include "clang-tidy/ClangTidyCheck.h"
@@ -246,13 +247,6 @@ void applyWarningOptions(llvm::ArrayRef<std::string> ExtraArgs,
     }
 }
 
-bool isInsideMainFile(clang::SourceLocation Loc, const clang::SourceManager& SM) {
-    if(!Loc.isValid())
-        return false;
-    clang::FileID FID = SM.getFileID(SM.getExpansionLoc(Loc));
-    return FID == SM.getMainFileID() || FID == SM.getPreambleFileID();
-}
-
 ClangTidyChecker::ClangTidyChecker(std::unique_ptr<ClangTidyOptionsProvider> provider) :
     context(std::move(provider)) {}
 
@@ -318,16 +312,20 @@ void ClangTidyChecker::adjustDiag(Diagnostic& Diag) {
     }
 }
 
-std::unique_ptr<ClangTidyChecker> check(clang::CompilerInstance& instance,
-                                        const TidyParams& params) {
-    // instance.getFrontendOpts().Inputs[0].getFile()
+std::unique_ptr<ClangTidyChecker> configure(clang::CompilerInstance& instance,
+                                            const TidyParams& params) {
     auto& input = instance.getFrontendOpts().Inputs[0];
-    if(input.isFile()) {
+
+    if(!input.isFile()) {
         return nullptr;
     }
     auto FileName = input.getFile();
+    log::info("Tidy configure file: {}", FileName);
 
     tidy::ClangTidyOptions ClangTidyOpts = createTidyOptions();
+    if(ClangTidyOpts.Checks) {
+        log::info("Tidy configure checks: {}", *ClangTidyOpts.Checks);
+    }
 
     {
         // If clang-tidy is configured to emit clang warnings, we should too.
@@ -375,9 +373,10 @@ std::unique_ptr<ClangTidyChecker> check(clang::CompilerInstance& instance,
     // tood: is it always FileName to check?
     checker->context.setCurrentFile(FileName);
     checker->context.setSelfContainedDiags(true);
-    auto CTChecks = FastFactories.createChecksForLanguage(&checker->context);
+    checker->checks = FastFactories.createChecksForLanguage(&checker->context);
+    log::info("Tidy configure checks: {}", checker->checks.size());
     clang::Preprocessor* PP = &instance.getPreprocessor();
-    for(const auto& Check: CTChecks) {
+    for(const auto& Check: checker->checks) {
         Check->registerPPCallbacks(instance.getSourceManager(), PP, PP);
         Check->registerMatchers(&checker->CTFinder);
     }
