@@ -29,6 +29,11 @@
 
 #include "TidyImpl.h"
 
+// Force the linker to link in Clang-tidy modules.
+// clangd doesn't support the static analyzer.
+#define CLANG_TIDY_DISABLE_STATIC_ANALYZER_CHECKS
+#include "clang-tidy/ClangTidyForceLinker.h"
+
 namespace clice::tidy {
 
 using namespace clang::tidy;
