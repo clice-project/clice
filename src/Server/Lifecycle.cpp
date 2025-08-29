@@ -1,20 +1,17 @@
 #include "Server/Server.h"
 
-#include <filesystem>
-
 namespace clice {
 
 namespace {
-
-namespace stdfs = std::filesystem;
 
 /// Load compile commands from given directories. If no valid commands are found,
 /// search recursively from the workspace directory.
 void load_compile_commands(CompilationDatabase& database,
                            const std::vector<std::string>& compile_commands_dirs,
                            const std::string& workspace) {
+
     auto try_load = [&database](const std::string& dir) {
-        std::string filepath = dir + "/compile_commands.json";
+        std::string filepath = path::join(dir, "compile_commands.json");
         auto content = fs::read(filepath);
         if(!content) {
             log::warn("Failed to read CDB file: {}, {}", filepath, content.error());
@@ -39,37 +36,26 @@ void load_compile_commands(CompilationDatabase& database,
         "Can not found any valid CDB file from given directories, search recursively from workspace: {} ...",
         workspace);
 
-    auto recursive_search = [&try_load](this auto&& self, const stdfs::path& dir) -> bool {
-        if(!stdfs::exists(dir) || !stdfs::is_directory(dir)) {
-            return false;
+    std::error_code ec;
+    for(fs::recursive_directory_iterator it(workspace, ec), end; it != end && !ec;
+        it.increment(ec)) {
+        auto status = it->status();
+        if(!status) {
+            continue;
         }
 
         // Skip hidden directories.
-        if(dir.filename().string().starts_with('.')) {
-            return false;
+        llvm::StringRef filename = path::filename(it->path());
+        if(fs::is_directory(*status) && filename.starts_with('.')) {
+            it.no_push();
+            continue;
         }
 
-        if(try_load(dir.string())) {
-            return true;
-        }
-
-        std::error_code ec;
-        for(const auto& entry: stdfs::directory_iterator(dir, ec)) {
-            if(ec) {
-                log::warn("Error iterating directory: {}, {}, skipped", dir.string(), ec.message());
-                continue;
-            }
-
-            if(self(entry.path())) {
-                return true;
+        if(fs::is_regular_file(*status) && filename == "compile_commands.json") {
+            if(try_load(it->path())) {
+                return;
             }
         }
-
-        return false;
-    };
-
-    if(recursive_search(workspace)) {
-        return;
     }
 
     /// TODO: Add a default command in clice.toml. Or load commands from .clangd ?
