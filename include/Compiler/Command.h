@@ -109,6 +109,7 @@ public:
     auto load_commands(this Self& self, llvm::StringRef json_content, llvm::StringRef workspace)
         -> std::expected<std::vector<UpdateInfo>, std::string>;
 
+    /// Get compile command from database. `file` should has relative path of workspace.
     auto get_command(this Self& self, llvm::StringRef file, CommandOptions options = {})
         -> LookupInfo;
 

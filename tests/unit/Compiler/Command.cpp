@@ -227,8 +227,6 @@ suite<"Command"> command = [] {
         expect(that % loaded.has_value());
 
         CommandOptions options;
-        options.query_driver = false;
-        options.resource_dir = false;
         options.suppress_log = true;
         auto info = database.get_command(file, options);
 
@@ -241,7 +239,9 @@ suite<"Command"> command = [] {
         }
     };
 
-    test("LoadAbsoluteStyle") = [expect_load] {
+#if defined(__unix__) || defined(__APPLE__)
+    /// TODO: add windows path testcase
+    test("LoadAbsoluteUnixStyle") = [expect_load] {
         constexpr const char* cmake = R"([
         {
             "directory": "/home/developer/clice/build",
@@ -273,7 +273,7 @@ suite<"Command"> command = [] {
                     });
     };
 
-    test("LoadRelativeStyle") = [expect_load] {
+    test("LoadRelativeUnixStyle") = [expect_load] {
         constexpr const char* xmake = R"([
         {
             "directory": "/home/developer/clice",
@@ -310,6 +310,7 @@ suite<"Command"> command = [] {
                 "src/Driver/clice.cc",
             });
     };
+#endif
 };
 
 }  // namespace
