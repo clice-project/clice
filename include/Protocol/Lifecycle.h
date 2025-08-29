@@ -14,7 +14,7 @@ struct LSPInfo {
     std::string name;
 
     /// The version of server or client.
-    std::string verion;
+    std::string version;
 };
 
 struct WindowCapacities {};
