@@ -64,7 +64,14 @@ struct InitializeParams {
     /// This property is only available if the client supports workspace folders.
     /// It can be `null` if the client supports workspace folders but none are
     /// configured.
-    array<WorkspaceFolder> workspaceFolders;
+    optional<array<WorkspaceFolder>> workspaceFolders;
+
+    /// The rootUri of the workspace. Is null if no
+    /// folder is open. If both `rootPath` and `rootUri` are set
+    /// `rootUri` wins.
+    ///
+    /// Deprecated in favour of `workspaceFolders`
+    optional<URI> rootUri;
 };
 
 struct ServerCapabilities {
