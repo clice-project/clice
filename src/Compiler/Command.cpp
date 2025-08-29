@@ -529,7 +529,10 @@ auto CompilationDatabase::guess_or_fallback(this Self& self, llvm::StringRef fil
     while(!dir.empty() && up_level < 3) {
         // If any file in the directory has a command, use that command
         for(const auto& [other_file, info]: self.command_infos) {
-            if(llvm::StringRef other = other_file; other.starts_with(dir)) {
+            llvm::StringRef other = other_file;
+            // Filter case that dir is /path/to/foo and there's another directory /path/to/foobar
+            if(other.starts_with(dir) &&
+               (other.size() == dir.size() || path::is_separator(other[dir.size()]))) {
                 log::info("Guess command for:{}, from existed file: {}", file, other_file);
                 return LookupInfo{info.directory, info.arguments};
             }

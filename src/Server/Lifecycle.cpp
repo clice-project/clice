@@ -10,7 +10,7 @@ void load_compile_commands(CompilationDatabase& database,
                            const std::vector<std::string>& compile_commands_dirs,
                            llvm::StringRef workspace) {
 
-    auto try_load = [&database, workspace](const std::string& dir) {
+    auto try_load = [&database, workspace](llvm::StringRef dir) {
         std::string filepath = path::join(dir, "compile_commands.json");
         auto content = fs::read(filepath);
         if(!content) {
@@ -52,7 +52,7 @@ void load_compile_commands(CompilationDatabase& database,
         }
 
         if(fs::is_regular_file(*status) && filename == "compile_commands.json") {
-            if(try_load(it->path())) {
+            if(try_load(path::parent_path(it->path()))) {
                 return;
             }
         }
