@@ -66,16 +66,8 @@ jobs:
           7z x x64-windows-msvc-release.7z "-o.llvm"
 
       - name: Setup llvm binary
-        if: matrix.os == 'ubuntu-24.04'
-        run: |
-          mkdir -p ./.llvm
-          curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/x86_64-linux-gnu-debug.tar.xz" | tar -xJ -C ./.llvm
-
-      - name: Setup llvm binary
-        if: matrix.os == 'macos-15'
-        run: |
-          mkdir -p ./.llvm
-          curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-debug.tar.xz" | tar -xJ -C ./.llvm
+        if: matrix.os == 'ubuntu-24.04' || matrix.os == 'macos-15'
+        run: scripts/download-prebuilts.sh --debug
 
       - name: Setup msvc sysroot for cmake
         if: matrix.os == 'windows-2025'
