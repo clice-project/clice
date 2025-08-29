@@ -71,7 +71,7 @@ else()
 endif()
 
 # build clice core part as library
-file(GLOB_RECURSE CLICE_SOURCES
+file(GLOB_RECURSE CLICE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/AST/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/Async/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/Basic/*.cpp" 
@@ -132,7 +132,7 @@ target_link_options(clice PUBLIC ${CLICE_LINKER_FLAGS})
 
 # clice tests
 if(CLICE_ENABLE_TEST)
-    file(GLOB_RECURSE CLICE_TEST_SOURCES "${CMAKE_SOURCE_DIR}/tests/unit/*/*.cpp")
+    file(GLOB_RECURSE CLICE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tests/unit/*/*.cpp")
     add_executable(unit_tests "${CLICE_TEST_SOURCES}" "${CMAKE_SOURCE_DIR}/src/Driver/unit_tests.cc")
     target_include_directories(unit_tests PUBLIC "${CMAKE_SOURCE_DIR}")
 
