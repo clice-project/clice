@@ -314,6 +314,7 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     params.pch = {pch->path, pch->preamble.size()};
     file->diagnostics->clear();
     params.diagnostics = file->diagnostics;
+    params.clang_tidy = config::server.clang_tidy;
 
     /// Check result
     auto ast = co_await async::submit([&] { return compile(params); });

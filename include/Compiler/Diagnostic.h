@@ -52,6 +52,8 @@ struct DiagnosticID {
     bool is_unused() const;
 };
 
+class DiagnosticCollector {};
+
 struct Diagnostic {
     /// The diagnostic id.
     DiagnosticID id;
@@ -66,7 +68,8 @@ struct Diagnostic {
     /// The error message of this diagnostic.
     std::string message;
 
-    static clang::DiagnosticConsumer* create(std::shared_ptr<std::vector<Diagnostic>> diagnostics);
+    static std::pair<DiagnosticCollector*, clang::DiagnosticConsumer*>
+        create(std::shared_ptr<std::vector<Diagnostic>> diagnostics);
 };
 
 }  // namespace clice
