@@ -35,7 +35,7 @@ public:
 
     struct CommandInfo {
         /// TODO: add sysroot or no stdinc command info.
-        llvm::StringRef dictionary;
+        llvm::StringRef directory;
 
         /// The canonical command list.
         llvm::ArrayRef<const char*> arguments;
@@ -57,7 +57,7 @@ public:
     };
 
     struct LookupInfo {
-        llvm::StringRef dictionary;
+        llvm::StringRef directory;
 
         std::vector<const char*> arguments;
     };
@@ -106,7 +106,7 @@ public:
                         llvm::StringRef command) -> UpdateInfo;
 
     /// Update commands from json file and return all updated file.
-    auto load_commands(this Self& self, llvm::StringRef json_content)
+    auto load_commands(this Self& self, llvm::StringRef json_content, llvm::StringRef workspace)
         -> std::expected<std::vector<UpdateInfo>, std::string>;
 
     auto get_command(this Self& self, llvm::StringRef file, CommandOptions options = {})

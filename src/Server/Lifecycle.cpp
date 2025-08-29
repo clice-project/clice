@@ -8,9 +8,9 @@ namespace {
 /// search recursively from the workspace directory.
 void load_compile_commands(CompilationDatabase& database,
                            const std::vector<std::string>& compile_commands_dirs,
-                           const std::string& workspace) {
+                           llvm::StringRef workspace) {
 
-    auto try_load = [&database](const std::string& dir) {
+    auto try_load = [&database, workspace](const std::string& dir) {
         std::string filepath = path::join(dir, "compile_commands.json");
         auto content = fs::read(filepath);
         if(!content) {
@@ -18,7 +18,7 @@ void load_compile_commands(CompilationDatabase& database,
             return false;
         }
 
-        auto load = database.load_commands(*content);
+        auto load = database.load_commands(*content, workspace);
         if(!load) {
             log::warn("Failed to load CDB file: {}. {}", filepath, load.error());
             return false;

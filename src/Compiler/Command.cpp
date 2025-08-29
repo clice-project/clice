@@ -257,11 +257,11 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
 }
 
 auto CompilationDatabase::update_command(this Self& self,
-                                         llvm::StringRef dictionary,
+                                         llvm::StringRef directory,
                                          llvm::StringRef file,
                                          llvm::ArrayRef<const char*> arguments) -> UpdateInfo {
     file = self.save_string(file);
-    dictionary = self.save_string(dictionary);
+    directory = self.save_string(directory);
 
     llvm::SmallVector<const char*, 16> filtered_arguments;
 
@@ -290,6 +290,21 @@ auto CompilationDatabase::update_command(this Self& self,
 
         /// Filter options we don't need.
         if(self.filtered_options.contains(id)) {
+            continue;
+        }
+
+        /// For arguments -I<dir>, convert directory to absolute path.
+        /// i.e xmake will generate commands in this style.
+        if(id == clang::driver::options::OPT_I) {
+            if(arg->getNumValues() == 1) {
+                add_argument("-I");
+                llvm::StringRef value = arg->getValue(0);
+                if(!value.empty() && !path::is_absolute(value)) {
+                    add_argument(path::join(directory, value));
+                } else {
+                    add_argument(value);
+                }
+            }
             continue;
         }
 
@@ -355,16 +370,15 @@ auto CompilationDatabase::update_command(this Self& self,
     arguments = self.save_cstring_list(filtered_arguments);
 
     UpdateKind kind = UpdateKind::Unchange;
-    CommandInfo info = {dictionary, arguments};
+    CommandInfo info = {directory, arguments};
     auto [it, success] = self.command_infos.try_emplace(file.data(), info);
     if(success) {
         kind = UpdateKind::Create;
     } else {
         auto& info = it->second;
-        if(info.dictionary.data() != dictionary.data() ||
-           info.arguments.data() != arguments.data()) {
+        if(info.directory.data() != directory.data() || info.arguments.data() != arguments.data()) {
             kind = UpdateKind::Update;
-            info.dictionary = dictionary;
+            info.directory = directory;
             info.arguments = arguments;
         }
     }
@@ -373,7 +387,7 @@ auto CompilationDatabase::update_command(this Self& self,
 }
 
 auto CompilationDatabase::update_command(this Self& self,
-                                         llvm::StringRef dictionary,
+                                         llvm::StringRef directory,
                                          llvm::StringRef file,
                                          llvm::StringRef command) -> UpdateInfo {
     llvm::BumpPtrAllocator local;
@@ -390,10 +404,12 @@ auto CompilationDatabase::update_command(this Self& self,
         llvm::cl::TokenizeGNUCommandLine(command, saver, arguments);
     }
 
-    return self.update_command(dictionary, file, arguments);
+    return self.update_command(directory, file, arguments);
 }
 
-auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_content)
+auto CompilationDatabase::load_commands(this Self& self,
+                                        llvm::StringRef json_content,
+                                        llvm::StringRef workspace)
     -> std::expected<std::vector<UpdateInfo>, std::string> {
     std::vector<UpdateInfo> infos;
 
@@ -415,9 +431,22 @@ auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_co
 
         auto& object = *item.getAsObject();
 
-        auto file = object.getString("file");
         auto directory = object.getString("directory");
-        if(!file || !directory) {
+        if(!directory) {
+            continue;
+        }
+
+        /// Always store relative path of source file.
+        std::string source;
+        if(auto file = object.getString("file")) {
+            if(path::is_absolute(*file)) {
+                llvm::SmallString<256> buffer = *file;
+                path::replace_path_prefix(buffer, workspace, "");
+                source = path::relative_path(buffer).str();
+            } else {
+                source = file->str();
+            }
+        } else {
             continue;
         }
 
@@ -433,12 +462,12 @@ auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_co
                 }
             }
 
-            auto info = self.update_command(*directory, *file, carguments);
+            auto info = self.update_command(*directory, source, carguments);
             if(info.kind != UpdateKind::Unchange) {
                 infos.emplace_back(info);
             }
         } else if(auto command = object.getString("command")) {
-            auto info = self.update_command(*directory, *file, *command);
+            auto info = self.update_command(*directory, source, *command);
             if(info.kind != UpdateKind::Unchange) {
                 infos.emplace_back(info);
             }
@@ -455,7 +484,7 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
     file = self.save_string(file);
     auto it = self.command_infos.find(file.data());
     if(it != self.command_infos.end()) {
-        info.dictionary = it->second.dictionary;
+        info.directory = it->second.directory;
         info.arguments = it->second.arguments;
     } else {
         info = self.guess_or_fallback(file);
@@ -502,7 +531,7 @@ auto CompilationDatabase::guess_or_fallback(this Self& self, llvm::StringRef fil
         for(const auto& [other_file, info]: self.command_infos) {
             if(llvm::StringRef other = other_file; other.starts_with(dir)) {
                 log::info("Guess command for:{}, from existed file: {}", file, other_file);
-                return LookupInfo{info.dictionary, info.arguments};
+                return LookupInfo{info.directory, info.arguments};
             }
         }
         dir = path::parent_path(dir);
