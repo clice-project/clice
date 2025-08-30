@@ -50,6 +50,7 @@ Bazel has no native support to generate a compilation database. The recommended 
 
 ```bash
 bazel run @hedron_compile_commands//:refresh_all
+```
 
 ### Visual Studio
 
