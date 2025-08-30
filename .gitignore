@@ -31,13 +31,20 @@
 *.out
 *.app
 
+# Evil things
+.claude
+
+# LSP & IDE
+compile_commands.json
+.vscode/
+.idea/
+
 temp/
 *build*/
 .cache/
 .clice/
 .llvm*/
 .xmake/
-.vscode/
 __pycache__/
 .pytest_cache/
 tests/unit/Local/
