@@ -138,7 +138,8 @@ Result<handle> open(std::string path, Mode mode) {
 // but it leads to "C4737: Unable to perform required tail call. Performance may be degraded."
 // Discovered in MSVC 14.44.35207
 // Adding /EHa won't help.
-// Related: https://developercommunity.visualstudio.com/t/coroutine-compilation-resulting-in-error-c4737-una/1510427
+// Related:
+// https://developercommunity.visualstudio.com/t/coroutine-compilation-resulting-in-error-c4737-una/1510427
 #ifdef _MSC_VER
 #pragma optimize("g", off)
 #endif
@@ -195,7 +196,8 @@ Result<std::string> read(std::string path, Mode mode) {
 // but it leads to "C4737: Unable to perform required tail call. Performance may be degraded."
 // Discovered in MSVC 14.44.35207
 // Adding /EHa won't help.
-// Related: https://developercommunity.visualstudio.com/t/coroutine-compilation-resulting-in-error-c4737-una/1510427
+// Related:
+// https://developercommunity.visualstudio.com/t/coroutine-compilation-resulting-in-error-c4737-una/1510427
 #ifdef _MSC_VER
 #pragma optimize("g", off)
 #endif
