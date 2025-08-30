@@ -149,7 +149,7 @@ Result<ssize_t> read(const handle& handle, char* buffer, std::size_t size) {
     };
 }
 #ifdef _MSC_VER
-#pragma optimize("", on)
+#pragma optimize("g", on)
 #endif
 
 Result<std::string> read(std::string path, Mode mode) {
@@ -206,7 +206,7 @@ Result<void> write(const handle& handle, char* buffer, std::size_t size) {
     };
 }
 #ifdef _MSC_VER
-#pragma optimize("", on)
+#pragma optimize("g", on)
 #endif
 
 Result<void> write(std::string path, char* buffer, std::size_t size, Mode mode) {
