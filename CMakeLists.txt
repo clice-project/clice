@@ -104,8 +104,8 @@ message(STATUS "LLVM include path: ${LLVM_INSTALL_PATH}/include")
 # add to include directories
 target_include_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/include")
 
-# private files may downloaded and present here
 if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/include")
+    # private files are downloaded here
     message(STATUS "Fetched private headers to include: ${CMAKE_CURRENT_BINARY_DIR}/include")
     target_include_directories(llvm-libs INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/include")
 endif()

@@ -161,18 +161,17 @@ function(setup_llvm)
         return()
     endif()
 
-    # Try to detect system LLVM
-    detect_llvm(LLVM_VERSION)
-    check_llvm_version("${LLVM_VERSION}" LLVM_VERSION_OK)
+    set(LLVM_VERSION_OK false)
+    if (CMAKE_BUILD_TYPE STREQUAL "Release")
+        # Try to detect system LLVM
+        detect_llvm(LLVM_VERSION)
+        check_llvm_version("${LLVM_VERSION}" LLVM_VERSION_OK)
+    endif()
 
     # Download prebuilt LLVM if system version is not suitable
     if(NOT LLVM_VERSION_OK)
-        if(CLICE_OFFLINE_BUILD)
-            message(FATAL_ERROR "CLICE_OFFLINE_BUILD is enabled but no suitable system LLVM found. Please install LLVM 20.1.x or disable offline build mode.")
-        endif()
-        
         set(LLVM_VERSION "20.1.5")
-        message(WARNING "System LLVM not found or version mismatch, downloading prebuilt LLVM...")
+        message(WARNING "System LLVM not found, version mismatch or incompatible build type, downloading prebuilt LLVM...")
         install_prebuilt_llvm("${LLVM_VERSION}")
     endif()
 
