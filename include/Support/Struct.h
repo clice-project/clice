@@ -146,9 +146,12 @@ using member_types =
 template <typename T, std::size_t I>
 using member_type = std::tuple_element_t<I, typename member_types<T>::to_tuple>;
 
+template <typename T>
+concept TupleLike = requires { std::tuple_size<T>::value; };
+
 /// Specialize for aggregate class.
 template <typename T>
-    requires std::is_aggregate_v<T>
+    requires std::is_aggregate_v<T> && (!TupleLike<T>)
 struct Struct<T> {
     constexpr inline static bool reflectable_struct = true;
 
@@ -318,12 +321,11 @@ struct Struct<Inheritance<Ts...>> {
     }(std::make_index_sequence<member_count>{});
 };
 
-template <typename TupleLike>
-    requires requires { std::tuple_size<TupleLike>::value; }
-struct Struct<TupleLike> {
+template <TupleLike T>
+struct Struct<T> {
     constexpr inline static bool reflectable_struct = true;
 
-    constexpr inline static std::size_t member_count = std::tuple_size_v<TupleLike>;
+    constexpr inline static std::size_t member_count = std::tuple_size_v<T>;
 
     template <typename Object>
     constexpr static auto collect_members(Object&& object) {

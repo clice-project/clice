@@ -134,12 +134,23 @@ Result<handle> open(std::string path, Mode mode) {
     };
 }
 
+// MSVC seems to have a bug that it will try to optimize the function with tail call
+// but it leads to "C4737: Unable to perform required tail call. Performance may be degraded."
+// Discovered in MSVC 14.44.35207
+// Adding /EHa won't help.
+// Related: https://developercommunity.visualstudio.com/t/coroutine-compilation-resulting-in-error-c4737-una/1510427
+#ifdef _MSC_VER
+#pragma optimize("g", off)
+#endif
 Result<ssize_t> read(const handle& handle, char* buffer, std::size_t size) {
     co_return co_await awaiter::read{
         .file = handle.value(),
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
+#ifdef _MSC_VER
+#pragma optimize("", on)
+#endif
 
 Result<std::string> read(std::string path, Mode mode) {
     /// First stat the file to check if it exists, and to get the size
@@ -180,12 +191,23 @@ Result<std::string> read(std::string path, Mode mode) {
     co_return content;
 }
 
+// MSVC seems to have a bug that it will try to optimize the function with tail call
+// but it leads to "C4737: Unable to perform required tail call. Performance may be degraded."
+// Discovered in MSVC 14.44.35207
+// Adding /EHa won't help.
+// Related: https://developercommunity.visualstudio.com/t/coroutine-compilation-resulting-in-error-c4737-una/1510427
+#ifdef _MSC_VER
+#pragma optimize("g", off)
+#endif
 Result<void> write(const handle& handle, char* buffer, std::size_t size) {
     co_return co_await awaiter::write{
         .file = handle.value(),
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
+#ifdef _MSC_VER
+#pragma optimize("", on)
+#endif
 
 Result<void> write(std::string path, char* buffer, std::size_t size, Mode mode) {
     auto file = co_await open(path, mode);
