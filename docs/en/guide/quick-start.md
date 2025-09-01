@@ -46,7 +46,11 @@ Note: This option only works when cmake's generator is set to makefile and ninja
 
 ### Bazel
 
-TODO:
+Bazel has no native support to generate a compilation database. The recommended solution is to use [bazel-compile-commands-extractor](https://github.com/hedronvision/bazel-compile-commands-extractor). After setting it up, you can generate `compile_commands.json` with:
+
+```bash
+bazel run @hedron_compile_commands//:refresh_all
+```
 
 ### Visual Studio
 

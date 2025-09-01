@@ -47,7 +47,11 @@ cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
 ### Bazel
 
-TODO:
+Bazel 不支持直接生成编译数据库，推荐使用 [bazel-compile-commands-extractor](https://github.com/hedronvision/bazel-compile-commands-extractor)。在安装好之后，你可以这样生成 `compile_commands.json`:
+
+```bash
+bazel run @hedron_compile_commands//:refresh_all
+```
 
 ### Visual Studio
 
