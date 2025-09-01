@@ -114,6 +114,7 @@ if(WIN32)
     target_compile_definitions(llvm-libs INTERFACE "CLANG_BUILD_STATIC")
     target_link_libraries(llvm-libs INTERFACE version ntdll)
 endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_link_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/lib")
     target_link_libraries(llvm-libs INTERFACE
@@ -153,6 +154,13 @@ add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")
 target_link_libraries(clice PRIVATE clice-core)
 target_compile_options(clice PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice PUBLIC ${CLICE_LINKER_FLAGS})
+
+# copy resource dir
+message(STATUS "Copying resource directory")
+file(COPY
+    ${LLVM_INSTALL_PATH}/lib/clang/20/
+    DESTINATION ${PROJECT_BINARY_DIR}/lib/clang/20
+)
 
 # clice tests
 if(CLICE_ENABLE_TEST)
