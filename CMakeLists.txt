@@ -139,7 +139,4 @@ if(CLICE_ENABLE_TEST)
     target_link_libraries(unit_tests PRIVATE clice-core)
     target_compile_options(unit_tests PUBLIC ${CLICE_CXX_FLAGS})
     target_link_options(unit_tests PUBLIC ${CLICE_LINKER_FLAGS})
-
-    add_executable(helper "${CMAKE_SOURCE_DIR}/src/Driver/helper.cc")
-    target_link_libraries(helper PRIVATE clice-core)
 endif()
