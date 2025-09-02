@@ -113,6 +113,12 @@ public:
     auto get_command(this Self& self, llvm::StringRef file, CommandOptions options = {})
         -> LookupInfo;
 
+    /// Load compile commands from given directories. If no valid commands are found,
+    /// search recursively from the workspace directory.
+    auto load_compile_commands(this Self& self,
+                               llvm::ArrayRef<std::string> compile_commands_dirs,
+                               llvm::StringRef workspace) -> void;
+
 private:
     /// If file not found in CDB file, try to guess commands or use the default case.
     auto guess_or_fallback(this Self& self, llvm::StringRef file) -> LookupInfo;

@@ -551,4 +551,59 @@ auto CompilationDatabase::guess_or_fallback(this Self& self, llvm::StringRef fil
     return info;
 }
 
+auto CompilationDatabase::load_compile_commands(this Self& self,
+                                                llvm::ArrayRef<std::string> compile_commands_dirs,
+                                                llvm::StringRef workspace) -> void {
+    auto try_load = [&self, workspace](llvm::StringRef dir) {
+        std::string filepath = path::join(dir, "compile_commands.json");
+        auto content = fs::read(filepath);
+        if(!content) {
+            log::warn("Failed to read CDB file: {}, {}", filepath, content.error());
+            return false;
+        }
+
+        auto load = self.load_commands(*content, workspace);
+        if(!load) {
+            log::warn("Failed to load CDB file: {}. {}", filepath, load.error());
+            return false;
+        }
+
+        log::info("Load CDB file: {} successfully, {} items loaded", filepath, load->size());
+        return true;
+    };
+
+    if(std::ranges::any_of(compile_commands_dirs, try_load)) {
+        return;
+    }
+
+    log::info(
+        "Can not found any valid CDB file from given directories, search recursively from workspace: {} ...",
+        workspace);
+
+    std::error_code ec;
+    for(fs::recursive_directory_iterator it(workspace, ec), end; it != end && !ec;
+        it.increment(ec)) {
+        auto status = it->status();
+        if(!status) {
+            continue;
+        }
+
+        // Skip hidden directories.
+        llvm::StringRef filename = path::filename(it->path());
+        if(fs::is_directory(*status) && filename.starts_with('.')) {
+            it.no_push();
+            continue;
+        }
+
+        if(fs::is_regular_file(*status) && filename == "compile_commands.json") {
+            if(try_load(path::parent_path(it->path()))) {
+                return;
+            }
+        }
+    }
+
+    /// TODO: Add a default command in clice.toml. Or load commands from .clangd ?
+    log::warn("Can not found any valid CDB file in current workspace, fallback to default mode.");
+}
+
 }  // namespace clice
