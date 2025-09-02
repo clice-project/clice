@@ -114,6 +114,12 @@ clice has two forms of tests: unit tests and integration tests.
 $ ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="<LLVM_INSTALL_PATH>/lib/clang/20"
 ```
 
+Or, run unit tests through xmake:
+
+```bash
+$ xmake run --verbose unit_tests
+```
+
 - Run integration tests:
 
 We recommend using [uv](https://github.com/astral-sh/uv) to manage Python dependencies and versions. If you don't want to download uv, please refer to `pyproject.toml` to download the required Python version and dependencies.
@@ -128,6 +134,19 @@ Or, if you use xmake as the build system, you can directly run tests through xma
 
 ```shell
 $ xmake test --verbose
-$ xmake run --verbose unit_tests
 $ xmake test --verbose integration_tests/default
+```
+
+Or, if you use xmake build the project and do not have uv installed, you can use the follwing script:
+
+```bash
+$ pip install pytest pytest-asyncio
+$ xmake f -m debug && xmake build unit_tests
+
+# The environment variable LLVM_INSTALL_DIR may vary in different commits and platforms, 
+# depending on the value of `set_versions` in the `package("llvm")` section of the xmake.lua
+$ LLVM_INSTALL_DIR=./build/.packages/l/llvm/20.1.5/0181167384bb4acb9e781210294c358d/lib/clang/20/ \
+  pytest -s --log-cli-level=INFO tests/integration \
+    --executable=./build/linux/x86_64/debug/clice \
+    --resource-dir=$LLVM_INSTALL_DIR
 ```
