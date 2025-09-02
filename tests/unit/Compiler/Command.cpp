@@ -216,6 +216,101 @@ suite<"Command"> command = [] {
         /// expect(that % command[2] == "test.cpp"sv);
         /// expect(that % command[3] == std::format("-resource-dir={}", fs::resource_dir));
     };
+
+    auto expect_load = [](llvm::StringRef content,
+                          llvm::StringRef workspace,
+                          llvm::StringRef file,
+                          llvm::StringRef directory,
+                          llvm::ArrayRef<const char*> arguments) {
+        CompilationDatabase database;
+        auto loaded = database.load_commands(content, workspace);
+        expect(that % loaded.has_value());
+
+        CommandOptions options;
+        options.suppress_log = true;
+        auto info = database.get_command(file, options);
+
+        expect(that % info.directory == directory);
+        expect(that % info.arguments.size() == arguments.size());
+        for(size_t i = 0; i < arguments.size(); i++) {
+            llvm::StringRef arg = info.arguments[i];
+            llvm::StringRef expect_arg = arguments[i];
+            expect(that % arg == expect_arg);
+        }
+    };
+
+#if defined(__unix__) || defined(__APPLE__)
+    /// TODO: add windows path testcase
+    test("LoadAbsoluteUnixStyle") = [expect_load] {
+        constexpr const char* cmake = R"([
+        {
+            "directory": "/home/developer/clice/build",
+            "command": "/usr/bin/c++ -I/home/developer/clice/include -I/home/developer/clice/build/_deps/libuv-src/include -isystem /home/developer/clice/build/_deps/tomlplusplus-src/include -std=gnu++23 -fno-rtti -fno-exceptions -Wno-deprecated-declarations -Wno-undefined-inline -O3 -o CMakeFiles/clice-core.dir/src/Driver/clice.cpp.o -c /home/developer/clice/src/Driver/clice.cpp",
+            "file": "/home/developer/clice/src/Driver/clice.cpp",
+            "output": "CMakeFiles/clice-core.dir/src/Driver/clice.cpp.o"
+        }
+        ])";
+
+        expect_load(cmake,
+                    "/home/developer/clice",
+                    "src/Driver/clice.cpp",
+                    "/home/developer/clice/build",
+                    {
+                        "/usr/bin/c++",
+                        "-I",
+                        "/home/developer/clice/include",
+                        "-I",
+                        "/home/developer/clice/build/_deps/libuv-src/include",
+                        "-isystem",
+                        "/home/developer/clice/build/_deps/tomlplusplus-src/include",
+                        "-std=gnu++23",
+                        "-fno-rtti",
+                        "-fno-exceptions",
+                        "-Wno-deprecated-declarations",
+                        "-Wno-undefined-inline",
+                        "-O3",
+                        "src/Driver/clice.cpp",
+                    });
+    };
+
+    test("LoadRelativeUnixStyle") = [expect_load] {
+        constexpr const char* xmake = R"([
+        {
+            "directory": "/home/developer/clice",
+            "arguments": ["/usr/bin/clang", "-c", "-Qunused-arguments", "-m64", "-g", "-O0", "-std=c++23", "-Iinclude", "-I/home/developer/clice/include", "-fno-exceptions", "-fno-cxx-exceptions", "-isystem", "/home/developer/.xmake/packages/l/libuv/v1.51.0/3ca1562e6c5d485f9ccafec8e0c50b6f/include", "-isystem", "/home/developer/.xmake/packages/t/toml++/v3.4.0/bde7344d843e41928b1d325fe55450e0/include", "-fsanitize=address", "-fno-rtti", "-o", "build/.objs/clice/linux/x86_64/debug/src/Driver/clice.cc.o", "src/Driver/clice.cc"],
+            "file": "src/Driver/clice.cc"
+        }
+        ])";
+
+        expect_load(
+            xmake,
+            "/home/developer/clice",
+            "src/Driver/clice.cc",
+            "/home/developer/clice",
+            {
+                "/usr/bin/clang",
+                "-Qunused-arguments",
+                "-m64",
+                "-g",
+                "-O0",
+                "-std=c++23",
+                //  parameter "-Iinclude" in CDB, should be convert to absolute path
+                "-I",
+                "/home/developer/clice/include",
+                "-I",
+                "/home/developer/clice/include",
+                "-fno-exceptions",
+                "-fno-cxx-exceptions",
+                "-isystem",
+                "/home/developer/.xmake/packages/l/libuv/v1.51.0/3ca1562e6c5d485f9ccafec8e0c50b6f/include",
+                "-isystem",
+                "/home/developer/.xmake/packages/t/toml++/v3.4.0/bde7344d843e41928b1d325fe55450e0/include",
+                "-fsanitize=address",
+                "-fno-rtti",
+                "src/Driver/clice.cc",
+            });
+    };
+#endif
 };
 
 }  // namespace

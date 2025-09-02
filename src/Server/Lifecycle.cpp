@@ -5,7 +5,7 @@ namespace clice {
 async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     log::info("Initialize from client: {}, version: {}",
               params.clientInfo.name,
-              params.clientInfo.verion);
+              params.clientInfo.version);
 
     /// FIXME: adjust position encoding.
     kind = PositionEncodingKind::UTF16;
@@ -27,12 +27,7 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     opening_files.set_capability(config::server.max_active_file);
 
     /// Load compile commands.json
-    for(auto& dir: config::server.compile_commands_dirs) {
-        auto content = fs::read(dir + "/compile_commands.json");
-        if(content) {
-            auto updated = database.load_commands(*content);
-        }
-    }
+    database.load_compile_commands(config::server.compile_commands_dirs, workspace);
 
     /// Load cache info.
     load_cache_info();
@@ -40,7 +35,7 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     proto::InitializeResult result;
     auto& [info, capabilities] = result;
     info.name = "clice";
-    info.verion = "0.0.1";
+    info.version = "0.0.1";
 
     capabilities.positionEncoding = "utf-16";
 

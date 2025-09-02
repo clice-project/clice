@@ -194,8 +194,6 @@ async::Task<bool> build_pch_task(CompilationDatabase::LookupInfo& info,
     params.diagnostics = diagnostics;
     params.add_remapped_file(path, content, bound);
 
-    PCHInfo pch;
-
     std::string command;
     for(auto argument: params.arguments) {
         command += " ";
@@ -203,13 +201,14 @@ async::Task<bool> build_pch_task(CompilationDatabase::LookupInfo& info,
     }
 
     log::info("Start building PCH for {}, command: [{}]", path, command);
+    command.clear();
 
-    std::string message;
+    PCHInfo pch;
+    std::string message = std::move(command);  // reuse buffer
     std::vector<feature::DocumentLink> links;
 
     bool success = co_await async::submit([&params, &pch, &message, &links] -> bool {
-        /// PCH file is written until destructing, Add a single block
-        /// for it.
+        /// PCH file is written until destructing, Add a single block for it.
         auto unit = compile(params, pch);
         if(!unit) {
             message = std::move(unit.error());
