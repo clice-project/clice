@@ -77,6 +77,10 @@ target("clice-core")
                 "clangToolingInclusionsStdlib",
                 "clangToolingSyntax",
         }})
+        on_config(function (target)
+            local llvm_dynlib_dir = path.join(target:pkg("llvm"):installdir(), "lib")
+            target:add("rpathdirs", llvm_dynlib_dir)
+        end)
     elseif is_mode("release", "releasedbg") then 
         add_packages("llvm", {public = true})
         add_ldflags("-Wl,--gc-sections")

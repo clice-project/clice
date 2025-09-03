@@ -114,6 +114,11 @@ clice 有两种形式的测试，单元测试和集成测试。
 $ ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="<LLVM_INSTALL_PATH>/lib/clang/20"
 ```
 
+或者, 使用 xmake 启动单元测试:
+```bash
+$ xmake run --verbose unit_tests
+```
+
 - 运行集成测试
 
 我们推荐使用 [uv](https://github.com/astral-sh/uv) 管理 python 依赖和版本。如果不想下载 uv，请参考 `pyproject.toml` 下载所需的 python 版本和依赖。
@@ -124,10 +129,23 @@ $ pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clic
 
 > resource-dir 是 clang 的内置头文件文件夹
 
-或者，如果你使用 xmake 作为构建系统，可以直接通过 xmake 运行测试：
+如果你使用 xmake 作为构建系统，可以直接通过 xmake 运行测试：
 
 ```shell
 $ xmake test --verbose
-$ xmake run --verbose unit_tests
 $ xmake test --verbose integration_tests/default
+```
+
+在使用 xmake 构建和不使用 uv 的情况下, 启动 debug 模式的测试:
+
+```shell
+$ pip install pytest pytest-asyncio
+$ xmake f -m debug && xmake build unit_tests
+
+# 此处的 LLVM_INSTALL_DIR 在不同版本, 不同平台的 clice 中 sha 值可能不一样,
+# 取决于对应的 xmake.lua 中 `package("llvm")` 一节 `set_versions` 的取值
+$ LLVM_INSTALL_DIR=./build/.packages/l/llvm/20.1.5/0181167384bb4acb9e781210294c358d/lib/clang/20/ \
+  pytest -s --log-cli-level=INFO tests/integration \
+    --executable=./build/linux/x86_64/debug/clice \
+    --resource-dir=$LLVM_INSTALL_DIR
 ```
