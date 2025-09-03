@@ -232,8 +232,8 @@ public:
     }
 
     template <std::same_as<typename Derived::Kind>... Kinds>
-    bool is_one_of(Kinds... kinds) const {
-        return (operator& (kinds) || ...);
+    constexpr bool is_one_of(Kinds... kinds) const {
+        return (((*this) & (kinds)) || ...);
     }
 
 private:

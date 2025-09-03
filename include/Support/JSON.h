@@ -298,6 +298,7 @@ template <typename T>
 constexpr inline bool is_optional_v<std::optional<T>> = true;
 
 template <refl::reflectable_struct T>
+    requires (!sequence_range<T>)
 struct Serde<T> {
     template <typename... Serdes>
     static json::Value serialize(const T& t) {
