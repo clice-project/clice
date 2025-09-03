@@ -119,7 +119,7 @@ $ ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="<LLVM_INSTALL
 $ xmake run --verbose unit_tests
 ```
 
-# 集成测试
+### 集成测试
 
 我们推荐使用 [uv](https://github.com/astral-sh/uv) 管理 python 依赖和版本。如果不想下载 uv，请参考 [pyproject.toml](./pyproject.toml) 下载所需的 python 版本和依赖。
 
