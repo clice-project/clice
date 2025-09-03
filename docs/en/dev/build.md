@@ -77,7 +77,7 @@ You can also refer to llvm's official build tutorial [Building LLVM with CMake](
 
 ### GCC Toolchain
 
-clice requires `GCC libstdc++ >= 14`. If you would like to use a different GCC toolchain and also link statically against its `libstdc++`, you should provide all flags in a single `cmake` command:
+clice requires `GCC libstdc++ >= 14`. You could use a different GCC toolchain and also link statically against its `libstdc++`:
 
 ```bash
 cmake .. -DCMAKE_C_FLAGS="--gcc-toolchain=/usr/local/gcc-14.3.0/" \
