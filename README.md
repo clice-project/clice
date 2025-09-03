@@ -118,7 +118,7 @@ LLVM_INSTALL_DIR=./build/.packages/l/llvm/20.1.5/0181167384bb4acb9e781210294c358
 
 ```shell
 mkdir build
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLLVM_INSTALL_PATH="./.llvm" -DCLICE_ENABLE_TEST=ON
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 ```
 
