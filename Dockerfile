@@ -12,12 +12,11 @@ RUN echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg.key] http://apt.l
 RUN echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-21 main" >> /etc/apt/sources.list
 RUN apt-get update && apt-get install -y \
     clang-20 lld-20
-RUN ln -s /usr/bin/clang-20 /usr/bin/clang
-RUN ln -s /usr/bin/clang++-20 /usr/bin/clang++
 RUN ln -s /usr/bin/lld-20 /usr/bin/lld
 
 # Adding Source Code
 ADD include /app/include
+ADD cmake /app/cmake
 ADD src /app/src
 ADD tests /app/tests
 ADD CMakeLists.txt /app/CMakeLists.txt
@@ -26,7 +25,7 @@ ADD scripts /app/scripts
 # Building clice
 WORKDIR /app
 RUN ls -la scripts
-RUN cmake -B build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release -DCLICE_ENABLE_TEST=ON
+RUN cmake -B build -G Ninja -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 -DCMAKE_BUILD_TYPE=Release -DCLICE_ENABLE_TEST=ON
 RUN cmake --build build -j
 
 RUN cmake --install build --prefix=/opt/clice
