@@ -11,6 +11,7 @@ option("llvm", {default = nil, description = "Specify pre-compiled llvm binary d
 option("ci", {default = false})
 
 if has_config("dev") then
+    set_policy("build.ccache", true)
     set_policy("compatibility.version", "3.0")
     if is_plat("windows") then
         set_runtimes("MD")
@@ -98,7 +99,7 @@ target("clice")
     end)
 
     after_build(function (target)
-        local res_dir = path.join(target:targetdir(), "lib")
+        local res_dir = path.join(target:targetdir(), "lib/clang")
         if not os.exists(res_dir) then
             local llvm_dir = target:dep("clice-core"):pkg("llvm"):installdir()
             os.vcp(path.join(llvm_dir, "lib/clang"), res_dir)
@@ -162,7 +163,7 @@ rule("clice_build_config")
         -- Fix MSVC Non-standard preprocessor caused error C1189
         -- While compiling Command.cpp, MSVC won't expand Options macro correctly
         -- Output: D:\Desktop\code\clice\build\.packages\l\llvm\20.1.5\cc2aa9f1d09a4b71b6fa3bf0011f6387\include\clang/Driver/Options.inc(3590): error C2365: “clang::driver::options::OPT_”: redefinition; previous definition was 'enumerator'
-        target:add("cxflags", "/Zc:preprocessor", {tools = {"cl"}})
+        target:add("cxflags", "cl::/Zc:preprocessor")
 
         target:set("exceptions", "no-cxx")
         

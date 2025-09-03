@@ -140,7 +140,7 @@ Result<handle> open(std::string path, Mode mode) {
 // Adding /EHa won't help.
 // Related:
 // https://developercommunity.visualstudio.com/t/coroutine-compilation-resulting-in-error-c4737-una/1510427
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 #pragma optimize("g", off)
 #endif
 Result<ssize_t> read(const handle& handle, char* buffer, std::size_t size) {
@@ -149,7 +149,7 @@ Result<ssize_t> read(const handle& handle, char* buffer, std::size_t size) {
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 #pragma optimize("g", on)
 #endif
 
@@ -198,7 +198,7 @@ Result<std::string> read(std::string path, Mode mode) {
 // Adding /EHa won't help.
 // Related:
 // https://developercommunity.visualstudio.com/t/coroutine-compilation-resulting-in-error-c4737-una/1510427
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 #pragma optimize("g", off)
 #endif
 Result<void> write(const handle& handle, char* buffer, std::size_t size) {
@@ -207,7 +207,7 @@ Result<void> write(const handle& handle, char* buffer, std::size_t size) {
         .bufs = {uv_buf_init(buffer, size)},
     };
 }
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 #pragma optimize("g", on)
 #endif
 
