@@ -6,10 +6,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
-# set llvm-libs install path
-if(NOT DEFINED LLVM_INSTALL_PATH OR LLVM_INSTALL_PATH STREQUAL "")
-    message(FATAL_ERROR "Error: The variable LLVM_INSTALL_PATH is not set. Please specify it with -DLLVM_INSTALL_PATH=<value>.")
-endif()
+include(cmake/llvm_setup.cmake)
+
+setup_llvm()
+
 get_filename_component(LLVM_INSTALL_PATH "${LLVM_INSTALL_PATH}" ABSOLUTE)
 
 if(NOT EXISTS "${LLVM_INSTALL_PATH}")
@@ -17,8 +17,15 @@ if(NOT EXISTS "${LLVM_INSTALL_PATH}")
 endif()
 message(STATUS "Found llvm-libs ${LLVM_INSTALL_PATH}")
 
-set(CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
+if (EXISTS "${LLVM_CMAKE_DIR}")
+    list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+else()
+    list(APPEND CMAKE_PREFIX_PATH "${LLVM_INSTALL_PATH}")
+endif()
+message(STATUS "CMake module path: ${CMAKE_MODULE_PATH}")
+message(STATUS "CMake prefix path: ${CMAKE_PREFIX_PATH}")
 
+message(STATUS "Installing other dependencies, please wait...")
 # install dependencies
 include(FetchContent)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -26,16 +33,22 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(ASAN ON CACHE BOOL "" FORCE)
 endif()
 
+message(STATUS "Fetching tomlplusplus...")
 FetchContent_Declare(
     tomlplusplus   
     GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
 )
+
+message(STATUS "Fetching libuv...")
 FetchContent_Declare(
     libuv
     GIT_REPOSITORY https://github.com/libuv/libuv.git
     GIT_TAG v1.x
 )
 FetchContent_MakeAvailable(tomlplusplus libuv)
+
+message(STATUS "Found tomlplusplus: ${tomlplusplus_SOURCE_DIR}")
+message(STATUS "Found libuv: ${libuv_SOURCE_DIR}")
 
 if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
@@ -85,11 +98,23 @@ add_library(clice-core STATIC "${CLICE_SOURCES}")
 
 # set llvm include and lib path
 add_library(llvm-libs INTERFACE IMPORTED)
+
+
+message(STATUS "LLVM include path: ${LLVM_INSTALL_PATH}/include")
+# add to include directories
 target_include_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/include")
+
+if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/include")
+    # private files are downloaded here
+    message(STATUS "Fetched private headers to include: ${CMAKE_CURRENT_BINARY_DIR}/include")
+    target_include_directories(llvm-libs INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/include")
+endif()
+
 if(WIN32)
     target_compile_definitions(llvm-libs INTERFACE "CLANG_BUILD_STATIC")
     target_link_libraries(llvm-libs INTERFACE version ntdll)
 endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_link_directories(llvm-libs INTERFACE "${LLVM_INSTALL_PATH}/lib")
     target_link_libraries(llvm-libs INTERFACE
@@ -129,6 +154,13 @@ add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")
 target_link_libraries(clice PRIVATE clice-core)
 target_compile_options(clice PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice PUBLIC ${CLICE_LINKER_FLAGS})
+
+# copy resource dir
+message(STATUS "Copying resource directory")
+file(COPY
+    ${LLVM_INSTALL_PATH}/lib/clang/20/
+    DESTINATION ${PROJECT_BINARY_DIR}/lib/clang/20
+)
 
 # clice tests
 if(CLICE_ENABLE_TEST)
