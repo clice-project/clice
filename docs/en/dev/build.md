@@ -75,6 +75,20 @@ $ python3 <clice>/scripts/build-llvm-libs.py debug
 
 You can also refer to llvm's official build tutorial [Building LLVM with CMake](https://llvm.org/docs/CMake.html).
 
+### GCC Toolchain
+
+clice requires `GCC libstdc++ >= 14`. If you would like to use a different GCC toolchain, you can separately specify the toolchain path for clice:
+
+```bash
+cmake .. -DCMAKE_C_FLAGS="--gcc-toolchain=/usr/local/gcc-14.3.0/" -DCMAKE_CXX_FLAGS="--gcc-toolchain=/usr/local/gcc-14.3.0/"
+```
+
+To run clice using the libstdc++ with the toolchain instead of that from the system environment, you need to specify using the libstdc++ static library when building:
+
+```bash
+cmake .. -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++"
+```
+
 ## Building
 
 After handling the prerequisites, you can start building clice. We provide two build methods: cmake/xmake.
