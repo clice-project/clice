@@ -108,7 +108,7 @@ $ xmake build --all
 
 clice 有两种形式的测试，单元测试和集成测试。
 
-- 运行单元测试
+# 单元测试
 
 ```bash
 $ ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="<LLVM_INSTALL_PATH>/lib/clang/20"
@@ -119,15 +119,15 @@ $ ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="<LLVM_INSTALL
 $ xmake run --verbose unit_tests
 ```
 
-- 运行集成测试
+# 集成测试
 
-我们推荐使用 [uv](https://github.com/astral-sh/uv) 管理 python 依赖和版本。如果不想下载 uv，请参考 `pyproject.toml` 下载所需的 python 版本和依赖。
+我们推荐使用 [uv](https://github.com/astral-sh/uv) 管理 python 依赖和版本。如果不想下载 uv，请参考 [pyproject.toml](./pyproject.toml) 下载所需的 python 版本和依赖。
 
 ```bash
 $ pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clice --resource-dir="<LLVM_INSTALL_PATH>/lib/clang/20"
 ```
 
-> resource-dir 是 clang 的内置头文件文件夹
+> `resource-dir` 是 clang 的内置头文件文件夹
 
 如果你使用 xmake 作为构建系统，可以直接通过 xmake 运行测试：
 
