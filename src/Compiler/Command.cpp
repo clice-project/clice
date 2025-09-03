@@ -436,16 +436,10 @@ auto CompilationDatabase::load_commands(this Self& self,
             continue;
         }
 
-        /// Always store relative path of source file.
+        /// Always store absolute path of source file.
         std::string source;
         if(auto file = object.getString("file")) {
-            if(path::is_absolute(*file)) {
-                llvm::SmallString<256> buffer = *file;
-                path::replace_path_prefix(buffer, workspace, "");
-                source = path::relative_path(buffer).str();
-            } else {
-                source = file->str();
-            }
+            source = path::is_absolute(*file) ? file->str() : path::join(*directory, *file);
         } else {
             continue;
         }
@@ -551,7 +545,7 @@ auto CompilationDatabase::guess_or_fallback(this Self& self, llvm::StringRef fil
     return info;
 }
 
-auto CompilationDatabase::load_compile_commands(this Self& self,
+auto CompilationDatabase::load_compile_database(this Self& self,
                                                 llvm::ArrayRef<std::string> compile_commands_dirs,
                                                 llvm::StringRef workspace) -> void {
     auto try_load = [&self, workspace](llvm::StringRef dir) {
@@ -576,7 +570,7 @@ auto CompilationDatabase::load_compile_commands(this Self& self,
         return;
     }
 
-    log::info(
+    log::warn(
         "Can not found any valid CDB file from given directories, search recursively from workspace: {} ...",
         workspace);
 
