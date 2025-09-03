@@ -325,6 +325,12 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
         co_return;
     }
 
+    /// Run Clang-Tidy
+    if(config::server.clang_tidy) {
+        log::warn(
+            "clang-tidy is not fully supported yet. Tracked in https://github.com/clice-project/clice/issues/90.");
+    }
+
     /// Send diagnostics
     auto diagnostics = co_await async::submit(
         [&, kind = this->kind] { return feature::diagnostics(kind, mapping, *ast); });
