@@ -145,5 +145,5 @@ $ xmake f -m debug && xmake build unit_tests
 
 $ pytest -s --log-cli-level=INFO tests/integration \
     --executable=./build/linux/x86_64/debug/clice \
-    --resource-dir=./build/linux/x86_64/debug/clice/lib/clang/20/
+    --resource-dir=./build/linux/x86_64/debug/lib/clang/20/
 ```
