@@ -1,40 +1,38 @@
 
 FROM debian:13 AS builder
 
-# Installing System Dependencies
+# Installs System Dependencies
 RUN apt-get update && apt-get install -y \
     ninja-build cmake build-essential curl gcc-14 g++-14 git
 
-# Installing LLVM 20
-RUN curl https://apt.llvm.org/llvm-snapshot.gpg.key | tee -a /usr/share/keyrings/llvm-snapshot.gpg.key
-RUN echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/trixie/ llvm-toolchain-trixie main" >> /etc/apt/sources.list
-RUN echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" >> /etc/apt/sources.list
-RUN echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-21 main" >> /etc/apt/sources.list
-RUN apt-get update && apt-get install -y \
-    clang-20 lld-20
+# Installs LLVM 20
+RUN curl https://apt.llvm.org/llvm-snapshot.gpg.key | tee /usr/share/keyrings/llvm-snapshot.gpg.key && \
+    echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/trixie/ llvm-toolchain-trixie main" >> /etc/apt/sources.list && \
+    echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" >> /etc/apt/sources.list && \
+    apt-get update && apt-get install -y \
+    clang-20 lld-20 
 RUN ln -s /usr/bin/lld-20 /usr/bin/lld
 
-# Adding Source Code
-ADD include /app/include
-ADD cmake /app/cmake
-ADD src /app/src
-ADD tests /app/tests
-ADD CMakeLists.txt /app/CMakeLists.txt
-ADD scripts /app/scripts
+# Adds source code
+COPY include /app/include
+COPY cmake /app/cmake
+COPY src /app/src
+COPY tests /app/tests
+COPY CMakeLists.txt /app/CMakeLists.txt
+COPY scripts /app/scripts
 
-# Building clice
 WORKDIR /app
-RUN ls -la scripts
+# Initializes and installs dependencies
 RUN cmake -B build -G Ninja -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 -DCMAKE_BUILD_TYPE=Release -DCLICE_ENABLE_TEST=ON
-RUN cmake --build build -j
-
-RUN cmake --install build --prefix=/opt/clice
+# Builds clice
+RUN cmake --build build -j && \
+    cmake --install build --prefix=/opt/clice
 
 FROM debian:13 
 
 COPY --from=builder /opt/clice /opt/clice/
-ADD LICENSE /opt/clice/LICENSE
-ADD README.md /opt/clice/README.md
+COPY LICENSE /opt/clice/LICENSE
+COPY README.md /opt/clice/README.md
 
 RUN ln -s /opt/clice/bin/clice /usr/local/bin/clice
 
