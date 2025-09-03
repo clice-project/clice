@@ -137,7 +137,7 @@ $ xmake test --verbose
 $ xmake test --verbose integration_tests/default
 ```
 
-Or, if you use xmake build the project and do not have uv installed, you can use the follwing script:
+Or, if you use xmake build the project and do not have uv installed, you can use the following script:
 
 ```bash
 $ pip install pytest pytest-asyncio
