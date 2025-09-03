@@ -108,7 +108,7 @@ $ xmake build --all
 
 clice 有两种形式的测试，单元测试和集成测试。
 
-# 单元测试
+### 单元测试
 
 ```bash
 $ ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="<LLVM_INSTALL_PATH>/lib/clang/20"
