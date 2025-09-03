@@ -26,8 +26,8 @@ ADD scripts /app/scripts
 # Building clice
 WORKDIR /app
 RUN ls -la scripts
-RUN cp scripts/build.sh scripts/build-release.sh && sed -i 's/DCMAKE_BUILD_TYPE=Debug/DCMAKE_BUILD_TYPE=Release/g' scripts/build-release.sh
-RUN bash -c ./scripts/build-release.sh
+RUN cmake -B build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release -DCLICE_ENABLE_TEST=ON
+RUN cmake --build build -j
 
 RUN cmake --install build --prefix=/opt/clice
 
