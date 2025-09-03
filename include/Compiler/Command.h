@@ -115,7 +115,7 @@ public:
 
     /// Load compile commands from given directories. If no valid commands are found,
     /// search recursively from the workspace directory.
-    auto load_compile_commands(this Self& self,
+    auto load_compile_database(this Self& self,
                                llvm::ArrayRef<std::string> compile_commands_dirs,
                                llvm::StringRef workspace) -> void;
 

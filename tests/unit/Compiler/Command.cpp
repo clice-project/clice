@@ -235,6 +235,7 @@ suite<"Command"> command = [] {
         for(size_t i = 0; i < arguments.size(); i++) {
             llvm::StringRef arg = info.arguments[i];
             llvm::StringRef expect_arg = arguments[i];
+            // llvm::outs() << "arg: " << arg << ", expect: " << expect_arg << "\n";
             expect(that % arg == expect_arg);
         }
     };
@@ -253,7 +254,7 @@ suite<"Command"> command = [] {
 
         expect_load(cmake,
                     "/home/developer/clice",
-                    "src/Driver/clice.cpp",
+                    "/home/developer/clice/src/Driver/clice.cpp",
                     "/home/developer/clice/build",
                     {
                         "/usr/bin/c++",
@@ -269,7 +270,7 @@ suite<"Command"> command = [] {
                         "-Wno-deprecated-declarations",
                         "-Wno-undefined-inline",
                         "-O3",
-                        "src/Driver/clice.cpp",
+                        "/home/developer/clice/src/Driver/clice.cpp",
                     });
     };
 
@@ -285,7 +286,7 @@ suite<"Command"> command = [] {
         expect_load(
             xmake,
             "/home/developer/clice",
-            "src/Driver/clice.cc",
+            "/home/developer/clice/src/Driver/clice.cc",
             "/home/developer/clice",
             {
                 "/usr/bin/clang",
@@ -307,7 +308,7 @@ suite<"Command"> command = [] {
                 "/home/developer/.xmake/packages/t/toml++/v3.4.0/bde7344d843e41928b1d325fe55450e0/include",
                 "-fsanitize=address",
                 "-fno-rtti",
-                "src/Driver/clice.cc",
+                "/home/developer/clice/src/Driver/clice.cc",
             });
     };
 #endif
