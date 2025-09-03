@@ -69,13 +69,17 @@ function(fetch_private_clang_files llvm_ver)
     # Download missing files
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/clang")
     foreach(FILE ${PRIVATE_CLANG_FILE_LIST})
-        if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/include/clang/${FILE}")
+        set(FILE_PATH "${CMAKE_CURRENT_BINARY_DIR}/include/clang/${FILE}")
+        if(NOT EXISTS "${FILE_PATH}")
             message(STATUS "Downloading ${FILE}...")
-            file(
-                DOWNLOAD "https://raw.githubusercontent.com/llvm/llvm-project/${LLVM_COMMIT}/clang/lib/${FILE}"
-                         "${CMAKE_CURRENT_BINARY_DIR}/include/clang/${FILE}"
-                SHOW_PROGRESS
-            )
+            file(DOWNLOAD "https://raw.githubusercontent.com/llvm/llvm-project/${LLVM_COMMIT}/clang/lib/${FILE}"
+                         "${FILE_PATH}"
+                         STATUS DOWNLOAD_STATUS
+                         TLS_VERIFY ON)
+            list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+            if(NOT STATUS_CODE EQUAL 0)
+                message(FATAL_ERROR "Failed to download private clang file: ${FILE}")
+            endif()
         endif()
     endforeach()
 endfunction()
@@ -112,11 +116,11 @@ function(detect_llvm OUTPUT_VAR)
     set(${OUTPUT_VAR} ${LLVM_VERSION} PARENT_SCOPE)
 endfunction()
 
-# Download and install prebuilt LLVM binaries
+# Download and install prebuilt LLVM binaries with error checking
 function(install_prebuilt_llvm llvm_ver)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.llvm")
     
-    # Determine build type
+    # Determine platform-specific package name
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(LLVM_BUILD_TYPE "debug")
     elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -125,7 +129,6 @@ function(install_prebuilt_llvm llvm_ver)
         set(LLVM_BUILD_TYPE "release-lto")
     endif()
 
-    # Determine platform-specific package name
     if(WIN32)
         set(LLVM_PACKAGE "x64-windows-msvc-${LLVM_BUILD_TYPE}.7z")
     elseif(APPLE)
@@ -134,18 +137,48 @@ function(install_prebuilt_llvm llvm_ver)
         set(LLVM_PACKAGE "x86_64-linux-gnu-${LLVM_BUILD_TYPE}.tar.xz")
     endif()
 
-    message(STATUS "Downloading prebuilt LLVM package: ${LLVM_PACKAGE}")
-    file(
-        DOWNLOAD "https://github.com/clice-project/llvm-binary/releases/download/${llvm_ver}/${LLVM_PACKAGE}"
-                 "${CMAKE_CURRENT_BINARY_DIR}/${LLVM_PACKAGE}"
-        SHOW_PROGRESS
-    )
+    if(NOT LLVM_PACKAGE)
+        message(FATAL_ERROR "Unsupported platform or build type for prebuilt LLVM.")
+    endif()
+    
+    set(DOWNLOAD_PATH "${CMAKE_CURRENT_BINARY_DIR}/${LLVM_PACKAGE}")
+
+    # Download if file does not exist
+    if(NOT EXISTS "${DOWNLOAD_PATH}")
+        message(STATUS "Downloading prebuilt LLVM package: ${LLVM_PACKAGE}")
+        set(DOWNLOAD_URL "https://github.com/clice-project/llvm-binary/releases/download/${llvm_ver}/${LLVM_PACKAGE}")
+        file(DOWNLOAD "${DOWNLOAD_URL}"
+                      "${DOWNLOAD_PATH}"
+                      STATUS DOWNLOAD_STATUS
+                      SHOW_PROGRESS
+                      TLS_VERIFY ON)
+        list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+        list(GET DOWNLOAD_STATUS 1 ERROR_MESSAGE)
+
+        if(NOT STATUS_CODE EQUAL 0)
+            # Download failed, remove the incomplete file to force a fresh download next time
+            if(EXISTS "${DOWNLOAD_PATH}")
+                file(REMOVE "${DOWNLOAD_PATH}")
+                message(STATUS "Removed incomplete file: ${DOWNLOAD_PATH}")
+            endif()
+            message(FATAL_ERROR "Failed to download prebuilt LLVM package from ${DOWNLOAD_URL}.\nError: ${ERROR_MESSAGE}")
+        endif()
+    else()
+        message(STATUS "Prebuilt LLVM package already exists, skipping download.")
+    endif()
 
     message(STATUS "Extracting LLVM package: ${LLVM_PACKAGE}")
     execute_process(
-        COMMAND "${CMAKE_COMMAND}" -E tar xvf "${CMAKE_CURRENT_BINARY_DIR}/${LLVM_PACKAGE}"
+        COMMAND "${CMAKE_COMMAND}" -E tar xvf "${DOWNLOAD_PATH}"
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.llvm"
+        RESULT_VARIABLE TAR_RESULT
+        OUTPUT_QUIET
+        ERROR_QUIET
     )
+
+    if(NOT TAR_RESULT EQUAL "0")
+        message(FATAL_ERROR "Failed to extract archive. The file may be corrupted or the tool is missing.")
+    endif()
 
     # Set installation paths
     set(LLVM_INSTALL_PATH "${CMAKE_CURRENT_BINARY_DIR}/.llvm" CACHE PATH "Path to LLVM installation" FORCE)
