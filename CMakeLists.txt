@@ -54,7 +54,15 @@ if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
 endif()
 
-set(CLICE_CXX_FLAGS "-fno-rtti;-fno-exceptions;-Wno-deprecated-declarations;-Wno-undefined-inline;")
+if (MSVC)
+    # Fix MSVC Non-standard preprocessor caused error C1189
+    # While compiling Command.cpp, MSVC won't expand Options macro correctly
+    # Output: D:\Desktop\code\clice\build\.packages\l\llvm\20.1.5\cc2aa9f1d09a4b71b6fa3bf0011f6387\include\clang/Driver/Options.inc(3590): error C2365: “clang::driver::options::OPT_”: redefinition; previous definition was 'enumerator'
+    set(CLICE_CXX_FLAGS "/GR-;/EHsc-;/Zc:preprocessor;")
+else()
+    set(CLICE_CXX_FLAGS "-fno-rtti;-fno-exceptions;-Wno-deprecated-declarations;-Wno-undefined-inline;")
+endif()
+
 set(CLICE_LINKER_FLAGS "")
 
 if(CLICE_USE_LIBCXX)
