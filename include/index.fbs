@@ -1,0 +1,18 @@
+namespace clice.index;
+
+struct Position {
+    line:uint32;
+    character:uint32;
+}
+
+table SymbolLocation {
+    name:string (required);
+    file_path:string (required);
+    pos:Position;
+}
+
+table SymbolIndex {
+    symbols:[SymbolLocation];
+}
+
+root_type SymbolIndex;
