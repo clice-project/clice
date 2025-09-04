@@ -7,6 +7,7 @@
 #include "clang/Frontend/MultiplexConsumer.h"
 #include "Support/Compression.h"
 #include "Support/FileSystem.h"
+#include "Support/Logger.h"
 
 namespace clice {
 
