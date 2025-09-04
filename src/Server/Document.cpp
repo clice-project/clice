@@ -1,4 +1,5 @@
 #include "Support/Logger.h"
+#include "Support/Compression.h"
 #include "Server/Server.h"
 #include "Compiler/Compilation.h"
 #include "Feature/Diagnostic.h"
@@ -226,6 +227,8 @@ async::Task<bool> build_pch_task(CompilationDatabase::LookupInfo& info,
             log::warn("{}", diagnostic.message);
         }
         co_return false;
+    } else {
+        compressPreCompiledFile(pch.path);
     }
 
     log::info("Building PCH successfully for {}", path);
@@ -311,6 +314,10 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     params.arguments = database.get_command(path, options).arguments;
     params.add_remapped_file(path, content);
     params.pch = {pch->path, pch->preamble.size()};
+    // if compressed PCH exists, use it
+    if (fs::exists(params.pch.first + ".lz4")) {
+        params.pch.first = params.pch.first + ".lz4";
+    }
     file->diagnostics->clear();
     params.diagnostics = file->diagnostics;
 

@@ -1,5 +1,6 @@
 #include "Test/Test.h"
 #include "Compiler/Compilation.h"
+#include "Support/Compression.h"
 #include "llvm/Support/ToolOutputFile.h"
 
 namespace clice::testing {
@@ -29,6 +30,8 @@ auto buildPCM = [](llvm::StringRef file, llvm::StringRef code) {
     if(!compile(params, pcm)) {
         llvm::errs() << "Failed to build PCM\n";
         std::abort();
+    } else {
+        compressPreCompiledFile(pcm.path);
     }
 
     return pcm;

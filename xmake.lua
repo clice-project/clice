@@ -41,6 +41,7 @@ end
 
 add_requires(libuv_require, "toml++")
 add_requires("llvm", {system = false})
+add_requires("lz4")
 
 add_rules("mode.release", "mode.debug", "mode.releasedbg")
 set_languages("c++23")
@@ -51,7 +52,7 @@ target("clice-core")
     add_files("src/**.cpp|Driver/*.cpp")
     add_includedirs("include", {public = true})
 
-    add_packages("libuv", "toml++", {public = true})
+    add_packages("libuv", "toml++", "lz4", {public = true})
 
     if is_mode("debug") then 
         add_packages("llvm", {

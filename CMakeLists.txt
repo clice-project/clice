@@ -45,10 +45,22 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/libuv/libuv.git
     GIT_TAG v1.x
 )
-FetchContent_MakeAvailable(tomlplusplus libuv)
+
+message(STATUS "Fetching lz4...")
+# Disable building the lz4 command line executable
+set(LZ4_BUILD_CLI OFF)
+FetchContent_Declare(
+    lz4
+    GIT_REPOSITORY https://github.com/lz4/lz4.git
+    GIT_TAG v1.10.0
+    SOURCE_SUBDIR build/cmake
+)
+
+FetchContent_MakeAvailable(tomlplusplus libuv lz4)
 
 message(STATUS "Found tomlplusplus: ${tomlplusplus_SOURCE_DIR}")
 message(STATUS "Found libuv: ${libuv_SOURCE_DIR}")
+message(STATUS "Found lz4: ${lz4_SOURCE_DIR}")
 
 if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
@@ -147,7 +159,7 @@ target_compile_options(clice-core PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
 
 target_include_directories(clice-core PUBLIC "${CMAKE_SOURCE_DIR}/include")
-target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus llvm-libs)
+target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus llvm-libs lz4_static)
 
 # clice executable
 add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")

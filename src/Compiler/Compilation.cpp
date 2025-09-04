@@ -5,6 +5,8 @@
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/MultiplexConsumer.h"
+#include "Support/Compression.h"
+#include "Support/FileSystem.h"
 
 namespace clice {
 
@@ -118,7 +120,30 @@ auto create_invocation(CompilationParams& params,
     params.buffers.clear();
 
     auto [pch, bound] = params.pch;
-    pp_opts.ImplicitPCHInclude = std::move(pch);
+    if (pch.ends_with(".lz4")) {
+        // When a compressed PCH/PCM is found, we decompress it into a memory buffer.
+        // To allow clang to read this in-memory PCH/PCM as if it were a file on disk,
+        // we create a virtual file system (VFS). This VFS overlays the real file system.
+        if (auto buffer = decompressFile(pch)) {
+            std::string pch_path = pch;
+            pch_path.resize(pch_path.size() - 4);
+
+            auto imfs = llvm::makeIntrusiveRefCnt<llvm::vfs::InMemoryFileSystem>();
+            imfs->addFile(pch_path, 0, std::move(buffer));
+
+            auto overlay = llvm::makeIntrusiveRefCnt<llvm::vfs::OverlayFileSystem>(params.vfs);
+            overlay->pushOverlay(imfs);
+
+            params.vfs = std::move(overlay);
+
+            pp_opts.ImplicitPCHInclude = std::move(pch_path);
+        } else {
+            pp_opts.ImplicitPCHInclude = std::move(pch);
+        }
+    } else {
+        pp_opts.ImplicitPCHInclude = std::move(pch);
+    }
+
     if(bound != 0) {
         pp_opts.PrecompiledPreambleBytes = {bound, false};
     }
