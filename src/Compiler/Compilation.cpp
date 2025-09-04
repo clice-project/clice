@@ -120,11 +120,11 @@ auto create_invocation(CompilationParams& params,
     params.buffers.clear();
 
     auto [pch, bound] = params.pch;
-    if (pch.ends_with(".lz4")) {
+    if(pch.ends_with(".lz4")) {
         // When a compressed PCH/PCM is found, we decompress it into a memory buffer.
         // To allow clang to read this in-memory PCH/PCM as if it were a file on disk,
         // we create a virtual file system (VFS). This VFS overlays the real file system.
-        if (auto buffer = decompressFile(pch)) {
+        if(auto buffer = decompressFile(pch)) {
             std::string pch_path = pch;
             pch_path.resize(pch_path.size() - 4);
 
@@ -138,7 +138,7 @@ auto create_invocation(CompilationParams& params,
 
             pp_opts.ImplicitPCHInclude = std::move(pch_path);
         } else {
-            pp_opts.ImplicitPCHInclude = std::move(pch);
+            log::warn("Failed to decompress PCH '{}', proceeding without it.", pch);
         }
     } else {
         pp_opts.ImplicitPCHInclude = std::move(pch);

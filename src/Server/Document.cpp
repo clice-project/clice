@@ -315,7 +315,7 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     params.add_remapped_file(path, content);
     params.pch = {pch->path, pch->preamble.size()};
     // if compressed PCH exists, use it
-    if (fs::exists(params.pch.first + ".lz4")) {
+    if(fs::exists(params.pch.first + ".lz4")) {
         params.pch.first = params.pch.first + ".lz4";
     }
     file->diagnostics->clear();
