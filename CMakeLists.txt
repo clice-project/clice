@@ -54,6 +54,10 @@ if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
 endif()
 
+# Remove any RTTI or exception enabling flags from CMAKE_CXX_FLAGS
+string(REPLACE "/EHsc" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+string(REPLACE "/GR" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+
 if (MSVC)
     # Fix MSVC Non-standard preprocessor caused error C1189
     # While compiling Command.cpp, MSVC won't expand Options macro correctly
@@ -76,9 +80,12 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     list(APPEND CLICE_CXX_FLAGS "-g;-O0;-fsanitize=address")
     list(APPEND CLICE_LINKER_FLAGS "-fsanitize=address")
 elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-    message(STATUS "RelWithDebInfo build: Enabling -fsanitize=thread")
-    list(APPEND CLICE_CXX_FLAGS "-fsanitize=thread")
-    list(APPEND CLICE_LINKER_FLAGS "-fsanitize=thread")
+    if(NOT MSVC)
+        # MSVC only supports ASAN
+        message(STATUS "RelWithDebInfo build: Enabling -fsanitize=thread")
+        list(APPEND CLICE_CXX_FLAGS "-fsanitize=thread")
+        list(APPEND CLICE_LINKER_FLAGS "-fsanitize=thread")
+    endif()
 else()
     message(STATUS "Release/Default build: Enabling -O3")
     list(APPEND CLICE_CXX_FLAGS "-O3")
