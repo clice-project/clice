@@ -19,7 +19,7 @@ namespace clice {
  *
  * @param path The path to the pre-compiled file to compress.
  */
-void compressPreCompiledFile(llvm::StringRef path);
+void compressPreCompiledFile(std::string path);
 /**
  *  @brief Compresses a file using LZ4 and saves it to an output path.
  *

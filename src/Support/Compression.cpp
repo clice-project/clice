@@ -7,7 +7,7 @@
 
 namespace clice {
 
-void compressPreCompiledFile(llvm::StringRef path) {
+void compressPreCompiledFile(std::string path) {
     if(!fs::exists(path)) {
         log::warn("PreCompiledFile does not exist: {}", path);
     } else if(!compressToFile(path, path + ".lz4")) {
