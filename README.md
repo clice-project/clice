@@ -3,10 +3,10 @@
 # clice
 
 ![C++ Standard](https://img.shields.io/badge/C++-23-blue.svg)
-[![GitHub license](https://img.shields.io/github/license/clice-project/clice)](https://github.com/clice-project/clice/blob/main/LICENSE)
-[![Actions status](https://github.com/clice-project/clice/workflows/CI/badge.svg)](https://github.com/clice-project/clice/actions)
+[![GitHub license](https://img.shields.io/github/license/clice-io/clice)](https://github.com/clice-io/clice/blob/main/LICENSE)
+[![Actions status](https://github.com/clice-io/clice/workflows/CI/badge.svg)](https://github.com/clice-io/clice/actions)
 [![Documentation](https://img.shields.io/badge/view-documentation-blue)](https://clice.io)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/clice-project/clice)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/clice-io/clice)
 [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?logo=discord&logoColor=white)](https://discord.gg/PA3UxW2VA3)
 
 clice is a next-generation language server designed for modern C++. Through excellent asynchronous task scheduling and intelligent caching, it achieves a lower memory footprint and faster response times.
@@ -18,7 +18,7 @@ Beyond performance, clice provides instantiation-aware template processing, supp
 
 ## Getting started
 
-Download the latest `clice` binary from the [releases page](https://github.com/clice-project/clice/releases) and install the [vscode extension](https://marketplace.visualstudio.com/items?itemName=ykiko.clice-vscode). Then, add the following configuration to your `.vscode/settings.json` file:
+Download the latest `clice` binary from the [releases page](https://github.com/clice-io/clice/releases) and install the [vscode extension](https://marketplace.visualstudio.com/items?itemName=ykiko.clice-vscode). Then, add the following configuration to your `.vscode/settings.json` file:
 
 ```jsonc
 {

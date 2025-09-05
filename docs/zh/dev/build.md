@@ -45,14 +45,14 @@ clice 使用 C++23 作为语言标准 ，请确保有可用的 clang 19 以及�
 
 # Linux precompiled binary require glibc 2.35 (build on ubuntu 22.04)
 $ mkdir -p ./.llvm
-$ curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/x86_64-linux-gnu-release.tar.xz" | tar -xJ -C ./.llvm
+$ curl -L "https://github.com/clice-io/llvm-binary/releases/download/20.1.5/x86_64-linux-gnu-release.tar.xz" | tar -xJ -C ./.llvm
 
 # MacOS precompiled binary require macos15+
 $ mkdir -p ./.llvm
-$ curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release.tar.xz" | tar -xJ -C ./.llvm
+$ curl -L "https://github.com/clice-io/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release.tar.xz" | tar -xJ -C ./.llvm
 
 # Windows precompiled binary only MD runtime support
-$ curl -O -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/x64-windows-msvc-release.7z"
+$ curl -O -L "https://github.com/clice-io/llvm-binary/releases/download/20.1.5/x64-windows-msvc-release.7z"
 $ 7z x x64-windows-msvc-release.7z "-o.llvm"
 ```
 
@@ -66,7 +66,7 @@ $ 7z x x64-windows-msvc-release.7z "-o.llvm"
 
 2. 自己从头编译 llvm/clang
 
-这是最推荐的方式，可以保证环境一致性，避免因为 ABI 不一致而导致的崩溃问题。我们提供了一个脚本，用于构建 clice 所需要的 llvm libs：[build-llvm-libs.py](https://github.com/clice-project/clice/blob/main/scripts/build-llvm-libs.py)。
+这是最推荐的方式，可以保证环境一致性，避免因为 ABI 不一致而导致的崩溃问题。我们提供了一个脚本，用于构建 clice 所需要的 llvm libs：[build-llvm-libs.py](https://github.com/clice-io/clice/blob/main/scripts/build-llvm-libs.py)。
 
 ```bash
 $ cd llvm-project

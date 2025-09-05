@@ -146,7 +146,7 @@ function(install_prebuilt_llvm llvm_ver)
     # Download if file does not exist
     if(NOT EXISTS "${DOWNLOAD_PATH}")
         message(STATUS "Downloading prebuilt LLVM package: ${LLVM_PACKAGE}")
-        set(DOWNLOAD_URL "https://github.com/clice-project/llvm-binary/releases/download/${llvm_ver}/${LLVM_PACKAGE}")
+        set(DOWNLOAD_URL "https://github.com/clice-io/llvm-binary/releases/download/${llvm_ver}/${LLVM_PACKAGE}")
         file(DOWNLOAD "${DOWNLOAD_URL}"
                       "${DOWNLOAD_PATH}"
                       STATUS DOWNLOAD_STATUS
