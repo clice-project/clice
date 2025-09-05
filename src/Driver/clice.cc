@@ -132,7 +132,7 @@ bool checkArguments(int argc, const char** argv) {
 int main(int argc, const char** argv) {
     llvm::InitLLVM guard(argc, argv);
     llvm::setBugReportMsg(
-        "Please report bugs to https://github.com/clice-project/clice/issues and include the crash backtrace");
+        "Please report bugs to https://github.com/clice-io/clice/issues and include the crash backtrace");
 
     if(!checkArguments(argc, argv)) {
         return 1;

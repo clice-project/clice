@@ -32,7 +32,7 @@ export default defineConfig({
     },
     socialLinks: [
       { icon: 'discord', link: 'https://discord.gg/PA3UxW2VA3' },
-      { icon: 'github', link: 'https://github.com/clice-project/clice' },
+      { icon: 'github', link: 'https://github.com/clice-io/clice' },
     ],
 
     outline: 'deep',
