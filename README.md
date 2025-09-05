@@ -32,3 +32,7 @@ Download the latest `clice` binary from the [releases page](https://github.com/c
 
 > [!NOTE]
 > As an early version, please do not use it in a production environment. Crashes are expected, and we welcome you to submit issues.
+
+## Documentation
+
+To learn more about building, installing, and configuring clice, or to dive deep into its features and architecture, please visit our official documentation at [**clice.io**](https://clice.io/).
