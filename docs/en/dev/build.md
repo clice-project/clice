@@ -143,10 +143,7 @@ Or, if you use xmake build the project and do not have uv installed, you can use
 $ pip install pytest pytest-asyncio
 $ xmake f -m debug && xmake build unit_tests
 
-# The environment variable LLVM_INSTALL_DIR may vary in different commits and platforms, 
-# depending on the value of `set_versions` in the `package("llvm")` section of the xmake.lua
-$ LLVM_INSTALL_DIR=./build/.packages/l/llvm/20.1.5/0181167384bb4acb9e781210294c358d/lib/clang/20/ \
-  pytest -s --log-cli-level=INFO tests/integration \
+$ pytest -s --log-cli-level=INFO tests/integration \
     --executable=./build/linux/x86_64/debug/clice \
-    --resource-dir=$LLVM_INSTALL_DIR
+    --resource-dir=./build/linux/x86_64/debug/lib/clang/20/
 ```

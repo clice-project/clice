@@ -142,10 +142,7 @@ $ xmake test --verbose integration_tests/default
 $ pip install pytest pytest-asyncio
 $ xmake f -m debug && xmake build unit_tests
 
-# 此处的 LLVM_INSTALL_DIR 在不同版本, 不同平台的 clice 中 sha 值可能不一样,
-# 取决于对应的 xmake.lua 中 `package("llvm")` 一节 `set_versions` 的取值
-$ LLVM_INSTALL_DIR=./build/.packages/l/llvm/20.1.5/0181167384bb4acb9e781210294c358d/lib/clang/20/ \
-  pytest -s --log-cli-level=INFO tests/integration \
+$ pytest -s --log-cli-level=INFO tests/integration \
     --executable=./build/linux/x86_64/debug/clice \
-    --resource-dir=$LLVM_INSTALL_DIR
+    --resource-dir=./build/linux/x86_64/debug/lib/clang/20/
 ```
