@@ -1,16 +1,28 @@
 #pragma once
 
 #include <expected>
-#include <string>
 #include <bitset>
 
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/SmallString.h"
+#include "Support/Enum.h"
 
 namespace clice {
 
-using GlobCharSet = std::bitset<256>;
+struct ParseGlobError : refl::Enum<ParseGlobError> {
+    enum Kind : uint8_t {
+        UnmatchedBrace,
+        UnmatchedBracket,
+        EmptyBrace,
+        NestedBrace,
+        TooManyBraceExpansions,
+        InvalidRange,
+        StrayBackslash,
+        MultipleSlash,
+        MultipleStar,
+    };
+
+    using Enum::Enum;
+};
 
 /// This class implements a glob pattern matcher to parse patterns to
 /// watch relative to the base path.
@@ -30,31 +42,28 @@ using GlobCharSet = std::bitset<256>;
 ///   Note: Use only `/` for path segment seperator
 class GlobPattern {
 public:
-    /// \param Pat the pattern to match against
-    /// \param MaxSubPatterns if provided limit the number of allowed subpatterns
-    ///                       created from expanding braces otherwise disable
-    ///                       brace expansion
-    static std::expected<GlobPattern, std::string>
-        create(llvm::StringRef s, std::optional<size_t> max_subpattern_num = {});
+    using GlobCharSet = std::bitset<std::numeric_limits<unsigned char>::max()>;
 
-    // Returns true for glob pattern "*" or "**". Can be used to avoid expensive
-    // preparation/acquisition of the input for match().
-    bool isTrivialMatchAll() const {
-        if(!prefix.empty()) {
-            // have no prefix
+    /// \param pattern the pattern to match against
+    /// \param max_subpattern_num if provided limit the number of allowed subpatterns
+    ///               created from expanding braces otherwise disable brace expansion
+    static auto create(llvm::StringRef pattern, std::optional<size_t> max_subpattern_num = {})
+        -> std::expected<GlobPattern, ParseGlobError>;
+
+    /// Returns true for glob pattern "*" or "**". Can be used to avoid expensive
+    /// preparation/acquisition of the input for match().
+    bool is_trivial_match_all() const {
+        if(!prefix.empty()) [[unlikely]] {
             return false;
         }
-        if((sub_globs.size() == 1 && sub_globs[0].getPat() == "*") ||
-           (sub_globs.size() == 2 && sub_globs[0].getPat() == "**")) {
-            // not "*" or "**"
-            return true;
-        }
-        // default return false
-        return false;
+
+        // "*" or "**"
+        return (sub_globs.size() == 1 && sub_globs[0].str() == "*") ||
+               (sub_globs.size() == 2 && sub_globs[0].str() == "**");
     }
 
     /// \returns \p true if \p str matches this glob pattern
-    bool match(llvm::StringRef s);
+    bool match(llvm::StringRef str) const;
 
 private:
     /// GlobPattern is seperated into `Prefix + SubGlobPattern`
@@ -74,14 +83,17 @@ private:
     /// SubGlobPattern:
     /// Pattern `foo.{c,cpp,cppm}`
     /// -> extend to 3 SubGlobPatterns: `foo.c`, `foo.cpp`, `foo.cppm`
-    struct SubGlobPattern {
-        /// \param Pat the pattern to match against
-        static std::expected<SubGlobPattern, std::string> create(llvm::StringRef s);
+    struct SubPattern {
+
+        /// \param pattern the pattern to match against
+        static std::expected<SubPattern, ParseGlobError> create(llvm::StringRef pattern);
+
         /// \returns \p true if \p S matches this glob pattern
         bool match(llvm::StringRef str) const;
 
-        llvm::StringRef getPat() const {
-            return llvm::StringRef{pat.data(), pat.size()};
+        /// Get pattern string
+        llvm::StringRef str() const {
+            return pattern.str();
         }
 
         struct Bracket {
@@ -89,7 +101,7 @@ private:
             GlobCharSet bytes;
         };
 
-        llvm::SmallVector<Bracket, 0> brackets;
+        llvm::SmallVector<Bracket, 1> brackets;
 
         // GlobSegment devide patterm into segments by '/'
         // SubPattern:
@@ -108,12 +120,21 @@ private:
             size_t end;
         };
 
-        llvm::SmallVector<GlobSegment, 6> glob_segments;
+        llvm::SmallVector<GlobSegment> segments;
 
-        llvm::SmallVector<char, 0> pat;
+        llvm::SmallString<16> pattern;
     };
 
-    llvm::SmallVector<SubGlobPattern, 1> sub_globs;
+    llvm::SmallVector<SubPattern> sub_globs;
 };
 
 }  // namespace clice
+
+template <>
+struct std::formatter<clice::ParseGlobError> : std::formatter<llvm::StringRef> {
+    template <typename FormatContext>
+    auto format(clice::ParseGlobError& e, FormatContext& ctx) const {
+        return std::format_to(ctx.out(), "{}", e.name());
+    }
+};
+
