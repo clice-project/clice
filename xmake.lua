@@ -51,6 +51,7 @@ target("clice-core")
     set_kind("$(kind)")
     add_files("src/**.cpp|Driver/*.cpp")
     add_includedirs("include", {public = true})
+    add_includedirs("src/Compiler/generated", {public = false})
 
     add_packages("libuv", "toml++", {public = true})
 
@@ -72,6 +73,32 @@ target("clice-core")
                 "clangLex",
                 "clangSema",
                 "clangSerialization",
+                "clangTidy",
+                "clangTidyUtils",
+                -- ALL_CLANG_TIDY_CHECKS
+                "clangTidyAndroidModule",
+                "clangTidyAbseilModule",
+                "clangTidyAlteraModule",
+                "clangTidyBoostModule",
+                "clangTidyBugproneModule",
+                "clangTidyCERTModule",
+                "clangTidyConcurrencyModule",
+                "clangTidyCppCoreGuidelinesModule",
+                "clangTidyDarwinModule",
+                "clangTidyFuchsiaModule",
+                "clangTidyGoogleModule",
+                "clangTidyHICPPModule",
+                "clangTidyLinuxKernelModule",
+                "clangTidyLLVMModule",
+                "clangTidyLLVMLibcModule",
+                "clangTidyMiscModule",
+                "clangTidyModernizeModule",
+                "clangTidyObjCModule",
+                "clangTidyOpenMPModule",
+                "clangTidyPerformanceModule",
+                "clangTidyPortabilityModule",
+                "clangTidyReadabilityModule",
+                "clangTidyZirconModule",
                 "clangTooling",
                 "clangToolingCore",
                 "clangToolingInclusions",

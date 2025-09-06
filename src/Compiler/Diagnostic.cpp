@@ -194,9 +194,9 @@ auto diagnostic_range(const clang::Diagnostic& diagnostic, const clang::LangOpti
     };
 }
 
-class DiagnosticCollector : public clang::DiagnosticConsumer {
+class DiagnosticCollectorImpl : public clang::DiagnosticConsumer, public DiagnosticCollector {
 public:
-    DiagnosticCollector(std::shared_ptr<std::vector<Diagnostic>> diagnostics) :
+    DiagnosticCollectorImpl(std::shared_ptr<std::vector<Diagnostic>> diagnostics) :
         diagnostics(diagnostics) {}
 
     void BeginSourceFile(const clang::LangOptions& Opts, const clang::Preprocessor* PP) override {
@@ -241,9 +241,10 @@ private:
     clang::SourceManager* src_mgr;
 };
 
-clang::DiagnosticConsumer*
+std::pair<DiagnosticCollector*, clang::DiagnosticConsumer*>
     Diagnostic::create(std::shared_ptr<std::vector<Diagnostic>> diagnostics) {
-    return new DiagnosticCollector(diagnostics);
+    auto collector = new DiagnosticCollectorImpl(diagnostics);
+    return std::pair{collector, collector};
 }
 
 }  // namespace clice

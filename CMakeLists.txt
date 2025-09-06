@@ -132,6 +132,32 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         clangLex
         clangSema
         clangSerialization
+        clangTidy
+        clangTidyUtils
+        # ALL_CLANG_TIDY_CHECKS
+        clangTidyAndroidModule
+        clangTidyAbseilModule
+        clangTidyAlteraModule
+        clangTidyBoostModule
+        clangTidyBugproneModule
+        clangTidyCERTModule
+        clangTidyConcurrencyModule
+        clangTidyCppCoreGuidelinesModule
+        clangTidyDarwinModule
+        clangTidyFuchsiaModule
+        clangTidyGoogleModule
+        clangTidyHICPPModule
+        clangTidyLinuxKernelModule
+        clangTidyLLVMModule
+        clangTidyLLVMLibcModule
+        clangTidyMiscModule
+        clangTidyModernizeModule
+        clangTidyObjCModule
+        clangTidyOpenMPModule
+        clangTidyPerformanceModule
+        clangTidyPortabilityModule
+        clangTidyReadabilityModule
+        clangTidyZirconModule
         clangTooling
         clangToolingCore
         clangToolingInclusions
@@ -147,6 +173,7 @@ target_compile_options(clice-core PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
 
 target_include_directories(clice-core PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_include_directories(clice-core PRIVATE "${CMAKE_SOURCE_DIR}/src/Compiler/generated/")
 target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus llvm-libs)
 
 # clice executable
