@@ -218,7 +218,8 @@ private:
 
 private:
     /// The current request id.
-    std::uint32_t id = 0;
+    std::uint32_t server_request_id = 0;
+    std::uint32_t client_request_id = 0;
 
     /// All registered LSP callbacks.
     llvm::StringMap<Callback> callbacks;
