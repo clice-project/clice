@@ -319,6 +319,7 @@ suite<"GlobPattern"> glob_pattern_tests = [] {
 
     test("WildGlob") = [&] {
         PATDEF(Pat1, "**/*")
+        expect(that % Pat1.is_trivial_match_all());
         expect(that % Pat1.match("foo") == true);
         expect(that % Pat1.match("foo/bar/baz") == true);
 
@@ -359,6 +360,7 @@ suite<"GlobPattern"> glob_pattern_tests = [] {
 
         // Boundary test of `**`
         PATDEF(Pat7, "**")
+        expect(that % Pat7.is_trivial_match_all());
         expect(that % Pat7.match("foo") == true);
         expect(that % Pat7.match("foo/bar/baz") == true);
 
@@ -398,6 +400,7 @@ suite<"GlobPattern"> glob_pattern_tests = [] {
         expect(that % Pat14.match("foo/bar/baz/xxx/yyy/zzz114514") == true);
 
         PATDEF(Pat15, "**/*")
+        expect(that % Pat15.is_trivial_match_all());
         expect(that % Pat15.match("foo") == true);
         expect(that % Pat15.match("foo/bar/baz") == true);
 
@@ -428,6 +431,7 @@ suite<"GlobPattern"> glob_pattern_tests = [] {
         expect(that % Pat18.match("est/other/foo.js") == false);
 
         PATDEF(Pat19, "**")
+        expect(that % Pat19.is_trivial_match_all());
         expect(that % Pat19.match("/") == true);
         expect(that % Pat19.match("foo.js") == true);
         expect(that % Pat19.match("folder/foo.js") == true);
