@@ -75,6 +75,16 @@ $ python3 <clice>/scripts/build-llvm-libs.py debug
 
 也可以参考 llvm 的官方构建教程 [Building LLVM with CMake](https://llvm.org/docs/CMake.html)。
 
+### GCC Toolchain
+
+clice 要求 `GCC libstdc++ >= 14` 。以下命令使用不同的 GCC 工具链并静态链接其 `libstdc++`：
+
+```bash
+cmake .. -DCMAKE_C_FLAGS="--gcc-toolchain=/usr/local/gcc-14.3.0/" \
+         -DCMAKE_CXX_FLAGS="--gcc-toolchain=/usr/local/gcc-14.3.0/" \
+         -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++"
+
+
 ## Building
 
 在处理好前置依赖之后，可以开始构建 clice 了，我们提供 cmake/xmake 两种构建方式。
