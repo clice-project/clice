@@ -1,10 +1,11 @@
 #pragma once
 
-#include <expected>
-#include <bitset>
-
+#include "Support/Format.h"
 #include "llvm/ADT/SmallString.h"
 #include "Support/Enum.h"
+
+#include <expected>
+#include <bitset>
 
 namespace clice {
 
@@ -52,15 +53,7 @@ public:
 
     /// Returns true for glob pattern "*" or "**". Can be used to avoid expensive
     /// preparation/acquisition of the input for match().
-    bool is_trivial_match_all() const {
-        if(!prefix.empty()) [[unlikely]] {
-            return false;
-        }
-
-        // "*" or "**"
-        return (sub_globs.size() == 1 && sub_globs[0].str() == "*") ||
-               (sub_globs.size() == 2 && sub_globs[0].str() == "**");
-    }
+    bool is_trivial_match_all() const;
 
     /// \returns \p true if \p str matches this glob pattern
     bool match(llvm::StringRef str) const;

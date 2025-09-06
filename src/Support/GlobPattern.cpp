@@ -569,4 +569,21 @@ bool GlobPattern::SubPattern::match(llvm::StringRef str) const {
     return s == s_end;
 }
 
+bool GlobPattern::is_trivial_match_all() const {
+    if(!prefix.empty()) [[likely]] {
+        return false;
+    }
+
+    // a pattern contians only '*' or '/'
+    constexpr auto is_wildcard_chain = [](llvm::StringRef pattern) {
+        return pattern.drop_while([](char ch) { return ch == '*' || ch == '/'; }).empty();
+    };
+
+    if(sub_globs.size() >= 1) {
+        return std::ranges::all_of(sub_globs, is_wildcard_chain, &SubPattern::str);
+    }
+
+    return false;
+}
+
 }  // namespace clice
