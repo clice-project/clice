@@ -154,6 +154,8 @@ add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")
 target_link_libraries(clice PRIVATE clice-core)
 target_compile_options(clice PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice PUBLIC ${CLICE_LINKER_FLAGS})
+# install clice executable
+install(TARGETS clice RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # copy resource dir
 message(STATUS "Copying resource directory")
