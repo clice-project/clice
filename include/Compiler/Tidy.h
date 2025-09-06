@@ -4,7 +4,7 @@
 
 namespace clice::tidy {
 
-bool isRegisteredTidyCheck(llvm::StringRef check);
-std::optional<bool> isFastTidyCheck(llvm::StringRef check);
+bool is_registered_tidy_check(llvm::StringRef check);
+std::optional<bool> is_fast_tidy_check(llvm::StringRef check);
 
 }  // namespace clice::tidy

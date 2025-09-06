@@ -22,7 +22,7 @@ namespace clice::tidy {
 
 using namespace clang::tidy;
 
-bool isRegisteredTidyCheck(llvm::StringRef check) {
+bool is_registered_tidy_check(llvm::StringRef check) {
     assert(!check.empty());
     assert(!check.contains('*') && !check.contains(',') &&
            "isRegisteredCheck doesn't support globs");
@@ -41,7 +41,7 @@ bool isRegisteredTidyCheck(llvm::StringRef check) {
     return all_checks.contains(check);
 }
 
-std::optional<bool> isFastTidyCheck(llvm::StringRef check) {
+std::optional<bool> is_fast_tidy_check(llvm::StringRef check) {
     static auto& fast = *new llvm::StringMap<bool>{
 #define FAST(CHECK, TIME) {#CHECK, true},
 #define SLOW(CHECK, TIME) {#CHECK, false},
