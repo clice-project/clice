@@ -184,15 +184,11 @@ else()
     target_link_libraries(llvm-libs INTERFACE ${LLVM_LIBRARIES})
 endif()
 
-configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/Compiler/clang-tidy-config.h.cmake
-  ${CMAKE_CURRENT_BINARY_DIR}/src/Compiler/clang-tidy-config.h)
-include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR}/src/Compiler)
-
 target_compile_options(clice-core PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
 
 target_include_directories(clice-core PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_include_directories(clice-core PRIVATE "${CMAKE_SOURCE_DIR}/src/Compiler/generated/")
 target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus llvm-libs)
 
 # clice executable
