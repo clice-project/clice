@@ -1,8 +1,9 @@
 #pragma once
 
 #include "Support/Enum.h"
-#include "llvm/ADT/DenseSet.h"
 #include "Support/Format.h"
+#include "Support/GlobPattern.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/Allocator.h"
 #include <expected>
 
@@ -11,6 +12,14 @@ namespace clice {
 /// A simple string pool to hold all cstring and cstring list.
 class StringPool {
 public:
+    bool contains(llvm::StringRef str) const {
+        return pooled_strs.contains(str);
+    }
+
+    bool contains(llvm::ArrayRef<const char*> list) const {
+        return pooled_str_lists.contains(list);
+    }
+
     /// Save a cstring in the pool, make sure end with `\0`.
     auto save_cstr(llvm::StringRef str) -> llvm::StringRef;
 
@@ -29,6 +38,57 @@ private:
 
     /// Cache between input command and its cache array in the allocator.
     llvm::DenseSet<llvm::ArrayRef<const char*>> pooled_str_lists;
+};
+
+/// Refers to clang::driver::options::ID in the `clang::Driver::Options.h`. We use the underlying
+/// type directly to avoid including clang headers.
+using DriverOptionID = std::uint32_t;
+
+/// See rules in clice.toml for details.
+struct Rule {
+    /// Whether the file is treated as readonly.
+    /// nullopt: auto, true: always, false: never.
+    std::optional<bool> readonly;
+
+    /// Whether the file is treated as header file.
+    /// nullopt: auto, true: always, false: never.
+    std::optional<bool> header;
+
+    /// The glob patterns to match the file path.
+    llvm::SmallVector<GlobPattern> pattern;
+
+    /// Additional arguments to append to the command.
+    llvm::SmallVector<DriverOptionID> append;
+
+    /// Arguments to remove from the command.
+    llvm::DenseMap<DriverOptionID, int> remove;
+
+    /// extra header contexts (file paths) for the file.
+    std::vector<std::string> context;
+};
+
+namespace config {
+struct Rule;
+}
+
+class RuleManager {
+public:
+    /// Clear all rules.
+    void clear();
+
+    /// Find the first matched rule for the given file path.
+    /// Return nullptr if no rule matches.
+    const Rule* find_rule(llvm::StringRef file) const;
+
+    std::pair<bool, const Rule*> try_apply() const;
+
+    static auto load_rules(llvm::ArrayRef<config::Rule> rules) -> RuleManager;
+
+private:
+    /// All rules in the order of appearance.
+    std::vector<Rule> rules;
+
+    llvm::DenseMap<DriverOptionID, llvm::StringRef> option_id_to_name;
 };
 
 struct CommandOptions {
@@ -158,7 +218,7 @@ private:
     llvm::DenseMap<const char*, DriverInfo> driver_infos;
 
     /// The clang options we want to filter in all cases, like -c and -o.
-    llvm::DenseSet<std::uint32_t> filtered_options;
+    llvm::DenseSet<DriverOptionID> filtered_options;
 };
 
 }  // namespace clice
