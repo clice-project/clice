@@ -77,7 +77,7 @@ $ python3 <clice>/scripts/build-llvm-libs.py debug
 
 ### GCC Toolchain
 
-clice要求`GCC libstdc++ >= 14`。以下命令使用不同的 GCC 工具链并静态链接其 `libstdc++`：
+clice 要求 `GCC libstdc++ >= 14` 。以下命令使用不同的 GCC 工具链并静态链接其 `libstdc++`：
 
 ```bash
 cmake .. -DCMAKE_C_FLAGS="--gcc-toolchain=/usr/local/gcc-14.3.0/" \
