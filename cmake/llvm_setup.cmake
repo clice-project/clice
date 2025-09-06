@@ -123,7 +123,7 @@ function(install_prebuilt_llvm llvm_ver)
     # Determine platform-specific package name
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(LLVM_BUILD_TYPE "debug")
-    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
         set(LLVM_BUILD_TYPE "release")
     else()
         set(LLVM_BUILD_TYPE "release-lto")
