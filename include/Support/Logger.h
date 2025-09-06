@@ -46,7 +46,7 @@ void log(Level level, std::string_view fmt, Args&&... args) {
         }
     }();
     if(level >= log_opt.level) {
-        llvm::errs() << std::format("[{0:%Y-%m-%d %H:%M:%S}] {1} ", time, tag)
+        llvm::errs() << std::format("[{0:%H:%M:%S}] {1} ", time, tag)
                      << std::vformat(fmt, std::make_format_args(args...)) << "\n";
     }
 #undef Green
