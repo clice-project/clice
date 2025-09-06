@@ -1,4 +1,3 @@
-#include <iostream>
 #include "Test/Test.h"
 #include "Support/GlobPattern.h"
 
@@ -9,22 +8,44 @@ namespace {
 #define PATDEF(NAME, PAT)                                                                          \
     const char* PatString_##NAME = PAT;                                                            \
     auto Res##NAME = clice::GlobPattern::create(PatString_##NAME, 100);                            \
-    if(!Res##NAME.has_value()) {                                                                   \
-        std::cout << Res##NAME.error() << '\n';                                                    \
-    }                                                                                              \
     assert(Res##NAME.has_value());                                                                 \
     auto NAME = Res##NAME.value();
 
 suite<"GlobPattern"> glob_pattern_tests = [] {
     test("PatternSema") = [&] {
-        auto Pat1 = clice::GlobPattern::create("**/****.{c,cc}", 100);
+        using enum ParseGlobError::Kind;
+
+        auto Pat1 = clice::GlobPattern::create("**/****.{c,cc}", 2);
         expect(that % Pat1.has_value() == false);
+        expect(that % Pat1.error() == MultipleStar);
 
-        auto Pat2 = clice::GlobPattern::create("/foo/bar/baz////aaa.{c,cc}", 100);
+        auto Pat2 = clice::GlobPattern::create("/foo/bar/baz////aaa.{c,cc}", 2);
         expect(that % Pat2.has_value() == false);
+        expect(that % Pat2.error() == MultipleSlash);
 
-        auto Pat3 = clice::GlobPattern::create("/foo/bar/baz/**////*.{c,cc}", 100);
+        auto Pat3 = clice::GlobPattern::create("/foo/bar/baz/**////*.{c,cc}", 2);
         expect(that % Pat3.has_value() == false);
+        expect(that % Pat3.error() == MultipleSlash);
+
+        auto Pat4 = clice::GlobPattern::create("a.{c,cc", 1);
+        expect(that % Pat4.has_value() == false);
+        expect(that % Pat4.error() == UnmatchedBrace);
+
+        auto Pat5 = clice::GlobPattern::create("[9-0]", 1);
+        expect(that % Pat5.has_value() == false);
+        expect(that % Pat5.error() == InvalidRange);
+
+        auto Pat6 = clice::GlobPattern::create("a.[0-9", 1);
+        expect(that % Pat6.has_value() == false);
+        expect(that % Pat6.error() == UnmatchedBracket);
+
+        auto Pat7 = clice::GlobPattern::create("a.{}", 1);
+        expect(that % Pat7.has_value() == false);
+        expect(that % Pat7.error() == EmptyBrace);
+
+        auto Pat8 = clice::GlobPattern::create("a.{cc, b.{c}}", 1);
+        expect(that % Pat8.has_value() == false);
+        expect(that % Pat8.error() == NestedBrace);
     };
 
     test("Simple") = [&] {
@@ -298,6 +319,7 @@ suite<"GlobPattern"> glob_pattern_tests = [] {
 
     test("WildGlob") = [&] {
         PATDEF(Pat1, "**/*")
+        expect(that % Pat1.is_trivial_match_all());
         expect(that % Pat1.match("foo") == true);
         expect(that % Pat1.match("foo/bar/baz") == true);
 
@@ -338,6 +360,7 @@ suite<"GlobPattern"> glob_pattern_tests = [] {
 
         // Boundary test of `**`
         PATDEF(Pat7, "**")
+        expect(that % Pat7.is_trivial_match_all());
         expect(that % Pat7.match("foo") == true);
         expect(that % Pat7.match("foo/bar/baz") == true);
 
@@ -377,6 +400,7 @@ suite<"GlobPattern"> glob_pattern_tests = [] {
         expect(that % Pat14.match("foo/bar/baz/xxx/yyy/zzz114514") == true);
 
         PATDEF(Pat15, "**/*")
+        expect(that % Pat15.is_trivial_match_all());
         expect(that % Pat15.match("foo") == true);
         expect(that % Pat15.match("foo/bar/baz") == true);
 
@@ -407,6 +431,7 @@ suite<"GlobPattern"> glob_pattern_tests = [] {
         expect(that % Pat18.match("est/other/foo.js") == false);
 
         PATDEF(Pat19, "**")
+        expect(that % Pat19.is_trivial_match_all());
         expect(that % Pat19.match("/") == true);
         expect(that % Pat19.match("foo.js") == true);
         expect(that % Pat19.match("folder/foo.js") == true);
