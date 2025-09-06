@@ -1,71 +1,74 @@
-#include <format>
-
+#include "llvm/ADT/STLExtras.h"
 #include "Support/GlobPattern.h"
 
 namespace clice {
 
-// Expands character ranges and returns a bitmap.
-// For example, "a-cf-hz" is expanded to "abcfghz".
-static std::expected<GlobCharSet, std::string> expand(llvm::StringRef s, llvm::StringRef original) {
-    GlobCharSet bv{false};
+namespace {
 
-    for(size_t i = 0, e = s.size(); i < e; ++i) {
-        switch(s[i]) {
+/// Expands character ranges and returns a bitmap.
+/// For example, "a-cf-hz" is expanded to "abcfghz".
+std::expected<GlobPattern::GlobCharSet, ParseGlobError> expand(llvm::StringRef str,
+                                                               llvm::StringRef original) {
+    using enum ParseGlobError::Kind;
+
+    GlobPattern::GlobCharSet charset;
+    for(size_t i = 0, e = str.size(); i < e; ++i) {
+        switch(str[i]) {
             case '\\': {
                 ++i;
                 if(i == e) {
-                    return std::unexpected{"Invalid expansions: stary `\\`"};
+                    return std::unexpected(StrayBackslash);
                 }
-                if(s[i] != '/') {
-                    bv.set(s[i], true);
+                if(str[i] != '/') {
+                    charset.set(str[i]);
                 }
                 break;
             }
 
             case '-': {
                 if(i == 0 || i + 1 == e) {
-                    bv.set('-', true);
+                    charset.set('-');
                     break;
                 }
-                char c_begin = s[i - 1];
-                char c_end = s[i + 1];
+                char c_begin = str[i - 1];
+                char c_end = str[i + 1];
                 ++i;
                 if(c_end == '\\') {
                     ++i;
-                    if(s[i] == e) {
-                        return std::unexpected{"Invalid expansions: stary `\\`"};
+                    if(str[i] == e) {
+                        return std::unexpected(StrayBackslash);
                     }
-                    c_end = s[i];
+                    c_end = str[i];
                 }
                 if(c_begin > c_end) {
-                    return std::unexpected{
-                        std::format("Invalid expansion: `{}` is larger than `{}`", c_begin, c_end)};
+                    return std::unexpected(InvalidRange);
                 }
                 for(char c = c_begin; c <= c_end; ++c) {
                     if(c != '/') {
-                        bv.set(c, true);
+                        charset.set(c);
                     }
                 }
                 break;
             }
 
             default: {
-                if(s[i] != '/') {
-                    bv.set(s[i], true);
+                if(str[i] != '/') {
+                    charset.set(str[i]);
                 }
             }
         }
     }
 
-    return bv;
+    return charset;
 }
 
-// Identify brace expansions in S and return the list of patterns they expand
-// into.
-static std::expected<llvm::SmallVector<std::string, 1>, std::string>
-    parseBraceExpansions(llvm::StringRef s, std::optional<size_t> max_subpattern_num) {
-    llvm::SmallVector<std::string> subpatterns = {s.str()};
-    if(!max_subpattern_num || !s.contains('{')) {
+/// Identify brace expansions in str and return the list of patterns they expand into.
+std::expected<llvm::SmallVector<std::string>, ParseGlobError>
+    parse_brace_expansion(llvm::StringRef str, std::optional<size_t> max_subpattern_num) {
+    using enum ParseGlobError::Kind;
+
+    llvm::SmallVector<std::string> subpatterns = {str.str()};
+    if(!max_subpattern_num || !str.contains('{')) {
         return subpatterns;
     }
 
@@ -79,58 +82,57 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
 
     BraceExpansion* current_be = nullptr;
     size_t term_begin = 0;
-    for(size_t i = 0, e = s.size(); i != e; ++i) {
-        if(s[i] == '[') {
+    for(size_t i = 0, e = str.size(); i != e; ++i) {
+        if(str[i] == '[') {
             ++i;
-            if(s[i] == ']') {
+            if(str[i] == ']') {
                 ++i;
             }
-            while(i != e && s[i] != ']') {
-                if(s[i] == '\\') {
+            while(i != e && str[i] != ']') {
+                if(str[i] == '\\') {
                     if(i == e) {
-                        return std::unexpected{
-                            "Invalid glob pattern, unmatched '[', with stray " "'\\' inside"};
+                        return std::unexpected(UnmatchedBracket);
                     }
                     ++i;
                 }
                 ++i;
             }
             if(i == e) {
-                return std::unexpected{"Invalid glob pattern, unmatched '['"};
+                return std::unexpected(UnmatchedBracket);
             }
-        } else if(s[i] == '{') {
+        } else if(str[i] == '{') {
             if(current_be) {
-                return std::unexpected{"Nested brace expansions are not supported"};
+                return std::unexpected(NestedBrace);
             }
             current_be = &brace_expansions.emplace_back();
             current_be->start = i;
             term_begin = i + 1;
-        } else if(s[i] == ',') {
+        } else if(str[i] == ',') {
             if(!current_be) {
                 continue;
             }
-            current_be->terms.push_back(s.substr(term_begin, i - term_begin));
+            current_be->terms.push_back(str.substr(term_begin, i - term_begin));
             term_begin = i + 1;
-        } else if(s[i] == '}') {
+        } else if(str[i] == '}') {
             if(!current_be) {
                 continue;
             }
             if(current_be->terms.empty() && i - term_begin == 0) {
-                return std::unexpected{"Empty brace expression is not supported"};
+                return std::unexpected(EmptyBrace);
             }
-            current_be->terms.push_back(s.substr(term_begin, i - term_begin));
+            current_be->terms.push_back(str.substr(term_begin, i - term_begin));
             current_be->length = i - current_be->start + 1;
             current_be = nullptr;
-        } else if(s[i] == '\\') {
+        } else if(str[i] == '\\') {
             ++i;
             if(i == e) {
-                return std::unexpected{"Invalid glob pattern, stray '\\'"};
+                return std::unexpected(StrayBackslash);
             }
         }
     }
 
     if(current_be) {
-        return std::unexpected{"Incomplete brace expansion"};
+        return std::unexpected(UnmatchedBrace);
     }
 
     size_t subpattern_num = 1;
@@ -143,7 +145,7 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
     }
 
     if(subpattern_num > *max_subpattern_num) {
-        return std::unexpected{"Too many brace expansions"};
+        return std::unexpected(TooManyBraceExpansions);
     }
 
     for(auto& be: reverse(brace_expansions)) {
@@ -159,136 +161,144 @@ static std::expected<llvm::SmallVector<std::string, 1>, std::string>
     return subpatterns;
 }
 
-std::expected<GlobPattern, std::string>
-    GlobPattern::create(llvm::StringRef s, std::optional<size_t> max_subpattern_num) {
+}  // namespace
+
+auto GlobPattern::create(llvm::StringRef pattern, std::optional<size_t> max_subpattern_num)
+    -> std::expected<GlobPattern, ParseGlobError> {
+    using enum ParseGlobError::Kind;
+
     // Store the prefix that does not contain any metacharacter.
     GlobPattern pat;
-    size_t prefix_size = s.find_first_of("?*[{\\");
+    size_t prefix_size = pattern.find_first_of("?*[{\\");
     if(prefix_size == std::string::npos) {
-        pat.prefix = s.substr(0, prefix_size).str();
+        pat.prefix = pattern.substr(0, prefix_size).str();
         // check if there is multiple `/` in prefix
         size_t last_slash = 0;
         size_t size = pat.prefix.size();
         for(size_t i = 0; i < size; ++i) {
-            if(s[i] == '/' && i - last_slash == 1) {
-                return std::unexpected{"Multiple `/` is not allowed"};
+            if(pattern[i] == '/' && i - last_slash == 1) {
+                return std::unexpected(MultipleSlash);
             }
             last_slash = i;
         }
         return pat;
     }
-    if(prefix_size != 0 && s[prefix_size - 1] == '/') {
+    if(prefix_size != 0 && pattern[prefix_size - 1] == '/') {
         pat.prefix_at_seg_end = true;
         --prefix_size;
     }
-    pat.prefix = s.substr(0, prefix_size).str();
+    pat.prefix = pattern.substr(0, prefix_size).str();
     // check if there is multiple `/` in prefix
     size_t last_slash = 0;
     size_t size = pat.prefix.size();
     for(size_t i = 0; i < size; ++i) {
-        if(s[i] == '/' && i - last_slash == 1) {
-            return std::unexpected{"Multiple `/` is not allowed"};
+        if(pattern[i] == '/' && i - last_slash == 1) {
+            return std::unexpected(MultipleSlash);
         }
         last_slash = i;
     }
-    s = s.substr(pat.prefix_at_seg_end ? prefix_size + 1 : prefix_size);
+    pattern = pattern.substr(pat.prefix_at_seg_end ? prefix_size + 1 : prefix_size);
 
-    llvm::SmallVector<std::string, 1> sub_pats;
-    if(auto res = parseBraceExpansions(s, max_subpattern_num); res.has_value()) {
-        sub_pats = res.value();
+    llvm::SmallVector<std::string> sub_patterns;
+    if(auto expansion = parse_brace_expansion(pattern, max_subpattern_num); expansion.has_value()) {
+        sub_patterns = expansion.value();
     } else {
-        return std::unexpected{res.error()};
+        return std::unexpected(expansion.error());
     }
 
-    for(auto sub_pat: sub_pats) {
-        if(auto res = SubGlobPattern::create(sub_pat); res.has_value()) {
+    for(auto sub_pat: sub_patterns) {
+        if(auto res = SubPattern::create(sub_pat); res.has_value()) {
             pat.sub_globs.push_back(res.value());
         } else {
-            return std::unexpected{res.error()};
+            return std::unexpected(res.error());
         }
     }
 
     return pat;
 }
 
-std::expected<GlobPattern::SubGlobPattern, std::string>
-    GlobPattern::SubGlobPattern::create(llvm::StringRef s) {
-    SubGlobPattern pat;
-    llvm::SmallVector<GlobSegment, 0> glob_segments;
-    GlobSegment* current_gs = &glob_segments.emplace_back();
-    current_gs->start = 0;
-    pat.pat.assign(s.begin(), s.end());
+std::expected<GlobPattern::SubPattern, ParseGlobError>
+    GlobPattern::SubPattern::create(llvm::StringRef pattern) {
+    using enum ParseGlobError::Kind;
+
+    llvm::SmallVector<Bracket> brackets;
+    llvm::SmallVector<GlobSegment> segments;
+    GlobSegment* current = &segments.emplace_back();
+
+    current->start = 0;
     // Parse brackets.
-    size_t e = s.size();
+    size_t e = pattern.size();
     for(size_t i = 0; i < e; ++i) {
-        if(!current_gs) {
-            current_gs = &glob_segments.emplace_back();
-            current_gs->start = i;
+        if(!current) {
+            current = &segments.emplace_back();
+            current->start = i;
         }
-        if(s[i] == '[') {
+        if(pattern[i] == '[') {
             ++i;
             size_t j = i;
-            if(s[j] == ']') {
+            if(pattern[j] == ']') {
                 // ']' is allowed as the first character of a character class. '[]'
                 // is invalid. So, just skip the first character.
                 ++j;
             }
-            while(j != e && s[j] != ']') {
+            while(j != e && pattern[j] != ']') {
                 // Check if there is invalid escape char
                 ++j;
-                if(s[j - 1] == '\\') {
+                if(pattern[j - 1] == '\\') {
                     if(j == e) {
                         // Reach here in such case:
                         // [a-zA-Z\]
                         // ~~~~~~~~^
-                        return std::unexpected{
-                            "Invalid glob pattern, unmatched '[' with stray '\\' inside"};
+                        return std::unexpected(StrayBackslash);
                     }
                     ++j;
                 }
             }
             if(j == e) {
-                return std::unexpected{"Invalid glob pattern, unmatched '['"};
+                return std::unexpected(UnmatchedBracket);
             }
-            llvm::StringRef chars = s.substr(i, j - i);
-            bool invert = s[i] == '^' || s[i] == '!';
-            auto bv = invert ? expand(chars.substr(1), s) : expand(chars, s);
+            llvm::StringRef chars = pattern.substr(i, j - i);
+            bool invert = pattern[i] == '^' || pattern[i] == '!';
+            auto bv = invert ? expand(chars.substr(1), pattern) : expand(chars, pattern);
             if(!bv.has_value()) {
-                return std::unexpected{bv.error()};
+                return std::unexpected(bv.error());
             }
             if(invert) {
                 bv->flip();
             }
-            pat.brackets.push_back(Bracket{j + 1, bv.value()});
+            brackets.emplace_back(j + 1, bv.value());
             i = j;
-        } else if(s[i] == '\\') {
+        } else if(pattern[i] == '\\') {
             if(++i == e) {
-                return std::unexpected{"Invalid glob pattern, stray '\\'"};
+                return std::unexpected(StrayBackslash);
             }
-        } else if(s[i] == '/') {
-            if(i - current_gs->start == 1) {
-                return std::unexpected{"Multiple `/` is not allowed"};
+        } else if(pattern[i] == '/') {
+            if(i - current->start == 1) {
+                return std::unexpected(MultipleSlash);
             }
-            current_gs->end = i;
-            current_gs = nullptr;
-        } else if(s[i] == '*') {
+            current->end = i;
+            current = nullptr;
+        } else if(pattern[i] == '*') {
             // check if there is multiple `*`
-            if(i + 1 < e - 1 && s[i + 1] == '*' && s[i + 2] == '*') {
-                return std::unexpected{"Multiple `*` is not allowed"};
+            if(i + 1 < e - 1 && pattern[i + 1] == '*' && pattern[i + 2] == '*') {
+                return std::unexpected(MultipleStar);
             }
         }
     }
 
-    if(current_gs) {
-        current_gs->end = e;
-        current_gs = nullptr;
+    if(current) {
+        current->end = e;
+        current = nullptr;
     }
 
-    std::swap(pat.glob_segments, glob_segments);
-    return pat;
+    return SubPattern{
+        .brackets = std::move(brackets),
+        .segments = std::move(segments),
+        .pattern = pattern,
+    };
 }
 
-bool GlobPattern::match(llvm::StringRef str) {
+bool GlobPattern::match(llvm::StringRef str) const {
     if(!str.consume_front(prefix)) {
         return false;
     }
@@ -304,15 +314,15 @@ bool GlobPattern::match(llvm::StringRef str) {
         str = str.substr(1);
     }
 
-    for(auto& Glob: sub_globs) {
-        if(Glob.match(str)) {
+    for(const auto& glob: sub_globs) {
+        if(glob.match(str)) {
             return true;
         }
     }
     return false;
 }
 
-bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
+bool GlobPattern::SubPattern::match(llvm::StringRef str) const {
     // p: Current position in the pattern
     // s: Current position in the String
     // b: Current processed bracket num
@@ -328,11 +338,11 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
     const char* s = str.data();
     const char* const s_start = s;
     const char* const s_end = s + str.size();
-    const char* p = pat.data();
+    const char* p = pattern.data();
     const char* seg_start = p;
     const char* const p_start = p;
-    const char* const p_end = p + pat.size();
-    const char* seg_end = p + glob_segments[0].end;
+    const char* const p_end = p + pattern.size();
+    const char* seg_end = p + segments[0].end;
     size_t b = 0;
     size_t current_glob_seg = 0;
     bool wild_mode = false;
@@ -349,7 +359,7 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
     };
 
     llvm::SmallVector<BacktraceStat, 6> backtrace_stack;
-    const size_t seg_num = glob_segments.size();
+    const size_t seg_num = segments.size();
 
     auto save_stat =
         [&backtrace_stack, &b, &current_glob_seg, &wild_mode, &p, &s, &seg_end, &seg_start]() {
@@ -367,7 +377,7 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
         if(s == s_end) {
             // Return true if all pattern characters are processed or only
             // '*' or '/' characters remain
-            return getPat().find_first_not_of("*/", p - pat.data()) == std::string::npos;
+            return pattern.find_first_not_of("*/", p - pattern.data()) == std::string::npos;
         }
 
         if(p != seg_end) {
@@ -384,8 +394,8 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                                     return true;
                                 }
                                 ++current_glob_seg;
-                                seg_start = p_start + glob_segments[current_glob_seg].start;
-                                seg_end = p_start + glob_segments[current_glob_seg].end;
+                                seg_start = p_start + segments[current_glob_seg].start;
+                                seg_end = p_start + segments[current_glob_seg].end;
                             }
                             ++p;
                         }
@@ -401,9 +411,9 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                             while(s != s_end && *s == '/') {
                                 ++s;
                             }
-                            p = p_start + glob_segments[current_glob_seg].start;
+                            p = p_start + segments[current_glob_seg].start;
                             seg_start = p;
-                            seg_end = p_start + glob_segments[current_glob_seg].end;
+                            seg_end = p_start + segments[current_glob_seg].end;
                         }
                         save_stat();
                     } else {
@@ -424,9 +434,9 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                                 return true;
                             }
                             ++current_glob_seg;
-                            p = p_start + glob_segments[current_glob_seg].start;
+                            p = p_start + segments[current_glob_seg].start;
                             seg_start = p;
-                            seg_end = p_start + glob_segments[current_glob_seg].end;
+                            seg_end = p_start + segments[current_glob_seg].end;
                         }
                         save_stat();
                     }
@@ -456,7 +466,7 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                             // Segment start dismatch
                             break;
                         }
-                        p = pat.data() + brackets[b].next_offset;
+                        p = pattern.data() + brackets[b].next_offset;
                         ++b;
                         ++s;
                         continue;
@@ -506,9 +516,9 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                     if(current_glob_seg >= seg_num) {
                         return s == s_end;
                     }
-                    p = p_start + glob_segments[current_glob_seg].start;
+                    p = p_start + segments[current_glob_seg].start;
                     seg_start = p;
-                    seg_end = p_start + glob_segments[current_glob_seg].end;
+                    seg_end = p_start + segments[current_glob_seg].end;
                     continue;
                 } else {
                     if(*seg_end != *s) {
@@ -521,9 +531,9 @@ bool GlobPattern::SubGlobPattern::match(llvm::StringRef str) const {
                     }
                     // Step to next segment
                     ++current_glob_seg;
-                    p = p_start + glob_segments[current_glob_seg].start;
+                    p = p_start + segments[current_glob_seg].start;
                     seg_start = p;
-                    seg_end = p_start + glob_segments[current_glob_seg].end;
+                    seg_end = p_start + segments[current_glob_seg].end;
                     continue;
                 }
             }
