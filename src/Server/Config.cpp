@@ -28,6 +28,7 @@ struct Config {
     ServerOptions server;
     CacheOptions cache;
     IndexOptions index;
+    ClangTidyOptions clang_tidy;
     std::vector<Rule> rules;
 };
 
@@ -37,6 +38,7 @@ static Config config = {};
 const ServerOptions& server = config.server;
 const CacheOptions& cache = config.cache;
 const IndexOptions& index = config.index;
+const ClangTidyOptions& clang_tidy = config.clang_tidy;
 llvm::ArrayRef<Rule> rules = config.rules;
 
 template <typename Object>
@@ -58,6 +60,14 @@ static void parse(Object& object, auto&& value) {
             for(auto& item: *v) {
                 object.emplace_back();
                 parse(object.back(), item);
+            }
+        }
+    } else if constexpr(std::is_same_v<Object, llvm::StringMap<std::string>>) {
+        if(auto v = value.as_table()) {
+            for(auto& [key, value]: *v) {
+                if(auto str_v = value.as_string()) {
+                    object.insert({llvm::StringRef(key), str_v->get()});
+                }
             }
         }
     } else if constexpr(refl::reflectable_struct<Object>) {
