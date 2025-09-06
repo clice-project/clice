@@ -36,7 +36,6 @@ struct ClangTidyOptions {
     // A comma-separated list of globs specify which clang-tidy checks to run.
     std::string checks;
     llvm::StringMap<std::string> check_options;
-    std::string fast_check_filter = "strict";
 };
 
 struct Rule {
