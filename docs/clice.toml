@@ -43,7 +43,8 @@
 # in order. If you want to add your own rules, either delete this rule
 # or insert your rule before it.
 [[rules]]
-    # Files matching the specified pattern will have this rule applied.
+    # Files matching the specified pattern will have this rule applied. 
+    # A string or a list of string is allowed.
     #
     # Patterns can use the following syntax:
     # - `*`: Matches one or more characters in a path segment.

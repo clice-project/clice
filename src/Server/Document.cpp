@@ -63,7 +63,7 @@ void Server::load_cache_info() {
             }
 
             for(auto& argument: *arguments) {
-                auto carg = database.save_string(*argument.getAsString());
+                auto carg = database.get_string_pool().save_cstr(*argument.getAsString());
                 info.arguments.emplace_back(carg.data());
             }
 

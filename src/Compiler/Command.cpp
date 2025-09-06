@@ -9,6 +9,51 @@
 
 namespace clice {
 
+auto StringPool::save_cstr_list(llvm::ArrayRef<const char*> list) -> llvm::ArrayRef<const char*> {
+    auto it = pooled_str_lists.find(list);
+
+    /// If we already store the argument, reuse it.
+    if(it != pooled_str_lists.end()) {
+        return *it;
+    }
+
+    /// Allocate for new array.
+    const auto size = list.size();
+    auto ptr = allocator.Allocate<const char*>(size);
+    std::ranges::copy(list, ptr);
+
+    /// Insert it to cache.
+    auto result = llvm::ArrayRef<const char*>(ptr, size);
+    pooled_str_lists.insert(result);
+    return result;
+}
+
+auto StringPool::save_cstr(llvm::StringRef str) -> llvm::StringRef {
+    assert(!str.empty() && "expected non empty string");
+    auto it = pooled_strs.find(str);
+    /// If we already store the argument, reuse it.
+    if(it != pooled_strs.end()) {
+        return *it;
+    }
+
+    /// Allocate for new string.
+    const auto size = str.size();
+    auto ptr = allocator.Allocate<char>(size + 1);
+    std::memcpy(ptr, str.data(), size);
+    ptr[size] = '\0';
+
+    /// Insert it to cache.
+    auto result = llvm::StringRef(ptr, size);
+    pooled_strs.insert(result);
+    return result;
+}
+
+void StringPool::clear() {
+    allocator.Reset();
+    pooled_strs.clear();
+    pooled_str_lists.clear();
+}
+
 CompilationDatabase::CompilationDatabase() {
     using opions = clang::driver::options::ID;
 
@@ -32,47 +77,6 @@ CompilationDatabase::CompilationDatabase() {
     filtered_options.insert(opions::OPT_fmodule_file);
     filtered_options.insert(opions::OPT_fmodule_output);
     filtered_options.insert(opions::OPT_fprebuilt_module_path);
-}
-
-auto CompilationDatabase::save_string(this Self& self, llvm::StringRef string) -> llvm::StringRef {
-    assert(!string.empty() && "expected non empty string");
-    auto it = self.string_cache.find(string);
-
-    /// If we already store the argument, reuse it.
-    if(it != self.string_cache.end()) {
-        return *it;
-    }
-
-    /// Allocate for new string.
-    const auto size = string.size();
-    auto ptr = self.allocator.Allocate<char>(size + 1);
-    std::memcpy(ptr, string.data(), size);
-    ptr[size] = '\0';
-
-    /// Insert it to cache.
-    auto result = llvm::StringRef(ptr, size);
-    self.string_cache.insert(result);
-    return result;
-}
-
-auto CompilationDatabase::save_cstring_list(this Self& self, llvm::ArrayRef<const char*> arguments)
-    -> llvm::ArrayRef<const char*> {
-    auto it = self.arguments_cache.find(arguments);
-
-    /// If we already store the argument, reuse it.
-    if(it != self.arguments_cache.end()) {
-        return *it;
-    }
-
-    /// Allocate for new array.
-    const auto size = arguments.size();
-    auto ptr = self.allocator.Allocate<const char*>(size);
-    ranges::copy(arguments, ptr);
-
-    /// Insert it to cache.
-    auto result = llvm::ArrayRef<const char*>(ptr, size);
-    self.arguments_cache.insert(result);
-    return result;
 }
 
 std::optional<std::uint32_t> CompilationDatabase::get_option_id(llvm::StringRef argument) {
@@ -129,7 +133,7 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
             absolute_path = *result;
         }
 
-        driver = self.save_string(absolute_path);
+        driver = self.pool.save_cstr(absolute_path);
     }
 
     auto it = self.driver_infos.find(driver.data());
@@ -246,12 +250,12 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
             continue;
         }
 
-        includes.emplace_back(self.save_string(buffer).data());
+        includes.emplace_back(self.pool.save_cstr(buffer).data());
     }
 
     DriverInfo info;
-    info.target = self.save_string(target);
-    info.system_includes = self.save_cstring_list(includes);
+    info.target = self.pool.save_cstr(target);
+    info.system_includes = self.pool.save_cstr_list(includes);
     self.driver_infos.try_emplace(driver.data(), info);
     return info;
 }
@@ -260,14 +264,14 @@ auto CompilationDatabase::update_command(this Self& self,
                                          llvm::StringRef directory,
                                          llvm::StringRef file,
                                          llvm::ArrayRef<const char*> arguments) -> UpdateInfo {
-    file = self.save_string(file);
-    directory = self.save_string(directory);
+    file = self.pool.save_cstr(file);
+    directory = self.pool.save_cstr(directory);
 
     llvm::SmallVector<const char*, 16> filtered_arguments;
 
     /// Append
     auto add_argument = [&](llvm::StringRef argument) {
-        auto saved = self.save_string(argument);
+        auto saved = self.pool.save_cstr(argument);
         filtered_arguments.emplace_back(saved.data());
     };
 
@@ -367,7 +371,7 @@ auto CompilationDatabase::update_command(this Self& self,
     }
 
     /// Save arguments.
-    arguments = self.save_cstring_list(filtered_arguments);
+    arguments = self.pool.save_cstr_list(filtered_arguments);
 
     UpdateKind kind = UpdateKind::Unchange;
     CommandInfo info = {directory, arguments};
@@ -475,7 +479,7 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
     -> LookupInfo {
     LookupInfo info;
 
-    file = self.save_string(file);
+    file = self.pool.save_cstr(file);
     auto it = self.command_infos.find(file.data());
     if(it != self.command_infos.end()) {
         info.directory = it->second.directory;
@@ -485,7 +489,7 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
     }
 
     auto record = [&info, &self](llvm::StringRef argument) {
-        info.arguments.emplace_back(self.save_string(argument).data());
+        info.arguments.emplace_back(self.pool.save_cstr(argument).data());
     };
 
     if(options.query_driver) {
@@ -540,7 +544,7 @@ auto CompilationDatabase::guess_or_fallback(this Self& self, llvm::StringRef fil
     LookupInfo info;
     constexpr const char* fallback[] = {"clang++", "-std=c++20"};
     for(const char* arg: fallback) {
-        info.arguments.emplace_back(self.save_string(arg).data());
+        info.arguments.emplace_back(self.pool.save_cstr(arg).data());
     }
     return info;
 }
@@ -598,6 +602,12 @@ auto CompilationDatabase::load_compile_database(this Self& self,
 
     /// TODO: Add a default command in clice.toml. Or load commands from .clangd ?
     log::warn("Can not found any valid CDB file in current workspace, fallback to default mode.");
+}
+
+void CompilationDatabase::clear() {
+    pool.clear();
+    command_infos.clear();
+    driver_infos.clear();
 }
 
 }  // namespace clice
