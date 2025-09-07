@@ -31,10 +31,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install uv for format
+      - name: Install uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Run uv check
+      - name: Run check
         run: |
+          uv venv
           uv pip install pre-commit
           pre-commit run --all-files
