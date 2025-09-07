@@ -132,13 +132,6 @@ target("clice")
         end
     end)
 
-target("helper")
-    set_default(false)
-    set_kind("binary")
-    add_files("src/Driver/helper.cc")
-
-    add_deps("clice-core")
-
 target("unit_tests")
     set_default(false)
     set_kind("binary")
