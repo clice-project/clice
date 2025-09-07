@@ -40,6 +40,7 @@ jobs:
           uv venv
           uv pip install pre-commit
           uv run pre-commit run --all-files
+        continue-on-error: true
 
       - name: Show diff on failure
         if: steps.precommit.outcome == 'failure'
