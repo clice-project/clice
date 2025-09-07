@@ -39,3 +39,8 @@ jobs:
           uv venv
           uv pip install pre-commit
           uv run pre-commit run --all-files
+
+      - name: Auto correct
+        uses: huacnlee/autocorrect-action@main
+        with:
+          args: --lint ./docs

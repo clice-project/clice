@@ -11,9 +11,9 @@ dependencies = []
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.3.0",
     "pytest",
     "pytest-asyncio>=1.1.0",
-    "ruff>=0.12.12",
 ]
 
 [tool.pytest.ini_options]
