@@ -29,7 +29,7 @@ function(fetch_private_clang_files llvm_ver)
         "Sema/TypeLocBuilder.h"
         "Sema/TreeTransform.h"
     )
-    
+
     # Check if all files already exist
     set(PRIVATE_FILE_EXISTS TRUE)
     foreach(FILE ${PRIVATE_CLANG_FILE_LIST})
@@ -119,7 +119,7 @@ endfunction()
 # Download and install prebuilt LLVM binaries with error checking
 function(install_prebuilt_llvm llvm_ver)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.llvm")
-    
+
     # Determine platform-specific package name
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(LLVM_BUILD_TYPE "debug")
@@ -140,7 +140,7 @@ function(install_prebuilt_llvm llvm_ver)
     if(NOT LLVM_PACKAGE)
         message(FATAL_ERROR "Unsupported platform or build type for prebuilt LLVM.")
     endif()
-    
+
     set(DOWNLOAD_PATH "${CMAKE_CURRENT_BINARY_DIR}/${LLVM_PACKAGE}")
 
     # Download if file does not exist

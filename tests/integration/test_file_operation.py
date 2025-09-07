@@ -1,27 +1,16 @@
-import sys
 import pytest
 import asyncio
-import logging
-from ..fixtures.client import LSPClient
 
 
 @pytest.mark.asyncio
-async def test_did_open(executable, test_data_dir, resource_dir):
-    client = LSPClient([executable, "--mode=pipe", f"--resource-dir={resource_dir}"])
-    await client.start()
-
+async def test_did_open(client, test_data_dir):
     await client.initialize(test_data_dir / "hello_world")
     await client.did_open("main.cpp")
-
     await asyncio.sleep(5)
-    await client.exit()
 
 
 @pytest.mark.asyncio
-async def test_did_change(executable, test_data_dir, resource_dir):
-    client = LSPClient([executable, "--mode=pipe", f"--resource-dir={resource_dir}"])
-    await client.start()
-
+async def test_did_change(client, test_data_dir):
     await client.initialize(test_data_dir / "hello_world")
     await client.did_open("main.cpp")
 
@@ -34,25 +23,11 @@ async def test_did_change(executable, test_data_dir, resource_dir):
         await client.did_change("main.cpp", content)
 
     await asyncio.sleep(5)
-    logging.info("Send exit")
-    await client.exit()
 
 
+@pytest.mark.parametrize("client", [{"config_project": "clang_tidy"}], indirect=True)
 @pytest.mark.asyncio
-async def test_clang_tidy(executable, test_data_dir, resource_dir):
-    config_path = test_data_dir / "clang_tidy" / "clice.toml"
-    client = LSPClient(
-        [
-            executable,
-            "--mode=pipe",
-            f"--resource-dir={resource_dir}",
-            f"--config={config_path}",
-        ]
-    )
-    await client.start()
-
+async def test_clang_tidy(client, test_data_dir):
     await client.initialize(test_data_dir / "clang_tidy")
     await client.did_open("main.cpp")
-
     await asyncio.sleep(5)
-    await client.exit()

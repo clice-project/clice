@@ -108,4 +108,3 @@ BINARY_PREDICATE(has, has) {
 }
 
 #undef BINARY_PREDICATE
-

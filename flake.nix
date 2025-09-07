@@ -51,7 +51,7 @@
             pkgs.llvmPackages_20.bintools
             pkgs.llvmPackages_20.compiler-rt
             pkgs.llvmPackages_20.libunwind
-            pkgs.zlib 
+            pkgs.zlib
             tomlplusplus
           ];
 

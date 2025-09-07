@@ -24,4 +24,3 @@ DocumentLinks document_links(CompilationUnit& unit);
 index::Shared<DocumentLinks> index_document_link(CompilationUnit& unit);
 
 }  // namespace clice::feature
-

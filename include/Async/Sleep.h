@@ -34,4 +34,3 @@ inline auto sleep(std::size_t milliseconds) {
 }
 
 };  // namespace clice::async
-

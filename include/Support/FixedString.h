@@ -19,7 +19,7 @@ struct fixed_string : std::array<char, N + 1> {
         return N;
     }
 
-    constexpr operator std::string_view () const {
+    constexpr operator std::string_view() const {
         return {this->data(), N};
     }
 };

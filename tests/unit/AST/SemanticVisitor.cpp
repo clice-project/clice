@@ -6,4 +6,3 @@ namespace clice::testing {
 namespace {}  // namespace
 
 }  // namespace clice::testing
-

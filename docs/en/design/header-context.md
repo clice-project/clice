@@ -28,7 +28,7 @@ A more extreme case is non-self-contained header files, for example:
 
 ```cpp
 // a.h
-struct Y { 
+struct Y {
     X x;
 };
 

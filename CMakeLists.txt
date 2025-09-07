@@ -35,7 +35,7 @@ endif()
 
 message(STATUS "Fetching tomlplusplus...")
 FetchContent_Declare(
-    tomlplusplus   
+    tomlplusplus
     GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
 )
 
@@ -87,9 +87,9 @@ endif()
 file(GLOB_RECURSE CLICE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/AST/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/Async/*.cpp"
-    "${CMAKE_SOURCE_DIR}/src/Basic/*.cpp" 
-    "${CMAKE_SOURCE_DIR}/src/Compiler/*.cpp" 
-    "${CMAKE_SOURCE_DIR}/src/Index/*.cpp" 
+    "${CMAKE_SOURCE_DIR}/src/Basic/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Compiler/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/Index/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/Feature/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/Server/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/Support/*.cpp"

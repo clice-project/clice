@@ -1,16 +1,17 @@
 [project]
 name = "clice"
 version = "0.1.0"
-description = "Clice is a language server for C/C++/Objective-C/Objective-C++/C#"
+description = "clice is a language server for C/C++"
 readme = "README.md"
 authors = [
-    { name = "Clice Developers" }
+    { name = "clice developers" }
 ]
 requires-python = ">=3.13"
 dependencies = []
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.3.0",
     "pytest",
     "pytest-asyncio>=1.1.0",
 ]

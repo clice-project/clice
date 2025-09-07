@@ -153,4 +153,3 @@ suite<"Struct"> struct_tests = [] {
 }  // namespace
 
 }  // namespace clice::testing
-

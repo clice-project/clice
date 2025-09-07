@@ -10,7 +10,7 @@ RUN curl https://apt.llvm.org/llvm-snapshot.gpg.key | tee /usr/share/keyrings/ll
     echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/trixie/ llvm-toolchain-trixie main" >> /etc/apt/sources.list && \
     echo "deb [signed-by=/usr/share/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/trixie/ llvm-toolchain-trixie-20 main" >> /etc/apt/sources.list && \
     apt-get update && apt-get install -y \
-    clang-20 lld-20 
+    clang-20 lld-20
 RUN ln -s /usr/bin/lld-20 /usr/bin/lld
 
 # Adds source code
@@ -28,7 +28,7 @@ RUN cmake -B build -G Ninja -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=cla
 RUN cmake --build build -j && \
     cmake --install build --prefix=/opt/clice
 
-FROM debian:13 
+FROM debian:13
 
 COPY --from=builder /opt/clice /opt/clice/
 COPY LICENSE /opt/clice/LICENSE

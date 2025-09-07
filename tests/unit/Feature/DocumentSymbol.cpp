@@ -35,7 +35,7 @@ suite<"DocumentSymbol"> document_symbol = [] {
         const char* main = R"cpp(
 namespace _1 {
     namespace _2 {
-    
+
     }
 }
 
@@ -154,13 +154,13 @@ int y = 2;
 
     test("Macro") = [&] {
         const char* main = R"cpp(
-#define CLASS(X) class X 
+#define CLASS(X) class X
 
 CLASS(test) {
     int x = 1;
 };
 
-#define VAR(X) int X = 1; 
+#define VAR(X) int X = 1;
 VAR(test)
 )cpp";
 

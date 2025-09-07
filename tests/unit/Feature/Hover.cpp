@@ -37,8 +37,8 @@ suite<"Hover"> hover = [] {
 namespace A {
     namespace B {
         namespace C {}
-        
-        /// anonymous namespace 
+
+        /// anonymous namespace
         namespace {
             namespace D {}
         }
@@ -78,11 +78,11 @@ typedef struct A {
     } _;
 } T;
 
-/// forward declaration 
+/// forward declaration
 struct FORWARD_STRUCT;
 struct FORWARD_CLASS;
 
-/// in function body 
+/// in function body
 void f() {
     struct X {};
 
@@ -100,7 +100,7 @@ namespace n1 {
             struct NB {};
         };
     }
-    
+
     namespace {
         struct NC {};
     }
@@ -139,7 +139,7 @@ ___
 <TODO: document>
 
 ___
-size: 24 (0x18) bytes, align: 8 (0x8) bytes, 
+size: 24 (0x18) bytes, align: 8 (0x8) bytes,
 ___
 5 fields:
 

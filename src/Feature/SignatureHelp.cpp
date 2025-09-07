@@ -208,4 +208,3 @@ proto::SignatureHelp signature_help(CompilationParams& params,
 }
 
 }  // namespace clice::feature
-

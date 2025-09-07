@@ -47,8 +47,8 @@ int x = fooo$(pos)
 
     test("Unqualified") = [&] {
         code_complete(R"cpp(
-namespace A { 
-    void fooooo(); 
+namespace A {
+    void fooooo();
 }
 
 void bar() {
@@ -66,7 +66,7 @@ void bar() {
     struct X {
         void operator() () {}
     };
-    
+
 void bar() {
     X foo;
     fo$(pos);
@@ -93,4 +93,3 @@ void bar() {
 }  // namespace
 
 }  // namespace clice::testing
-
