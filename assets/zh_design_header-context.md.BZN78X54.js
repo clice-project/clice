@@ -11,7 +11,7 @@ import{_ as a,c as i,o as e,ae as n}from"./chunks/framework.U1Gow_7P.js";const r
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">// c.cpp</span></span>
 <span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">#include</span><span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF;"> &quot;a.h&quot;</span></span></code></pre></div><p>显然，<code>a.h</code>在<code>b.cpp</code>和<code>c.cpp</code>中具有不同的状态，一个定义了<code>X</code>，一个定义了<code>Y</code>，如果简单的把<code>a.h</code>当做一个源文件进行处理，那么就只能看得到<code>Y</code>。</p><p>一个更极端的情况是 non-self-contained 头文件，例如：</p><div class="language-cpp vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">cpp</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">// a.h</span></span>
-<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">struct</span><span style="--shiki-light:#6F42C1;--shiki-dark:#B392F0;"> Y</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> { </span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">struct</span><span style="--shiki-light:#6F42C1;--shiki-dark:#B392F0;"> Y</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> {</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">    X x;</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">};</span></span>
 <span class="line"></span>

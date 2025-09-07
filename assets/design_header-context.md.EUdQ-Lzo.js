@@ -11,7 +11,7 @@ import{_ as s,c as i,o as a,ae as n}from"./chunks/framework.U1Gow_7P.js";const k
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">// c.cpp</span></span>
 <span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">#include</span><span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF;"> &quot;a.h&quot;</span></span></code></pre></div><p>Obviously, <code>a.h</code> has different states in <code>b.cpp</code> and <code>c.cpp</code> - one defines <code>X</code> and the other defines <code>Y</code>. If we simply treat <code>a.h</code> as a source file, then only <code>Y</code> can be seen.</p><p>A more extreme case is non-self-contained header files, for example:</p><div class="language-cpp vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">cpp</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-dark:#6A737D;">// a.h</span></span>
-<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">struct</span><span style="--shiki-light:#6F42C1;--shiki-dark:#B392F0;"> Y</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> { </span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583;">struct</span><span style="--shiki-light:#6F42C1;--shiki-dark:#B392F0;"> Y</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;"> {</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">    X x;</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8;">};</span></span>
 <span class="line"></span>
