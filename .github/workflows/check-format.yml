@@ -38,4 +38,4 @@ jobs:
         run: |
           uv venv
           uv pip install pre-commit
-          pre-commit run --all-files
+          uv run pre-commit run --all-files
