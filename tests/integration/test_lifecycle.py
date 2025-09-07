@@ -1,7 +1,4 @@
-import sys
 import pytest
-import asyncio
-from ..fixtures.client import LSPClient
 
 
 @pytest.mark.asyncio

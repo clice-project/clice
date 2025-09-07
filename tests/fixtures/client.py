@@ -1,4 +1,3 @@
-import asyncio
 from pathlib import Path
 from .transport import LSPTransport
 
@@ -18,7 +17,10 @@ class LSPClient(LSPTransport):
     async def initialize(self, workspace: str):
         self.workspace = workspace
         params = {
-            "clientInfo": {"name": "clice tester", "version": "0.0.1", },
+            "clientInfo": {
+                "name": "clice tester",
+                "version": "0.0.1",
+            },
             "capabilities": {},
             "workspaceFolders": [{"uri": Path(workspace).as_uri(), "name": "test"}],
         }
@@ -68,13 +70,12 @@ class LSPClient(LSPTransport):
         file.version += 1
         file.content = content
         params = {
-            "textDocument": {
-                "uri": path.as_uri(),
-                "version": file.version
-            },
+            "textDocument": {"uri": path.as_uri(), "version": file.version},
             "contentChanges": [
-                {"text": content, }
-            ]
+                {
+                    "text": content,
+                }
+            ],
         }
 
         await self.send_notification("textDocument/didChange", params)

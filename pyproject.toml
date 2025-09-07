@@ -1,10 +1,10 @@
 [project]
 name = "clice"
 version = "0.1.0"
-description = "Clice is a language server for C/C++/Objective-C/Objective-C++/C#"
+description = "clice is a language server for C/C++"
 readme = "README.md"
 authors = [
-    { name = "Clice Developers" }
+    { name = "clice developers" }
 ]
 requires-python = ">=3.13"
 dependencies = []
@@ -13,6 +13,7 @@ dependencies = []
 dev = [
     "pytest",
     "pytest-asyncio>=1.1.0",
+    "ruff>=0.12.12",
 ]
 
 [tool.pytest.ini_options]
