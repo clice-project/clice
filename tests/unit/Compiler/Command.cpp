@@ -235,7 +235,7 @@ suite<"Command"> command = [] {
         for(size_t i = 0; i < arguments.size(); i++) {
             llvm::StringRef arg = info.arguments[i];
             llvm::StringRef expect_arg = arguments[i];
-            // llvm::outs() << "arg: " << arg << ", expect: " << expect_arg << "\n";
+            llvm::outs() << "arg: " << arg << ", expect: " << expect_arg << "\n";
             expect(that % arg == expect_arg);
         }
     };

@@ -59,13 +59,15 @@
     pattern = "**/*"
 
     # Commands to append to the original command list (e.g., ["-std=c++17"]).
+    # For options with path arguments (e.g., -I, -isystem), you need to use absolute paths.
     append = []
 
     # Commands to remove from the original command list.
+    # For options with path arguments (e.g., -I, -isystem), you need to use absolute paths.
     remove = []
 
     # Controls whether the file is treated as readonly.
-    # Possible values: ["auto", "always", "never"]
+    # Possible values: ["auto", "always", "never"], invalid value defaults to "auto".
     #
     # - "auto": Treats the file as readonly until you edit it.
     # - "always": Always treats the file as readonly.
@@ -78,7 +80,7 @@
     readonly = "auto"
 
     # Controls how header files are treated.
-    # Possible values: ["auto", "always", "never"]
+    # Possible values: ["auto", "always", "never"], invalid value defaults to "auto"
     #
     # - "auto": Attempts to infer the header context first. If no header context
     #   is found, the file will be treated as a normal source file.
