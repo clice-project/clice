@@ -28,7 +28,7 @@ struct Y { ... };
 
 ```cpp
 // a.h
-struct Y { 
+struct Y {
     X x;
 };
 

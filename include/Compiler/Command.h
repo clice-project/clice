@@ -181,4 +181,3 @@ struct std::formatter<clice::CompilationDatabase::QueryDriverError> :
         return std::format_to(ctx.out(), "{} {}", e.kind.name(), e.detail);
     }
 };
-

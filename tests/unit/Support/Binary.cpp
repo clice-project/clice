@@ -211,4 +211,3 @@ suite<"Binary"> binary = [] {
 }  // namespace
 
 }  // namespace clice::testing
-

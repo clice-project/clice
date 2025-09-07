@@ -134,4 +134,3 @@ void foo() {}
 }  // namespace
 
 }  // namespace clice::testing
-

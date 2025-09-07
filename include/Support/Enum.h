@@ -104,7 +104,7 @@ public:
         return ((m_Value == underlying_value(kinds)) || ...);
     }
 
-    constexpr explicit operator bool () const {
+    constexpr explicit operator bool() const {
         return m_Value != invalid();
     }
 
@@ -199,7 +199,7 @@ public:
         return enum_table<typename Derived::Kind, end() - begin()>::table;
     }
 
-    constexpr explicit operator bool () const {
+    constexpr explicit operator bool() const {
         return m_Value != 0;
     }
 
@@ -299,4 +299,3 @@ concept reflectable_enum = requires {
 };
 
 }  // namespace clice::refl
-

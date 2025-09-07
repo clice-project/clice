@@ -121,4 +121,3 @@ private:
 };
 
 }  // namespace clice
-

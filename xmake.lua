@@ -54,9 +54,9 @@ target("clice-core")
 
     add_packages("libuv", "toml++", {public = true})
 
-    if is_mode("debug") then 
+    if is_mode("debug") then
         add_packages("llvm", {
-            public = true, 
+            public = true,
             links = {
                 "LLVMSupport",
                 "LLVMFrontendOpenMP",
@@ -108,10 +108,10 @@ target("clice-core")
             local llvm_dynlib_dir = path.join(target:pkg("llvm"):installdir(), "lib")
             target:add("rpathdirs", llvm_dynlib_dir)
         end)
-    elseif is_mode("release", "releasedbg") then 
+    elseif is_mode("release", "releasedbg") then
         add_packages("llvm", {public = true})
         add_ldflags("-Wl,--gc-sections")
-    end 
+    end
 
 target("clice")
     set_kind("binary")
@@ -143,7 +143,7 @@ target("unit_tests")
     add_tests("default")
 
     after_load(function (target)
-        target:set("runargs", 
+        target:set("runargs",
             "--test-dir=" .. path.absolute("tests/data"),
             "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
         )
@@ -185,7 +185,7 @@ rule("clice_build_config")
         target:add("cxflags", "cl::/Zc:preprocessor")
 
         target:set("exceptions", "no-cxx")
-        
+
         if target:is_plat("windows") and not target:toolchain("msvc") then
             target:set("toolset", "ar", "llvm-ar")
             if target:toolchain("clang-cl") then

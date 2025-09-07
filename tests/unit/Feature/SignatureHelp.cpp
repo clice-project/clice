@@ -41,4 +41,3 @@ int main() {
 }  // namespace
 
 }  // namespace clice::testing
-

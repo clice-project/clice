@@ -94,4 +94,3 @@ Result<Stats> stat(std::string path);
 }  // namespace fs
 
 }  // namespace clice::async
-

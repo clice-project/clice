@@ -96,8 +96,8 @@ suite<"InlayHint"> inlay_hint = [] {
         expect_size(0);
 
         run(R"c(
-            namespace std { 
-                template <typename T> T&& forward(T&); 
+            namespace std {
+                template <typename T> T&& forward(T&);
             }
 
             int foo(int);
@@ -450,7 +450,7 @@ suite<"InlayHint"> inlay_hint = [] {
             f3_t f3;
             using f4_t = void(*)(int param) noexcept;
             f4_t f4;
-            
+
             void bar() {
                 f1($(0)42);
                 f2($(1)42);
@@ -622,8 +622,8 @@ suite<"InlayHint"> inlay_hint = [] {
         run(R"c(
             void f() {
                 int cap = 42;
-                auto L$(0) = [cap, init$(1) = 1 + 1](int a)$(2) { 
-                    return a + cap + init; 
+                auto L$(0) = [cap, init$(1) = 1 + 1](int a)$(2) {
+                    return a + cap + init;
                 };
             }
         )c");
@@ -677,10 +677,10 @@ suite<"InlayHint"> inlay_hint = [] {
                 struct tuple_size<IntPair> {
                     constexpr static unsigned value = 2;
                 };
-                
+
                 template <unsigned I, typename T>
                 struct tuple_element {};
-                
+
                 template <unsigned I>
                 struct tuple_element<I, IntPair> {
                     using type = int;
@@ -695,7 +695,7 @@ suite<"InlayHint"> inlay_hint = [] {
                     return p.b;
                 }
             }
-            
+
             IntPair bar();
             auto [x$(0), y$(1)] = bar();
         )c");
@@ -897,13 +897,13 @@ suite<"InlayHint"> inlay_hint = [] {
                 return 41;
             $(0)}
 
-            template<int X> 
-            int bar() { 
+            template<int X>
+            int bar() {
                 // No hint for lambda for now
-                auto f = []() { 
-                    return X; 
+                auto f = []() {
+                    return X;
                 };
-                return f(); 
+                return f();
             $(1)}
 
             // No hint because this isn't a definition
@@ -924,7 +924,7 @@ suite<"InlayHint"> inlay_hint = [] {
             struct Test {
                 // No hint because there's no function body
                 Test() = default;
-                
+
                 ~Test() {
                 $(0)}
 
@@ -1205,7 +1205,7 @@ suite<"InlayHint"> inlay_hint = [] {
         run(R"c(
             // The hint is placed after the trailing ';'
             struct S1 {
-            $(0)}  ;   
+            $(0)}  ;
 
             // The hint is always placed in the same line with the closing '}'.
             // So in this case where ';' is missing, it is attached to '}'.
@@ -1226,7 +1226,7 @@ suite<"InlayHint"> inlay_hint = [] {
             struct {
                 int x;
             $(2)}
-            
+
             s2;
         )c");
         expect_size(3);
@@ -1441,12 +1441,12 @@ suite<"InlayHint"> inlay_hint = [] {
             struct Foo{ Foo(); Foo(int x); };
 
             void foo(Foo a, int b);
-            
+
             template <typename... Args>
             void bar(Args... args) {
                 foo(args...);
             }
-            
+
             template <typename... Args>
             void baz(Args... args) { foo($(0)Foo{args...}, $(1)1); }
 
@@ -1526,4 +1526,3 @@ suite<"InlayHint"> inlay_hint = [] {
 
 }  // namespace
 }  // namespace clice::testing
-

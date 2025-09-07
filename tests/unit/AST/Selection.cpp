@@ -691,9 +691,9 @@ void test() {
 
     test("DeclContextIsLexical") = [&] {
         llvm::StringRef code = R"cpp(
-namespace a { 
-    void f$oo(); 
-} 
+namespace a {
+    void f$oo();
+}
 
 void a::foo() { }
   )cpp";
@@ -704,9 +704,9 @@ void a::foo() { }
         });
 
         code = R"cpp(
-namespace a { 
-    void foo(); 
-} 
+namespace a {
+    void foo();
+}
 
 void a::f$oo() { }
   )cpp";

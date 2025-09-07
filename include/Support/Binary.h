@@ -275,7 +275,7 @@ struct Proxy {
         return &value();
     }
 
-    operator const underlying_type& () const {
+    operator const underlying_type&() const {
         return value();
     }
 };

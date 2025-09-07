@@ -185,4 +185,3 @@ struct Tester {
 };
 
 }  // namespace clice::testing
-

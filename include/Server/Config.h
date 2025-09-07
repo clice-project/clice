@@ -50,4 +50,3 @@ extern const IndexOptions& index;
 extern llvm::ArrayRef<Rule> rules;
 
 };  // namespace clice::config
-

@@ -53,4 +53,3 @@ FoldingRanges folding_ranges(CompilationUnit& unit);
 index::Shared<FoldingRanges> index_folding_range(CompilationUnit& unit);
 
 }  // namespace clice::feature
-

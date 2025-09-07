@@ -25,4 +25,3 @@ void spawn(llvm::StringRef path, llvm::ArrayRef<std::string> args, Callback call
 Task<> write(json::Value value);
 
 }  // namespace clice::async::net
-

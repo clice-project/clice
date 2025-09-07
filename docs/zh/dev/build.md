@@ -15,9 +15,9 @@
 - clang >= 19
 - c++23 compitable standard library
   - MSVC STL >= 19.44(VS 2022 17.4)
-  - GCC libstdc++ >= 14 
+  - GCC libstdc++ >= 14
   - Clang libc++ >= 20
-  
+
 clice 使用 C++23 作为语言标准 ，请确保有可用的 clang 19 以及以上的编译器，以及兼容 C++23 的标准库。
 
 > clice 暂时只能使用 clang 编译，在未来我们会改进这一点，使其能使用 gcc 和 msvc 编译。
@@ -31,7 +31,7 @@ clice 使用 C++23 作为语言标准 ，请确保有可用的 clang 19 以及�
 如果你能找到系统的 llvm package 对应的 llvm commit，将该 commit 下的如下三个文件
 
 - `clang/lib/Sema/CoroutineStmtBuilder.h`
-- `clang/lib/Sema/TypeLocBuilder.h` 
+- `clang/lib/Sema/TypeLocBuilder.h`
 - `clang/lib/Sema/TreeTransform.h`
 
 拷贝到 `LLVM_INSTALL_PATH/include/clang/Sema/` 中即可。
@@ -59,7 +59,7 @@ $ 7z x x64-windows-msvc-release.7z "-o.llvm"
 > [!IMPORTANT]
 >
 > 对于 debug 版本的 llvm libs，构建的时候我们开启了 address sanitizer，而 address sanitizer 依赖于 compiler rt，它对编译器版本十分敏感。所以如果使用 debug 版本，请确保你的 clang 的 compiler rt 版本和我们构建的时候**严格一致**。
-> 
+>
 > - Windows 暂时无 debug 构建的 llvm libs，因为它不支持将 clang 构建为动态库，相关的进展可以在 [这里](https://discourse.llvm.org/t/llvm-is-buildable-as-a-windows-dll/87748) 找到
 > - Linux 使用 clang20
 > - MacOS 使用 homebrew llvm@20，一定不要使用 apple clang

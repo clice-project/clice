@@ -229,4 +229,3 @@ Result<Stats> stat(std::string path) {
 }
 
 }  // namespace clice::async::fs
-

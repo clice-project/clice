@@ -98,7 +98,7 @@ auto test_code = [](HeaderIndex& index, std::uint32_t id) {
                         .kind = RelationKind::{},
                         .range = {{ {}, {} }},
                         .target_symbol = {}ull,
-                    }}    
+                    }}
                 );)",
                                 index_name,
                                 relation.kind.name(),

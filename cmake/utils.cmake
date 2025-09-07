@@ -15,7 +15,7 @@ function(download_to_string URL OUTPUT_VAR RESULT_VAR)
     )
 
     list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
-    
+
     if(NOT STATUS_CODE EQUAL 0)
         list(GET DOWNLOAD_STATUS 1 ERROR_MSG)
         message(WARNING "Failed to download from ${URL}: ${ERROR_MSG}")
@@ -25,7 +25,7 @@ function(download_to_string URL OUTPUT_VAR RESULT_VAR)
 
     file(READ ${CMAKE_CURRENT_BINARY_DIR}/temp_download_file DOWNLOADED_CONTENT)
     file(REMOVE ${CMAKE_CURRENT_BINARY_DIR}/temp_download_file)
-    
+
     set(${OUTPUT_VAR} ${DOWNLOADED_CONTENT} PARENT_SCOPE)
     set(${RESULT_VAR} 0 PARENT_SCOPE)
 endfunction()
@@ -43,7 +43,7 @@ function(parse_json_field_from_string JSON_CONTENT)
     list(REMOVE_AT ARGS -1)
 
     string(JSON FIELD_VALUE GET "${JSON_CONTENT}" ${ARGS})
-    
+
     if(NOT FIELD_VALUE)
         string(JOIN " " FIELD_PATH_STR ${ARGS})
         message(WARNING "Could not parse field '${FIELD_PATH_STR}' from JSON.")

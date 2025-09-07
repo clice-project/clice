@@ -95,7 +95,7 @@ brief block
 brief line2
     a b c d e f
     ~~~~^
-This is *Italic* **Bold** ~~Striketough~~, `InlineCode` 
+This is *Italic* **Bold** ~~Striketough~~, `InlineCode`
 )md");
         st.add_ruler();
         st.add_paragraph().append_text("Details:", Paragraph::Kind::Bold).append_newline_char();

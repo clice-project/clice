@@ -57,7 +57,7 @@ suite<"Module"> module = [] {
         /// Simple case.
         const char* content = R"(
 export module A;
-import B;    
+import B;
     )";
         auto info = scan(content);
         expect(that % info.isInterfaceUnit == true);
@@ -101,7 +101,7 @@ import B;
 
         content = R"(
 module A;
-import B;    
+import B;
 import C;
 )";
         info = scan(content);

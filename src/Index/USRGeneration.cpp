@@ -970,4 +970,3 @@ bool generateUSRForMacro(StringRef MacroName,
 }
 
 }  // namespace clice::index
-

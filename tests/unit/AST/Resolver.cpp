@@ -474,4 +474,3 @@ struct test {
 }  // namespace
 
 }  // namespace clice::testing
-

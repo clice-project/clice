@@ -274,4 +274,3 @@ int y = foo();
 }  // namespace
 
 }  // namespace clice::testing
-

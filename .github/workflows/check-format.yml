@@ -4,7 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - .clang-format
+      - ".clang-format"
+      - ".pre-commit-config.yaml"
+      - "**/*.py"
+      - "pyproject.toml"
       - "include/**"
       - "src/**"
       - "tests/**"
@@ -12,7 +15,10 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - .clang-format
+      - ".clang-format"
+      - ".pre-commit-config.yaml"
+      - "**/*.py"
+      - "pyproject.toml"
       - "include/**"
       - "src/**"
       - "tests/**"
@@ -25,16 +31,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run clang-format check
-        uses: jidicula/clang-format-action@v4.15.0
-        with:
-          clang-format-version: "20"
-          check-path: "src include tests"
-
       - name: Install uv for format
         uses: astral-sh/setup-uv@v6
 
       - name: Run uv check
         run: |
-          uv run ruff check
-          uv run ruff format --check
+          uv pip install pre-commit
+          pre-commit run --all-files
