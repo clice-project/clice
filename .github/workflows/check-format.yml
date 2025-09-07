@@ -35,10 +35,27 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Run check
+        id: precommit
         run: |
           uv venv
           uv pip install pre-commit
           uv run pre-commit run --all-files
+
+      - name: Show diff on failure
+        if: steps.precommit.outcome == 'failure'
+        run: |
+          echo "❌ pre-commit found issues that it auto-fixed."
+          echo "   Please run 'pre-commit run --all-files' locally,"
+          echo "   commit the changes, and push again."
+          echo ""
+          echo "👇 The required changes are shown below:"
+          git diff
+
+      - name: Fail the job if pre-commit failed
+        if: steps.precommit.outcome == 'failure'
+        run: |
+          echo "pre-commit checks failed."
+          exit 1
 
       - name: Auto correct
         uses: huacnlee/autocorrect-action@main
