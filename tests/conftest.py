@@ -8,7 +8,7 @@ from .fixtures.client import LSPClient
 def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--executable",
-        required=True,
+        required=False,
         help="Path to the of the clice executable.",
     )
 
@@ -43,8 +43,10 @@ def pytest_addoption(parser: pytest.Parser):
 
 
 @pytest.fixture(scope="session")
-def executable(request):
+def executable(request) -> Path | None:
     executable = request.config.getoption("--executable")
+    if not executable:
+        return None
 
     path = Path(executable)
     if not path.exists():
@@ -72,7 +74,9 @@ def test_data_dir(request):
 
 
 @pytest_asyncio.fixture(scope="function")
-async def client(request, executable: Path, resource_dir: Path, test_data_dir: Path):
+async def client(
+    request, executable: Path | None, resource_dir: Path | None, test_data_dir: Path
+):
     config = request.config
     mode = config.getoption("--mode")
 
