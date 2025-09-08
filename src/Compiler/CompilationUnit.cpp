@@ -7,9 +7,9 @@ namespace clice {
 CompilationUnit::~CompilationUnit() {
     if(impl && impl->instance) {
         auto instance = impl->instance.get();
-        // We already notified the PP of end-of-file earlier, so detach it first.
+        // We already notified the pp of end-of-file earlier, so detach it first.
         // We must keep it alive until after EndSourceFile(), Sema relies on this.
-        auto PP = instance->getPreprocessorPtr();
+        auto pp = instance->getPreprocessorPtr();
         instance->setPreprocessor(nullptr);  // Detach so we don't send EOF again.
     }
     if(impl && impl->action) {
