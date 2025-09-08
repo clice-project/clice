@@ -20,6 +20,8 @@ class LSPTransport:
         self.notification_handlers: dict[str, Callable[[dict[str, Any]], Any]] = {}
         self.message_queue: asyncio.Queue = asyncio.Queue()
 
+        self._tasks: list[asyncio.Task] = []
+
         logging.basicConfig(
             level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
         )
@@ -58,22 +60,44 @@ class LSPTransport:
         else:
             raise ValueError("Invalid connection mode. Use 'stdio' or 'socket'.")
 
-        asyncio.create_task(self._read_messages())
-        asyncio.create_task(self._process_messages())
+        self._tasks.append(asyncio.create_task(self._read_messages()))
+        self._tasks.append(asyncio.create_task(self._process_messages()))
         if self.process and self.process.stderr:
-            asyncio.create_task(self._read_stderr())
+            self._tasks.append(asyncio.create_task(self._read_stderr()))
+
+    def cancel_all(self):
+        for task in self._tasks:
+            task.cancel()
+
+        for request in self.pending_requests.values():
+            request.cancel()
 
     async def stop(self):
-        if self.mode == "stdio" and self.process:
-            return_code = await self.process.wait()
-            if return_code != 0:
-                raise RuntimeError("Server exit with error!")
+        for task in self._tasks:
+            task.cancel()
 
-        elif self.mode == "socket" and self.writer:
-            logging.info("Closing socket connection to LSP server.")
+        for request in self.pending_requests.values():
+            request.cancel()
+
+        if self.writer and not self.writer.is_closing():
+            logging.info("Closing writer.")
             self.writer.close()
             await self.writer.wait_closed()
-            logging.info("Socket connection closed.")
+
+        if self.process and self.process.returncode is None:
+            logging.info("Waiting for LSP server process to terminate.")
+            try:
+                await asyncio.wait_for(self.process.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                logging.warning("Process did not terminate gracefully, killing.")
+                self.process.kill()
+                await self.process.wait()
+
+        logging.info("LSPTransport stopped.")
+        if self.process and self.process.returncode != 0:
+            raise RuntimeError(
+                f"Server exited with non-zero code: {self.process.returncode}"
+            )
 
     async def _read_stderr(self):
         if not self.process or not self.process.stderr:
@@ -108,6 +132,7 @@ class LSPTransport:
         try:
             while True:
                 if not self.reader:
+                    self.cancel_all()
                     logging.info(
                         "LSP client reader is not available. Exiting _read_messages."
                     )
@@ -115,6 +140,7 @@ class LSPTransport:
 
                 header_line = await self.reader.readline()
                 if not header_line:
+                    self.cancel_all()
                     logging.info(
                         "LSP server output stream closed. Exiting _read_messages."
                     )
@@ -134,21 +160,10 @@ class LSPTransport:
                 if parsed_length > 0:
                     content_length = parsed_length
 
-        except asyncio.IncompleteReadError as e:
-            logging.error(f"Incomplete message read: {e}")
-        except json.JSONDecodeError as e:
-            decoded_content_attempt = (
-                content_bytes.decode("utf-8", errors="ignore")
-                if content_bytes
-                else "N/A"
-            )
-            logging.error(
-                f"JSON decode error: {e}, Content (attempted): {decoded_content_attempt}"
-            )
-        except Exception as e:
-            logging.error(f"Error reading messages: {e}")
-        finally:
-            logging.info("_read_messages task finished.")
+        except Exception:
+            raise
+
+        logging.info("_read_messages task finished.")
 
     async def _handle_response(self, message: dict[str, Any]):
         request_id = message["id"]

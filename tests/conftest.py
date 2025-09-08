@@ -1,6 +1,5 @@
 import os
 import pytest
-import logging
 import pytest_asyncio
 from pathlib import Path
 from .fixtures.client import LSPClient
@@ -42,8 +41,10 @@ def executable(request):
 
 
 @pytest.fixture(scope="session")
-def resource_dir(request):
+def resource_dir(request) -> Path | None:
     path = request.config.getoption("--resource-dir")
+    if not path:
+        return None
     return Path(path).resolve()
 
 
@@ -58,8 +59,10 @@ async def client(request, executable: Path, resource_dir: Path, test_data_dir: P
     cmd = [
         str(executable),
         "--mode=pipe",
-        f"--resource-dir={resource_dir}",
     ]
+
+    if resource_dir:
+        cmd.append(f"--resource-dir={resource_dir}")
 
     if hasattr(request, "param") and request.param:
         if "config_project" in request.param:
@@ -69,10 +72,5 @@ async def client(request, executable: Path, resource_dir: Path, test_data_dir: P
 
     lsp_client = LSPClient(cmd)
     await lsp_client.start()
-
     yield lsp_client
-
-    try:
-        await lsp_client.exit()
-    except Exception as e:
-        logging.error(f"Error during LSP client exit: {e}")
+    await lsp_client.stop()
