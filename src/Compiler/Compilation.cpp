@@ -252,7 +252,7 @@ CompilationResult run_clang(CompilationParams& params,
     if(checker) {
         auto clangd_top_level_decls = top_level_decls;
         std::erase_if(clangd_top_level_decls,
-                      [](auto decl) { return !isClangdTopLevelDecl(decl); });
+                      [](auto decl) { return !is_clangd_top_level_decl(decl); });
         log::info("Clangd top level decls: {} of {}",
                   clangd_top_level_decls.size(),
                   top_level_decls.size());
