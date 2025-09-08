@@ -58,7 +58,7 @@ if (MSVC)
     # Remove any RTTI or exception enabling flags from CMAKE_CXX_FLAGS
     string(REPLACE "/EHsc" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
     string(REPLACE "/GR" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    
+
     # Fix MSVC Non-standard preprocessor caused error C1189
     # While compiling Command.cpp, MSVC won't expand Options macro correctly
     # Output: D:\Desktop\code\clice\build\.packages\l\llvm\20.1.5\cc2aa9f1d09a4b71b6fa3bf0011f6387\include\clang/Driver/Options.inc(3590): error C2365: “clang::driver::options::OPT_”: redefinition; previous definition was 'enumerator'
