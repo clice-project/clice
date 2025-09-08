@@ -21,7 +21,8 @@ $ pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clic
 If you use xmake as your build system, you can run the tests directly with xmake:
 
 ```shell
-$xmake run --verbose unit_tests$ xmake test --verbose integration_tests/default
+$ xmake run --verbose unit_tests
+$ xmake test --verbose integration_tests/default
 ```
 
 ## Debug
