@@ -26,6 +26,7 @@
 
 #include "Compiler/Diagnostic.h"
 #include "Compiler/Tidy.h"
+#include "Compiler/Utility.h"
 
 #include "TidyImpl.h"
 
@@ -41,7 +42,7 @@ using namespace clang::tidy;
 bool is_registered_tidy_check(llvm::StringRef check) {
     assert(!check.empty());
     assert(!check.contains('*') && !check.contains(',') &&
-           "isRegisteredCheck doesn't support globs");
+           "is_registered_tidy_check doesn't support globs");
     assert(check.ltrim().front() != '-');
 
     const static llvm::StringSet<llvm::BumpPtrAllocator> all_checks = [] {
@@ -69,19 +70,19 @@ std::optional<bool> is_fast_tidy_check(llvm::StringRef check) {
     return std::nullopt;
 }
 
-tidy::ClangTidyCheckFactories filterFastTidyChecks(const tidy::ClangTidyCheckFactories& All) {
-    tidy::ClangTidyCheckFactories Fast;
-    for(const auto& Factory: All) {
-        if(isFastTidyCheck(Factory.getKey()).value_or(false))
-            Fast.registerCheckFactory(Factory.first(), Factory.second);
+tidy::ClangTidyCheckFactories get_fast_checks(const tidy::ClangTidyCheckFactories& all) {
+    tidy::ClangTidyCheckFactories fast;
+    for(const auto& Factory: all) {
+        if(is_fast_tidy_check(Factory.getKey()).value_or(false))
+            fast.registerCheckFactory(Factory.first(), Factory.second);
     }
-    return Fast;
+    return fast;
 }
 
-tidy::ClangTidyOptions createTidyOptions() {
+tidy::ClangTidyOptions create_options() {
     // getDefaults instantiates all check factories, which are registered at link
     // time. So cache the results once.
-    const static auto* DefaultOpts = [] {
+    const static auto* default_opts = [] {
         auto* Opts = new tidy::ClangTidyOptions;
         *Opts = tidy::ClangTidyOptions::getDefaults();
         Opts->Checks->clear();
@@ -91,18 +92,18 @@ tidy::ClangTidyOptions createTidyOptions() {
     //  - low false-positive rate
     //  - providing a lot of value
     //  - being reasonably efficient
-    const static std::string DefaultChecks = llvm::join_items(",",
-                                                              "readability-misleading-indentation",
-                                                              "readability-deleted-default",
-                                                              "bugprone-integer-division",
-                                                              "bugprone-sizeof-expression",
-                                                              "bugprone-suspicious-missing-comma",
-                                                              "bugprone-unused-raii",
-                                                              "bugprone-unused-return-value",
-                                                              "misc-unused-using-decls",
-                                                              "misc-unused-alias-decls",
-                                                              "misc-definitions-in-headers");
-    const static std::string BadChecks =
+    const static std::string default_checks = llvm::join_items(",",
+                                                               "readability-misleading-indentation",
+                                                               "readability-deleted-default",
+                                                               "bugprone-integer-division",
+                                                               "bugprone-sizeof-expression",
+                                                               "bugprone-suspicious-missing-comma",
+                                                               "bugprone-unused-raii",
+                                                               "bugprone-unused-return-value",
+                                                               "misc-unused-using-decls",
+                                                               "misc-unused-alias-decls",
+                                                               "misc-definitions-in-headers");
+    const static std::string bad_checks =
         llvm::join_items(",",
                          // We want this list to start with a separator to
                          // simplify appending in the lambda. So including an
@@ -130,7 +131,7 @@ tidy::ClangTidyOptions createTidyOptions() {
                          // incomplete code.
                          "-bugprone-unchecked-optional-access");
 
-    tidy::ClangTidyOptions opts = *DefaultOpts;
+    tidy::ClangTidyOptions opts = *default_opts;
 
     opts.Checks->clear();
     // clang::clangd::provideEnvironment
@@ -140,10 +141,10 @@ tidy::ClangTidyOptions createTidyOptions() {
     // TODO: if(EnableConfig) Providers.push_back(provideClangdConfig());
     // clang::clangd::provideDefaultChecks
     if(!opts.Checks || opts.Checks->empty())
-        opts.Checks = DefaultChecks;
+        opts.Checks = default_checks;
     // clang::clangd::disableUnusableChecks
     if(opts.Checks && !opts.Checks->empty())
-        opts.Checks->append(BadChecks);
+        opts.Checks->append(bad_checks);
     return opts;
 }
 
@@ -158,96 +159,97 @@ tidy::ClangTidyOptions createTidyOptions() {
 class TidyDiagnosticGroups {
     // Whether all diagnostic groups are enabled by default.
     // True if we've seen clang-diagnostic-*.
-    bool Default = false;
-    // Set of diag::Group whose enablement != Default.
-    // If Default is false, this is foo where we've seen clang-diagnostic-foo.
-    llvm::DenseSet<unsigned> Exceptions;
+    bool default_enable = false;
+    // Set of diag::Group whose enablement != default_enable.
+    // If default_enable is false, this is foo where we've seen clang-diagnostic-foo.
+    llvm::DenseSet<unsigned> exceptions;
 
 public:
-    TidyDiagnosticGroups(llvm::StringRef Checks) {
+    TidyDiagnosticGroups(llvm::StringRef checks) {
         constexpr llvm::StringLiteral CDPrefix = "clang-diagnostic-";
 
-        llvm::StringRef Check;
-        while(!Checks.empty()) {
-            std::tie(Check, Checks) = Checks.split(',');
-            Check = Check.trim();
+        llvm::StringRef check;
+        while(!checks.empty()) {
+            std::tie(check, checks) = checks.split(',');
+            check = check.trim();
 
-            if(Check.empty())
+            if(check.empty())
                 continue;
 
-            bool Enable = !Check.consume_front("-");
-            bool Glob = Check.consume_back("*");
-            if(Glob) {
+            bool enable = !check.consume_front("-");
+            bool glob = check.consume_back("*");
+            if(glob) {
                 // Is this clang-diagnostic-*, or *, or so?
                 // (We ignore all other types of globs).
-                if(CDPrefix.starts_with(Check)) {
-                    Default = Enable;
-                    Exceptions.clear();
+                if(CDPrefix.starts_with(check)) {
+                    default_enable = enable;
+                    exceptions.clear();
                 }
                 continue;
             }
 
             // In "*,clang-diagnostic-foo", the latter is a no-op.
-            if(Default == Enable)
+            if(default_enable == enable)
                 continue;
             // The only non-glob entries we care about are clang-diagnostic-foo.
-            if(!Check.consume_front(CDPrefix))
+            if(!check.consume_front(CDPrefix))
                 continue;
 
-            if(auto Group = clang::DiagnosticIDs::getGroupForWarningOption(Check))
-                Exceptions.insert(static_cast<unsigned>(*Group));
+            if(auto group = clang::DiagnosticIDs::getGroupForWarningOption(check))
+                exceptions.insert(static_cast<unsigned>(*group));
         }
     }
 
-    bool operator() (clang::diag::Group GroupID) const {
-        return Exceptions.contains(static_cast<unsigned>(GroupID)) ? !Default : Default;
+    bool operator() (clang::diag::Group group_id) const {
+        return exceptions.contains(static_cast<unsigned>(group_id)) ? !default_enable
+                                                                    : default_enable;
     }
 };
 
-// Find -W<group> and -Wno-<group> options in ExtraArgs and apply them to Diags.
+// Find -W<group> and -Wno-<group> options in extra_args and apply them to diags.
 //
-// This is used to handle ExtraArgs in clang-tidy configuration.
+// This is used to handle extra_args in clang-tidy configuration.
 // We don't use clang's standard handling of this as we want slightly different
 // behavior (e.g. we want to exclude these from -Wno-error).
-void applyWarningOptions(llvm::ArrayRef<std::string> ExtraArgs,
-                         llvm::function_ref<bool(clang::diag::Group)> EnabledGroups,
-                         clang::DiagnosticsEngine& Diags) {
-    for(llvm::StringRef Group: ExtraArgs) {
+void apply_warning_options(llvm::ArrayRef<std::string> extra_args,
+                           llvm::function_ref<bool(clang::diag::Group)> enable_groups,
+                           clang::DiagnosticsEngine& diags) {
+    for(llvm::StringRef group: extra_args) {
         // Only handle args that are of the form -W[no-]<group>.
         // Other flags are possible but rare and deliberately out of scope.
-        llvm::SmallVector<clang::diag::kind> Members;
-        if(!Group.consume_front("-W") || Group.empty())
+        llvm::SmallVector<clang::diag::kind> members;
+        if(!group.consume_front("-W") || group.empty())
             continue;
-        bool Enable = !Group.consume_front("no-");
-        if(Diags.getDiagnosticIDs()->getDiagnosticsInGroup(clang::diag::Flavor::WarningOrError,
-                                                           Group,
-                                                           Members))
+        bool enable = !group.consume_front("no-");
+        if(diags.getDiagnosticIDs()->getDiagnosticsInGroup(clang::diag::Flavor::WarningOrError,
+                                                           group,
+                                                           members))
             continue;
 
         // Upgrade (or downgrade) the severity of each diagnostic in the group.
         // If -Werror is on, newly added warnings will be treated as errors.
         // We don't want this, so keep track of them to fix afterwards.
-        bool NeedsWerrorExclusion = false;
-        for(clang::diag::kind ID: Members) {
-            if(Enable) {
-                if(Diags.getDiagnosticLevel(ID, clang::SourceLocation()) <
+        bool needs_werror_exclusion = false;
+        for(clang::diag::kind id: members) {
+            if(enable) {
+                if(diags.getDiagnosticLevel(id, clang::SourceLocation()) <
                    clang::DiagnosticsEngine::Warning) {
-                    auto Group = Diags.getDiagnosticIDs()->getGroupForDiag(ID);
-                    if(!Group || !EnabledGroups(*Group))
+                    auto group = diags.getDiagnosticIDs()->getGroupForDiag(id);
+                    if(!group || !enable_groups(*group))
                         continue;
-                    Diags.setSeverity(ID, clang::diag::Severity::Warning, clang::SourceLocation());
-                    if(Diags.getWarningsAsErrors())
-                        NeedsWerrorExclusion = true;
+                    diags.setSeverity(id, clang::diag::Severity::Warning, clang::SourceLocation());
+                    if(diags.getWarningsAsErrors())
+                        needs_werror_exclusion = true;
                 }
             } else {
-                Diags.setSeverity(ID, clang::diag::Severity::Ignored, clang::SourceLocation());
+                diags.setSeverity(id, clang::diag::Severity::Ignored, clang::SourceLocation());
             }
         }
-        if(NeedsWerrorExclusion) {
+        if(needs_werror_exclusion) {
             // FIXME: there's no API to suppress -Werror for single diagnostics.
             // In some cases with sub-groups, we may end up erroneously
             // downgrading diagnostics that were -Werror in the compile command.
-            Diags.setDiagnosticGroupWarningAsError(Group, false);
+            diags.setDiagnosticGroupWarningAsError(group, false);
         }
     }
 }
@@ -255,65 +257,64 @@ void applyWarningOptions(llvm::ArrayRef<std::string> ExtraArgs,
 ClangTidyChecker::ClangTidyChecker(std::unique_ptr<ClangTidyOptionsProvider> provider) :
     context(std::move(provider)) {}
 
-clang::DiagnosticsEngine::Level
-    ClangTidyChecker::adjustLevel(clang::DiagnosticsEngine::Level DiagLevel,
-                                  const clang::Diagnostic& Info) {
+clang::DiagnosticsEngine::Level ClangTidyChecker::adjustLevel(clang::DiagnosticsEngine::Level level,
+                                                              const clang::Diagnostic& info) {
     if(!checks.empty()) {
-        std::string CheckName = context.getCheckName(Info.getID());
-        bool IsClangTidyDiag = !CheckName.empty();
-        if(IsClangTidyDiag) {
+        std::string tidy_diag = context.getCheckName(info.getID());
+        bool is_clang_tidy_diag = !tidy_diag.empty();
+        if(is_clang_tidy_diag) {
             // Check for suppression comment. Skip the check for diagnostics not
             // in the main file, because we don't want that function to query the
             // source buffer for preamble files. For the same reason, we ask
             // shouldSuppressDiagnostic to avoid I/O.
             // We let suppression comments take precedence over warning-as-error
             // to match clang-tidy's behaviour.
-            bool IsInsideMainFile = Info.hasSourceManager() &&
-                                    isInsideMainFile(Info.getLocation(), Info.getSourceManager());
+            bool in_main_file = info.hasSourceManager() &&
+                                is_inside_main_file(info.getLocation(), info.getSourceManager());
             llvm::SmallVector<clang::tooling::Diagnostic, 1> TidySuppressedErrors;
-            if(IsInsideMainFile && context.shouldSuppressDiagnostic(DiagLevel,
-                                                                    Info,
-                                                                    TidySuppressedErrors,
-                                                                    /*AllowIO=*/false,
-                                                                    /*EnableNolintBlocks=*/true)) {
+            if(in_main_file && context.shouldSuppressDiagnostic(level,
+                                                                info,
+                                                                TidySuppressedErrors,
+                                                                /*AllowIO=*/false,
+                                                                /*EnableNolintBlocks=*/true)) {
                 // FIXME: should we expose the suppression error (invalid use of
                 // NOLINT comments)?
                 return clang::DiagnosticsEngine::Ignored;
             }
-            if(!context.getOptions().SystemHeaders.value_or(false) && Info.hasSourceManager() &&
-               Info.getSourceManager().isInSystemMacro(Info.getLocation()))
+            if(!context.getOptions().SystemHeaders.value_or(false) && info.hasSourceManager() &&
+               info.getSourceManager().isInSystemMacro(info.getLocation()))
                 return clang::DiagnosticsEngine::Ignored;
 
             // Check for warning-as-error.
-            if(DiagLevel == clang::DiagnosticsEngine::Warning && context.treatAsError(CheckName)) {
+            if(level == clang::DiagnosticsEngine::Warning && context.treatAsError(tidy_diag)) {
                 return clang::DiagnosticsEngine::Error;
             }
         }
     }
-    return DiagLevel;
+    return level;
 }
 
-void ClangTidyChecker::adjustDiag(Diagnostic& Diag) {
-    std::string TidyDiag = context.getCheckName(Diag.id.value);
-    if(!TidyDiag.empty()) {
+void ClangTidyChecker::adjustDiag(Diagnostic& diag) {
+    std::string tidy_diag = context.getCheckName(diag.id.value);
+    if(!tidy_diag.empty()) {
         // TODO: using a global string saver.
-        static llvm::BumpPtrAllocator Allocator;
-        static llvm::StringSaver Saver(Allocator);
-        Diag.id.name = Saver.save(TidyDiag);
-        Diag.id.source = DiagnosticSource::ClangTidy;
+        static llvm::BumpPtrAllocator allocator;
+        static llvm::StringSaver saver(allocator);
+        diag.id.name = saver.save(tidy_diag);
+        diag.id.source = DiagnosticSource::ClangTidy;
         // clang-tidy bakes the name into diagnostic messages. Strip it out.
         // It would be much nicer to make clang-tidy not do this.
-        auto CleanMessage = [&](std::string& Msg) {
-            llvm::StringRef Rest(Msg);
-            if(Rest.consume_back("]") && Rest.consume_back(Diag.id.name) && Rest.consume_back(" ["))
-                Msg.resize(Rest.size());
+        auto clean_message = [&](std::string& msg) {
+            llvm::StringRef rest(msg);
+            if(rest.consume_back("]") && rest.consume_back(diag.id.name) && rest.consume_back(" ["))
+                msg.resize(rest.size());
         };
-        CleanMessage(Diag.message);
+        clean_message(diag.message);
         // todo: where is clice notes and fixes?
-        // for(auto& Note: Diag.Notes)
-        //     CleanMessage(Note.Message);
-        // for(auto& Fix: Diag.Fixes)
-        //     CleanMessage(Fix.Message);
+        // for(auto& note: diag.Notes)
+        //     clean_message(note.Message);
+        // for(auto& fix: diag.Fixes)
+        //     clean_message(fix.Message);
     }
 }
 
@@ -324,12 +325,12 @@ std::unique_ptr<ClangTidyChecker> configure(clang::CompilerInstance& instance,
     if(!input.isFile()) {
         return nullptr;
     }
-    auto FileName = input.getFile();
-    log::info("Tidy configure file: {}", FileName);
+    auto file_name = input.getFile();
+    log::info("Tidy configure file: {}", file_name);
 
-    tidy::ClangTidyOptions ClangTidyOpts = createTidyOptions();
-    if(ClangTidyOpts.Checks) {
-        log::info("Tidy configure checks: {}", *ClangTidyOpts.Checks);
+    tidy::ClangTidyOptions opts = create_options();
+    if(opts.Checks) {
+        log::info("Tidy configure checks: {}", *opts.Checks);
     }
 
     {
@@ -351,171 +352,40 @@ std::unique_ptr<ClangTidyChecker> configure(clang::CompilerInstance& instance,
         // Similarly, we don't want to use Checks to filter clang diagnostics after
         // they are generated, as this spreads clang-tidy emulation everywhere.
         // Instead, we just use these to filter which extra diagnostics we enable.
-        auto& Diags = instance.getDiagnostics();
-        TidyDiagnosticGroups TidyGroups(ClangTidyOpts.Checks ? *ClangTidyOpts.Checks
-                                                             : llvm::StringRef());
-        if(ClangTidyOpts.ExtraArgsBefore)
-            applyWarningOptions(*ClangTidyOpts.ExtraArgsBefore, TidyGroups, Diags);
-        if(ClangTidyOpts.ExtraArgs)
-            applyWarningOptions(*ClangTidyOpts.ExtraArgs, TidyGroups, Diags);
+        auto& diags = instance.getDiagnostics();
+        TidyDiagnosticGroups groups(opts.Checks ? *opts.Checks : llvm::StringRef());
+        if(opts.ExtraArgsBefore)
+            apply_warning_options(*opts.ExtraArgsBefore, groups, diags);
+        if(opts.ExtraArgs)
+            apply_warning_options(*opts.ExtraArgs, groups, diags);
     }
 
     /// No need to run clang-tidy or IncludeFixerif we are not going to surface
     /// diagnostics.
-    const static auto* AllCTFactories = [] {
-        auto* CTFactories = new tidy::ClangTidyCheckFactories;
-        for(const auto& E: tidy::ClangTidyModuleRegistry::entries())
-            E.instantiate()->addCheckFactories(*CTFactories);
-        return CTFactories;
+    const static auto* all_factories = [] {
+        auto* factories = new tidy::ClangTidyCheckFactories;
+        for(const auto& e: tidy::ClangTidyModuleRegistry::entries())
+            e.instantiate()->addCheckFactories(*factories);
+        return factories;
     }();
-    tidy::ClangTidyCheckFactories FastFactories = filterFastTidyChecks(*AllCTFactories);
+    tidy::ClangTidyCheckFactories factories = get_fast_checks(*all_factories);
     std::unique_ptr<ClangTidyChecker> checker = std::make_unique<ClangTidyChecker>(
-        std::make_unique<tidy::DefaultOptionsProvider>(tidy::ClangTidyGlobalOptions(),
-                                                       ClangTidyOpts));
+        std::make_unique<tidy::DefaultOptionsProvider>(tidy::ClangTidyGlobalOptions(), opts));
 
     checker->context.setDiagnosticsEngine(&instance.getDiagnostics());
     checker->context.setASTContext(&instance.getASTContext());
-    // tood: is it always FileName to check?
-    checker->context.setCurrentFile(FileName);
+    // tood: is it always file_name to check?
+    checker->context.setCurrentFile(file_name);
     checker->context.setSelfContainedDiags(true);
-    checker->checks = FastFactories.createChecksForLanguage(&checker->context);
+    checker->checks = factories.createChecksForLanguage(&checker->context);
     log::info("Tidy configure checks: {}", checker->checks.size());
-    clang::Preprocessor* PP = &instance.getPreprocessor();
-    for(const auto& Check: checker->checks) {
-        Check->registerPPCallbacks(instance.getSourceManager(), PP, PP);
-        Check->registerMatchers(&checker->CTFinder);
+    clang::Preprocessor* pp = &instance.getPreprocessor();
+    for(const auto& check: checker->checks) {
+        check->registerPPCallbacks(instance.getSourceManager(), pp, pp);
+        check->registerMatchers(&checker->CTFinder);
     }
 
     return checker;
 }
-
-#if 0
-
-TidyProvider addTidyChecks(llvm::StringRef Checks, llvm::StringRef WarningsAsErrors) {
-    return [Checks = std::string(Checks),
-            WarningsAsErrors = std::string(WarningsAsErrors)](tidy::ClangTidyOptions& Opts,
-                                                              llvm::StringRef) {
-        mergeCheckList(Opts.Checks, Checks);
-        mergeCheckList(Opts.WarningsAsErrors, WarningsAsErrors);
-    };
-}
-
-TidyProvider disableUnusableChecks(llvm::ArrayRef<std::string> ExtraBadChecks) {
-    constexpr llvm::StringLiteral Separator(",");
-    const static std::string BadChecks =
-        llvm::join_items(Separator,
-                         // We want this list to start with a separator to
-                         // simplify appending in the lambda. So including an
-                         // empty string here will force that.
-                         "",
-                         // include-cleaner is directly integrated in IncludeCleaner.cpp
-                         "-misc-include-cleaner",
-
-                         // ----- False Positives -----
-
-                         // Check relies on seeing ifndef/define/endif directives,
-                         // clangd doesn't replay those when using a preamble.
-                         "-llvm-header-guard",
-                         "-modernize-macro-to-enum",
-
-                         // ----- Crashing Checks -----
-
-                         // Check can choke on invalid (intermediate) c++
-                         // code, which is often the case when clangd
-                         // tries to build an AST.
-                         "-bugprone-use-after-move",
-                         // Alias for bugprone-use-after-move.
-                         "-hicpp-invalid-access-moved",
-                         // Check uses dataflow analysis, which might hang/crash unexpectedly on
-                         // incomplete code.
-                         "-bugprone-unchecked-optional-access");
-
-    size_t Size = BadChecks.size();
-    for(const std::string& Str: ExtraBadChecks) {
-        if(Str.empty())
-            continue;
-        Size += Separator.size();
-        if(LLVM_LIKELY(Str.front() != '-'))
-            ++Size;
-        Size += Str.size();
-    }
-    std::string DisableGlob;
-    DisableGlob.reserve(Size);
-    DisableGlob += BadChecks;
-    for(const std::string& Str: ExtraBadChecks) {
-        if(Str.empty())
-            continue;
-        DisableGlob += Separator;
-        if(LLVM_LIKELY(Str.front() != '-'))
-            DisableGlob.push_back('-');
-        DisableGlob += Str;
-    }
-
-    return [DisableList(std::move(DisableGlob))](tidy::ClangTidyOptions& Opts, llvm::StringRef) {
-        if(Opts.Checks && !Opts.Checks->empty())
-            Opts.Checks->append(DisableList);
-    };
-}
-
-TidyProvider provideEnvironment() {
-    const static std::optional<std::string> User = [] {
-        std::optional<std::string> Ret = llvm::sys::Process::GetEnv("USER");
-#ifdef _WIN32
-        if(!Ret)
-            return llvm::sys::Process::GetEnv("USERNAME");
-#endif
-        return Ret;
-    }();
-
-    if(User)
-        return [](tidy::ClangTidyOptions& Opts, llvm::StringRef) {
-            Opts.User = User;
-        };
-    // FIXME: Once function_ref and unique_function operator= operators handle
-    // null values, this can return null.
-    return [](tidy::ClangTidyOptions&, llvm::StringRef) {
-    };
-}
-
-TidyProvider provideClangdConfig() {
-    return [](tidy::ClangTidyOptions& Opts, llvm::StringRef) {
-        const auto& CurTidyConfig = Config::current().Diagnostics.ClangTidy;
-        if(!CurTidyConfig.Checks.empty())
-            mergeCheckList(Opts.Checks, CurTidyConfig.Checks);
-
-        for(const auto& CheckOption: CurTidyConfig.CheckOptions)
-            Opts.CheckOptions.insert_or_assign(
-                CheckOption.getKey(),
-                tidy::ClangTidyOptions::ClangTidyValue(CheckOption.getValue(), 10000U));
-    };
-}
-
-TidyProvider combine(std::vector<TidyProvider> Providers) {
-    // FIXME: Once function_ref and unique_function operator= operators handle
-    // null values, we should filter out any Providers that are null. Right now we
-    // have to ensure we dont pass any providers that are null.
-    return
-        [Providers(std::move(Providers))](tidy::ClangTidyOptions& Opts, llvm::StringRef Filename) {
-            for(const auto& Provider: Providers)
-                Provider(Opts, Filename);
-        };
-}
-
-tidy::ClangTidyOptions getTidyOptionsForFile(TidyProviderRef Provider, llvm::StringRef Filename) {
-    /// getDefaults instantiates all check factories, which are registered at link
-    /// time. So cache the results once.
-    const static auto* DefaultOpts = [] {
-        auto* Opts = new tidy::ClangTidyOptions;
-        *Opts = tidy::ClangTidyOptions::getDefaults();
-        Opts->Checks->clear();
-        return Opts;
-    }();
-    auto Opts = *DefaultOpts;
-    if(Provider)
-        Provider(Opts, Filename);
-    return Opts;
-}
-
-#endif
 
 }  // namespace clice::tidy

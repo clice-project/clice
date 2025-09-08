@@ -17,7 +17,7 @@ struct TidyParams {};
 
 class ClangTidyChecker;
 
-/// Run clang-tidy on the given file.
+/// Configure to run clang-tidy on the given file.
 std::unique_ptr<ClangTidyChecker> configure(clang::CompilerInstance& instance,
                                             const TidyParams& params);
 

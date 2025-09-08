@@ -29,13 +29,4 @@ public:
 
 }  // namespace clice::tidy
 
-namespace clice {
-
-inline bool isInsideMainFile(clang::SourceLocation Loc, const clang::SourceManager& SM) {
-    if(!Loc.isValid())
-        return false;
-    clang::FileID FID = SM.getFileID(SM.getExpansionLoc(Loc));
-    return FID == SM.getMainFileID() || FID == SM.getPreambleFileID();
-}
-
-}  // namespace clice
+namespace clice {}  // namespace clice

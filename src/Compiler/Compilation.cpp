@@ -4,6 +4,7 @@
 #include "Compiler/Compilation.h"
 #include "Compiler/Diagnostic.h"
 #include "Compiler/Tidy.h"
+#include "Compiler/Utility.h"
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/MultiplexConsumer.h"
@@ -67,25 +68,6 @@ private:
     std::shared_ptr<std::atomic_bool> stop;
 };
 
-template <class T>
-bool isTemplateSpecializationKind(const clang::NamedDecl* D,
-                                  clang::TemplateSpecializationKind Kind) {
-    if(const auto* TD = dyn_cast<T>(D))
-        return TD->getTemplateSpecializationKind() == Kind;
-    return false;
-}
-
-bool isTemplateSpecializationKind(const clang::NamedDecl* D,
-                                  clang::TemplateSpecializationKind Kind) {
-    return isTemplateSpecializationKind<clang::FunctionDecl>(D, Kind) ||
-           isTemplateSpecializationKind<clang::CXXRecordDecl>(D, Kind) ||
-           isTemplateSpecializationKind<clang::VarDecl>(D, Kind);
-}
-
-bool isImplicitTemplateInstantiation(const clang::NamedDecl* D) {
-    return isTemplateSpecializationKind(D, clang::TSK_ImplicitInstantiation);
-}
-
 class DeclTrackingASTConsumer : public clang::ASTConsumer {
 public:
     DeclTrackingASTConsumer(std::vector<clang::Decl*>& TopLevelDecls) :
@@ -102,20 +84,6 @@ public:
 private:
     std::vector<clang::Decl*>& TopLevelDecls;
 };
-
-bool isClangdTopLevelDecl(const clang::Decl* D) {
-    auto& SM = D->getASTContext().getSourceManager();
-    if(!isInsideMainFile(D->getLocation(), SM))
-        return false;
-    if(const clang::NamedDecl* ND = dyn_cast<clang::NamedDecl>(D))
-        if(isImplicitTemplateInstantiation(ND))
-            return false;
-
-    // ObjCMethodDecl are not actually top-level decls.
-    if(isa<clang::ObjCMethodDecl>(D))
-        return false;
-    return true;
-}
 
 class ProxyAction final : public clang::WrapperFrontendAction {
 public:
