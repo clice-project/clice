@@ -9,7 +9,7 @@ class LSPError(Exception):
 
 
 class LSPTransport:
-    def __init__(self, commands: list[str], mode="stdio", host="127.0.0.1", port=2087):
+    def __init__(self, commands: list[str], mode, host, port):
         self.commands = commands
         self.mode = mode
         self.host = host
@@ -31,7 +31,7 @@ class LSPTransport:
         self._stopping = False
 
     async def start(self):
-        if self.mode == "stdio":
+        if self.mode == "pipe":
             self.logger.info(f"Starting LSP server via stdio: {self.commands}")
             self.process = await asyncio.create_subprocess_exec(
                 *self.commands,
@@ -51,7 +51,7 @@ class LSPTransport:
             )
             self.logger.info("Connected to LSP server via socket")
         else:
-            raise ValueError("Invalid connection mode. Use 'stdio' or 'socket'")
+            raise ValueError("Invalid connection mode. Use 'pipe' or 'socket'")
 
         self._tasks.add(asyncio.create_task(self._read_messages()))
         self._tasks.add(asyncio.create_task(self._process_messages()))

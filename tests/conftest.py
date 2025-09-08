@@ -5,15 +5,39 @@ from pathlib import Path
 from .fixtures.client import LSPClient
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--executable",
-        action="store",
+        required=True,
         help="Path to the of the clice executable.",
     )
+
+    CONNECTION_MODES = ["pipe", "socket"]
+    parser.addoption(
+        "--mode",
+        type=str,
+        choices=CONNECTION_MODES,
+        default="pipe",
+        help=f"The connection mode to use. Must be one of: {', '.join(CONNECTION_MODES)})",
+    )
+
+    parser.addoption(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="The host to connect to (default: 127.0.0.1)",
+    )
+
+    parser.addoption(
+        "--port",
+        type=int,
+        default=50051,
+        help="The port to connect to",
+    )
+
     parser.addoption(
         "--resource-dir",
-        action="store",
+        required=False,
         help="Path to the of the clang resource directory.",
     )
 
@@ -21,13 +45,6 @@ def pytest_addoption(parser):
 @pytest.fixture(scope="session")
 def executable(request):
     executable = request.config.getoption("--executable")
-    if executable is None:
-        pytest.exit(
-            "Error: You must specify the 'clice' executable path using "
-            "'--executable=<path/to/clice>' in pytest arguments, "
-            "or configure it in your pytest.ini/conftest.py.",
-            returncode=64,
-        )
 
     path = Path(executable)
     if not path.exists():
@@ -56,9 +73,12 @@ def test_data_dir(request):
 
 @pytest_asyncio.fixture(scope="function")
 async def client(request, executable: Path, resource_dir: Path, test_data_dir: Path):
+    config = request.config
+    mode = config.getoption("--mode")
+
     cmd = [
         str(executable),
-        "--mode=pipe",
+        f"--mode={mode}",
     ]
 
     if resource_dir:
@@ -70,7 +90,13 @@ async def client(request, executable: Path, resource_dir: Path, test_data_dir: P
             config_path = test_data_dir / project_name / "clice.toml"
             cmd.append(f"--config={config_path}")
 
-    lsp_client = LSPClient(cmd)
-    await lsp_client.start()
-    yield lsp_client
-    await lsp_client.stop()
+    client = LSPClient(
+        cmd,
+        mode,
+        config.getoption("--host"),
+        config.getoption("--port"),
+    )
+
+    await client.start()
+    yield client
+    await client.exit()
