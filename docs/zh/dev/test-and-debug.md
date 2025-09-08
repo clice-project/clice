@@ -65,12 +65,12 @@ $ pytest -s --log-cli-level=INFO tests/integration/test_file_operation.py::test_
     }
     ```
 
-3. 重新加载窗口: 修改配置后，在 vscode 中执行 Developer: Reload Window 命令使配置生效。插件会自动连接到正在 50051 端口监听的 clice。
+3. 重新加载窗口：修改配置后，在 vscode 中执行 Developer: Reload Window 命令使配置生效。插件会自动连接到正在 50051 端口监听的 clice。
 
 
 如果你需要修改或调试 clice-vscode 插件本身，可以按以下步骤操作：
 
-1. 克隆并安装依赖:
+1. 克隆并安装依赖：
     ```shell
     $ git clone https://github.com/clice-io/clice-vscode
     $ cd clice-vscode
