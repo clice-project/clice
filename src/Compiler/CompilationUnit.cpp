@@ -5,14 +5,12 @@
 namespace clice {
 
 CompilationUnit::~CompilationUnit() {
-    if(impl && impl->instance) {
+    if(impl && impl->action) {
         auto instance = impl->instance.get();
         // We already notified the pp of end-of-file earlier, so detach it first.
         // We must keep it alive until after EndSourceFile(), Sema relies on this.
-        auto pp = instance->getPreprocessorPtr();
-        instance->setPreprocessor(nullptr);  // Detach so we don't send EOF again.
-    }
-    if(impl && impl->action) {
+        std::shared_ptr<clang::Preprocessor> pp = instance->getPreprocessorPtr();
+        instance->setPreprocessor(nullptr);  // Detach so we don't send EOF again
         impl->action->EndSourceFile();
     }
 
