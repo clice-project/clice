@@ -68,23 +68,6 @@ private:
     std::shared_ptr<std::atomic_bool> stop;
 };
 
-class DeclTrackingASTConsumer : public clang::ASTConsumer {
-public:
-    DeclTrackingASTConsumer(std::vector<clang::Decl*>& TopLevelDecls) :
-        TopLevelDecls(TopLevelDecls) {}
-
-    bool HandleTopLevelDecl(clang::DeclGroupRef DG) override {
-        for(clang::Decl* D: DG) {
-
-            TopLevelDecls.push_back(D);
-        }
-        return true;
-    }
-
-private:
-    std::vector<clang::Decl*>& TopLevelDecls;
-};
-
 class ProxyAction final : public clang::WrapperFrontendAction {
 public:
     ProxyAction(std::unique_ptr<clang::FrontendAction> action,
@@ -102,6 +85,7 @@ public:
             std::move(stop));
     }
 
+    /// Make this public.
     using clang::WrapperFrontendAction::EndSourceFile;
 
 private:
