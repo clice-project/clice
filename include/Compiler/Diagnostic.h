@@ -75,9 +75,9 @@ struct Diagnostic {
 
 class DiagnosticTransform {
 public:
-    virtual clang::DiagnosticsEngine::Level adjust_level(clang::DiagnosticsEngine::Level DiagLevel,
-                                                         const clang::Diagnostic& Info) = 0;
-    virtual void adjust_diag(Diagnostic& Diag) = 0;
+    virtual clang::DiagnosticsEngine::Level adjust_level(clang::DiagnosticsEngine::Level level,
+                                                         const clang::Diagnostic& diag) = 0;
+    virtual void adjust_diag(Diagnostic& diag) = 0;
 };
 
 class DiagnosticCollector {
