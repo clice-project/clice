@@ -158,7 +158,7 @@ CompilationResult run_clang(CompilationParams& params,
                             const AfterExecute& after_execute = no_hook) {
     auto diagnostics =
         params.diagnostics ? params.diagnostics : std::make_shared<std::vector<Diagnostic>>();
-    auto [collector, diagnostic_client] = Diagnostic::create(diagnostics);
+    auto [diagnostic_collector, diagnostic_client] = Diagnostic::create(diagnostics);
     auto diagnostic_engine =
         clang::CompilerInstance::createDiagnostics(*params.vfs,
                                                    new clang::DiagnosticOptions(),
@@ -209,7 +209,7 @@ CompilationResult run_clang(CompilationParams& params,
     if(params.clang_tidy) {
         tidy::TidyParams params;
         checker = tidy::configure(*instance, params);
-        collector->set_transform(checker.get());
+        diagnostic_collector->set_transform(checker.get());
     }
 
     /// `BeginSourceFile` may create new preprocessor, so all operations related to preprocessor
@@ -274,7 +274,7 @@ CompilationResult run_clang(CompilationParams& params,
 
     if(checker) {
         /// Avoid dangling pointer.
-        collector->set_transform(nullptr);
+        diagnostic_collector->set_transform(nullptr);
     }
 
     auto impl = new CompilationUnit::Impl{
