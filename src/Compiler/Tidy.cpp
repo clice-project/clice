@@ -259,9 +259,9 @@ ClangTidyChecker::ClangTidyChecker(std::unique_ptr<ClangTidyOptionsProvider> pro
 
 clang::DiagnosticsEngine::Level
     ClangTidyChecker::adjust_level(clang::DiagnosticsEngine::Level level,
-                                   const clang::Diagnostic& info) {
+                                   const clang::Diagnostic& diag) {
     if(!checks.empty()) {
-        std::string tidy_diag = context.getCheckName(info.getID());
+        std::string tidy_diag = context.getCheckName(diag.getID());
         bool is_clang_tidy_diag = !tidy_diag.empty();
         if(is_clang_tidy_diag) {
             // Check for suppression comment. Skip the check for diagnostics not
@@ -270,11 +270,11 @@ clang::DiagnosticsEngine::Level
             // shouldSuppressDiagnostic to avoid I/O.
             // We let suppression comments take precedence over warning-as-error
             // to match clang-tidy's behaviour.
-            bool in_main_file = info.hasSourceManager() &&
-                                is_inside_main_file(info.getLocation(), info.getSourceManager());
+            bool in_main_file = diag.hasSourceManager() &&
+                                is_inside_main_file(diag.getLocation(), diag.getSourceManager());
             llvm::SmallVector<clang::tooling::Diagnostic, 1> TidySuppressedErrors;
             if(in_main_file && context.shouldSuppressDiagnostic(level,
-                                                                info,
+                                                                diag,
                                                                 TidySuppressedErrors,
                                                                 /*AllowIO=*/false,
                                                                 /*EnableNolintBlocks=*/true)) {
@@ -282,8 +282,8 @@ clang::DiagnosticsEngine::Level
                 // NOLINT comments)?
                 return clang::DiagnosticsEngine::Ignored;
             }
-            if(!context.getOptions().SystemHeaders.value_or(false) && info.hasSourceManager() &&
-               info.getSourceManager().isInSystemMacro(info.getLocation()))
+            if(!context.getOptions().SystemHeaders.value_or(false) && diag.hasSourceManager() &&
+               diag.getSourceManager().isInSystemMacro(diag.getLocation()))
                 return clang::DiagnosticsEngine::Ignored;
 
             // Check for warning-as-error.
@@ -383,7 +383,7 @@ std::unique_ptr<ClangTidyChecker> configure(clang::CompilerInstance& instance,
     clang::Preprocessor* pp = &instance.getPreprocessor();
     for(const auto& check: checker->checks) {
         check->registerPPCallbacks(instance.getSourceManager(), pp, pp);
-        check->registerMatchers(&checker->CTFinder);
+        check->registerMatchers(&checker->finder);
     }
 
     return checker;

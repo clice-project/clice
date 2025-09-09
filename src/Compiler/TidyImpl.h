@@ -16,16 +16,18 @@ using namespace clang::tidy;
 class ClangTidyChecker : public DiagnosticTransform {
 
 public:
+    /// The context of the clang-tidy checker.
     ClangTidyContext context;
-    /// Create instances of checks that are enabled for the current Language.
+    /// The instances of checks that are enabled for the current Language.
     std::vector<std::unique_ptr<ClangTidyCheck>> checks;
-    clang::ast_matchers::MatchFinder CTFinder;
+    /// The match finder to run clang-tidy on ASTs.
+    clang::ast_matchers::MatchFinder finder;
 
     ClangTidyChecker(std::unique_ptr<ClangTidyOptionsProvider> provider);
 
-    clang::DiagnosticsEngine::Level adjust_level(clang::DiagnosticsEngine::Level DiagLevel,
-                                                 const clang::Diagnostic& Info) override;
-    void adjust_diag(Diagnostic& Diag) override;
+    clang::DiagnosticsEngine::Level adjust_level(clang::DiagnosticsEngine::Level level,
+                                                 const clang::Diagnostic& diag) override;
+    void adjust_diag(Diagnostic& diag) override;
 };
 
 }  // namespace clice::tidy

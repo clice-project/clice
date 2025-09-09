@@ -256,7 +256,7 @@ CompilationResult run_clang(CompilationParams& params,
         // AST traversals should exclude the preamble, to avoid performance cliffs.
         // TODO: is it okay to affect the unit-level traversal scope here?
         instance->getASTContext().setTraversalScope(clangd_top_level_decls);
-        checker->CTFinder.matchAST(instance->getASTContext());
+        checker->finder.matchAST(instance->getASTContext());
     }
 
     /// XXX: This is messy: clang-tidy checks flush some diagnostics at EOF.
