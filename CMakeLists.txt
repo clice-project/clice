@@ -218,5 +218,5 @@ if(CLICE_ENABLE_TEST)
     target_compile_options(unit_tests PUBLIC ${CLICE_CXX_FLAGS})
     target_link_options(unit_tests PUBLIC ${CLICE_LINKER_FLAGS})
 
-    add_test(NAME clice_unit_tests COMMAND unit_tests --test-dir="${CMAKE_SOURCE_DIR}/tests/data")
+    add_test(NAME clice_unit_tests COMMAND unit_tests --test-dir="${CMAKE_SOURCE_DIR}/tests/data" --resource-dir="${PROJECT_BINARY_DIR}/lib/clang/20")
 endif()
