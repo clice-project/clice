@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include "AST/SourceCode.h"
+#include "clang/Basic/Diagnostic.h"
 
 namespace clang {
 class DiagnosticConsumer;
@@ -52,7 +53,7 @@ struct DiagnosticID {
     bool is_unused() const;
 };
 
-class DiagnosticCollector {};
+class DiagnosticCollector;
 
 struct Diagnostic {
     /// The diagnostic id.
@@ -70,6 +71,18 @@ struct Diagnostic {
 
     static std::pair<DiagnosticCollector*, clang::DiagnosticConsumer*>
         create(std::shared_ptr<std::vector<Diagnostic>> diagnostics);
+};
+
+class DiagnosticTransform {
+public:
+    virtual clang::DiagnosticsEngine::Level adjust_level(clang::DiagnosticsEngine::Level DiagLevel,
+                                                         const clang::Diagnostic& Info) = 0;
+    virtual void adjust_diag(Diagnostic& Diag) = 0;
+};
+
+class DiagnosticCollector {
+public:
+    virtual void set_transform(DiagnosticTransform* transform) = 0;
 };
 
 }  // namespace clice

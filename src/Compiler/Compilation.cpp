@@ -1,4 +1,3 @@
-#include "Support/Logger.h"
 #include "CompilationUnitImpl.h"
 #include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
@@ -210,6 +209,7 @@ CompilationResult run_clang(CompilationParams& params,
     if(params.clang_tidy) {
         tidy::TidyParams params;
         checker = tidy::configure(*instance, params);
+        collector->set_transform(checker.get());
     }
 
     /// `BeginSourceFile` may create new preprocessor, so all operations related to preprocessor
@@ -253,18 +253,15 @@ CompilationResult run_clang(CompilationParams& params,
         auto clangd_top_level_decls = top_level_decls;
         std::erase_if(clangd_top_level_decls,
                       [](auto decl) { return !is_clangd_top_level_decl(decl); });
-        log::info("Clangd top level decls: {} of {}",
-                  clangd_top_level_decls.size(),
-                  top_level_decls.size());
         // AST traversals should exclude the preamble, to avoid performance cliffs.
         // TODO: is it okay to affect the unit-level traversal scope here?
         instance->getASTContext().setTraversalScope(clangd_top_level_decls);
         checker->CTFinder.matchAST(instance->getASTContext());
     }
 
-    // XXX: This is messy: clang-tidy checks flush some diagnostics at EOF.
-    // However Action->EndSourceFile() would destroy the ASTContext!
-    // So just inform the preprocessor of EOF, while keeping everything alive.
+    /// XXX: This is messy: clang-tidy checks flush some diagnostics at EOF.
+    /// However Action->EndSourceFile() would destroy the ASTContext!
+    /// So just inform the preprocessor of EOF, while keeping everything alive.
     pp.EndSourceFile();
 
     /// FIXME: getDependencies currently return ArrayRef<std::string>, which actually results in
@@ -273,6 +270,11 @@ CompilationResult run_clang(CompilationParams& params,
     std::optional<TemplateResolver> resolver;
     if(instance->hasSema()) {
         resolver.emplace(instance->getSema());
+    }
+
+    if(checker) {
+        /// Avoid dangling pointer.
+        collector->set_transform(nullptr);
     }
 
     auto impl = new CompilationUnit::Impl{

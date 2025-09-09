@@ -257,8 +257,9 @@ void apply_warning_options(llvm::ArrayRef<std::string> extra_args,
 ClangTidyChecker::ClangTidyChecker(std::unique_ptr<ClangTidyOptionsProvider> provider) :
     context(std::move(provider)) {}
 
-clang::DiagnosticsEngine::Level ClangTidyChecker::adjustLevel(clang::DiagnosticsEngine::Level level,
-                                                              const clang::Diagnostic& info) {
+clang::DiagnosticsEngine::Level
+    ClangTidyChecker::adjust_level(clang::DiagnosticsEngine::Level level,
+                                   const clang::Diagnostic& info) {
     if(!checks.empty()) {
         std::string tidy_diag = context.getCheckName(info.getID());
         bool is_clang_tidy_diag = !tidy_diag.empty();
@@ -294,7 +295,7 @@ clang::DiagnosticsEngine::Level ClangTidyChecker::adjustLevel(clang::Diagnostics
     return level;
 }
 
-void ClangTidyChecker::adjustDiag(Diagnostic& diag) {
+void ClangTidyChecker::adjust_diag(Diagnostic& diag) {
     std::string tidy_diag = context.getCheckName(diag.id.value);
     if(!tidy_diag.empty()) {
         // TODO: using a global string saver.

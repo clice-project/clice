@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "clang-tidy/ClangTidyModuleRegistry.h"
 #include "clang-tidy/ClangTidyOptions.h"
 #include "clang-tidy/ClangTidyCheck.h"
@@ -11,7 +13,7 @@ namespace clice::tidy {
 
 using namespace clang::tidy;
 
-class ClangTidyChecker {
+class ClangTidyChecker : public DiagnosticTransform {
 
 public:
     ClangTidyContext context;
@@ -21,10 +23,9 @@ public:
 
     ClangTidyChecker(std::unique_ptr<ClangTidyOptionsProvider> provider);
 
-    clang::DiagnosticsEngine::Level adjustLevel(clang::DiagnosticsEngine::Level DiagLevel,
-                                                const clang::Diagnostic& Info);
-
-    void adjustDiag(Diagnostic& Diag);
+    clang::DiagnosticsEngine::Level adjust_level(clang::DiagnosticsEngine::Level DiagLevel,
+                                                 const clang::Diagnostic& Info) override;
+    void adjust_diag(Diagnostic& Diag) override;
 };
 
 }  // namespace clice::tidy

@@ -2,6 +2,7 @@
 
 #include "clang/Basic/SourceManager.h"
 #include "clang/AST/DeclCXX.h"
+#include "clang/AST/DeclObjC.h"
 #include "clang/AST/ASTContext.h"
 
 namespace clice {
