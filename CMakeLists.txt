@@ -32,6 +32,10 @@ if(CLICE_USE_LIBCXX)
     string(APPEND CMAKE_MODULE_LINKER_FLAGS " -stdlib=libc++")
 endif()
 
+add_compile_definitions(TOML_EXCEPTIONS=0)
+add_compile_definitions(SPDLOG_USE_STD_FORMAT=1)
+add_compile_definitions(SPDLOG_NO_EXCEPTIONS=1)
+
 message(STATUS "Installing other dependencies, please wait...")
 # install dependencies
 include(FetchContent)
