@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
+enable_testing()
+
 include(cmake/llvm_setup.cmake)
 
 setup_llvm()
@@ -215,4 +217,6 @@ if(CLICE_ENABLE_TEST)
     target_link_libraries(unit_tests PRIVATE clice-core)
     target_compile_options(unit_tests PUBLIC ${CLICE_CXX_FLAGS})
     target_link_options(unit_tests PUBLIC ${CLICE_LINKER_FLAGS})
+
+    add_test(NAME clice_unit_tests COMMAND unit_tests --test-dir="${CMAKE_SOURCE_DIR}/tests/data")
 endif()
