@@ -104,7 +104,12 @@ llvm::SmallVector<llvm::StringRef, 4> driver_invocation_argv(llvm::StringRef dri
     /// } else if (driver.starts_with("cl") || driver.starts_with("clang-cl")) {
     ///      return {"/Bv"};
     /// }
-    return {driver, "-E", "-v", "-xc++", "/dev/null"};
+#if defined(_WIN32)
+    const llvm::StringRef null_device = "NUL";
+#else
+    const llvm::StringRef null_device = "/dev/null";
+#endif
+    return {driver, "-E", "-v", "-xc++", null_device};
 }
 
 using QueryDriverError = CompilationDatabase::QueryDriverError;
