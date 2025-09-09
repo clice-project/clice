@@ -45,7 +45,22 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/libuv/libuv.git
     GIT_TAG v1.x
 )
-FetchContent_MakeAvailable(tomlplusplus libuv)
+FetchContent_Declare(
+    croaring
+    GIT_REPOSITORY https://github.com/RoaringBitmap/CRoaring.git
+    GIT_TAG        v4.3.9
+)
+set(ENABLE_ROARING_TESTS OFF CACHE INTERNAL "")
+FetchContent_Declare(
+  flatbuffers
+  GIT_REPOSITORY https://github.com/google/flatbuffers.git
+  GIT_TAG        v24.3.25
+)
+set(FLATBUFFERS_BUILD_GRPC OFF CACHE BOOL "" FORCE)
+set(FLATBUFFERS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(FLATBUFFERS_BUILD_FLATHASH OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(tomlplusplus libuv croaring flatbuffers)
 
 message(STATUS "Found tomlplusplus: ${tomlplusplus_SOURCE_DIR}")
 message(STATUS "Found libuv: ${libuv_SOURCE_DIR}")
@@ -188,7 +203,7 @@ target_compile_options(clice-core PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
 
 target_include_directories(clice-core PUBLIC "${CMAKE_SOURCE_DIR}/include")
-target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus llvm-libs)
+target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus roaring flatbuffers llvm-libs)
 
 # clice executable
 add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")
