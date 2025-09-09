@@ -206,6 +206,7 @@ file(COPY
 )
 
 # clice tests
+option(CLICE_ENABLE_TEST "Enable building unit tests" OFF)
 if(CLICE_ENABLE_TEST)
     file(GLOB_RECURSE CLICE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tests/unit/*/*.cpp")
     add_executable(unit_tests "${CLICE_TEST_SOURCES}" "${CMAKE_SOURCE_DIR}/src/Driver/unit_tests.cc")
