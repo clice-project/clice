@@ -2,6 +2,10 @@
 #include "Support/Logger.h"
 #include "Support/Format.h"
 
+#define SPDLOG_NO_EXCEPTIONS 1
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/stdout_color_sinks.h"
+
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Process.h"
@@ -106,17 +110,17 @@ bool checkArguments(int argc, const char** argv) {
     init_log();
 
     for(int i = 0; i < argc; ++i) {
-        log::info("argv[{}] = {}", i, argv[i]);
+        spdlog::info("argv[{}] = {}", i, argv[i]);
     }
 
     // Handle configuration file loading
     if(config_path.empty()) {
-        log::info("No configuration file specified, using default settings");
+        spdlog::info("No configuration file specified, using default settings");
     } else {
         llvm::StringRef path = config_path;
         // Try to load the configuration file and check the result
         if(auto result = config::load(argv[0], path); result) {
-            log::info("Configuration file loaded successfully from: {}", path);
+            spdlog::info("Configuration file loaded successfully from: {}", path);
         } else {
             log::warn("Failed to load configuration file from: {} because {}",
                       path,
@@ -127,7 +131,7 @@ bool checkArguments(int argc, const char** argv) {
 
     // Initialize resource directory
     if(resource_dir.empty()) {
-        log::info("No resource directory specified, using default resource directory");
+        spdlog::info("No resource directory specified, using default resource directory");
         // Try to initialize default resource directory
         if(auto result = fs::init_resource_dir(argv[0]); !result) {
             log::warn("Cannot find default resource directory, because {}", result.error());
@@ -137,7 +141,7 @@ bool checkArguments(int argc, const char** argv) {
         // Set and check the specified resource directory
         fs::resource_dir = resource_dir.getValue();
         if(fs::exists(fs::resource_dir)) {
-            log::info("Resource directory found: {}", fs::resource_dir);
+            spdlog::info("Resource directory found: {}", fs::resource_dir);
         } else {
             log::warn("Resource directory not found: {}", fs::resource_dir);
             return false;
@@ -150,6 +154,8 @@ bool checkArguments(int argc, const char** argv) {
 }  // namespace
 
 int main(int argc, const char** argv) {
+    spdlog::set_default_logger(spdlog::stderr_color_mt("clice"));
+
     llvm::InitLLVM guard(argc, argv);
     llvm::setBugReportMsg(
         "Please report bugs to https://github.com/clice-io/clice/issues and include the crash backtrace");
@@ -168,10 +174,10 @@ int main(int argc, const char** argv) {
 
     if(mode == "pipe") {
         async::net::listen(loop);
-        log::info("Server starts listening on stdin/stdout");
+        spdlog::info("Server starts listening on stdin/stdout");
     } else if(mode == "socket") {
         async::net::listen(host.c_str(), port, loop);
-        log::info("Server starts listening on {}:{}", host.getValue(), port.getValue());
+        spdlog::info("Server starts listening on {}:{}", host.getValue(), port.getValue());
     } else if(mode == "indexer") {
         /// TODO:
     } else {
@@ -181,7 +187,7 @@ int main(int argc, const char** argv) {
 
     async::run();
 
-    log::info("clice exit normally!");
+    spdlog::info("clice exit normally!");
 
     return 0;
 }
