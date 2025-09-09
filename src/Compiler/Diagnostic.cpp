@@ -131,8 +131,8 @@ bool DiagnosticID::is_unused() const {
     return source == DiagnosticSource::Clang && unused_diags.contains(value);
 }
 
-bool is_note(clang::DiagnosticsEngine::Level L) {
-    return L == clang::DiagnosticsEngine::Note || L == clang::DiagnosticsEngine::Remark;
+bool is_note(clang::DiagnosticsEngine::Level level) {
+    return level == clang::DiagnosticsEngine::Note || level == clang::DiagnosticsEngine::Remark;
 }
 
 static DiagnosticLevel diagnostic_level(clang::DiagnosticsEngine::Level level) {
