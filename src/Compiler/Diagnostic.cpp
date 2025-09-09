@@ -246,6 +246,8 @@ public:
         /// raw_diagnostic.getFixItHints();
     }
 
+    void EndSourceFile() override {}
+
     void set_transform(DiagnosticTransform* transform) override {
         this->transform = transform;
     }
