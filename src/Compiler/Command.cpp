@@ -1,5 +1,6 @@
 #include "Compiler/Command.h"
 #include "Compiler/Compilation.h"
+#include "Server/Config.h"
 #include "Support/FileSystem.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/Support/CommandLine.h"
@@ -9,77 +10,57 @@
 
 namespace clice {
 
-CompilationDatabase::CompilationDatabase() {
-    using opions = clang::driver::options::ID;
-
-    /// Remove the input file, we will add input file ourselves.
-    filtered_options.insert(opions::OPT_INPUT);
-
-    /// -c and -o are meaningless for frontend.
-    filtered_options.insert(opions::OPT_c);
-    filtered_options.insert(opions::OPT_o);
-    filtered_options.insert(opions::OPT_dxc_Fc);
-    filtered_options.insert(opions::OPT_dxc_Fo);
-
-    /// Remove all options related to PCH building.
-    filtered_options.insert(opions::OPT_emit_pch);
-    filtered_options.insert(opions::OPT_include_pch);
-    filtered_options.insert(opions::OPT__SLASH_Yu);
-    filtered_options.insert(opions::OPT__SLASH_Fp);
-
-    /// Remove all options related to C++ module, we will
-    /// build module and set deps ourselves.
-    filtered_options.insert(opions::OPT_fmodule_file);
-    filtered_options.insert(opions::OPT_fmodule_output);
-    filtered_options.insert(opions::OPT_fprebuilt_module_path);
-}
-
-auto CompilationDatabase::save_string(this Self& self, llvm::StringRef string) -> llvm::StringRef {
-    assert(!string.empty() && "expected non empty string");
-    auto it = self.string_cache.find(string);
+auto StringPool::save_cstr_list(llvm::ArrayRef<const char*> list) -> llvm::ArrayRef<const char*> {
+    auto it = pooled_str_lists.find(list);
 
     /// If we already store the argument, reuse it.
-    if(it != self.string_cache.end()) {
-        return *it;
-    }
-
-    /// Allocate for new string.
-    const auto size = string.size();
-    auto ptr = self.allocator.Allocate<char>(size + 1);
-    std::memcpy(ptr, string.data(), size);
-    ptr[size] = '\0';
-
-    /// Insert it to cache.
-    auto result = llvm::StringRef(ptr, size);
-    self.string_cache.insert(result);
-    return result;
-}
-
-auto CompilationDatabase::save_cstring_list(this Self& self, llvm::ArrayRef<const char*> arguments)
-    -> llvm::ArrayRef<const char*> {
-    auto it = self.arguments_cache.find(arguments);
-
-    /// If we already store the argument, reuse it.
-    if(it != self.arguments_cache.end()) {
+    if(it != pooled_str_lists.end()) {
         return *it;
     }
 
     /// Allocate for new array.
-    const auto size = arguments.size();
-    auto ptr = self.allocator.Allocate<const char*>(size);
-    ranges::copy(arguments, ptr);
+    const auto size = list.size();
+    auto ptr = allocator.Allocate<const char*>(size);
+    std::ranges::copy(list, ptr);
 
     /// Insert it to cache.
     auto result = llvm::ArrayRef<const char*>(ptr, size);
-    self.arguments_cache.insert(result);
+    pooled_str_lists.insert(result);
     return result;
 }
 
-std::optional<std::uint32_t> CompilationDatabase::get_option_id(llvm::StringRef argument) {
+auto StringPool::save_cstr(llvm::StringRef str) -> llvm::StringRef {
+    assert(!str.empty() && "expected non empty string");
+    auto it = pooled_strs.find(str);
+    /// If we already store the argument, reuse it.
+    if(it != pooled_strs.end()) {
+        return *it;
+    }
+
+    /// Allocate for new string.
+    const auto size = str.size();
+    auto ptr = allocator.Allocate<char>(size + 1);
+    std::memcpy(ptr, str.data(), size);
+    ptr[size] = '\0';
+
+    /// Insert it to cache.
+    auto result = llvm::StringRef(ptr, size);
+    pooled_strs.insert(result);
+    return result;
+}
+
+void StringPool::clear() {
+    allocator.Reset();
+    pooled_strs.clear();
+    pooled_str_lists.clear();
+}
+
+namespace {
+
+/// Get the option for specific argument, return nullptr if not found.
+std::unique_ptr<llvm::opt::Arg> get_option(llvm::StringRef argument) {
     auto& table = clang::driver::getDriverOptTable();
-
     llvm::SmallString<64> buffer = argument;
-
     if(argument.ends_with("=")) {
         buffer += "placeholder";
     }
@@ -87,19 +68,201 @@ std::optional<std::uint32_t> CompilationDatabase::get_option_id(llvm::StringRef 
     unsigned index = 0;
     std::array arguments = {buffer.c_str(), "placeholder"};
     llvm::opt::InputArgList arg_list(arguments.data(), arguments.data() + arguments.size());
+    return table.ParseOneArg(arg_list, index);
+}
 
-    if(auto arg = table.ParseOneArg(arg_list, index)) {
-        return arg->getOption().getID();
-    } else {
-        return {};
+void rewrite_arg_str(const llvm::opt::Arg* arg, llvm::unique_function<void(llvm::StringRef)> fn) {
+    switch(arg->getOption().getRenderStyle()) {
+        case llvm::opt::Option::RenderValuesStyle: {
+            for(auto value: arg->getValues()) {
+                fn(value);
+            }
+            break;
+        }
+
+        case llvm::opt::Option::RenderSeparateStyle: {
+            fn(arg->getSpelling());
+            for(auto value: arg->getValues()) {
+                fn(value);
+            }
+            break;
+        }
+
+        case llvm::opt::Option::RenderJoinedStyle: {
+            llvm::SmallString<256> first = {arg->getSpelling(), arg->getValue(0)};
+            fn(first);
+            for(auto value: llvm::ArrayRef(arg->getValues()).drop_front()) {
+                fn(value);
+            }
+            break;
+        }
+
+        case llvm::opt::Option::RenderCommaJoinedStyle: {
+            llvm::SmallString<256> buffer = arg->getSpelling();
+            for(auto i = 0; i < arg->getNumValues(); i++) {
+                if(i) {
+                    buffer += ',';
+                }
+                buffer += arg->getValue(i);
+            }
+            fn(buffer);
+            break;
+        }
     }
+}
+
+}  // namespace
+
+std::expected<Rule, ParseRuleError> Rule::create(config::Rule rule, StringPool& pool) {
+    using enum ParseRuleError::Kind;
+    if(rule.pattern.empty()) [[unlikely]] {
+        return std::unexpected(EmptyPattern);
+    }
+
+    Rule result;
+
+    /// Parse readonly field.
+    if(rule.readonly == "auto") {
+        result.readonly = std::nullopt;
+    } else if(rule.readonly == "always") {
+        result.readonly = true;
+    } else if(rule.readonly == "never") {
+        result.readonly = false;
+    }
+
+    /// Parse header field.
+    if(rule.header == "auto") {
+        result.header = std::nullopt;
+    } else if(rule.header == "always") {
+        result.header = true;
+    } else if(rule.header == "never") {
+        result.header = false;
+    }
+
+    bool has_effect = result.readonly || result.header || !rule.context.empty();
+    if(!has_effect && rule.append.empty() && rule.remove.empty()) [[unlikely]] {
+        return std::unexpected(RuleHasNoEffect);
+    }
+
+    /// Parse pattern field.
+    for(auto& pattern: rule.pattern) {
+        if(auto glob = GlobPattern::create(pattern)) {
+            result.pattern.push_back(*glob);
+        }
+    }
+
+    if(result.pattern.empty()) [[unlikely]] {
+        return std::unexpected(NoValidPattern);
+    }
+
+    /// Parse append field.
+    for(auto& argument: rule.append) {
+        auto arg = get_option(argument);
+        if(!arg) {
+            continue;
+        }
+
+        const auto& opt = arg->getOption();
+        DriverOptionID id = opt.getID();
+        rewrite_arg_str(arg.get(), [&result, &pool, id](llvm::StringRef arg) {
+            result.append[id].push_back(pool.save_cstr(arg));
+        });
+    }
+
+    /// Parse remove field.
+    for(auto& argument: rule.remove) {
+        auto arg = get_option(argument);
+        if(!arg) {
+            continue;
+        }
+
+        const auto& opt = arg->getOption();
+        DriverOptionID id = opt.getID();
+        rewrite_arg_str(arg.get(), [&result, &pool, id](llvm::StringRef arg) {
+            result.remove[id].push_back(pool.save_cstr(arg));
+        });
+    }
+
+    if(!has_effect && result.append.empty() && result.remove.empty()) [[unlikely]] {
+        return std::unexpected(RuleHasNoEffect);
+    }
+
+    result.context = rule.context;
+    return result;
+}
+
+void RuleManager::load_rules(llvm::ArrayRef<config::Rule> configs, StringPool& pool) {
+    for(auto& config: configs) {
+        if(auto rule = Rule::create(config, pool)) {
+            rules.push_back(std::move(*rule));
+        } else {
+            log::warn("Ignore invalid rule: {}", rule.error());
+        }
+    }
+}
+
+const Rule* RuleManager::find_rule(llvm::StringRef file) const {
+    for(auto& rule: rules) {
+        for(auto& pattern: rule.pattern) {
+            if(pattern.match(file)) {
+                return &rule;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+void RuleManager::clear() {
+    rules.clear();
+}
+
+CompilationDatabase::CompilationDatabase() {
+    using opions = clang::driver::options::ID;
+
+    /// Remove the input file, we will add input file ourselves.
+    ignored.insert(opions::OPT_INPUT);
+
+    /// -c and -o are meaningless for frontend.
+    ignored.insert(opions::OPT_c);
+    ignored.insert(opions::OPT_o);
+    ignored.insert(opions::OPT_dxc_Fc);
+    ignored.insert(opions::OPT_dxc_Fo);
+
+    /// Remove all options related to outputting compilation time trace.
+    ignored.insert(opions::OPT_ftime_report);
+    ignored.insert(opions::OPT_ftime_report_EQ);
+    ignored.insert(opions::OPT_ftime_trace);
+    ignored.insert(opions::OPT_ftime_trace_EQ);
+    ignored.insert(opions::OPT_ftime_trace_granularity_EQ);
+    ignored.insert(opions::OPT_ftime_trace_verbose);
+
+    /// Remove all options related to PCH building.
+    ignored.insert(opions::OPT_emit_pch);
+    ignored.insert(opions::OPT_include_pch);
+    ignored.insert(opions::OPT__SLASH_Yu);
+    ignored.insert(opions::OPT__SLASH_Fp);
+
+    /// Remove all options related to C++ module, we will
+    /// build module and set deps ourselves.
+    ignored.insert(opions::OPT_fmodule_file);
+    ignored.insert(opions::OPT_fmodule_output);
+    ignored.insert(opions::OPT_fprebuilt_module_path);
+}
+
+std::optional<std::uint32_t> CompilationDatabase::get_option_id(llvm::StringRef argument) {
+    if(auto arg = get_option(argument)) {
+        return arg->getOption().getID();
+    }
+    return std::nullopt;
 }
 
 namespace {
 
 llvm::SmallVector<llvm::StringRef, 4> driver_invocation_argv(llvm::StringRef driver) {
     /// FIXME: MSVC command:` cl /Bv`, should we support it?
-    /// if (driver.starts_with("gcc") || driver.starts_with("g++") || driver.starts_with("clang")) {
+    /// if (driver.starts_with("gcc") || driver.starts_with("g++") ||
+    /// driver.starts_with("clang")) {
     ///      return {"-E", "-v", "-xc++", "/dev/null"};
     /// } else if (driver.starts_with("cl") || driver.starts_with("clang-cl")) {
     ///      return {"/Bv"};
@@ -129,11 +292,11 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
             absolute_path = *result;
         }
 
-        driver = self.save_string(absolute_path);
+        driver = self.pool.save_cstr(absolute_path);
     }
 
-    auto it = self.driver_infos.find(driver.data());
-    if(it != self.driver_infos.end()) {
+    auto it = self.drivers.find(driver.data());
+    if(it != self.drivers.end()) {
         return it->second;
     }
 
@@ -246,28 +409,54 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
             continue;
         }
 
-        includes.emplace_back(self.save_string(buffer).data());
+        includes.emplace_back(self.pool.save_cstr(buffer).data());
     }
 
     DriverInfo info;
-    info.target = self.save_string(target);
-    info.system_includes = self.save_cstring_list(includes);
-    self.driver_infos.try_emplace(driver.data(), info);
+    info.target = self.pool.save_cstr(target);
+    info.system_includes = self.pool.save_cstr_list(includes);
+    self.drivers.try_emplace(driver.data(), info);
     return info;
 }
+
+namespace {
+
+/// Check an argument should be removed by the rule.
+bool should_remove(const Rule& rule, llvm::opt::Arg* argument, DriverOptionID id) {
+    if(auto remove_list = rule.remove.find(id); remove_list != rule.remove.end()) {
+        /// For flag options, we always remove it.
+        if(argument->getOption().getKind() == llvm::opt::Option::FlagClass) {
+            return true;
+        }
+
+        /// Check if any value in the argument matches the remove list.
+        for(auto& to_remove: remove_list->second) {
+            if(std::ranges::any_of(argument->getValues(), [to_remove](llvm::StringRef arg) {
+                   return arg.contains(to_remove);
+               })) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+}  // namespace
 
 auto CompilationDatabase::update_command(this Self& self,
                                          llvm::StringRef directory,
                                          llvm::StringRef file,
                                          llvm::ArrayRef<const char*> arguments) -> UpdateInfo {
-    file = self.save_string(file);
-    directory = self.save_string(directory);
+    file = self.pool.save_cstr(file);
+    directory = self.pool.save_cstr(directory);
+    const Rule* rule = self.rules.find_rule(file);
 
     llvm::SmallVector<const char*, 16> filtered_arguments;
 
     /// Append
     auto add_argument = [&](llvm::StringRef argument) {
-        auto saved = self.save_string(argument);
+        auto saved = self.pool.save_cstr(argument);
         filtered_arguments.emplace_back(saved.data());
     };
 
@@ -289,7 +478,14 @@ auto CompilationDatabase::update_command(this Self& self,
         auto id = opt.getID();
 
         /// Filter options we don't need.
-        if(self.filtered_options.contains(id)) {
+        if(self.ignored.contains(id)) {
+            llvm::outs() << "Ignored: " << arg->getSpelling() << "\n";
+            continue;
+        }
+
+        /// There is a matching user defined rules, try to remove options in rules
+        if(rule && should_remove(*rule, arg, id)) {
+            llvm::outs() << "Removed: " << arg->getSpelling() << "\n";
             continue;
         }
 
@@ -327,51 +523,29 @@ auto CompilationDatabase::update_command(this Self& self,
 
         /// Rewrite the argument to filter arguments, we basically reimplement
         /// the logic of `Arg::render` to use our allocator to allocate memory.
-        switch(opt.getRenderStyle()) {
-            case llvm::opt::Option::RenderValuesStyle: {
-                for(auto value: arg->getValues()) {
-                    add_argument(value);
-                }
-                break;
-            }
+        rewrite_arg_str(arg, add_argument);
+    }
 
-            case llvm::opt::Option::RenderSeparateStyle: {
-                add_argument(arg->getSpelling());
-                for(auto value: arg->getValues()) {
-                    add_argument(value);
-                }
-                break;
-            }
-
-            case llvm::opt::Option::RenderJoinedStyle: {
-                llvm::SmallString<256> first = {arg->getSpelling(), arg->getValue(0)};
-                add_argument(first);
-                for(auto value: llvm::ArrayRef(arg->getValues()).drop_front()) {
-                    add_argument(value);
-                }
-                break;
-            }
-
-            case llvm::opt::Option::RenderCommaJoinedStyle: {
-                llvm::SmallString<256> buffer = arg->getSpelling();
-                for(auto i = 0; i < arg->getNumValues(); i++) {
-                    if(i) {
-                        buffer += ',';
-                    }
-                    buffer += arg->getValue(i);
-                }
-                add_argument(buffer);
-                break;
+    /// Append additional arguments in rules.
+    if(rule) {
+        for(auto& [id, args]: rule->append) {
+            for(auto arg: args) {
+                add_argument(arg);
             }
         }
     }
 
     /// Save arguments.
-    arguments = self.save_cstring_list(filtered_arguments);
+    arguments = self.pool.save_cstr_list(filtered_arguments);
+    llvm::outs() << "Update command for " << file << ":\n";
+    for(auto arg: arguments) {
+        llvm::outs() << "  " << arg;
+    }
+    llvm::outs() << '\n';
 
     UpdateKind kind = UpdateKind::Unchange;
     CommandInfo info = {directory, arguments};
-    auto [it, success] = self.command_infos.try_emplace(file.data(), info);
+    auto [it, success] = self.commands.try_emplace(file.data(), info);
     if(success) {
         kind = UpdateKind::Create;
     } else {
@@ -475,9 +649,9 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
     -> LookupInfo {
     LookupInfo info;
 
-    file = self.save_string(file);
-    auto it = self.command_infos.find(file.data());
-    if(it != self.command_infos.end()) {
+    file = self.pool.save_cstr(file);
+    auto it = self.commands.find(file.data());
+    if(it != self.commands.end()) {
         info.directory = it->second.directory;
         info.arguments = it->second.arguments;
     } else {
@@ -485,7 +659,7 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
     }
 
     auto record = [&info, &self](llvm::StringRef argument) {
-        info.arguments.emplace_back(self.save_string(argument).data());
+        info.arguments.emplace_back(self.pool.save_cstr(argument).data());
     };
 
     if(options.query_driver) {
@@ -493,7 +667,8 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
         if(auto driver_info = self.query_driver(driver)) {
             record("-nostdlibinc");
 
-            /// FIXME: Use target information here, this is useful for cross compilation.
+            /// FIXME: Use target information here, this is useful for cross
+            /// compilation.
 
             /// FIXME: Cache -I so that we can append directly, avoid duplicate lookup.
             for(auto& system_header: driver_info->system_includes) {
@@ -522,9 +697,10 @@ auto CompilationDatabase::guess_or_fallback(this Self& self, llvm::StringRef fil
     int up_level = 0;
     while(!dir.empty() && up_level < 3) {
         // If any file in the directory has a command, use that command
-        for(const auto& [other_file, info]: self.command_infos) {
+        for(const auto& [other_file, info]: self.commands) {
             llvm::StringRef other = other_file;
-            // Filter case that dir is /path/to/foo and there's another directory /path/to/foobar
+            // Filter case that dir is /path/to/foo and there's another directory
+            // /path/to/foobar
             if(other.starts_with(dir) &&
                (other.size() == dir.size() || path::is_separator(other[dir.size()]))) {
                 log::info("Guess command for:{}, from existed file: {}", file, other_file);
@@ -540,7 +716,7 @@ auto CompilationDatabase::guess_or_fallback(this Self& self, llvm::StringRef fil
     LookupInfo info;
     constexpr const char* fallback[] = {"clang++", "-std=c++20"};
     for(const char* arg: fallback) {
-        info.arguments.emplace_back(self.save_string(arg).data());
+        info.arguments.emplace_back(self.pool.save_cstr(arg).data());
     }
     return info;
 }
@@ -598,6 +774,13 @@ auto CompilationDatabase::load_compile_database(this Self& self,
 
     /// TODO: Add a default command in clice.toml. Or load commands from .clangd ?
     log::warn("Can not found any valid CDB file in current workspace, fallback to default mode.");
+}
+
+void CompilationDatabase::clear() {
+    pool.clear();
+    rules.clear();
+    commands.clear();
+    drivers.clear();
 }
 
 }  // namespace clice

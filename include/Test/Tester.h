@@ -177,7 +177,7 @@ struct Tester {
 
     void clear() {
         params = CompilationParams();
-        database = CompilationDatabase();
+        database.clear();
         unit.reset();
         sources.all_files.clear();
         src_path.clear();

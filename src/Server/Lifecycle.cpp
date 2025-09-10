@@ -26,6 +26,9 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     /// Set server options.
     opening_files.set_capability(config::server.max_active_file);
 
+    /// Load user defined rules before load the compile commands.
+    database.load_rules(config::rules);
+
     /// Load compile commands.json
     database.load_compile_database(config::server.compile_commands_dirs, workspace);
 

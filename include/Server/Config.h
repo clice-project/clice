@@ -31,7 +31,7 @@ struct IndexOptions {
 };
 
 struct Rule {
-    std::string pattern;
+    std::vector<std::string> pattern;
     std::vector<std::string> append;
     std::vector<std::string> remove;
     std::string readonly;
