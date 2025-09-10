@@ -41,7 +41,7 @@ if has_config("release") then
 end
 
 add_defines("TOML_EXCEPTIONS=0")
-add_requires(libuv_require, "spdlog[shared,header_only=n,std_format,noexcept]" ,"toml++")
+add_requires(libuv_require, "spdlog[header_only=n,std_format,noexcept]" ,"toml++")
 add_requires("llvm", {system = false})
 
 add_rules("mode.release", "mode.debug", "mode.releasedbg")
