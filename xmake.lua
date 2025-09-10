@@ -40,8 +40,8 @@ if has_config("release") then
     includes("@builtin/xpack")
 end
 
-add_defines("TOML_EXCEPTIONS=0", "SPDLOG_USE_STD_FORMAT=1", "SPDLOG_NO_EXCEPTIONS=1")
-add_requires(libuv_require, "spdlog" ,"toml++")
+add_defines("TOML_EXCEPTIONS=0")
+add_requires(libuv_require, "spdlog[std_format,noexcept]" ,"toml++")
 add_requires("llvm", {system = false})
 
 add_rules("mode.release", "mode.debug", "mode.releasedbg")
