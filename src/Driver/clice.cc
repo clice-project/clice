@@ -2,6 +2,9 @@
 #include "Support/Logger.h"
 #include "Support/Format.h"
 
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/stdout_color_sinks.h"
+
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Process.h"
@@ -14,18 +17,27 @@ namespace {
 
 static cl::OptionCategory category("clice options");
 
-cl::opt<std::string> mode{
+enum class Mode {
+    Pipe,
+    Socket,
+    Indexer,
+};
+
+cl::opt<Mode> mode{
     "mode",
     cl::cat(category),
-    cl::value_desc("pipe|socket|indexer"),
-    cl::init("pipe"),
+    cl::value_desc("string"),
+    cl::init(Mode::Pipe),
+    cl::values(clEnumValN(Mode::Pipe, "pipe", "pipe mode, clice will listen on stdio"),
+               clEnumValN(Mode::Socket, "socket", "socket mode, clice will listen on host:port")),
+    ///  clEnumValN(Mode::Indexer, "indexer", "indexer mode, to implement")
     cl::desc("The mode of clice, default is pipe, socket is usually used for debugging"),
 };
 
 cl::opt<std::string> host{
     "host",
     cl::cat(category),
-    cl::value_desc("str"),
+    cl::value_desc("string"),
     cl::init("127.0.0.1"),
     cl::desc("The host to connect to (default: 127.0.0.1)"),
 };
@@ -69,11 +81,6 @@ cl::opt<std::string> log_level{
     cl::desc("The log level, default is info"),
 };
 
-void printVersion(llvm::raw_ostream& os) {
-    os << std::format("clice version: {}\n", clice::config::version)
-       << std::format("llvm version: {}\n", clice::config::llvm_version);
-}
-
 void init_log() {
     using namespace log;
     if(auto color_mode = llvm::StringRef{log_color}; !color_mode.compare("never")) {
@@ -93,12 +100,16 @@ void init_log() {
 }
 
 /// Check the command line arguments and initialize the clice.
-bool checkArguments(int argc, const char** argv) {
+bool check_arguments(int argc, const char** argv) {
     /// Hide unrelated options.
     cl::HideUnrelatedOptions(category);
 
     // Set version printer and parse command line options
-    cl::SetVersionPrinter(printVersion);
+    cl::SetVersionPrinter([](llvm::raw_ostream& os) {
+        os << std::format("clice version: {}\nllvm version: {}\n",
+                          clice::config::version,
+                          clice::config::llvm_version);
+    });
     cl::ParseCommandLineOptions(argc,
                                 argv,
                                 "clice is a new generation of language server for C/C++");
@@ -106,40 +117,40 @@ bool checkArguments(int argc, const char** argv) {
     init_log();
 
     for(int i = 0; i < argc; ++i) {
-        log::info("argv[{}] = {}", i, argv[i]);
+        spdlog::info("argv[{}] = {}", i, argv[i]);
     }
 
     // Handle configuration file loading
     if(config_path.empty()) {
-        log::info("No configuration file specified, using default settings");
+        spdlog::info("No configuration file specified, using default settings");
     } else {
         llvm::StringRef path = config_path;
         // Try to load the configuration file and check the result
         if(auto result = config::load(argv[0], path); result) {
-            log::info("Configuration file loaded successfully from: {}", path);
+            spdlog::info("Configuration file loaded successfully from: {}", path);
         } else {
-            log::warn("Failed to load configuration file from: {} because {}",
-                      path,
-                      result.error());
+            spdlog::warn("Failed to load configuration file from: {} because {}",
+                         path,
+                         result.error());
             return false;
         }
     }
 
     // Initialize resource directory
     if(resource_dir.empty()) {
-        log::info("No resource directory specified, using default resource directory");
+        spdlog::info("No resource directory specified, using default resource directory");
         // Try to initialize default resource directory
         if(auto result = fs::init_resource_dir(argv[0]); !result) {
-            log::warn("Cannot find default resource directory, because {}", result.error());
+            spdlog::warn("Cannot find default resource directory, because {}", result.error());
             return false;
         }
     } else {
         // Set and check the specified resource directory
         fs::resource_dir = resource_dir.getValue();
         if(fs::exists(fs::resource_dir)) {
-            log::info("Resource directory found: {}", fs::resource_dir);
+            spdlog::info("Resource directory found: {}", fs::resource_dir);
         } else {
-            log::warn("Resource directory not found: {}", fs::resource_dir);
+            spdlog::warn("Resource directory not found: {}", fs::resource_dir);
             return false;
         }
     }
@@ -150,11 +161,13 @@ bool checkArguments(int argc, const char** argv) {
 }  // namespace
 
 int main(int argc, const char** argv) {
+    spdlog::set_default_logger(spdlog::stderr_color_mt("clice"));
+
     llvm::InitLLVM guard(argc, argv);
     llvm::setBugReportMsg(
         "Please report bugs to https://github.com/clice-io/clice/issues and include the crash backtrace");
 
-    if(!checkArguments(argc, argv)) {
+    if(!check_arguments(argc, argv)) {
         return 1;
     }
 
@@ -166,22 +179,28 @@ int main(int argc, const char** argv) {
         co_await instance.on_receive(value);
     };
 
-    if(mode == "pipe") {
-        async::net::listen(loop);
-        log::info("Server starts listening on stdin/stdout");
-    } else if(mode == "socket") {
-        async::net::listen(host.c_str(), port, loop);
-        log::info("Server starts listening on {}:{}", host.getValue(), port.getValue());
-    } else if(mode == "indexer") {
-        /// TODO:
-    } else {
-        log::fatal("Invalid mode: {}", mode.getValue());
-        return 1;
+    switch(mode) {
+        case Mode::Pipe: {
+            async::net::listen(loop);
+            spdlog::info("Server starts listening on stdin/stdout");
+            break;
+        }
+
+        case Mode::Socket: {
+            async::net::listen(host.c_str(), port, loop);
+            spdlog::info("Server starts listening on {}:{}", host.getValue(), port.getValue());
+            break;
+        }
+
+        case Mode::Indexer: {
+            /// TODO:
+            break;
+        }
     }
 
     async::run();
 
-    log::info("clice exit normally!");
+    spdlog::info("clice exit normally!");
 
     return 0;
 }
