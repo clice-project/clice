@@ -1,11 +1,13 @@
 # build with multi-stage for cache efficiency
-# base image
-FROM ubuntu:24.04 AS base
+FROM ubuntu:24.04 AS basic-tools
 
-# tool chain versions will be read from config/default-toolchain-version
-COPY config/default-toolchain-version /clice/config/default-toolchain-version
-# python and dependencies config
-COPY pyproject.toml /clice/pyproject.toml
+# allow build script to bind-mount project source into build container (host path)
+ARG BUILD_SRC
+
+# set non-interactive frontend to avoid prompts
+ENV DEBIAN_FRONTEND=noninteractive
+# ensure user-local bin is on PATH for non-apt installs (xmake, uv, python)
+ENV PATH="/root/.local/bin:${PATH}"
 
 # install basic tools
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -13,205 +15,214 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     # TODO: support more cache for python, xmake installation
     # TODO: check why cache doesn't work after add-apt-repository, may we change it to cache?
 bash -eux - <<'BASH'
-install_common_requests() {
+
     set -e
-    rm -f /etc/apt/apt.conf.d/docker-clean
-    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache  
-    XMAKE_VERSION=$(grep -E '^xmake,' /clice/config/default-toolchain-version | cut -d',' -f2)  
-    CMAKE_VERSION=$(grep -E '^cmake,' /clice/config/default-toolchain-version | cut -d',' -f2)  
-    PYTHON_VERSION=$(grep -E '^python,' /clice/config/default-toolchain-version | cut -d',' -f2)  
-    # ensure user-local bin is on PATH for non-apt installs
-    # for xmake, uv, python
-    echo 'PATH=/root/.local/bin:${PATH}' >> ~/.bashrc  
-    apt update  
-    # first install minimal apt prerequisites (curl required, software-properties-common for add-apt-repository)
-    apt install -y --no-install-recommends software-properties-common curl gpg 
-}
+    apt-get update
+    # first install minimal apt prerequisites
+    # software-properties-common for add-apt-repository
+    # gnupg for gpg to verify cmake installer
+    # curl, git for downloading sources
+    # xz-utils, unzip for extracting archives
+    # make for xmake
+    apt-get install -y --no-install-recommends \
+        software-properties-common \
+        curl \
+        gnupg \
+        git \
+        xz-utils \
+        unzip \
+        make
+BASH
+
+# Compiler stage
+FROM basic-tools AS compiler-stage
+
+# passed from build arg
+ARG COMPILER
+
+# copy instead of bind-mount, to avoid docker build cache invalidation
+COPY config/default-toolchain-version /clice/config/default-toolchain-version
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    bash -eux - <<'BASH'
+    set -e
+    apt update
+    # gcc, llvm PPA
+    add-apt-repository -y ppa:ubuntu-toolchain-r/ppa
+    apt update
+    if [ "$COMPILER" = "gcc" ]; then
+        GCC_VERSION=$(grep -E '^gcc,' /clice/config/default-toolchain-version | cut -d',' -f2)
+        apt-get install -y --no-install-recommends "gcc-${GCC_VERSION}" "g++-${GCC_VERSION}"
+        update-alternatives --install /usr/bin/c++ c++ "/usr/bin/g++-${GCC_VERSION}" 100
+        update-alternatives --install /usr/bin/cc cc "/usr/bin/gcc-${GCC_VERSION}" 100
+    elif [ "$COMPILER" = "clang" ]; then
+        CLANG_VERSION=$(grep -E '^clang,' /clice/config/default-toolchain-version | cut -d',' -f2)
+        # try to install additional clang-related packages, fallback to minimal set if some are not available
+        apt install -y --no-install-recommends "clang-${CLANG_VERSION}" "clang-tools-${CLANG_VERSION}" "lld-${CLANG_VERSION}" "libclang-rt-${CLANG_VERSION}-dev" libc++-dev libc++abi-dev
+        update-alternatives --install /usr/bin/clang clang "/usr/bin/clang-${CLANG_VERSION}" 100
+        update-alternatives --install /usr/bin/clang++ clang++ "/usr/bin/clang++-${CLANG_VERSION}" 100
+        update-alternatives --install /usr/bin/c++ c++ "/usr/bin/clang++-${CLANG_VERSION}" 100
+        update-alternatives --install /usr/bin/cc cc "/usr/bin/clang-${CLANG_VERSION}" 100
+        update-alternatives --install /usr/bin/ld ld "/usr/bin/lld-${CLANG_VERSION}" 100
+    else
+        echo "Error: Unsupported compiler '$COMPILER'. Use 'gcc' or 'clang'." >&2; exit 1
+    fi
+BASH
+
+FROM compiler-stage AS build-tool-stage
+
+ENV XMAKE_ROOT=y
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    --mount=type=cache,target=/docker-build-cache/cmake,sharing=locked \
+bash -eux - <<'BASH'
 
 install_xmake() {
-    echo "Installing xmake ${XMAKE_VERSION}..." 
-    curl -fsSL https://xmake.io/shget.text | bash -s "v${XMAKE_VERSION}"  
+    # xmake installation requires compiler, or the script will install build-essential automatically
+    # so we schedule xmake installation after compiler stage
+    set -e
+    # xmake requires make, ensure it is installed
+    apt install -y --no-install-recommends make
+    XMAKE_VERSION=$(grep -E '^xmake,' /clice/config/default-toolchain-version | cut -d',' -f2)
+    curl -fsSL https://xmake.io/shget.text | bash -s "v${XMAKE_VERSION}"
     echo "export XMAKE_ROOT=y" >> ~/.bashrc
 }
 
-install_python() {
-    echo "Installing python ${PYTHON_VERSION} via uv..." 
-    curl -LsSf https://astral.sh/uv/install.sh | sh  
-    source $HOME/.local/bin/env  
-    uv python install "${PYTHON_VERSION}"  
-    uv sync
+# Attention: DO NOT install cmake via PPA with apt, which would have to install required build-essential compiler tool chain
+# We SHOULD NOT install another compiler toolchain, which could cause a lot trouble
+# And we should not install compiler toolchain away from compiler stage
+# So we install cmake from official installer script, and cache the downloaded files
+install_cmake() {
+    set -e
+
+    # cached downloads live under /docker-build-cache/cmake (BuildKit cache mount)
+    CMAKE_VERSION=$(grep -E '^cmake,' /clice/config/default-toolchain-version | cut -d',' -f2)
+    ARCH="x86_64"
+    CMAKE_CACHE_DIR="/docker-build-cache/cmake"
+    mkdir -p "${CMAKE_CACHE_DIR}"
+
+    BASE_URL="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}"
+    INSTALLER_FILENAME="cmake-${CMAKE_VERSION}-linux-${ARCH}.sh"
+    SHA_FILENAME="cmake-${CMAKE_VERSION}-SHA-256.txt"
+    ASC_FILENAME="${SHA_FILENAME}.asc"
+
+    INSTALLER_PATH="${CMAKE_CACHE_DIR}/${INSTALLER_FILENAME}"
+    SHA_PATH="${CMAKE_CACHE_DIR}/${SHA_FILENAME}"
+    ASC_PATH="${CMAKE_CACHE_DIR}/${ASC_FILENAME}"
+
+    verify_cmake_installer() {
+        if ! gpg --verify "${ASC_PATH}" "${SHA_PATH}"; then
+            echo "Signature verification failed for ${SHA_FILENAME}." >&2
+            return 1
+        fi
+
+        local expected_hash
+        expected_hash=$(grep "${INSTALLER_FILENAME}" "${SHA_PATH}" | awk '{print $1}')
+
+        local actual_hash
+        actual_hash=$(sha256sum "${INSTALLER_PATH}" | awk '{print $1}')
+        if [ "${expected_hash}" != "${actual_hash}" ]; then
+            echo "Checksum mismatch for ${INSTALLER_FILENAME}." >&2
+            return 1
+        fi
+
+        echo "Checksum for ${INSTALLER_FILENAME} is valid."
+        return 0
+    }
+
+    gpg --keyserver keys.openpgp.org --recv-keys C6C265324BBEBDC350B513D02D2CEF1034921684
+
+    if [ ! -f "${INSTALLER_PATH}" ] || ! verify_cmake_installer; then
+        rm -f "${CMAKE_CACHE_DIR}/*"
+
+        curl -fsSL --retry 3 -o "${INSTALLER_PATH}" "${BASE_URL}/${INSTALLER_FILENAME}"
+        curl -fsSL --retry 3 -o "${SHA_PATH}" "${BASE_URL}/${SHA_FILENAME}"
+        curl -fsSL --retry 3 -o "${ASC_PATH}" "${BASE_URL}/${ASC_FILENAME}"
+
+        if ! verify_cmake_installer; then
+            echo "Verification of the downloaded installer failed. Cleaning cache." >&2
+            rm -f "${CMAKE_CACHE_DIR}/*"
+            exit 1
+        fi
+    fi
+
+    sh "${INSTALLER_PATH}" --skip-license --prefix=/usr/local
 }
 
-install_apt_packages() {
-    # add cmake PPA from kitware (use curl instead of wget)
-    curl -fsSL https://apt.kitware.com/keys/kitware-archive-latest.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/kitware.gpg  
-    CODENAME=$(lsb_release -cs 2>/dev/null || (source /etc/os-release && echo "$VERSION_CODENAME"))  
-    add-apt-repository "deb https://apt.kitware.com/ubuntu/ ${CODENAME} main"  
-    apt update  
-    set -e  
-    # install cmake (and other apt deps) after repositories added
-    apt install -y --no-install-recommends git "cmake=${CMAKE_VERSION}-0kitware1ubuntu24.04.1" "cmake-data=${CMAKE_VERSION}-0kitware1ubuntu24.04.1"
+install_python() {
+    set -e
+    PYTHON_VERSION=$(grep -E '^python,' /clice/config/default-toolchain-version | cut -d',' -f2)
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    uv python install "${PYTHON_VERSION}"
 }
 
 do_install() {
     set -e
-    
-    mkdir -p /clice
-    
-    cd /clice
-    
-    # pre-requests required by both apt and non-apt installers
-    install_common_requests
-    
-    # run non-apt installers in parallel tasks: (1) xmake, (2) uv+python
-    install_xmake & TASK_XMAKE=$!
-    install_python & TASK_UV=$!
-    
-    # install apt packages (blocking)
-    install_apt_packages
-    
-    # wait for background tasks and propagate their exit codes
-    wait $TASK_XMAKE; XMAKE_STATUS=$?
-    wait $TASK_UV; UV_STATUS=$? 
-    if [ $XMAKE_STATUS -ne 0 ] || [ $UV_STATUS -ne 0 ]; then
-        echo "One of parallel setup tasks failed (apt:$APT_STATUS uv:$UV_STATUS xmake:$XMAKE_STATUS)" >&2
-        exit 1
-    fi
 
-    echo "Base image prepared"
+    install_cmake &
+    install_xmake &
+    install_python &
+
+    for job in $(jobs -p); do
+        wait $job || exit 1
+    done
 }
 
 do_install
 
 BASH
 
-# Compiler stage
-FROM base AS compiler-stage
-
-# passed from build arg
-ARG COMPILER
-
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    # TODO: support more cache for gcc,clang installation
-    set -e; \
-    # read toolchain versions
-    apt update; \
-    apt install -y --no-install-recommends software-properties-common; \
-    # gcc, llvm PPA
-    add-apt-repository ppa:ubuntu-toolchain-r/ppa; \
-    apt update; \
-    apt purge --autoremove -y gcc g++ build-essential; \
-    apt autoremove -y; \
-    if [ "$COMPILER" = "gcc" ]; then \
-        GCC_VERSION=$(grep -E '^gcc,' /clice/config/default-toolchain-version | cut -d',' -f2); \
-        apt install -y "g++-${GCC_VERSION}"; \
-        update-alternatives --install /usr/bin/c++ c++ "/usr/bin/g++-${GCC_VERSION}" 100; \
-        update-alternatives --install /usr/bin/cc cc "/usr/bin/gcc-${GCC_VERSION}" 100; \
-        update-alternatives --install /usr/bin/ld ld "/usr/bin/ld-${GCC_VERSION}" 100; \
-    elif [ "$COMPILER" = "clang" ]; then \
-    CLANG_VERSION=$(grep -E '^clang,' /clice/config/default-toolchain-version | cut -d',' -f2); \
-    # try to install additional clang-related packages, fallback to minimal set if some aren't available
-    apt install -y "clang-${CLANG_VERSION}" "clang-tools-${CLANG_VERSION}" "clang-format-${CLANG_VERSION}" "clang-tidy-${CLANG_VERSION}" "lld-${CLANG_VERSION}" libc++-dev libc++abi-dev || apt install -y "clang-${CLANG_VERSION}" "lld-${CLANG_VERSION}"; \
-    update-alternatives --install /usr/bin/clang clang "/usr/bin/clang-${CLANG_VERSION}" 100; \
-    update-alternatives --install /usr/bin/clang++ clang++ "/usr/bin/clang++-${CLANG_VERSION}" 100; \
-    update-alternatives --install /usr/bin/c++ c++ "/usr/bin/clang++-${CLANG_VERSION}" 100; \
-    update-alternatives --install /usr/bin/cc cc "/usr/bin/clang-${CLANG_VERSION}" 100; \
-    update-alternatives --install /usr/bin/ld ld "/usr/bin/lld-${CLANG_VERSION}" 100; \
-    echo "export CC=/usr/bin/clang-${CLANG_VERSION}" >> ~/.bashrc; \
-    echo "export CXX=/usr/bin/clang++-${CLANG_VERSION}" >> ~/.bashrc; \
-    echo "export LDFLAGS=-fuse-ld=lld" >> ~/.bashrc; \
-    echo "export CXXFLAGS=-stdlib=libc++" >> ~/.bashrc; \
-    else \
-        echo "Error: Unsupported compiler '$COMPILER'. Use 'gcc' or 'clang'." >&2; exit 1; \
-    fi
-
 # download compile dependencies
-FROM compiler-stage AS dependency-stage
+FROM build-tool-stage AS dependency-cache-stage
 
 # passed from build arg
 # "lto" or "non_lto"
-ARG LTO_TYPE
-ARG CACHE_DIR="/var/cache/llvm-binary"
-ARG LLVM_BINARY_BASE_URL="https://github.com/clice-io/llvm-binary/releases/download"
+ARG BUILD_SRC
+ARG LTO_TYPE=""
 
-COPY config/llvm-binary /clice/config/llvm-binary
-
-# download llvm-binary based on LTO_TYPE and verify sha256 (download both Debug and Release variants)
-# Use buildx cache at /var/cache/llvm-binary to avoid re-downloading between builds.
-RUN --mount=type=cache,target=${CACHE_DIR},sharing=locked \
+RUN --mount=type=bind,src=./,target=/clice,rw \
 bash -eux - <<'BASH'
 
-download_and_check() {
-    LINE="$1"
-    if [ -z "$LINE" ]; then
-        echo "Empty entry, skipping"
-        return 1
-    fi
-    # parse CSV: PLATFORM,BUILD_TYPE,LTO_FIELD,FILE_NAME,LLVM_VERSION,SHA256_HASH
-    IFS=','; set -- $LINE
-    PLATFORM="$1"; BUILD_TYPE="$2"; LTO_FIELD="$3"; FILE_NAME="$4"; LLVM_VERSION="$5"; SHA256_HASH="$6"
-    DOWNLOAD_URL="${LLVM_BINARY_BASE_URL}/${LLVM_VERSION}/${FILE_NAME}"
-    DEST_PATH="/llvm-binary/${FILE_NAME}"
-    CACHE_PATH="${CACHE_DIR}/${FILE_NAME}"
-
-    mkdir -p "${CACHE_DIR}" "$(dirname "${DEST_PATH}")"
-
-    # If cached file exists and matches hash, copy from cache and skip download
-    if [ -f "${CACHE_PATH}" ]; then
-        echo "Found cached ${CACHE_PATH}, verifying sha256..."
-        if echo "${SHA256_HASH}  ${CACHE_PATH}" | sha256sum --check >/dev/null 2>&1; then
-            echo "SHA256 OK in cache, copying ${FILE_NAME} to ${DEST_PATH}"
-            cp -a "${CACHE_PATH}" "${DEST_PATH}"
-            return 0
-        else
-            echo "Cached file ${CACHE_PATH} failed SHA256, will re-download" >&2
-            rm -f "${CACHE_PATH}"
-        fi
-    fi
-
-    echo "Downloading ${DOWNLOAD_URL} -> ${CACHE_PATH} (cache)"
-    curl -fsSL -o "${CACHE_PATH}" "${DOWNLOAD_URL}" || (echo "Download failed for ${DOWNLOAD_URL}" >&2; return 1)
-    echo "${SHA256_HASH}  ${CACHE_PATH}" | sha256sum --check || (echo "SHA256 mismatch for ${CACHE_PATH}" >&2; exit 1)
-    cp -a "${CACHE_PATH}" "${DEST_PATH}"
+install_python_dependencies() {
+    set -e
+    uv sync
 }
 
-set -e
+cache_xmake_packages() {
+    set -e
 
-mkdir -p /clice/build /llvm-binary
+    export PATH="/root/.local/bin:${PATH}"
+    export XMAKE_ROOT=y
 
-cd /clice
+    LTO_FLAG=""
+    if [ "$LTO_TYPE" = "lto" ]; then
+        LTO_FLAG="--release"
+    fi
 
-LIB_DEBUG_INFO=$(grep -i "Linux,Debug,${LTO_TYPE}" /clice/config/llvm-binary || true)
-LIB_RELEASE_INFO=$(grep -i "Linux,Release,${LTO_TYPE}" /clice/config/llvm-binary || true)
+    xmake f -y -v --mode=release ${LTO_FLAG}
+    xmake f -y -v --mode=debug ${LTO_FLAG}
+}
 
-# start downloads in background to parallelize network I/O
-if [ -n "$LIB_DEBUG_INFO" ]; then
-    download_and_check "$LIB_DEBUG_INFO" & TASK_DEBUG=$!
-else
-    TASK_DEBUG=0; DEBUG_STATUS=0
-fi
+do_prepare_dependency() {
+    set -e
 
-if [ -n "$LIB_RELEASE_INFO" ]; then
-    download_and_check "$LIB_RELEASE_INFO" & TASK_RELEASE=$!
-else
-    TASK_RELEASE=0; RELEASE_STATUS=0
-fi
+    cd /clice
 
-if [ "$TASK_DEBUG" -ne 0 ]; then
-    wait $TASK_DEBUG; DEBUG_STATUS=$?
-fi
-if [ "$TASK_RELEASE" -ne 0 ]; then
-    wait $TASK_RELEASE; RELEASE_STATUS=$?
-fi
-if [ $DEBUG_STATUS -ne 0 ] || [ $RELEASE_STATUS -ne 0 ]; then
-    echo "One of the downloads failed (Debug:$DEBUG_STATUS Release:$RELEASE_STATUS)" >&2;
-    exit 1
-fi
+    install_python_dependencies &
+    cache_xmake_packages &
+
+    for job in $(jobs -p); do
+        wait $job || exit 1
+    done
+}
+
+do_prepare_dependency
 
 BASH
 
-FROM dependency-stage AS final
+FROM dependency-cache-stage AS final
 
 WORKDIR /clice
 

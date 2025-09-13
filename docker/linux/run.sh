@@ -1,6 +1,15 @@
 #!/bin/bash
 set -e
 
+# Save original working directory and switch to project root
+ORIG_PWD="$(pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "${SCRIPT_DIR}"
+cd "${SCRIPT_DIR}/../.."
+PROJECT_ROOT="$(pwd)"
+
+trap 'cd "${ORIG_PWD}"' EXIT
+
 # default configurations
 COMPILER="clang"
 LIB_TYPE="non_lto"
@@ -35,11 +44,16 @@ done
 IMAGE_TAG="Linux-${COMPILER}-${LIB_TYPE}"
 IMAGE_NAME="clice-dev-container:${IMAGE_TAG}"
 
-PROJECT_PATH="$(pwd)"
+# If the image doesn't exist, build it automatically by invoking build.sh
+if ! docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
+  echo "Image ${IMAGE_NAME} not found, invoking build.sh to create it..."
+  ./docker/linux/build.sh --compiler "${COMPILER}" --lib "${LIB_TYPE}"
+fi
+
 CONTAINER_WORKDIR="/clice"
 
 DOCKER_RUN_ARGS=(--rm -it -w "${CONTAINER_WORKDIR}")
-DOCKER_RUN_ARGS+=(--mount "type=bind,src=${PROJECT_PATH},target=${CONTAINER_WORKDIR}")
+DOCKER_RUN_ARGS+=(--mount "type=bind,src=${PROJECT_ROOT},target=${CONTAINER_WORKDIR}")
 if [[ "${LLVM_PATH}" != "" ]]; then
   LLVM_MOUNT_PATH="/llvm"
   DOCKER_RUN_ARGS+=(--mount "type=bind,src=${LLVM_PATH},target=${LLVM_MOUNT_PATH}")
@@ -48,7 +62,7 @@ DOCKER_RUN_ARGS+=(-w "${CONTAINER_WORKDIR}")
 
 echo "==========================================="
 echo "Running container from image: ${IMAGE_NAME}"
-echo "Project mount: ${PROJECT_PATH} -> ${CONTAINER_WORKDIR}"
+echo "Project mount: ${PROJECT_ROOT} -> ${CONTAINER_WORKDIR}"
 if [[ "${LLVM_PATH}" != "" ]]; then
   echo "LLVM mount: ${LLVM_PATH} -> ${LLVM_MOUNT_PATH}"
 fi

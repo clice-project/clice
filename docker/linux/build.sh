@@ -1,6 +1,15 @@
 #!/bin/bash
 set -e
 
+# Save original working directory and switch to project root
+ORIG_PWD="$(pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "${SCRIPT_DIR}"
+cd "${SCRIPT_DIR}/../.."
+PROJECT_ROOT="$(pwd)"
+
+trap 'cd "${ORIG_PWD}"' EXIT
+
 # default configurations
 COMPILER="clang"
 LIB_TYPE="non_lto"
@@ -8,12 +17,11 @@ DOCKERFILE_PATH="docker/linux/Dockerfile"
 
 usage() {
 cat <<EOF
-Usage: $0 [--compiler <gcc|clang>] [--lib <lto|non_lto>] [--dockerfile <path>]
+Usage: $0 [--compiler <gcc|clang>] [--lib <lto|non_lto>]
 
 Defaults:
   --compiler    ${COMPILER}
   --lib         ${LIB_TYPE}
-  --dockerfile  ${DOCKERFILE_PATH}
 EOF
 }
 
@@ -24,8 +32,6 @@ while [ "$#" -gt 0 ]; do
             COMPILER="$2"; shift 2;;
         --lib)
             LIB_TYPE="$2"; shift 2;;
-        --dockerfile)
-            DOCKERFILE_PATH="$2"; shift 2;;
         -h|--help)
             usage; exit 0;;
         *)
@@ -44,9 +50,11 @@ echo "Dockerfile: ${DOCKERFILE_PATH}"
 echo "==========================================="
 
 # build the docker image with specified arguments
-docker buildx build -t "${IMAGE_NAME}" \
+# must run in clice root dir, so that we can mount the project in docker file to acquire essential files
+docker buildx build --progress=plain -t "${IMAGE_NAME}" \
     --build-arg COMPILER="${COMPILER}" \
     --build-arg LTO_TYPE="${LIB_TYPE}" \
+    --build-arg BUILD_SRC="${PROJECT_ROOT}" \
     -f "${DOCKERFILE_PATH}" .
 
 echo "Build complete. Image:${IMAGE_NAME}"
