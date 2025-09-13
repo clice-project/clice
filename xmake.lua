@@ -42,7 +42,7 @@ end
 
 add_defines("TOML_EXCEPTIONS=0")
 add_requires(libuv_require, "spdlog[header_only=n,std_format,noexcept]" ,"toml++")
-add_requires("llvm", {system = false})
+add_requires("clice-llvm", {system = false})
 
 add_rules("mode.release", "mode.debug", "mode.releasedbg")
 set_languages("c++23")
@@ -56,7 +56,7 @@ target("clice-core")
     add_packages("libuv", "spdlog", "toml++", {public = true})
 
     if is_mode("debug") then
-        add_packages("llvm", {
+        add_packages("clice-llvm", {
             public = true,
             links = {
                 "LLVMSupport",
@@ -106,11 +106,11 @@ target("clice-core")
                 "clangToolingSyntax",
         }})
         on_config(function (target)
-            local llvm_dynlib_dir = path.join(target:pkg("llvm"):installdir(), "lib")
+            local llvm_dynlib_dir = path.join(target:pkg("clice-llvm"):installdir(), "lib")
             target:add("rpathdirs", llvm_dynlib_dir)
         end)
     elseif is_mode("release", "releasedbg") then
-        add_packages("llvm", {public = true})
+        add_packages("clice-llvm", {public = true})
         add_ldflags("-Wl,--gc-sections")
     end
 
@@ -121,14 +121,14 @@ target("clice")
     add_deps("clice-core")
 
     on_config(function (target)
-        local llvm_dir = target:dep("clice-core"):pkg("llvm"):installdir()
+        local llvm_dir = target:dep("clice-core"):pkg("clice-llvm"):installdir()
         target:add("installfiles", path.join(llvm_dir, "lib/clang/(**)"), {prefixdir = "lib/clang"})
     end)
 
     after_build(function (target)
         local res_dir = path.join(target:targetdir(), "lib/clang")
         if not os.exists(res_dir) then
-            local llvm_dir = target:dep("clice-core"):pkg("llvm"):installdir()
+            local llvm_dir = target:dep("clice-core"):pkg("clice-llvm"):installdir()
             os.vcp(path.join(llvm_dir, "lib/clang"), res_dir)
         end
     end)
@@ -146,7 +146,7 @@ target("unit_tests")
     after_load(function (target)
         target:set("runargs",
             "--test-dir=" .. path.absolute("tests/data"),
-            "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
+            "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("clice-llvm"):installdir(), "lib/clang/20")
         )
     end)
 
@@ -155,7 +155,7 @@ target("integration_tests")
     set_kind("phony")
 
     add_deps("clice")
-    add_packages("llvm")
+    add_packages("clice-llvm")
 
     add_tests("default")
 
@@ -168,7 +168,7 @@ target("integration_tests")
             "--log-cli-level=INFO",
             "-s", "tests/integration",
             "--executable=" .. target:dep("clice"):targetfile(),
-            "--resource-dir=" .. path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
+            "--resource-dir=" .. path.join(target:pkg("clice-llvm"):installdir(), "lib/clang/20"),
         }
         local opt = {envs = envs, curdir = os.projectdir()}
         os.vrunv(uv.program, argv, opt)
@@ -198,51 +198,33 @@ rule("clice_build_config")
         elseif target:is_plat("linux") then
             -- gnu ld need to fix link order
             target:add("ldflags", "-fuse-ld=lld")
+            if target:toolchain("clang") then
+                target:add("ldflags", "-stdlib=libc++")
+                target:add("cxflags", "-stdlib=libc++")
+            end
         end
     end)
 
-package("llvm")
+package("clice-llvm")
     if not has_config("ci") then
         set_policy("package.install_locally", true)
     end
     if has_config("llvm") then
         set_sourcedir(get_config("llvm"))
     else
-        if has_config("release") then
-            if is_plat("windows") then
-                add_urls("https://github.com/clice-io/llvm-binary/releases/download/$(version)/x64-windows-msvc-release-lto.7z")
-                add_versions("20.1.5", "0548c0e3f613d1ec853d493870e68c7d424d70442d144fb35b99dc65fc682918")
-            elseif is_plat("linux") then
-                add_urls("https://github.com/clice-io/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release-lto.tar.xz")
-                add_versions("20.1.5", "37bc9680df5b766de6367c3c690fe8be993e94955341e63fb5ee6a3132080059")
-            elseif is_plat("macosx") then
-                add_urls("https://github.com/clice-io/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release-lto.tar.xz")
-                add_versions("20.1.5", "57a58adcc0a033acd66dbf8ed1f6bcf4f334074149e37bf803fc6bf022d419d2")
-            end
-        else
-            if is_plat("windows") then
-                if is_mode("release", "releasedbg") then
-                    add_urls("https://github.com/clice-io/llvm-binary/releases/download/$(version)/x64-windows-msvc-release.7z")
-                    add_versions("20.1.5", "499b2e1e37c6dcccbc9d538cea5a222b552d599f54bb523adea8594d7837d02b")
-                end
-            elseif is_plat("linux") then
-                if is_mode("debug") then
-                    add_urls("https://github.com/clice-io/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-debug.tar.xz")
-                    add_versions("20.1.5", "c04dddbe1d43d006f1ac52db01ab1776b8686fb8d4a1d13f2e07df37ae1ed47e")
-                elseif is_mode("release") then
-                    add_urls("https://github.com/clice-io/llvm-binary/releases/download/$(version)/x86_64-linux-gnu-release.tar.xz")
-                    add_versions("20.1.5", "5ff442434e9c1fbe67c9c2bd13284ef73590aa984bb74bcdfcec4404e5074b70")
-                end
-            elseif is_plat("macosx") then
-                if is_mode("debug") then
-                    add_urls("https://github.com/clice-io/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-debug.tar.xz")
-                    add_versions("20.1.5", "899d15d0678c1099bccb41098355b938d3bb6dd20870763758b70db01b31a709")
-                elseif is_mode("release") then
-                    add_urls("https://github.com/clice-io/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-release.tar.xz")
-                    add_versions("20.1.5", "47d89ed747b9946b4677ff902b5889b47d07b5cd92b0daf12db9abc6d284f955")
+        on_source(function (package)
+            import("core.base.json")
+ 
+            local info = json.loadfile("./config/prebuilt-llvm.json")
+            for _, info in ipairs(info) do
+                if  get_config("mode") == info.build_type:lower()
+                and get_config("plat") == info.platform:lower()
+                and (info.is_lto == has_config("release")) then
+                    package:add("urls", format("https://github.com/clice-io/llvm-binary/releases/download/%s/%s", info.version, info.filename))
+                    package:add("versions", info.version, info.sha256)
                 end
             end
-        end
+        end)
     end
 
     if is_plat("linux", "macosx") then
@@ -281,7 +263,7 @@ if has_config("release") then
         add_installfiles(path.join(os.projectdir(), "docs/clice.toml"))
 
         on_load(function (package)
-            local llvm_dir = package:target("clice"):dep("clice-core"):pkg("llvm"):installdir()
+            local llvm_dir = package:target("clice"):dep("clice-core"):pkg("clice-llvm"):installdir()
             package:add("installfiles", path.join(llvm_dir, "lib/clang/(**)"), {prefixdir = "lib/clang"})
         end)
 end
