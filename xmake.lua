@@ -211,7 +211,7 @@ package("clice-llvm")
     else
         on_source(function (package)
             import("core.base.json")
- 
+
             local info = json.loadfile("./config/prebuilt-llvm.json")
             for _, info in ipairs(info) do
                 if  get_config("mode") == info.build_type:lower()
