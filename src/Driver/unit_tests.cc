@@ -19,21 +19,31 @@ namespace cl = llvm::cl;
 
 cl::OptionCategory unittest_category("Clice Unittest Options");
 
-cl::opt<std::string> test_dir("test-dir",
-                              cl::desc("Specify the test source directory path"),
-                              cl::value_desc("path"),
-                              cl::Required,
-                              cl::cat(unittest_category));
+cl::opt<std::string> test_dir{
+    "test-dir",
+    cl::desc("Specify the test source directory path"),
+    cl::value_desc("path"),
+    cl::Required,
+    cl::cat(unittest_category),
+};
 
-cl::opt<std::string> resource_dir("resource-dir",
-                                  cl::desc("Resource dir path"),
-                                  cl::cat(unittest_category));
+cl::opt<std::string> resource_dir{
+    "resource-dir",
+    cl::desc("Resource dir path"),
+    cl::cat(unittest_category),
+};
 
-cl::opt<std::string> test_filter("test_filter",
-                                 cl::desc("A glob pattern to run subset of tests"),
-                                 cl::cat(unittest_category));
+cl::opt<std::string> test_filter{
+    "test-filter",
+    cl::desc("A glob pattern to run subset of tests"),
+    cl::cat(unittest_category),
+};
 
-cl::opt<bool> enable_example("enable-example", cl::init(false), cl::cat(unittest_category));
+cl::opt<bool> enable_example{
+    "enable-example",
+    cl::init(false),
+    cl::cat(unittest_category),
+};
 
 std::optional<GlobPattern> pattern;
 
