@@ -84,7 +84,7 @@ void listen(Callback callback) {
     uv_check_result(uv_read_start(uv_cast<uv_stream_t>(in), net::on_alloc, net::on_read));
 }
 
-void listen(const char* ip, unsigned int port, Callback callback) {
+void listen(const char* host, unsigned int port, Callback callback) {
     static uv_tcp_t server;
     static uv_tcp_t client;
 
@@ -95,7 +95,7 @@ void listen(const char* ip, unsigned int port, Callback callback) {
     uv_check_result(uv_tcp_init(async::loop, &client));
 
     struct ::sockaddr_in addr;
-    uv_check_result(uv_ip4_addr(ip, port, &addr));
+    uv_check_result(uv_ip4_addr(host, port, &addr));
     uv_check_result(uv_tcp_bind(&server, (const struct ::sockaddr*)&addr, 0));
 
     auto on_connection = [](uv_stream_t* server, int status) {

@@ -1,0 +1,6 @@
+### clice configuration
+
+[server]
+
+    # Enable clang-tidy diagnostics.
+    clang_tidy = true

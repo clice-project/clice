@@ -45,4 +45,3 @@ suite<"Async"> suite = [] {
 }  // namespace
 
 }  // namespace clice::testing
-

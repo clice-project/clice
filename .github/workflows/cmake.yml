@@ -40,8 +40,10 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y gcc-14 g++-14 libstdc++-14-dev
+
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+
           sudo update-alternatives --set gcc /usr/bin/gcc-14
           sudo update-alternatives --set g++ /usr/bin/g++-14
 
@@ -56,32 +58,8 @@ jobs:
         run: |
           brew install llvm@20 lld@20
 
-      - name: Set up Python
-        if: matrix.os == 'windows-2025'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Setup llvm binary
-        if: matrix.os == 'windows-2025'
-        run: |
-          curl -O -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/x64-windows-msvc-release.7z"
-          7z x x64-windows-msvc-release.7z "-o.llvm"
-
-      - name: Setup llvm binary
-        if: matrix.os == 'ubuntu-24.04'
-        run: |
-          mkdir -p ./.llvm
-          curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/x86_64-linux-gnu-debug.tar.xz" | tar -xJ -C ./.llvm
-
-      - name: Setup llvm binary
-        if: matrix.os == 'macos-15'
-        run: |
-          mkdir -p ./.llvm
-          curl -L "https://github.com/clice-project/llvm-binary/releases/download/20.1.5/arm64-macosx-apple-debug.tar.xz" | tar -xJ -C ./.llvm
 
       - name: Setup msvc sysroot for cmake
         if: matrix.os == 'windows-2025'
@@ -90,33 +68,33 @@ jobs:
       - name: Build clice (release, windows)
         if: matrix.os == 'windows-2025'
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DLLVM_INSTALL_PATH="./.llvm" -DCLICE_ENABLE_TEST=ON
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCLICE_ENABLE_TEST=ON
           cmake --build build
 
       - name: Build clice (debug, linux)
         if: matrix.os == 'ubuntu-24.04'
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 -DLLVM_INSTALL_PATH="./.llvm" -DCLICE_ENABLE_TEST=ON
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 -DCLICE_ENABLE_TEST=ON
           cmake --build build
 
       - name: Build clice (debug, macos)
         if: matrix.os == 'macos-15'
         run: |
           export PATH="/opt/homebrew/opt/llvm@20/bin:/opt/homebrew/opt/lld@20/bin:$PATH"
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DLLVM_INSTALL_PATH="./.llvm" -DCLICE_ENABLE_TEST=ON
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCLICE_ENABLE_TEST=ON
           cmake --build build
 
-      - name: Install Python dependencies
-        run: pip install pytest pytest-asyncio pytest-xdist
+      - name: Install uv for integration tests
+        uses: astral-sh/setup-uv@v6
 
       - name: Run tests
         if: matrix.os == 'windows-2025'
         run: |
           ./build/bin/unit_tests.exe --test-dir="./tests/data" --resource-dir="./.llvm/lib/clang/20"
-          pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clice.exe --resource-dir="./.llvm/lib/clang/20"
+          uv run pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clice.exe
 
       - name: Run tests
         if: matrix.os == 'ubuntu-24.04' ||  matrix.os == 'macos-15'
         run: |
           ./build/bin/unit_tests --test-dir="./tests/data" --resource-dir="./.llvm/lib/clang/20"
-          pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clice --resource-dir="./.llvm/lib/clang/20"
+          uv run pytest -s --log-cli-level=INFO tests/integration --executable=./build/bin/clice

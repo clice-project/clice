@@ -72,4 +72,3 @@ Hover hover(CompilationUnit& unit, const clang::NamedDecl* decl);
 Hover hover(CompilationUnit& unit, std::uint32_t offset);
 
 }  // namespace clice::feature
-

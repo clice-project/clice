@@ -38,7 +38,7 @@ suite<"FoldingRange"> folding_range = [] {
 namespace single_line { }
 
 namespace with_nodes $(1){
-    struct inner $(3){ 
+    struct inner $(3){
         int x;
     }$(4);
 }$(2)
@@ -125,7 +125,7 @@ void foo() $(9){
 
     test("Method") = [&] {
         run(R"cpp(
-struct s2 $(1){ 
+struct s2 $(1){
     int x;
     float y;
 
@@ -134,13 +134,13 @@ struct s2 $(1){
 
 struct s3;
 
-struct s3 $(3){ 
-    void method() $(5){ 
+struct s3 $(3){
+    void method() $(5){
         int x = 0;
     }$(6)
 
-    void parameter() $(7){ 
- 
+    void parameter() $(7){
+
     }$(8)
 
     void skip() {};
@@ -165,19 +165,19 @@ auto z = $(1)[
 static int array[4];
 
 auto s = $(5)[
-    x=0, 
+    x=0,
     y = 1,
     z = array[
     0],
     k = -1
-]$(6) () $(7){ 
-    return; 
+]$(6) () $(7){
+    return;
 }$(8);
 
 auto l1 = [] () {};
 
 auto l2 = [] () $(9){
-   
+
 }$(10);
 
 auto l3 = [] () $(11){
@@ -251,7 +251,7 @@ int f(int p1, int p2, int p3, int p4, int p5, int p6) { return p1 + p2; }
 
 int main() $(1){
     int x = f(1, 2, 3, 4, 5, 6);
-    
+
     int y = f $(2)(
         1, 2, 3,
         4, 5, 6
@@ -367,9 +367,9 @@ $(17)PROTECTED$(16)
 
 #else
 
-    #ifdef M2 
-    
-    
+    #ifdef M2
+
+
     #endif
 
 #endif
@@ -379,12 +379,12 @@ $(17)PROTECTED$(16)
     test("PragmaRegion") = [&] {
         run(R"cpp(
 $(1)#pragma region level1
-    $(2)#pragma region level2 
-        $(3)#pragma region level3 
+    $(2)#pragma region level2
+        $(3)#pragma region level3
 
         #$(4)pragma endregion level3
 
-    
+
     #$(5)pragma endregion level2
 
 

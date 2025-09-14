@@ -35,7 +35,7 @@ public:
 
     struct CommandInfo {
         /// TODO: add sysroot or no stdinc command info.
-        llvm::StringRef dictionary;
+        llvm::StringRef directory;
 
         /// The canonical command list.
         llvm::ArrayRef<const char*> arguments;
@@ -57,7 +57,7 @@ public:
     };
 
     struct LookupInfo {
-        llvm::StringRef dictionary;
+        llvm::StringRef directory;
 
         std::vector<const char*> arguments;
     };
@@ -106,11 +106,22 @@ public:
                         llvm::StringRef command) -> UpdateInfo;
 
     /// Update commands from json file and return all updated file.
-    auto load_commands(this Self& self, llvm::StringRef json_content)
+    auto load_commands(this Self& self, llvm::StringRef json_content, llvm::StringRef workspace)
         -> std::expected<std::vector<UpdateInfo>, std::string>;
 
+    /// Get compile command from database. `file` should has relative path of workspace.
     auto get_command(this Self& self, llvm::StringRef file, CommandOptions options = {})
         -> LookupInfo;
+
+    /// Load compile commands from given directories. If no valid commands are found,
+    /// search recursively from the workspace directory.
+    auto load_compile_database(this Self& self,
+                               llvm::ArrayRef<std::string> compile_commands_dirs,
+                               llvm::StringRef workspace) -> void;
+
+private:
+    /// If file not found in CDB file, try to guess commands or use the default case.
+    auto guess_or_fallback(this Self& self, llvm::StringRef file) -> LookupInfo;
 
 private:
     /// The memory pool to hold all cstring and command list.
@@ -128,10 +139,10 @@ private:
     llvm::DenseSet<std::uint32_t> filtered_options;
 
     /// A map between file path and its canonical command list.
-    llvm::DenseMap<const void*, CommandInfo> command_infos;
+    llvm::DenseMap<const char*, CommandInfo> command_infos;
 
     /// A map between driver path and its query driver info.
-    llvm::DenseMap<const void*, DriverInfo> driver_infos;
+    llvm::DenseMap<const char*, DriverInfo> driver_infos;
 };
 
 }  // namespace clice
@@ -170,4 +181,3 @@ struct std::formatter<clice::CompilationDatabase::QueryDriverError> :
         return std::format_to(ctx.out(), "{} {}", e.kind.name(), e.detail);
     }
 };
-

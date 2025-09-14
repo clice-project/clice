@@ -104,4 +104,3 @@ std::vector<CompletionItem> code_complete(CompilationParams& params,
 }  // namespace feature
 
 }  // namespace clice
-

@@ -104,7 +104,12 @@ llvm::SmallVector<llvm::StringRef, 4> driver_invocation_argv(llvm::StringRef dri
     /// } else if (driver.starts_with("cl") || driver.starts_with("clang-cl")) {
     ///      return {"/Bv"};
     /// }
-    return {driver, "-E", "-v", "-xc++", "/dev/null"};
+#if defined(_WIN32)
+    const llvm::StringRef null_device = "NUL";
+#else
+    const llvm::StringRef null_device = "/dev/null";
+#endif
+    return {driver, "-E", "-v", "-xc++", null_device};
 }
 
 using QueryDriverError = CompilationDatabase::QueryDriverError;
@@ -148,6 +153,7 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
     bool keep_output_file = true;
     auto clean_up = llvm::make_scope_exit([&output_path, &keep_output_file]() {
         if(keep_output_file) {
+            log::warn("Query driver failed, output file:{}", output_path);
             return;
         }
 
@@ -256,11 +262,11 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
 }
 
 auto CompilationDatabase::update_command(this Self& self,
-                                         llvm::StringRef dictionary,
+                                         llvm::StringRef directory,
                                          llvm::StringRef file,
                                          llvm::ArrayRef<const char*> arguments) -> UpdateInfo {
     file = self.save_string(file);
-    dictionary = self.save_string(dictionary);
+    directory = self.save_string(directory);
 
     llvm::SmallVector<const char*, 16> filtered_arguments;
 
@@ -289,6 +295,21 @@ auto CompilationDatabase::update_command(this Self& self,
 
         /// Filter options we don't need.
         if(self.filtered_options.contains(id)) {
+            continue;
+        }
+
+        /// For arguments -I<dir>, convert directory to absolute path.
+        /// i.e xmake will generate commands in this style.
+        if(id == clang::driver::options::OPT_I) {
+            if(arg->getNumValues() == 1) {
+                add_argument("-I");
+                llvm::StringRef value = arg->getValue(0);
+                if(!value.empty() && !path::is_absolute(value)) {
+                    add_argument(path::join(directory, value));
+                } else {
+                    add_argument(value);
+                }
+            }
             continue;
         }
 
@@ -354,16 +375,15 @@ auto CompilationDatabase::update_command(this Self& self,
     arguments = self.save_cstring_list(filtered_arguments);
 
     UpdateKind kind = UpdateKind::Unchange;
-    CommandInfo info = {dictionary, arguments};
+    CommandInfo info = {directory, arguments};
     auto [it, success] = self.command_infos.try_emplace(file.data(), info);
     if(success) {
         kind = UpdateKind::Create;
     } else {
         auto& info = it->second;
-        if(info.dictionary.data() != dictionary.data() ||
-           info.arguments.data() != arguments.data()) {
+        if(info.directory.data() != directory.data() || info.arguments.data() != arguments.data()) {
             kind = UpdateKind::Update;
-            info.dictionary = dictionary;
+            info.directory = directory;
             info.arguments = arguments;
         }
     }
@@ -372,7 +392,7 @@ auto CompilationDatabase::update_command(this Self& self,
 }
 
 auto CompilationDatabase::update_command(this Self& self,
-                                         llvm::StringRef dictionary,
+                                         llvm::StringRef directory,
                                          llvm::StringRef file,
                                          llvm::StringRef command) -> UpdateInfo {
     llvm::BumpPtrAllocator local;
@@ -389,20 +409,22 @@ auto CompilationDatabase::update_command(this Self& self,
         llvm::cl::TokenizeGNUCommandLine(command, saver, arguments);
     }
 
-    return self.update_command(dictionary, file, arguments);
+    return self.update_command(directory, file, arguments);
 }
 
-auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_content)
+auto CompilationDatabase::load_commands(this Self& self,
+                                        llvm::StringRef json_content,
+                                        llvm::StringRef workspace)
     -> std::expected<std::vector<UpdateInfo>, std::string> {
     std::vector<UpdateInfo> infos;
 
     auto json = json::parse(json_content);
     if(!json) {
-        return std::unexpected(std::format("Fail to parse json: {}", json.takeError()));
+        return std::unexpected(std::format("parse json failed: {}", json.takeError()));
     }
 
     if(json->kind() != json::Value::Array) {
-        return std::unexpected("Compilation Database must be an array of object");
+        return std::unexpected("compile_commands.json must be an array of object");
     }
 
     /// FIXME: warn illegal item.
@@ -414,9 +436,16 @@ auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_co
 
         auto& object = *item.getAsObject();
 
-        auto file = object.getString("file");
         auto directory = object.getString("directory");
-        if(!file || !directory) {
+        if(!directory) {
+            continue;
+        }
+
+        /// Always store absolute path of source file.
+        std::string source;
+        if(auto file = object.getString("file")) {
+            source = path::is_absolute(*file) ? file->str() : path::join(*directory, *file);
+        } else {
             continue;
         }
 
@@ -432,12 +461,12 @@ auto CompilationDatabase::load_commands(this Self& self, llvm::StringRef json_co
                 }
             }
 
-            auto info = self.update_command(*directory, *file, carguments);
+            auto info = self.update_command(*directory, source, carguments);
             if(info.kind != UpdateKind::Unchange) {
                 infos.emplace_back(info);
             }
         } else if(auto command = object.getString("command")) {
-            auto info = self.update_command(*directory, *file, *command);
+            auto info = self.update_command(*directory, source, *command);
             if(info.kind != UpdateKind::Unchange) {
                 infos.emplace_back(info);
             }
@@ -454,32 +483,27 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
     file = self.save_string(file);
     auto it = self.command_infos.find(file.data());
     if(it != self.command_infos.end()) {
-        info.dictionary = it->second.dictionary;
+        info.directory = it->second.directory;
         info.arguments = it->second.arguments;
     } else {
-        /// FIXME: Use a better way to handle fallback command.
-        info.dictionary = {};
-        info.arguments = {
-            self.save_string("clang++").data(),
-            self.save_string("-std=c++20").data(),
-        };
+        info = self.guess_or_fallback(file);
     }
 
-    auto append_argument = [&](llvm::StringRef argument) {
+    auto record = [&info, &self](llvm::StringRef argument) {
         info.arguments.emplace_back(self.save_string(argument).data());
     };
 
     if(options.query_driver) {
         llvm::StringRef driver = info.arguments[0];
         if(auto driver_info = self.query_driver(driver)) {
-            append_argument("-nostdlibinc");
+            record("-nostdlibinc");
 
             /// FIXME: Use target information here, this is useful for cross compilation.
 
             /// FIXME: Cache -I so that we can append directly, avoid duplicate lookup.
             for(auto& system_header: driver_info->system_includes) {
-                append_argument("-I");
-                append_argument(system_header);
+                record("-I");
+                record(system_header);
             }
         } else if(!options.suppress_log) {
             log::warn("Failed to query driver:{}, error:{}", driver, driver_info.error());
@@ -487,11 +511,98 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
     }
 
     if(options.resource_dir) {
-        append_argument(std::format("-resource-dir={}", fs::resource_dir));
+        record(std::format("-resource-dir={}", fs::resource_dir));
     }
 
     info.arguments.emplace_back(file.data());
+    /// TODO: apply rules in clice.toml.
     return info;
+}
+
+auto CompilationDatabase::guess_or_fallback(this Self& self, llvm::StringRef file) -> LookupInfo {
+    // Try to guess command from other file in same directory or parent directory
+    llvm::StringRef dir = path::parent_path(file);
+
+    // Search up to 3 levels of parent directories
+    int up_level = 0;
+    while(!dir.empty() && up_level < 3) {
+        // If any file in the directory has a command, use that command
+        for(const auto& [other_file, info]: self.command_infos) {
+            llvm::StringRef other = other_file;
+            // Filter case that dir is /path/to/foo and there's another directory /path/to/foobar
+            if(other.starts_with(dir) &&
+               (other.size() == dir.size() || path::is_separator(other[dir.size()]))) {
+                log::info("Guess command for:{}, from existed file: {}", file, other_file);
+                return LookupInfo{info.directory, info.arguments};
+            }
+        }
+        dir = path::parent_path(dir);
+        up_level += 1;
+    }
+
+    /// FIXME: use a better default case.
+    // Fallback to default case.
+    LookupInfo info;
+    constexpr const char* fallback[] = {"clang++", "-std=c++20"};
+    for(const char* arg: fallback) {
+        info.arguments.emplace_back(self.save_string(arg).data());
+    }
+    return info;
+}
+
+auto CompilationDatabase::load_compile_database(this Self& self,
+                                                llvm::ArrayRef<std::string> compile_commands_dirs,
+                                                llvm::StringRef workspace) -> void {
+    auto try_load = [&self, workspace](llvm::StringRef dir) {
+        std::string filepath = path::join(dir, "compile_commands.json");
+        auto content = fs::read(filepath);
+        if(!content) {
+            log::warn("Failed to read CDB file: {}, {}", filepath, content.error());
+            return false;
+        }
+
+        auto load = self.load_commands(*content, workspace);
+        if(!load) {
+            log::warn("Failed to load CDB file: {}. {}", filepath, load.error());
+            return false;
+        }
+
+        log::info("Load CDB file: {} successfully, {} items loaded", filepath, load->size());
+        return true;
+    };
+
+    if(std::ranges::any_of(compile_commands_dirs, try_load)) {
+        return;
+    }
+
+    log::warn(
+        "Can not found any valid CDB file from given directories, search recursively from workspace: {} ...",
+        workspace);
+
+    std::error_code ec;
+    for(fs::recursive_directory_iterator it(workspace, ec), end; it != end && !ec;
+        it.increment(ec)) {
+        auto status = it->status();
+        if(!status) {
+            continue;
+        }
+
+        // Skip hidden directories.
+        llvm::StringRef filename = path::filename(it->path());
+        if(fs::is_directory(*status) && filename.starts_with('.')) {
+            it.no_push();
+            continue;
+        }
+
+        if(fs::is_regular_file(*status) && filename == "compile_commands.json") {
+            if(try_load(path::parent_path(it->path()))) {
+                return;
+            }
+        }
+    }
+
+    /// TODO: Add a default command in clice.toml. Or load commands from .clangd ?
+    log::warn("Can not found any valid CDB file in current workspace, fallback to default mode.");
 }
 
 }  // namespace clice

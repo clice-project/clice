@@ -1,4 +1,3 @@
-import asyncio
 from pathlib import Path
 from .transport import LSPTransport
 
@@ -10,7 +9,7 @@ class OpeningFile:
 
 
 class LSPClient(LSPTransport):
-    def __init__(self, commands, mode="stdio", host="127.0.0.1", port=2087):
+    def __init__(self, commands, mode, host, port):
         super().__init__(commands, mode, host, port)
         self.workspace = ""
         self.opening_files: dict[Path, OpeningFile] = {}
@@ -18,7 +17,10 @@ class LSPClient(LSPTransport):
     async def initialize(self, workspace: str):
         self.workspace = workspace
         params = {
-            "clientInfo": {"name": "clice tester", "version": "0.0.1", },
+            "clientInfo": {
+                "name": "clice tester",
+                "version": "0.0.1",
+            },
             "capabilities": {},
             "workspaceFolders": [{"uri": Path(workspace).as_uri(), "name": "test"}],
         }
@@ -26,7 +28,6 @@ class LSPClient(LSPTransport):
 
     async def exit(self):
         await self.send_notification("exit")
-        await self.stop()
 
     def get_abs_path(self, relative_path: str):
         return Path(self.workspace, relative_path)
@@ -68,13 +69,12 @@ class LSPClient(LSPTransport):
         file.version += 1
         file.content = content
         params = {
-            "textDocument": {
-                "uri": path.as_uri(),
-                "version": file.version
-            },
+            "textDocument": {"uri": path.as_uri(), "version": file.version},
             "contentChanges": [
-                {"text": content, }
-            ]
+                {
+                    "text": content,
+                }
+            ],
         }
 
         await self.send_notification("textDocument/didChange", params)

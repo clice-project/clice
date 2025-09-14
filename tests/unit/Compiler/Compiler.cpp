@@ -14,7 +14,7 @@ suite<"Compiler"> compiler = [] {
         llvm::StringRef content = R"(
 #include <iostream>
 
-int x = 1;  
+int x = 1;
 
 void foo {}
 
@@ -66,4 +66,3 @@ struct Bar {
 }  // namespace
 
 }  // namespace clice::testing
-

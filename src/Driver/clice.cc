@@ -14,39 +14,60 @@ namespace {
 
 static cl::OptionCategory category("clice options");
 
-cl::opt<std::string>
-    mode("mode",
-         cl::cat(category),
-         cl::value_desc("pipe|socket|indexer"),
-         cl::init("pipe"),
-         cl::desc("The mode of clice, default is pipe, socket is usually used for debugging"));
+cl::opt<std::string> mode{
+    "mode",
+    cl::cat(category),
+    cl::value_desc("pipe|socket|indexer"),
+    cl::init("pipe"),
+    cl::desc("The mode of clice, default is pipe, socket is usually used for debugging"),
+};
 
-cl::opt<std::string> config_path(
+cl::opt<std::string> host{
+    "host",
+    cl::cat(category),
+    cl::value_desc("str"),
+    cl::init("127.0.0.1"),
+    cl::desc("The host to connect to (default: 127.0.0.1)"),
+};
+
+cl::opt<unsigned int> port{
+    "port",
+    cl::cat(category),
+    cl::value_desc("unsigned int"),
+    cl::init(50051),
+    cl::desc("The port to connect to"),
+};
+
+cl::opt<std::string> config_path{
     "config",
     cl::cat(category),
     cl::value_desc("path"),
     cl::desc(
-        "The path of the clice config file, if not specified, the default config will be used"));
+        "The path of the clice config file, if not specified, the default config will be used"),
+};
 
-cl::opt<std::string> resource_dir(
+cl::opt<std::string> resource_dir{
     "resource-dir",
     cl::cat(category),
     cl::value_desc("path"),
-    cl::desc(R"(The path of the clang resource directory, default is "../../lib/clang/version")"));
+    cl::desc(R"(The path of the clang resource directory, default is "../../lib/clang/version")"),
+};
 
-static cl::OptionCategory category_log{"clice logging options"};
+cl::opt<std::string> log_color{
+    "log-color",
+    cl::cat(category),
+    cl::value_desc("always|auto|never"),
+    cl::init("auto"),
+    cl::desc("When to use terminal colors, default is auto"),
+};
 
-cl::opt<std::string> log_color("log-color",
-                               cl::cat(category_log),
-                               cl::value_desc("always|auto|never"),
-                               cl::init("auto"),
-                               cl::desc("When to use terminal colors, default is auto"));
-
-cl::opt<std::string> log_level("log-level",
-                               cl::cat(category_log),
-                               cl::value_desc("trace|debug|info|warn|fatal"),
-                               cl::init("info"),
-                               cl::desc("The log level, default is info"));
+cl::opt<std::string> log_level{
+    "log-level",
+    cl::cat(category),
+    cl::value_desc("trace|debug|info|warn|fatal"),
+    cl::init("info"),
+    cl::desc("The log level, default is info"),
+};
 
 void printVersion(llvm::raw_ostream& os) {
     os << std::format("clice version: {}\n", clice::config::version)
@@ -74,8 +95,7 @@ void init_log() {
 /// Check the command line arguments and initialize the clice.
 bool checkArguments(int argc, const char** argv) {
     /// Hide unrelated options.
-    std::vector<cl::OptionCategory*> categories = {&category, &category_log};
-    cl::HideUnrelatedOptions(categories);
+    cl::HideUnrelatedOptions(category);
 
     // Set version printer and parse command line options
     cl::SetVersionPrinter(printVersion);
@@ -132,7 +152,7 @@ bool checkArguments(int argc, const char** argv) {
 int main(int argc, const char** argv) {
     llvm::InitLLVM guard(argc, argv);
     llvm::setBugReportMsg(
-        "Please report bugs to https://github.com/clice-project/clice/issues and include the crash backtrace");
+        "Please report bugs to https://github.com/clice-io/clice/issues and include the crash backtrace");
 
     if(!checkArguments(argc, argv)) {
         return 1;
@@ -150,8 +170,8 @@ int main(int argc, const char** argv) {
         async::net::listen(loop);
         log::info("Server starts listening on stdin/stdout");
     } else if(mode == "socket") {
-        async::net::listen("127.0.0.1", 50051, loop);
-        log::info("Server starts listening on {}:{}", "127.0.0.1", 50051);
+        async::net::listen(host.c_str(), port, loop);
+        log::info("Server starts listening on {}:{}", host.getValue(), port.getValue());
     } else if(mode == "indexer") {
         /// TODO:
     } else {
@@ -165,4 +185,3 @@ int main(int argc, const char** argv) {
 
     return 0;
 }
-

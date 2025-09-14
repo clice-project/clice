@@ -27,4 +27,3 @@ SemanticTokens semantic_tokens(CompilationUnit& unit);
 index::Shared<SemanticTokens> index_semantic_token(CompilationUnit& unit);
 
 }  // namespace clice::feature
-

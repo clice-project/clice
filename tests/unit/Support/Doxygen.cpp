@@ -164,7 +164,7 @@ suite<"Doxygen"> doxygen = [] {
  details 1 blah blah... line2
         aabbcssss
           ~~~~~~^
- 
+
  A line not in a block
  @details
  details 2 blah blah... line1

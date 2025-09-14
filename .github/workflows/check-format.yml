@@ -3,19 +3,10 @@ name: format
 on:
   push:
     branches: [main]
-    paths:
-      - .clang-format
-      - "include/**"
-      - "src/**"
-      - "tests/**"
 
   pull_request:
     branches: [main]
-    paths:
-      - .clang-format
-      - "include/**"
-      - "src/**"
-      - "tests/**"
+
 
 jobs:
   check:
@@ -25,23 +16,34 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install clang-format
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Run check
+        id: precommit
         run: |
-          wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc
-          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm20.list
-          echo "deb-src http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee -a /etc/apt/sources.list.d/llvm20.list
-          sudo apt-get update && sudo apt-get install -y clang-format-20
-          clang-format-20 --version
+          uv venv
+          uv pip install pre-commit
+          uv run pre-commit run --all-files
+        continue-on-error: true
 
-      - name: Run clang-format check
+      - name: Show diff on failure
+        if: steps.precommit.outcome == 'failure'
         run: |
-          FILES=$(find ./ -type f | grep -P '^\.\/(src|include)(\/[^\/]+)*\/[^\/]+\.(h|cpp|cc)$')
+          echo "❌ pre-commit found issues that it auto-fixed."
+          echo "   Please run 'pre-commit run --all-files' locally,"
+          echo "   commit the changes, and push again."
+          echo ""
+          echo "👇 The required changes are shown below:"
+          git diff
 
-          UNFORMATTED=$(clang-format-20 --dry-run --Werror $FILES)
+      - name: Fail the job if pre-commit failed
+        if: steps.precommit.outcome == 'failure'
+        run: |
+          echo "pre-commit checks failed."
+          exit 1
 
-          if [ $? -ne 0 ]; then
-            echo "× Some files are not properly formatted. Run clang-format to fix them."
-            exit 1
-          else
-            echo "✓ All files are properly formatted."
-          fi
+      - name: Auto correct
+        uses: huacnlee/autocorrect-action@main
+        with:
+          args: --lint ./docs

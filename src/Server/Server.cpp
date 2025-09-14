@@ -45,10 +45,10 @@ ActiveFileManager::ActiveFile& ActiveFileManager::add(llvm::StringRef path, Open
 
 async::Task<> Server::request(llvm::StringRef method, json::Value params) {
     co_await async::net::write(json::Object{
-        {"jsonrpc", "2.0"            },
-        {"id",      id += 1          },
-        {"method",  method           },
-        {"params",  std::move(params)},
+        {"jsonrpc", "2.0"                 },
+        {"id",      server_request_id += 1},
+        {"method",  method                },
+        {"params",  std::move(params)     },
     });
 }
 
@@ -147,7 +147,6 @@ async::Task<> Server::on_receive(json::Value value) {
     }
 
     /// Handle request and notification separately.
-    /// TODO: Record the time of handling request and notification.
     auto it = callbacks.find(method);
     if(it == callbacks.end()) {
         log::info("Ignore unhandled method: {}", method);
@@ -155,14 +154,27 @@ async::Task<> Server::on_receive(json::Value value) {
     }
 
     if(id) {
-        log::info("Handling request: {}", method);
+        auto current_id = client_request_id++;
+        auto start_time = std::chrono::steady_clock::now();
+
+        log::info("<-- Handling request: {}({})", method, current_id);
         auto result = co_await it->second(*this, std::move(params));
         co_await response(std::move(*id), std::move(result));
-        log::info("Handled request: {}", method);
+
+        auto end_time = std::chrono::steady_clock::now();
+        auto duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        log::info("--> Handled request: {}({}) {}ms", method, current_id, duration.count());
     } else {
-        log::info("Handling notification: {}", method);
+        auto start_time = std::chrono::steady_clock::now();
+        log::info("<-- Handling notification: {}", method);
+
         auto result = co_await it->second(*this, std::move(params));
-        log::info("Handled notification: {}", method);
+
+        auto end_time = std::chrono::steady_clock::now();
+        auto duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        log::info("--> Handled notification: {} {}ms", method, duration.count());
     }
 
     co_return;

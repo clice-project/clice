@@ -146,4 +146,3 @@ suite<"Enum"> enum_tests = [] {
 }  // namespace
 
 }  // namespace clice::testing
-

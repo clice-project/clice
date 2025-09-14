@@ -17,6 +17,7 @@ void init(std::string_view workplace);
 
 struct ServerOptions {
     std::vector<std::string> compile_commands_dirs = {"${workspace}/build"};
+    bool clang_tidy = false;
     size_t max_active_file = 8;
 };
 
@@ -49,4 +50,3 @@ extern const IndexOptions& index;
 extern llvm::ArrayRef<Rule> rules;
 
 };  // namespace clice::config
-

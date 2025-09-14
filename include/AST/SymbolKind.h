@@ -83,4 +83,3 @@ struct SymbolModifiers : refl::Enum<SymbolModifiers, true, uint32_t> {
 };
 
 }  // namespace clice
-

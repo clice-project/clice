@@ -35,4 +35,3 @@ DocumentSymbols document_symbols(CompilationUnit& unit);
 index::Shared<DocumentSymbols> index_document_symbol(CompilationUnit& unit);
 
 }  // namespace clice::feature
-
