@@ -32,10 +32,6 @@ if(CLICE_USE_LIBCXX)
     string(APPEND CMAKE_MODULE_LINKER_FLAGS "-stdlib=libc++")
 endif()
 
-add_compile_definitions(TOML_EXCEPTIONS=0)
-add_compile_definitions(SPDLOG_USE_STD_FORMAT=1)
-add_compile_definitions(SPDLOG_NO_EXCEPTIONS=1)
-
 message(STATUS "Installing other dependencies, please wait...")
 # install dependencies
 include(FetchContent)
@@ -73,7 +69,10 @@ message(STATUS "Found spdlog: ${spdlog_SOURCE_DIR}")
 
 if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+    target_compile_definitions(uv_a PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
+
+target_compile_definitions(spdlog PUBLIC SPDLOG_USE_STD_FORMAT=1 SPDLOG_NO_EXCEPTIONS=1)
 
 if (MSVC)
     # Remove any RTTI or exception enabling flags from CMAKE_CXX_FLAGS
@@ -129,7 +128,6 @@ add_library(clice-core STATIC "${CLICE_SOURCES}")
 
 # set llvm include and lib path
 add_library(llvm-libs INTERFACE IMPORTED)
-
 
 message(STATUS "LLVM include path: ${LLVM_INSTALL_PATH}/include")
 # add to include directories
@@ -205,6 +203,7 @@ target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
 
 target_include_directories(clice-core PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(clice-core PUBLIC uv_a spdlog::spdlog tomlplusplus::tomlplusplus llvm-libs)
+target_compile_definitions(clice-core PUBLIC TOML_EXCEPTIONS=0)
 
 # clice executable
 add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")
