@@ -198,10 +198,6 @@ rule("clice_build_config")
         elseif target:is_plat("linux") then
             -- gnu ld need to fix link order
             target:add("ldflags", "-fuse-ld=lld")
-            if target:toolchain("clang") then
-                target:add("ldflags", "-stdlib=libc++")
-                target:add("cxflags", "-stdlib=libc++")
-            end
         end
     end)
 

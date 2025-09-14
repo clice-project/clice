@@ -17,14 +17,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 bash -eux - <<'BASH'
 
     set -e
-    apt-get update
+    apt update
     # first install minimal apt prerequisites
     # software-properties-common for add-apt-repository
     # gnupg for gpg to verify cmake installer
     # curl, git for downloading sources
     # xz-utils, unzip for extracting archives
-    # make for xmake
-    apt-get install -y --no-install-recommends \
+    # make for xmake installation
+    apt install -y --no-install-recommends \
         software-properties-common \
         curl \
         gnupg \
@@ -32,6 +32,10 @@ bash -eux - <<'BASH'
         xz-utils \
         unzip \
         make
+    
+    # gcc, llvm PPA
+    add-apt-repository -y ppa:ubuntu-toolchain-r/ppa
+    apt update
 BASH
 
 # Compiler stage
@@ -47,19 +51,21 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     bash -eux - <<'BASH'
     set -e
-    apt update
-    # gcc, llvm PPA
-    add-apt-repository -y ppa:ubuntu-toolchain-r/ppa
-    apt update
+
+    # Always install libstdc++ development files, required for both gcc and clang to link against libstdc++
+    GCC_VERSION=$(grep -E '^gcc,' /clice/config/default-toolchain-version | cut -d',' -f2)
+    apt install -y --no-install-recommends "libstdc++-${GCC_VERSION}-dev"
+
     if [ "$COMPILER" = "gcc" ]; then
-        GCC_VERSION=$(grep -E '^gcc,' /clice/config/default-toolchain-version | cut -d',' -f2)
-        apt-get install -y --no-install-recommends "gcc-${GCC_VERSION}" "g++-${GCC_VERSION}"
-        update-alternatives --install /usr/bin/c++ c++ "/usr/bin/g++-${GCC_VERSION}" 100
+        apt install -y --no-install-recommends "gcc-${GCC_VERSION}" "g++-${GCC_VERSION}"
         update-alternatives --install /usr/bin/cc cc "/usr/bin/gcc-${GCC_VERSION}" 100
+        update-alternatives --install /usr/bin/gcc gcc "/usr/bin/gcc-${GCC_VERSION}" 100
+        update-alternatives --install /usr/bin/c++ c++ "/usr/bin/g++-${GCC_VERSION}" 100
+        update-alternatives --install /usr/bin/g++ g++ "/usr/bin/g++-${GCC_VERSION}" 100
     elif [ "$COMPILER" = "clang" ]; then
         CLANG_VERSION=$(grep -E '^clang,' /clice/config/default-toolchain-version | cut -d',' -f2)
-        # try to install additional clang-related packages, fallback to minimal set if some are not available
-        apt install -y --no-install-recommends "clang-${CLANG_VERSION}" "clang-tools-${CLANG_VERSION}" "lld-${CLANG_VERSION}" "libclang-rt-${CLANG_VERSION}-dev" libc++-dev libc++abi-dev
+        # install clang toolchain, libstdc++ is already installed
+        apt install -y --no-install-recommends "clang-${CLANG_VERSION}" "clang-tools-${CLANG_VERSION}" "lld-${CLANG_VERSION}" "libclang-rt-${CLANG_VERSION}-dev"
         update-alternatives --install /usr/bin/clang clang "/usr/bin/clang-${CLANG_VERSION}" 100
         update-alternatives --install /usr/bin/clang++ clang++ "/usr/bin/clang++-${CLANG_VERSION}" 100
         update-alternatives --install /usr/bin/c++ c++ "/usr/bin/clang++-${CLANG_VERSION}" 100
@@ -74,9 +80,12 @@ FROM compiler-stage AS build-tool-stage
 
 ENV XMAKE_ROOT=y
 
+COPY ./pyproject.toml /clice/pyproject.toml
+
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     --mount=type=cache,target=/docker-build-cache/cmake,sharing=locked \
+    --mount=type=cache,target=/var/cache/uv,sharing=locked \
 bash -eux - <<'BASH'
 
 install_xmake() {
@@ -156,10 +165,14 @@ install_python() {
     PYTHON_VERSION=$(grep -E '^python,' /clice/config/default-toolchain-version | cut -d',' -f2)
     curl -LsSf https://astral.sh/uv/install.sh | sh
     uv python install "${PYTHON_VERSION}"
+    export UV_CACHE_DIR="/var/cache/uv"
+    uv sync
 }
 
 do_install() {
     set -e
+
+    cd /clice
 
     install_cmake &
     install_xmake &
@@ -185,11 +198,6 @@ ARG LTO_TYPE=""
 RUN --mount=type=bind,src=./,target=/clice,rw \
 bash -eux - <<'BASH'
 
-install_python_dependencies() {
-    set -e
-    uv sync
-}
-
 cache_xmake_packages() {
     set -e
 
@@ -210,8 +218,7 @@ do_prepare_dependency() {
 
     cd /clice
 
-    install_python_dependencies &
-    cache_xmake_packages &
+    # cache_xmake_packages &
 
     for job in $(jobs -p); do
         wait $job || exit 1
@@ -223,6 +230,15 @@ do_prepare_dependency
 BASH
 
 FROM dependency-cache-stage AS final
+
+RUN bash -eux - <<'BASH'
+set -e
+    # clice is mounted here, so remove everything to reduce image size
+    rm -rf /clice
+
+    # disable git exception in cmake build when Fetch-Content
+    git config --global --add safe.directory '*'
+BASH
 
 WORKDIR /clice
 
