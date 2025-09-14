@@ -26,7 +26,7 @@ void create_file_loggger(std::string_view name, std::string_view dir, const Opti
     auto filename = std::format("{:%Y-%m-%d_%H-%M-%S}.log", now);
     auto path = path::join(dir, filename);
 
-    auto logger = spdlog::basic_logger_mt(std::string(name), filename);
+    auto logger = spdlog::basic_logger_mt(std::string(name), path);
     logger->set_level(options.level);
     logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [thread %t] [%s:%#] %v");
     spdlog::set_default_logger(std::move(logger));
