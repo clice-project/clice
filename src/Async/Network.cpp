@@ -1,5 +1,5 @@
 #include "Async/Network.h"
-#include "Support/Logger.h"
+#include "Support/Logging.h"
 
 namespace clice::async::net {
 

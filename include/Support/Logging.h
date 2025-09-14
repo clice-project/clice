@@ -16,6 +16,8 @@ extern Options options;
 
 void create_stderr_logger(std::string_view name, const Options& options);
 
+void create_file_loggger(std::string_view name, std::string_view dir, const Options& options);
+
 template <typename... Args>
 struct logging_rformat {
     template <std::convertible_to<std::string_view> StrLike>
@@ -71,6 +73,7 @@ void warn(logging_format<Args...> fmt, Args&&... args) {
 template <typename... Args>
 void fatal [[noreturn]] (logging_format<Args...> fmt, Args&&... args) {
     logging::log(spdlog::level::err, fmt.location, fmt.str, std::forward<Args>(args)...);
+    spdlog::shutdown();
     std::exit(1);
 }
 

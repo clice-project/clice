@@ -1,5 +1,5 @@
 #include "Async/FileSystem.h"
-#include "Support/Logger.h"
+#include "Support/Logging.h"
 
 namespace clice::async::awaiter {}
 

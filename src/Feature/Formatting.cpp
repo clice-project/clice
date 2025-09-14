@@ -1,5 +1,5 @@
 #include "Feature/Formatting.h"
-#include "Support/Logger.h"
+#include "Support/Logging.h"
 #include "Server/Convert.h"
 #include "clang/Format/Format.h"
 

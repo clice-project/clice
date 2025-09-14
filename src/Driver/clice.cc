@@ -1,5 +1,5 @@
 #include "Server/Server.h"
-#include "Support/Logger.h"
+#include "Support/Logging.h"
 #include "Support/Format.h"
 
 #include "llvm/Support/InitLLVM.h"

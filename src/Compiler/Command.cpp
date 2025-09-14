@@ -5,7 +5,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Program.h"
 #include "clang/Driver/Driver.h"
-#include "Support/Logger.h"
+#include "Support/Logging.h"
 
 namespace clice {
 

@@ -1,4 +1,4 @@
-#include "Support/Logger.h"
+#include "Support/Logging.h"
 #include "Test/Tester.h"
 #include "Index/USR.h"
 #include "clang/AST/DeclBase.h"

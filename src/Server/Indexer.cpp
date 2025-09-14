@@ -2,7 +2,7 @@
 #include "Compiler/Compilation.h"
 #include "Index/Index.h"
 #include "Server/Indexer.h"
-#include "Support/Logger.h"
+#include "Support/Logging.h"
 
 namespace clice {
 

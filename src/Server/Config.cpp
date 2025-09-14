@@ -2,7 +2,7 @@
 #include "toml++/toml.hpp"
 
 #include "Server/Config.h"
-#include "Support/Logger.h"
+#include "Support/Logging.h"
 #include "Support/FileSystem.h"
 #include "llvm/ADT/StringMap.h"
 

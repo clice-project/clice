@@ -4,7 +4,7 @@
 #include <algorithm>
 #include "AST/Selection.h"
 #include "Compiler/CompilationUnit.h"
-#include "Support/Logger.h"
+#include "Support/Logging.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"

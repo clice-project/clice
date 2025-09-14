@@ -1,7 +1,7 @@
 #include "Feature/Diagnostic.h"
 #include "Compiler/CompilationUnit.h"
 #include "Server/Convert.h"
-#include "Support/Logger.h"
+#include "Support/Logging.h"
 
 namespace clice::feature {
 
