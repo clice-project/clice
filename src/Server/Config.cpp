@@ -96,21 +96,25 @@ auto Config::parse(llvm::StringRef workspace) -> std::expected<void, std::string
     this->workspace = workspace;
 
     auto path = path::join(workspace, "clice.toml");
-    if(!fs::exists(path)) {
-        replace(*this, *this);
-        return std::unexpected("Config file doesn't exist!");
+
+    std::string error_message;
+    if(fs::exists(path)) {
+        if(auto toml = toml::parse_file(path)) {
+            parse_toml(*this, toml.table(), *this);
+        } else {
+            error_message = toml.error().description();
+        }
+    } else {
+        error_message = "Config file doesn't exist!";
     }
 
-    auto toml = toml::parse_file(path);
-    if(toml.failed()) {
-        replace(*this, *this);
-        return std::unexpected<std::string>(toml.error().description());
-    }
-
-    parse_toml(*this, toml.table(), *this);
     replace(*this, *this);
 
-    return std::expected<void, std::string>();
+    if(!error_message.empty()) {
+        return std::unexpected(std::move(error_message));
+    }
+
+    return {};
 }
 
 }  // namespace clice::config
