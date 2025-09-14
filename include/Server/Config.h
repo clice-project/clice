@@ -8,11 +8,6 @@
 
 namespace clice::config {
 
-extern llvm::StringRef version;
-extern llvm::StringRef binary;
-extern llvm::StringRef llvm_version;
-extern llvm::StringRef workspace;
-
 struct ProjectOptions {
     bool root = true;
 
@@ -30,19 +25,24 @@ struct ProjectOptions {
 };
 
 struct Rule {
-    std::string pattern;
-    std::vector<std::string> append;
-    std::vector<std::string> remove;
-    std::string readonly;
-    std::string header;
-    std::vector<std::string> context;
+    /// All patterns of the rule.
+    llvm::SmallVector<std::string> patterns;
+
+    /// The commands that you want to remove from original command.
+    llvm::SmallVector<std::string> remove;
+
+    /// The commands that you want to append from original command.
+    llvm::SmallVector<std::string> append;
 };
 
 struct Config {
+    /// The workspace of this config file.
     std::string workspace;
 
+    /// Project level configs.
     ProjectOptions project;
 
+    /// All rules used for specific files.
     llvm::SmallVector<Rule> rules;
 
     auto parse(llvm::StringRef workspace) -> std::expected<void, std::string>;

@@ -1,3 +1,4 @@
+#include "Server/Version.h"
 #include "Server/Server.h"
 #include "Support/Logging.h"
 #include "Support/Format.h"

@@ -24,7 +24,8 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     if(auto result = config.parse(workspace)) {
         logging::info("Config initialized successfully: {0}", json::serialize(config));
     } else {
-        logging::warn("Fail to initialize config, because: {}", result.error());
+        logging::warn("Fail to load config, because: {0}", result.error());
+        logging::info("Use default config: {0}", json::serialize(config));
     }
 
     /// Set server options.
