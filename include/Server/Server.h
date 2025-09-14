@@ -235,6 +235,8 @@ private:
     ActiveFileManager opening_files;
 
     PathMapping mapping;
+
+    config::Config config;
 };
 
 }  // namespace clice

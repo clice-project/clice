@@ -1,3 +1,4 @@
+#include "Server/Version.h"
 #include "Server/Server.h"
 #include "Support/Logging.h"
 #include "Support/Format.h"
@@ -45,14 +46,6 @@ cl::opt<unsigned int> port{
     cl::value_desc("unsigned int"),
     cl::init(50051),
     cl::desc("The port to connect to"),
-};
-
-cl::opt<std::string> config_path{
-    "config",
-    cl::cat(category),
-    cl::value_desc("path"),
-    cl::desc(
-        "The path of the clice config file, if not specified, the default config will be used"),
 };
 
 cl::opt<std::string> resource_dir{
@@ -117,22 +110,6 @@ bool check_arguments(int argc, const char** argv) {
 
     for(int i = 0; i < argc; ++i) {
         logging::info("argv[{}] = {}", i, argv[i]);
-    }
-
-    // Handle configuration file loading
-    if(config_path.empty()) {
-        logging::info("No configuration file specified, using default settings");
-    } else {
-        llvm::StringRef path = config_path;
-        // Try to load the configuration file and check the result
-        if(auto result = config::load(argv[0], path); result) {
-            logging::info("Configuration file loaded successfully from: {}", path);
-        } else {
-            logging::warn("Failed to load configuration file from: {} because {}",
-                          path,
-                          result.error());
-            return false;
-        }
     }
 
     // Initialize resource directory
