@@ -4,17 +4,16 @@
 
 ## Project
 
-
 | 名称                | 类型     | 默认值                        |
 | ------------------- | -------- | ----------------------------- |
-| `project.index_dir` | `string` | `"${workspace}/.clice/index"` |
+| `project.cache_dir` | `string` | `"${workspace}/.clice/cache"` |
 
 用于储存 PCH 和 PCM 缓存的文件夹。
 <br>
 
 | 名称                | 类型     | 默认值                        |
 | ------------------- | -------- | ----------------------------- |
-| `project.cache_dir` | `string` | `"${workspace}/.clice/cache"` |
+| `project.index_dir` | `string` | `"${workspace}/.clice/index"` |
 
 用于储存索引文件的文件夹。
 <br>
@@ -24,9 +23,9 @@
 `[[rules]]` 表示一个对象数组，其中每个对象都拥有下面这些属性
 <br>
 
-| 名称              | 类型                |
-| ----------------- | ------------------- |
-| `[rules].pattern` | `array` of `string` |
+| 名称               | 类型                |
+| ------------------ | ------------------- |
+| `[rules].patterns` | `array` of `string` |
 
 用于匹配文件路径的 glob patterns，遵循 LSP 的 [标准](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentFilter)。
 

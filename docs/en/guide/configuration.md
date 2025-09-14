@@ -13,7 +13,7 @@ Folder for storing PCH and PCM caches.
 
 | Name                | Type     | Default                       |
 | ------------------- | -------- | ----------------------------- |
-| `project.index.dir` | `string` | `"${workspace}/.clice/index"` |
+| `project.index_dir` | `string` | `"${workspace}/.clice/index"` |
 
 Folder for storing index files.
 <br>
@@ -23,9 +23,9 @@ Folder for storing index files.
 `[[rules]]` represents an array of objects, where each object has the following properties:
 <br>
 
-| Name              | Type                |
-| ----------------- | ------------------- |
-| `[rules].pattern` | `array` of `string` |
+| Name               | Type                |
+| ------------------ | ------------------- |
+| `[rules].patterns` | `array` of `string` |
 
 Glob patterns for matching file paths, following LSP's [standard](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentFilter).
 
