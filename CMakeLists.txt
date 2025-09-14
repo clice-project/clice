@@ -25,6 +25,13 @@ endif()
 message(STATUS "CMake module path: ${CMAKE_MODULE_PATH}")
 message(STATUS "CMake prefix path: ${CMAKE_PREFIX_PATH}")
 
+if(CLICE_USE_LIBCXX)
+    string(APPEND CMAKE_CXX_FLAGS "-stdlib=libc++")
+    string(APPEND CMAKE_EXE_LINKER_FLAGS "-stdlib=libc++")
+    string(APPEND CMAKE_SHARED_LINKER_FLAGS "-stdlib=libc++")
+    string(APPEND CMAKE_MODULE_LINKER_FLAGS "-stdlib=libc++")
+endif()
+
 message(STATUS "Installing other dependencies, please wait...")
 # install dependencies
 include(FetchContent)
@@ -33,26 +40,39 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(ASAN ON CACHE BOOL "" FORCE)
 endif()
 
-message(STATUS "Fetching tomlplusplus...")
-FetchContent_Declare(
-    tomlplusplus
-    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
-)
-
 message(STATUS "Fetching libuv...")
 FetchContent_Declare(
     libuv
     GIT_REPOSITORY https://github.com/libuv/libuv.git
     GIT_TAG v1.x
 )
-FetchContent_MakeAvailable(tomlplusplus libuv)
+
+set(BUILD_SHARED_LIBS OFF)
+message(STATUS "Fetching spdlog...")
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG v1.15.3
+)
+
+message(STATUS "Fetching tomlplusplus...")
+FetchContent_Declare(
+    tomlplusplus
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+)
+
+FetchContent_MakeAvailable(libuv spdlog tomlplusplus)
 
 message(STATUS "Found tomlplusplus: ${tomlplusplus_SOURCE_DIR}")
 message(STATUS "Found libuv: ${libuv_SOURCE_DIR}")
+message(STATUS "Found spdlog: ${spdlog_SOURCE_DIR}")
 
 if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+    target_compile_definitions(uv_a PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
+
+target_compile_definitions(spdlog PUBLIC SPDLOG_USE_STD_FORMAT=1 SPDLOG_NO_EXCEPTIONS=1)
 
 if (MSVC)
     # Remove any RTTI or exception enabling flags from CMAKE_CXX_FLAGS
@@ -68,11 +88,6 @@ else()
 endif()
 
 set(CLICE_LINKER_FLAGS "")
-
-if(CLICE_USE_LIBCXX)
-    list(APPEND CLICE_CXX_FLAGS "-stdlib=libc++")
-    list(APPEND CLICE_LINKER_FLAGS "-stdlib=libc++")
-endif()
 
 # Build-type specific flags
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -113,7 +128,6 @@ add_library(clice-core STATIC "${CLICE_SOURCES}")
 
 # set llvm include and lib path
 add_library(llvm-libs INTERFACE IMPORTED)
-
 
 message(STATUS "LLVM include path: ${LLVM_INSTALL_PATH}/include")
 # add to include directories
@@ -188,7 +202,8 @@ target_compile_options(clice-core PUBLIC ${CLICE_CXX_FLAGS})
 target_link_options(clice-core PUBLIC ${CLICE_LINKER_FLAGS})
 
 target_include_directories(clice-core PUBLIC "${CMAKE_SOURCE_DIR}/include")
-target_link_libraries(clice-core PUBLIC uv_a tomlplusplus::tomlplusplus llvm-libs)
+target_link_libraries(clice-core PUBLIC uv_a spdlog::spdlog tomlplusplus::tomlplusplus llvm-libs)
+target_compile_definitions(clice-core PUBLIC TOML_EXCEPTIONS=0)
 
 # clice executable
 add_executable(clice "${CMAKE_SOURCE_DIR}/src/Driver/clice.cc")

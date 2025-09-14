@@ -2,7 +2,8 @@
 #include "toml++/toml.hpp"
 
 #include "Server/Config.h"
-#include "Support/Logger.h"
+#include "Support/Logging.h"
+#include "Support/FileSystem.h"
 #include "llvm/ADT/StringMap.h"
 
 namespace clice::config {
@@ -136,7 +137,7 @@ void init(std::string_view workplace) {
 
     replace(config);
 
-    log::info("Config initialized successfully: {0}", json::serialize(config));
+    logging::info("Config initialized successfully: {0}", json::serialize(config));
     return;
 }
 

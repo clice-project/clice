@@ -3,9 +3,9 @@
 namespace clice {
 
 async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
-    log::info("Initialize from client: {}, version: {}",
-              params.clientInfo.name,
-              params.clientInfo.version);
+    logging::info("Initialize from client: {}, version: {}",
+                  params.clientInfo.name,
+                  params.clientInfo.version);
 
     /// FIXME: adjust position encoding.
     kind = PositionEncodingKind::UTF16;
@@ -17,7 +17,7 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
             return *params.rootUri;
         }
 
-        log::fatal("The client should provide one workspace folder or rootUri at least!");
+        logging::fatal("The client should provide one workspace folder or rootUri at least!");
     })());
 
     /// Initialize configuration.
