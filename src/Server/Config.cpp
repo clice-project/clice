@@ -74,6 +74,7 @@ static void parse(Object& object, auto&& value) {
     }
 }
 
+/// Read the config file, call when the program starts.
 std::expected<void, std::string> load(llvm::StringRef execute, llvm::StringRef filename) {
     predefined["version"] = "0.0.1";
     predefined["binary"] = execute;
