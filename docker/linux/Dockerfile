@@ -32,7 +32,7 @@ bash -eux - <<'BASH'
         xz-utils \
         unzip \
         make
-    
+
     # gcc, llvm PPA
     add-apt-repository -y ppa:ubuntu-toolchain-r/ppa
     apt update
