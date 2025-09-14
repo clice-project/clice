@@ -53,7 +53,7 @@ async::Task<> Indexer::index(llvm::StringRef file) {
     auto AST = co_await async::submit([&] { return compile(params); });
 
     if(!AST) {
-        log::info("Fail to index background file {}", file);
+        logging::info("Fail to index background file {}", file);
         co_return;
     }
 

@@ -148,12 +148,12 @@ auto CompilationDatabase::query_driver(this Self& self, llvm::StringRef driver)
     bool keep_output_file = true;
     auto clean_up = llvm::make_scope_exit([&output_path, &keep_output_file]() {
         if(keep_output_file) {
-            log::warn("Query driver failed, output file:{}", output_path);
+            logging::warn("Query driver failed, output file:{}", output_path);
             return;
         }
 
         if(auto errc = llvm::sys::fs::remove(output_path)) {
-            log::warn("Fail to remove temporary file: {}", errc.message());
+            logging::warn("Fail to remove temporary file: {}", errc.message());
         }
     });
 
@@ -501,7 +501,7 @@ auto CompilationDatabase::get_command(this Self& self, llvm::StringRef file, Com
                 record(system_header);
             }
         } else if(!options.suppress_log) {
-            log::warn("Failed to query driver:{}, error:{}", driver, driver_info.error());
+            logging::warn("Failed to query driver:{}, error:{}", driver, driver_info.error());
         }
     }
 
@@ -527,7 +527,7 @@ auto CompilationDatabase::guess_or_fallback(this Self& self, llvm::StringRef fil
             // Filter case that dir is /path/to/foo and there's another directory /path/to/foobar
             if(other.starts_with(dir) &&
                (other.size() == dir.size() || path::is_separator(other[dir.size()]))) {
-                log::info("Guess command for:{}, from existed file: {}", file, other_file);
+                logging::info("Guess command for:{}, from existed file: {}", file, other_file);
                 return LookupInfo{info.directory, info.arguments};
             }
         }
@@ -552,17 +552,17 @@ auto CompilationDatabase::load_compile_database(this Self& self,
         std::string filepath = path::join(dir, "compile_commands.json");
         auto content = fs::read(filepath);
         if(!content) {
-            log::warn("Failed to read CDB file: {}, {}", filepath, content.error());
+            logging::warn("Failed to read CDB file: {}, {}", filepath, content.error());
             return false;
         }
 
         auto load = self.load_commands(*content, workspace);
         if(!load) {
-            log::warn("Failed to load CDB file: {}. {}", filepath, load.error());
+            logging::warn("Failed to load CDB file: {}. {}", filepath, load.error());
             return false;
         }
 
-        log::info("Load CDB file: {} successfully, {} items loaded", filepath, load->size());
+        logging::info("Load CDB file: {} successfully, {} items loaded", filepath, load->size());
         return true;
     };
 
@@ -570,7 +570,7 @@ auto CompilationDatabase::load_compile_database(this Self& self,
         return;
     }
 
-    log::warn(
+    logging::warn(
         "Can not found any valid CDB file from given directories, search recursively from workspace: {} ...",
         workspace);
 
@@ -597,7 +597,8 @@ auto CompilationDatabase::load_compile_database(this Self& self,
     }
 
     /// TODO: Add a default command in clice.toml. Or load commands from .clangd ?
-    log::warn("Can not found any valid CDB file in current workspace, fallback to default mode.");
+    logging::warn(
+        "Can not found any valid CDB file in current workspace, fallback to default mode.");
 }
 
 }  // namespace clice

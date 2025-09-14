@@ -1,88 +1,72 @@
 #pragma once
 
 #include "Format.h"
-#include "FileSystem.h"
+#include "spdlog/spdlog.h"
 
-#include "llvm/Support/CommandLine.h"
+namespace clice::logging {
 
-namespace clice::log {
+using Level = spdlog::level::level_enum;
 
-enum class Level {
-    TRACE,
-    DEBUG,
-    INFO,
-    WARN,
-    FATAL,
-};
-
-struct LogOpt {
-    Level level = Level::INFO;
+struct Options {
+    Level level = Level::info;
     bool color = false;
 };
 
-inline LogOpt log_opt;
+extern Options options;
+
+void create_stderr_logger(std::string_view name, const Options& options);
 
 template <typename... Args>
-void log(Level level, std::string_view fmt, Args&&... args) {
-#define Green "\033[32m"
-#define Yellow "\033[33m"
-#define Cyan "\033[36m"
-#define Magenta "\033[35m"
-#define Red "\033[31m"
-#define None "\033[0m"
-    namespace chrono = std::chrono;
-    auto now = chrono::floor<chrono::milliseconds>(chrono::system_clock::now());
-    auto time = now;  // chrono::zoned_time(chrono::current_zone(), now);
-    auto tag = [&] {
-        switch(level) {
-            case Level::INFO: return log_opt.color ? Green "[INFO]" None : "[INFO]";    // Green
-            case Level::WARN: return log_opt.color ? Yellow "[WARN]" None : "[WARN]";   // Yellow
-            case Level::DEBUG: return log_opt.color ? Cyan "[DEBUG]" None : "[DEBUG]";  // Cyan
-            case Level::TRACE:
-                return log_opt.color ? Magenta "[TRACE]" None : "[TRACE]";  // Magenta
-            case Level::FATAL:
-                return log_opt.color ? Red "[FATAL ERROR]" None : "[FATAL ERROR]";  // Red
-            default: llvm::llvm_unreachable_internal("Illegal log level");
-        }
-    }();
-    if(level >= log_opt.level) {
-        llvm::errs() << std::format("[{0:%H:%M:%S}] {1} ", time, tag)
-                     << std::vformat(fmt, std::make_format_args(args...)) << "\n";
-    }
-#undef Green
-#undef Yellow
-#undef Cyan
-#undef Magenta
-#undef Red
-#undef None
+struct logging_rformat {
+    template <std::convertible_to<std::string_view> StrLike>
+    consteval logging_rformat(const StrLike& str,
+                              std::source_location location = std::source_location::current()) :
+        str(str), location(location) {}
+
+    std::format_string<Args...> str;
+    std::source_location location;
+};
+
+template <typename... Args>
+using logging_format = logging_rformat<std::type_identity_t<Args>...>;
+
+template <typename... Args>
+void log(spdlog::level::level_enum level,
+         std::source_location location,
+         std::string_view fmt,
+         Args&&... args) {
+    spdlog::source_loc loc{
+        location.file_name(),
+        static_cast<int>(location.line()),
+        location.function_name(),
+    };
+    spdlog::log(loc, level, fmt, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void info(std::format_string<Args...> fmt, Args&&... args) {
-    log::log(Level::INFO, fmt.get(), std::forward<Args>(args)...);
+void trace(logging_format<Args...> fmt, Args&&... args) {
+    logging::log(spdlog::level::trace, fmt.location, fmt.str.get(), std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void warn(std::format_string<Args...> fmt, Args&&... args) {
-    log::log(Level::WARN, fmt.get(), std::forward<Args>(args)...);
+void debug(logging_format<Args...> fmt, Args&&... args) {
+    logging::log(spdlog::level::debug, fmt.location, fmt.str.get(), std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void debug(std::format_string<Args...> fmt, Args&&... args) {
-#ifndef NDEBUG
-    log::log(Level::DEBUG, fmt.get(), std::forward<Args>(args)...);
-#endif
+void info(logging_format<Args...> fmt, Args&&... args) {
+    logging::log(spdlog::level::info, fmt.location, fmt.str.get(), std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void trace(std::format_string<Args...> fmt, Args&&... args) {
-    log::log(Level::TRACE, fmt.get(), std::forward<Args>(args)...);
+void warn(logging_format<Args...> fmt, Args&&... args) {
+    logging::log(spdlog::level::warn, fmt.location, fmt.str.get(), std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void fatal [[noreturn]] (std::format_string<Args...> fmt, Args&&... args) {
-    log::log(Level::FATAL, fmt.get(), std::forward<Args>(args)...);
-    std::abort();
+void fatal [[noreturn]] (logging_format<Args...> fmt, Args&&... args) {
+    logging::log(spdlog::level::err, fmt.location, fmt.str.get(), std::forward<Args>(args)...);
+    std::exit(1);
 }
 
-}  // namespace clice::log
+}  // namespace clice::logging

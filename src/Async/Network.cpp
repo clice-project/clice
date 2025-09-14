@@ -30,7 +30,7 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 
     /// If an error occurred while reading, we can't continue.
     if(nread < 0) [[unlikely]] {
-        log::fatal("An error occurred while reading: {0}", uv_strerror(nread));
+        logging::fatal("An error occurred while reading: {0}", uv_strerror(nread));
     }
 
     /// We have at most one connection and use default event loop. So there is no data race
@@ -57,7 +57,7 @@ void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
             task.dispose();
         } else {
             /// If the message is invalid, we can't continue.
-            log::fatal("Unexpected JSON input: {0}", result);
+            logging::fatal("Unexpected JSON input: {0}", result);
         }
 
         /// Remove the processed message from the buffer.
@@ -166,10 +166,10 @@ void spawn(llvm::StringRef path, llvm::ArrayRef<std::string> args, Callback call
     /// FIXME: This implementation is not correct.
     auto on_read = [](uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
         if(nread > 0) {
-            log::warn("{0}", llvm::StringRef{buf->base, static_cast<std::size_t>(nread)});
+            logging::warn("{0}", llvm::StringRef{buf->base, static_cast<std::size_t>(nread)});
         } else if(nread < 0) {
             if(nread != UV_EOF) {
-                log::fatal("An error occurred while reading: {0}", uv_strerror(nread));
+                logging::fatal("An error occurred while reading: {0}", uv_strerror(nread));
             }
             uv_close((uv_handle_t*)stream, NULL);
         }
@@ -201,7 +201,7 @@ struct write {
 
         uv_write(&req, writer, buf, 2, [](uv_write_t* req, int status) {
             if(status < 0) {
-                log::fatal("An error occurred while writing: {0}", uv_strerror(status));
+                logging::fatal("An error occurred while writing: {0}", uv_strerror(status));
             }
 
             auto& awaiter = uv_cast<struct write>(req);
