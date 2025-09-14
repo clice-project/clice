@@ -3,6 +3,7 @@
 
 #include "Server/Config.h"
 #include "Support/Logging.h"
+#include "Support/Ranges.h"
 #include "Support/FileSystem.h"
 #include "llvm/ADT/StringMap.h"
 
@@ -25,23 +26,8 @@ llvm::StringRef binary = predefined["binary"];
 llvm::StringRef llvm_version = predefined["llvm_version"];
 llvm::StringRef workspace = predefined["workplace"];
 
-struct Config {
-    ServerOptions server;
-    CacheOptions cache;
-    IndexOptions index;
-    std::vector<Rule> rules;
-};
-
-/// global config instance.
-static Config config = {};
-
-const ServerOptions& server = config.server;
-const CacheOptions& cache = config.cache;
-const IndexOptions& index = config.index;
-llvm::ArrayRef<Rule> rules = config.rules;
-
 template <typename Object>
-static void parse(Object& object, auto&& value) {
+static void parse2(Object& object, auto&& value) {
     if constexpr(std::is_same_v<Object, bool>) {
         if(auto v = value.as_boolean()) {
             object = v->get();
@@ -54,39 +40,24 @@ static void parse(Object& object, auto&& value) {
         if(auto v = value.as_string()) {
             object = v->get();
         }
-    } else if constexpr(clice::is_specialization_of<Object, std::vector>) {
+    } else if constexpr(sequence_range<Object>) {
         if(auto v = value.as_array()) {
             for(auto& item: *v) {
                 object.emplace_back();
-                parse(object.back(), item);
+                parse2(object.back(), item);
             }
         }
     } else if constexpr(refl::reflectable_struct<Object>) {
         if(auto table = value.as_table()) {
             refl::foreach(object, [&](std::string_view key, auto& member) {
                 if(auto v = (*table)[key]) {
-                    parse(member, v);
+                    parse2(member, v);
                 }
             });
         }
     } else {
         static_assert(dependent_false<Object>, "Unsupported type");
     }
-}
-
-/// Read the config file, call when the program starts.
-std::expected<void, std::string> load(llvm::StringRef execute, llvm::StringRef filename) {
-    predefined["version"] = "0.0.1";
-    predefined["binary"] = execute;
-    predefined["llvm_version"] = "20";
-
-    auto toml = toml::parse_file(filename);
-    if(toml.failed()) {
-        return std::unexpected<std::string>(toml.error().description());
-    }
-
-    parse(config, toml.table());
-    return {};
 }
 
 /// replace all predefined variables in the text.
@@ -133,13 +104,26 @@ static void replace(Object& object) {
     }
 }
 
-void init(std::string_view workplace) {
-    predefined["workspace"] = workplace;
+auto Config::parse(llvm::StringRef workspace) -> std::expected<void, std::string> {
+    this->workspace = workspace;
 
-    replace(config);
+    /// Workaround.
+    predefined["workspace"] = workspace;
 
-    logging::info("Config initialized successfully: {0}", json::serialize(config));
-    return;
+    auto path = path::join(workspace, "clice.toml");
+    if(!fs::exists(path)) {
+        return std::unexpected("Config file doesn't exist!");
+    }
+
+    auto toml = toml::parse_file(path);
+    if(toml.failed()) {
+        return std::unexpected<std::string>(toml.error().description());
+    }
+
+    parse2(*this, toml.table());
+    replace(*this);
+
+    return std::expected<void, std::string>();
 }
 
 }  // namespace clice::config

@@ -8,23 +8,25 @@
 
 namespace clice::config {
 
-/// Initialize the config, replace all predefined variables in the config file.
-/// called in `Server::initialize`.
-void init(std::string_view workplace);
+extern llvm::StringRef version;
+extern llvm::StringRef binary;
+extern llvm::StringRef llvm_version;
+extern llvm::StringRef workspace;
 
-struct ServerOptions {
-    std::vector<std::string> compile_commands_dirs = {"${workspace}/build"};
+struct ProjectOptions {
+    bool root = true;
+
     bool clang_tidy = false;
-    size_t max_active_file = 8;
-};
 
-struct CacheOptions {
-    std::string dir = "${workspace}/.clice/cache";
-    uint32_t limit = 0;
-};
+    std::size_t max_active_file = 8;
 
-struct IndexOptions {
-    std::string dir = "${workspace}/.clice/index";
+    std::string cache_dir = "${workspace}/.clice/cache";
+
+    std::string index_dir = "${workspace}/.clice/index";
+
+    std::string logging_dir = "${workspace}/.clice/logging";
+
+    std::vector<std::string> compile_commands_dirs = {"${workspace}/build"};
 };
 
 struct Rule {
@@ -36,14 +38,14 @@ struct Rule {
     std::vector<std::string> context;
 };
 
-extern llvm::StringRef version;
-extern llvm::StringRef binary;
-extern llvm::StringRef llvm_version;
-extern llvm::StringRef workspace;
+struct Config {
+    std::string workspace;
 
-extern const ServerOptions& server;
-extern const CacheOptions& cache;
-extern const IndexOptions& index;
-extern llvm::ArrayRef<Rule> rules;
+    ProjectOptions project;
+
+    llvm::SmallVector<Rule> rules;
+
+    auto parse(llvm::StringRef workspace) -> std::expected<void, std::string>;
+};
 
 };  // namespace clice::config

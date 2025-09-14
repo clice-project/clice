@@ -21,13 +21,17 @@ async::Task<json::Value> Server::on_initialize(proto::InitializeParams params) {
     })());
 
     /// Initialize configuration.
-    config::init(workspace);
+    if(auto result = config.parse(workspace)) {
+        logging::info("Config initialized successfully: {0}", json::serialize(config));
+    } else {
+        logging::warn("Fail to initialize config, because: {}", result.error());
+    }
 
     /// Set server options.
-    opening_files.set_capability(config::server.max_active_file);
+    opening_files.set_capability(config.project.max_active_file);
 
     /// Load compile commands.json
-    database.load_compile_database(config::server.compile_commands_dirs, workspace);
+    database.load_compile_database(config.project.compile_commands_dirs, workspace);
 
     /// Load cache info.
     load_cache_info();

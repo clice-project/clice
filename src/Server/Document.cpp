@@ -9,7 +9,7 @@
 namespace clice {
 
 void Server::load_cache_info() {
-    auto path = path::join(config::cache.dir, "cache.json");
+    auto path = path::join(config.project.cache_dir, "cache.json");
     auto file = llvm::MemoryBuffer::getFile(path);
     if(!file) {
         logging::warn("Fail to load cache info, because: {}", file.getError());
@@ -101,7 +101,7 @@ void Server::save_cache_info() {
         json["pchs"].getAsArray()->emplace_back(std::move(object));
     }
 
-    auto final_path = path::join(config::cache.dir, "cache.json");
+    auto final_path = path::join(config.project.cache_dir, "cache.json");
 
     llvm::SmallString<128> temp_path;
     if(auto error = llvm::sys::fs::createTemporaryFile("cache", "json", temp_path)) {
@@ -171,15 +171,16 @@ bool check_pch_update(llvm::StringRef content,
 
 /// The actual PCH build task.
 async::Task<bool> build_pch_task(CompilationDatabase::LookupInfo& info,
+                                 std::string cache_dir,
                                  std::shared_ptr<OpenFile> open_file,
                                  std::string path,
                                  std::uint32_t bound,
                                  std::string content,
                                  std::shared_ptr<std::vector<Diagnostic>> diagnostics) {
-    if(!fs::exists(config::cache.dir)) {
-        auto error = fs::create_directories(config::cache.dir);
+    if(!fs::exists(cache_dir)) {
+        auto error = fs::create_directories(cache_dir);
         if(error) {
-            logging::warn("Fail to create directory for PCH building: {}", config::cache.dir);
+            logging::warn("Fail to create directory for PCH building: {}", cache_dir);
             co_return false;
         }
     }
@@ -189,7 +190,7 @@ async::Task<bool> build_pch_task(CompilationDatabase::LookupInfo& info,
 
     CompilationParams params;
     params.kind = CompilationUnit::Preamble;
-    params.output_file = path::join(config::cache.dir, path::filename(path) + ".pch");
+    params.output_file = path::join(cache_dir, path::filename(path) + ".pch");
     params.arguments = std::move(info.arguments);
     params.diagnostics = diagnostics;
     params.add_remapped_file(path, content, bound);
@@ -273,7 +274,13 @@ async::Task<bool> Server::build_pch(std::string file, std::string content) {
     }
 
     /// Schedule the new building task.
-    task = build_pch_task(info, open_file, file, bound, std::move(content), open_file->diagnostics);
+    task = build_pch_task(info,
+                          config.project.cache_dir,
+                          open_file,
+                          file,
+                          bound,
+                          std::move(content),
+                          open_file->diagnostics);
     if(co_await task) {
         /// FIXME: At this point, task has already been finished, destroy it directly.
         task.release().destroy();
@@ -326,7 +333,7 @@ async::Task<> Server::build_ast(std::string path, std::string content) {
     }
 
     /// Run Clang-Tidy
-    if(config::server.clang_tidy) {
+    if(config.project.clang_tidy) {
         logging::warn(
             "clang-tidy is not fully supported yet. Tracked in https://github.com/clice-project/clice/issues/90.");
     }
