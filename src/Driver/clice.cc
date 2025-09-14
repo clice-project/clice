@@ -2,10 +2,6 @@
 #include "Support/Logger.h"
 #include "Support/Format.h"
 
-#include "spdlog/spdlog.h"
-#include "spdlog/sinks/stdout_color_sinks.h"
-#include <print>
-
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Process.h"
