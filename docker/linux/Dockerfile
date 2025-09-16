@@ -1,5 +1,5 @@
 # build with multi-stage for cache efficiency
-FROM ubuntu:24.04 AS basic-tools
+FROM ubuntu:22.04 AS basic-tools
 
 # allow build script to bind-mount project source into build container (host path)
 ARG BUILD_SRC
@@ -193,25 +193,25 @@ FROM build-tool-stage AS dependency-cache-stage
 # passed from build arg
 # "lto" or "non_lto"
 ARG BUILD_SRC
-ARG LTO_TYPE=""
+# ARG LTO_TYPE=""
 
 RUN --mount=type=bind,src=./,target=/clice,rw \
 bash -eux - <<'BASH'
 
-cache_xmake_packages() {
-    set -e
+# cache_xmake_packages() {
+#     set -e
 
-    export PATH="/root/.local/bin:${PATH}"
-    export XMAKE_ROOT=y
+#     export PATH="/root/.local/bin:${PATH}"
+#     export XMAKE_ROOT=y
 
-    LTO_FLAG=""
-    if [ "$LTO_TYPE" = "lto" ]; then
-        LTO_FLAG="--release"
-    fi
+#     LTO_FLAG=""
+#     if [ "$LTO_TYPE" = "lto" ]; then
+#         LTO_FLAG="--release"
+#     fi
 
-    xmake f -y -v --mode=release ${LTO_FLAG}
-    xmake f -y -v --mode=debug ${LTO_FLAG}
-}
+#     xmake f -y -v --mode=release ${LTO_FLAG}
+#     xmake f -y -v --mode=debug ${LTO_FLAG}
+# }
 
 do_prepare_dependency() {
     set -e

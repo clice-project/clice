@@ -12,16 +12,14 @@ trap 'cd "${ORIG_PWD}"' EXIT
 
 # default configurations
 COMPILER="clang"
-LIB_TYPE="non_lto"
 DOCKERFILE_PATH="docker/linux/Dockerfile"
 
 usage() {
 cat <<EOF
-Usage: $0 [--compiler <gcc|clang>] [--lib <lto|non_lto>]
+Usage: $0 [--compiler <gcc|clang>]
 
 Defaults:
   --compiler    ${COMPILER}
-  --lib         ${LIB_TYPE}
 EOF
 }
 
@@ -30,8 +28,6 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --compiler)
             COMPILER="$2"; shift 2;;
-        --lib)
-            LIB_TYPE="$2"; shift 2;;
         -h|--help)
             usage; exit 0;;
         *)
@@ -39,13 +35,12 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-IMAGE_TAG="Linux-${COMPILER}-${LIB_TYPE}"
-IMAGE_NAME="clice-dev-container:${IMAGE_TAG}"
+IMAGE_TAG="linux-${COMPILER}-${LIB_TYPE}"
+IMAGE_NAME="clice-io/clice-dev:${IMAGE_TAG}"
 
 echo "==========================================="
 echo "Building image: ${IMAGE_NAME}"
 echo "Compiler: ${COMPILER}"
-echo "Lib Type: ${LIB_TYPE}"
 echo "Dockerfile: ${DOCKERFILE_PATH}"
 echo "==========================================="
 
@@ -53,7 +48,6 @@ echo "==========================================="
 # must run in clice root dir, so that we can mount the project in docker file to acquire essential files
 docker buildx build --progress=plain -t "${IMAGE_NAME}" \
     --build-arg COMPILER="${COMPILER}" \
-    --build-arg LTO_TYPE="${LIB_TYPE}" \
     --build-arg BUILD_SRC="${PROJECT_ROOT}" \
     -f "${DOCKERFILE_PATH}" .
 
