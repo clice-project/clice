@@ -178,7 +178,7 @@ target("integration_tests")
 
 rule("clice_build_config")
     on_load(function (target)
-        target:add("cxflags", "-fno-rtti", {tools = {"clang", "gcc"}})
+        target:add("cxflags", "-fno-rtti", {tools = {"clang", "clangxx", "gcc", "gxx"}})
         target:add("cxflags", "/GR-", {tools = {"clang_cl", "cl"}})
         -- Fix MSVC Non-standard preprocessor caused error C1189
         -- While compiling Command.cpp, MSVC won't expand Options macro correctly
