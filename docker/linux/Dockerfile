@@ -115,7 +115,7 @@ install_xmake() {
     chmod +x "${XMAKE_INSTALLED_FILE}"
 
     update-alternatives --install /usr/bin/xmake xmake "${XMAKE_INSTALLED_FILE}" 100
-    
+
     echo "export XMAKE_ROOT=y" >> ~/.bashrc
 }
 
@@ -190,7 +190,7 @@ do_install() {
     set -e
 
     cd /clice
-    
+
     export PATH="/root/.local/bin:${PATH}"
     echo "export XMAKE_ROOT=y" >> ~/.bashrc
 
