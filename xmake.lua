@@ -42,7 +42,7 @@ end
 
 add_defines("TOML_EXCEPTIONS=0")
 add_requires(libuv_require, "spdlog[header_only=n,std_format,noexcept]" ,"toml++")
-add_requires("clice-llvm", {system = false})
+add_requires("clice-llvm", {alias = "llvm"})
 
 add_rules("mode.release", "mode.debug", "mode.releasedbg")
 set_languages("c++23")
@@ -56,7 +56,7 @@ target("clice-core")
     add_packages("libuv", "spdlog", "toml++", {public = true})
 
     if is_mode("debug") then
-        add_packages("clice-llvm", {
+        add_packages("llvm", {
             public = true,
             links = {
                 "LLVMSupport",
@@ -106,11 +106,11 @@ target("clice-core")
                 "clangToolingSyntax",
         }})
         on_config(function (target)
-            local llvm_dynlib_dir = path.join(target:pkg("clice-llvm"):installdir(), "lib")
+            local llvm_dynlib_dir = path.join(target:pkg("llvm"):installdir(), "lib")
             target:add("rpathdirs", llvm_dynlib_dir)
         end)
     elseif is_mode("release", "releasedbg") then
-        add_packages("clice-llvm", {public = true})
+        add_packages("llvm", {public = true})
         add_ldflags("-Wl,--gc-sections")
     end
 
@@ -121,14 +121,14 @@ target("clice")
     add_deps("clice-core")
 
     on_config(function (target)
-        local llvm_dir = target:dep("clice-core"):pkg("clice-llvm"):installdir()
+        local llvm_dir = target:dep("clice-core"):pkg("llvm"):installdir()
         target:add("installfiles", path.join(llvm_dir, "lib/clang/(**)"), {prefixdir = "lib/clang"})
     end)
 
     after_build(function (target)
         local res_dir = path.join(target:targetdir(), "lib/clang")
         if not os.exists(res_dir) then
-            local llvm_dir = target:dep("clice-core"):pkg("clice-llvm"):installdir()
+            local llvm_dir = target:dep("clice-core"):pkg("llvm"):installdir()
             os.vcp(path.join(llvm_dir, "lib/clang"), res_dir)
         end
     end)
@@ -146,7 +146,7 @@ target("unit_tests")
     after_load(function (target)
         target:set("runargs",
             "--test-dir=" .. path.absolute("tests/data"),
-            "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("clice-llvm"):installdir(), "lib/clang/20")
+            "--resource-dir=" .. path.join(target:dep("clice-core"):pkg("llvm"):installdir(), "lib/clang/20")
         )
     end)
 
@@ -155,7 +155,7 @@ target("integration_tests")
     set_kind("phony")
 
     add_deps("clice")
-    add_packages("clice-llvm")
+    add_packages("llvm")
 
     add_tests("default")
 
@@ -168,7 +168,7 @@ target("integration_tests")
             "--log-cli-level=INFO",
             "-s", "tests/integration",
             "--executable=" .. target:dep("clice"):targetfile(),
-            "--resource-dir=" .. path.join(target:pkg("clice-llvm"):installdir(), "lib/clang/20"),
+            "--resource-dir=" .. path.join(target:pkg("llvm"):installdir(), "lib/clang/20"),
         }
         local opt = {envs = envs, curdir = os.projectdir()}
         os.vrunv(uv.program, argv, opt)
@@ -256,7 +256,7 @@ if has_config("release") then
         add_installfiles(path.join(os.projectdir(), "docs/clice.toml"))
 
         on_load(function (package)
-            local llvm_dir = package:target("clice"):dep("clice-core"):pkg("clice-llvm"):installdir()
+            local llvm_dir = package:target("clice"):dep("clice-core"):pkg("llvm"):installdir()
             package:add("installfiles", path.join(llvm_dir, "lib/clang/(**)"), {prefixdir = "lib/clang"})
         end)
 end

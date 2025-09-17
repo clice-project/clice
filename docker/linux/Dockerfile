@@ -1,5 +1,5 @@
 # build with multi-stage for cache efficiency
-FROM ubuntu:22.04 AS basic-tools
+FROM ubuntu:24.04 AS basic-tools
 
 # allow build script to bind-mount project source into build container (host path)
 ARG BUILD_SRC
@@ -78,24 +78,44 @@ BASH
 
 FROM compiler-stage AS build-tool-stage
 
-ENV XMAKE_ROOT=y
+ARG XMAKE_CACHE_DIR="/docker-build-cache/xmake"
+ARG CMAKE_CACHE_DIR="/docker-build-cache/cmake"
+ARG UV_CACHE_DIR="/var/cache/uv"
+
+ENV XMAKE_CACHE_DIR=${XMAKE_CACHE_DIR}
+ENV CMAKE_CACHE_DIR=${CMAKE_CACHE_DIR}
+ENV UV_CACHE_DIR=${UV_CACHE_DIR}
 
 COPY ./pyproject.toml /clice/pyproject.toml
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    --mount=type=cache,target=/docker-build-cache/cmake,sharing=locked \
-    --mount=type=cache,target=/var/cache/uv,sharing=locked \
+    --mount=type=cache,target=${XMAKE_CACHE_DIR},sharing=locked \
+    --mount=type=cache,target=${CMAKE_CACHE_DIR},sharing=locked \
+    --mount=type=cache,target=${UV_CACHE_DIR},sharing=locked \
 bash -eux - <<'BASH'
 
 install_xmake() {
-    # xmake installation requires compiler, or the script will install build-essential automatically
-    # so we schedule xmake installation after compiler stage
     set -e
-    # xmake requires make, ensure it is installed
-    apt install -y --no-install-recommends make
+
     XMAKE_VERSION=$(grep -E '^xmake,' /clice/config/default-toolchain-version | cut -d',' -f2)
-    curl -fsSL https://xmake.io/shget.text | bash -s "v${XMAKE_VERSION}"
+    XMAKE_BASE_URL="https://github.com/xmake-io/xmake/releases/download/v${XMAKE_VERSION}"
+    XMAKE_FILENAME="xmake-bundle-v${XMAKE_VERSION}.linux.x86_64"
+    XMAKE_CACHED_FILE="${XMAKE_CACHE_DIR}/${XMAKE_FILENAME}"
+
+    if [ ! -f "${XMAKE_CACHED_FILE}" ] ; then
+        rm -f "${XMAKE_CACHE_DIR}/*"
+        curl -fsSL --retry 3 -o "${XMAKE_CACHED_FILE}" "${XMAKE_BASE_URL}/${XMAKE_FILENAME}"
+    fi
+
+    XMAKE_INSTALL_DIR="/usr/bin"
+    XMAKE_INSTALLED_FILE="${XMAKE_INSTALL_DIR}/${XMAKE_FILENAME}"
+
+    cp "${XMAKE_CACHED_FILE}" "${XMAKE_INSTALLED_FILE}"
+    chmod +x "${XMAKE_INSTALLED_FILE}"
+
+    update-alternatives --install /usr/bin/xmake xmake "${XMAKE_INSTALLED_FILE}" 100
+    
     echo "export XMAKE_ROOT=y" >> ~/.bashrc
 }
 
@@ -109,8 +129,6 @@ install_cmake() {
     # cached downloads live under /docker-build-cache/cmake (BuildKit cache mount)
     CMAKE_VERSION=$(grep -E '^cmake,' /clice/config/default-toolchain-version | cut -d',' -f2)
     ARCH="x86_64"
-    CMAKE_CACHE_DIR="/docker-build-cache/cmake"
-    mkdir -p "${CMAKE_CACHE_DIR}"
 
     BASE_URL="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}"
     INSTALLER_FILENAME="cmake-${CMAKE_VERSION}-linux-${ARCH}.sh"
@@ -165,7 +183,6 @@ install_python() {
     PYTHON_VERSION=$(grep -E '^python,' /clice/config/default-toolchain-version | cut -d',' -f2)
     curl -LsSf https://astral.sh/uv/install.sh | sh
     uv python install "${PYTHON_VERSION}"
-    export UV_CACHE_DIR="/var/cache/uv"
     uv sync
 }
 
@@ -173,6 +190,9 @@ do_install() {
     set -e
 
     cd /clice
+    
+    export PATH="/root/.local/bin:${PATH}"
+    echo "export XMAKE_ROOT=y" >> ~/.bashrc
 
     install_cmake &
     install_xmake &
