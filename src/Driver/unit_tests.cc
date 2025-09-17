@@ -63,8 +63,9 @@ void Runner::add_suite(std::string_view name, Suite suite) {
 void Runner::on_test(std::string_view name, Test test, bool skipped) {
     std::string full_name = std::format("{}.{}", curr_suite_name, name);
 
-    /// If this test if filter, directly return.
-    if(pattern && !pattern->match(full_name)) {
+    auto pt = GlobPattern::create("{Diagnostic,Binary}", 100);
+    /// If this test or this suite if filter, directly return.
+    if(pattern && !(pattern->match(full_name) || pattern->match(curr_suite_name))) {
         return;
     }
 
@@ -183,8 +184,13 @@ int main(int argc, const char* argv[]) {
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
 
     if(!test_filter.empty()) {
-        if(auto result = GlobPattern::create(test_filter)) {
+        if(auto result = GlobPattern::create(test_filter,
+                                             /*FIXME: must for {,}*/ 100)) {
             pattern.emplace(std::move(*result));
+        } else {
+            std::println("Failed to use filter argument: {}, because {}",
+                         test_filter.c_str(),
+                         result.error());
         }
     }
 
@@ -192,7 +198,9 @@ int main(int argc, const char* argv[]) {
         fs::resource_dir = resource_dir;
     } else {
         if(auto result = fs::init_resource_dir(argv[0]); !result) {
-            std::println("Failed to get resource directory, because {}", result.error());
+            std::println("Failed to get resource directory: {}, because {}",
+                         resource_dir.c_str(),
+                         result.error());
             return 1;
         }
     }
