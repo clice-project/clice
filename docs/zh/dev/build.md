@@ -116,7 +116,7 @@ $ xmake build --all
 
 ## Dev Container
 
-我们提供了docker镜像作为预装环境解决方案，可以有效地解决环境配置问题，可通过下列命令使用（不限脚本调用路径，可以直接运行./build.sh）：
+我们提供了 docker 镜像作为预装环境解决方案，可以有效地解决环境配置问题，可通过下列命令使用（不限脚本调用路径，可以直接运行 ./build.sh）：
 
 ```bash
 # construct container
@@ -130,7 +130,7 @@ docker/linux/run.sh --reset
 ```
 
 > [!NOTE]
-> 当前该功能仍处于Preview阶段，仅支持Linux，后续会提供Windows平台版本，并可能存在功能改动
+> 当前该功能仍处于 Preview 阶段，仅支持 Linux，后续会提供 Windows 平台版本，并可能存在功能改动
 
 ## Building Docker Image
 

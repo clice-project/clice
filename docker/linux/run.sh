@@ -12,16 +12,14 @@ trap 'cd "${ORIG_PWD}"' EXIT
 
 # default configurations
 COMPILER="clang"
-LIB_TYPE="non_lto"
 RESET="false"
 
 usage() {
 cat <<EOF
-Usage: $0 [--compiler <gcc|clang>] [--lib <lto|non_lto>] [--reset]
+Usage: $0 [--compiler <gcc|clang>] [--reset]
 
 Defaults:
   --compiler    ${COMPILER}
-  --lib         ${LIB_TYPE}
   --reset       (re-create the container)
 EOF
 }
@@ -31,8 +29,6 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --compiler)
       COMPILER="$2"; shift 2;;
-    --lib)
-      LIB_TYPE="$2"; shift 2;;
     --reset)
       RESET="true"; shift 1;;
     -h|--help)
@@ -41,14 +37,14 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-IMAGE_TAG="linux-${COMPILER}-${LIB_TYPE}"
+IMAGE_TAG="linux-${COMPILER}"
 IMAGE_NAME="clice-io/clice-dev:${IMAGE_TAG}"
-CONTAINER_NAME="clice-dev-${COMPILER}-${LIB_TYPE}"
+CONTAINER_NAME="clice-dev-linux-${COMPILER}"
 
 # If the image doesn't exist, build it automatically by invoking build.sh
 if ! docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
   echo "Image ${IMAGE_NAME} not found, invoking build.sh to create it..."
-  ./docker/linux/build.sh --compiler "${COMPILER}" --lib "${LIB_TYPE}"
+  ./docker/linux/build.sh --compiler "${COMPILER}"
 fi
 
 # Handle --reset: remove the existing container if it exists

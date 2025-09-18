@@ -35,7 +35,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-IMAGE_TAG="linux-${COMPILER}-${LIB_TYPE}"
+IMAGE_TAG="linux-${COMPILER}"
 IMAGE_NAME="clice-io/clice-dev:${IMAGE_TAG}"
 
 echo "==========================================="
