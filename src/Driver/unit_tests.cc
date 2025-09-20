@@ -63,8 +63,8 @@ void Runner::add_suite(std::string_view name, Suite suite) {
 void Runner::on_test(std::string_view name, Test test, bool skipped) {
     std::string full_name = std::format("{}.{}", curr_suite_name, name);
 
-    /// If this test if filter, directly return.
-    if(pattern && !pattern->match(full_name)) {
+    /// If this test or this suite if filter, directly return.
+    if(pattern && !(pattern->match(full_name) || pattern->match(curr_suite_name))) {
         return;
     }
 
@@ -183,8 +183,13 @@ int main(int argc, const char* argv[]) {
     llvm::cl::ParseCommandLineOptions(argc, argv, "clice test\n");
 
     if(!test_filter.empty()) {
-        if(auto result = GlobPattern::create(test_filter)) {
+        if(auto result = GlobPattern::create(test_filter,
+                                             /*FIXME: must for {,}*/ 100)) {
             pattern.emplace(std::move(*result));
+        } else {
+            std::println("Failed to use filter argument: {}, because {}",
+                         test_filter.c_str(),
+                         result.error());
         }
     }
 
